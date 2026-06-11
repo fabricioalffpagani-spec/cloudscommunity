@@ -1,0 +1,741 @@
+1. Introdução e Princípios de Design
+O Clouds Community Design System é o conjunto canônico de decisões visuais, componentes e regras de uso que governa a interface da plataforma. Ele foi extraído diretamente da identidade visual implementada e serve como fonte única de verdade para designers e desenvolvedores.
+O sistema foi pensado para atender dois objetivos simultâneos: reduzir a fricção de novos usuários — que precisam entender a plataforma em segundos — e manter um visual distinto, contemporâneo e reconhecível em todas as telas.
+Princípios Fundamentais
+Clareza primeiro: toda decisão visual deve tornar a interface mais fácil de usar, não mais bonita às custas da usabilidade.
+Consistência radical: o mesmo elemento deve ter exatamente a mesma aparência em todas as telas. Variações só existem quando codificam uma diferença de estado ou hierarquia.
+Dark-first: o sistema nasce escuro. Todos os tokens de cor foram definidos para o modo escuro; o modo claro é uma adaptação opcional.
+Roxo como única cor de ação: somente o roxo primário (#9333EA) indica ao usuário que algo é clicável ou interativo. Outras cores comunicam categoria ou status, nunca ação.
+Arredondamento generoso: a linguagem visual é suave, com cantos arredondados em todos os elementos, reforçando o tom amigável e moderno da plataforma.
+
+
+2. Sistema de Cores
+A paleta foi construída em três camadas: Principal (decisões de marca e ação), Superfícies (fundos e elevação) e Suporte (status, categorias e feedback). Cada cor possui um papel único e não deve ser usada fora desse papel.
+2.1 Paleta Principal
+A cor primária é o roxo #9333EA. Ela aparece em botões de ação primária, bordas de foco, badges de Trending, links ativos e no logotipo. Todo elemento clicável principal usa algum tom desta rampa.
+
+Cor
+Nome
+Hex
+Uso
+
+
+Roxo 500 — Primária
+#9333EA
+Botão CTA, bordas de foco, badge Trending, links
+
+
+Roxo 600 — Hover
+#7C3AED
+Estado de hover em botões primários
+
+
+Roxo 700 — Pressionado
+#6D28D9
+Estado active/pressed em botões primários
+
+
+Violeta 300 — Destaque
+#C084FC
+Ícones ativos, sublinhados, animações de carregamento
+
+
+Roxo 100 — Fill badge
+#E9D5FF
+Fundo de badges em modo claro ou overlays suaves
+
+
+Roxo 950 — Badge dark
+#3B0764
+Fundo de badge Trending sobre tema escuro
+
+
+2.2 Paleta de Superfícies (Fundos e Elevação)
+O sistema usa seis tons de fundo que criam profundidade sem uso de sombras. Quanto mais claro o tom, mais alto o elemento está na hierarquia visual (mais próximo do usuário).
+
+Cor
+Nome
+Hex
+Uso
+
+
+BG Raiz
+#09090B
+Fundo da página inteira (camada 0)
+
+
+BG Nav
+#111827
+Header/navbar e drawers laterais (camada 1)
+
+
+Surface 1
+#1C1F2E
+Cards principais, panels e modais (camada 2)
+
+
+Surface 2
+#252840
+Seção interna de card, inputs de formulário (camada 3)
+
+
+Surface 3
+#2E3157
+Estado hover de cards, itens selecionados (camada 4)
+
+
+Surface 4
+#3B3E6B
+Tooltips, popovers (camada 5 — mais alta)
+
+
+2.3 Paleta de Texto
+Três níveis de texto garantem hierarquia tipográfica sem trocar de fonte ou peso. Nunca use texto terciário para conteúdo que o usuário precisa ler; reserve-o para metadados e timestamps.
+
+Cor
+Nome
+Hex
+Uso
+
+
+Texto Primário
+#F9FAFB
+Títulos, nomes, conteúdo principal
+
+
+Texto Secundário
+#9CA3AF
+Subtítulos, descrições, labels de campo
+
+
+Texto Terciário
+#6B7280
+Timestamps, contadores, placeholders, hints
+
+
+2.4 Paleta de Suporte — Categorias e Status
+Cada categoria do feed possui uma cor única. A mesma cor é usada no badge (pill) do filtro, no indicador do card e em qualquer referência visual àquela categoria. Cores de status (verde, vermelho) têm uso exclusivo para comunicar estado do sistema — nunca como decoração.
+
+Cor
+Nome
+Hex
+Uso
+
+
+Verde Vivo
+#22C55E
+Status online, indicador AO VIVO, confirmações
+
+
+Vermelho
+#EF4444
+Erros, alertas críticos, exclusões
+
+
+Laranja Hypar
+#F97316
+Ícone e contador de Hypar (reação da plataforma)
+
+
+Rosa Drama
+#EC4899
+Categoria Drama
+
+
+Amarelo Funny
+#EAB308
+Categoria Funny
+
+
+Azul Pop
+#3B82F6
+Categorias Pop e Politics
+
+
+Verde Sports
+#10B981
+Categorias Sports e Real Life
+
+
+Ciano Tech
+#06B6D4
+Categoria Tech
+
+
+Roxo Gaming
+#8B5CF6
+Categoria Gaming
+
+
+Rosa Music
+#F472B6
+Categoria Music
+
+
+Âmbar Movies
+#F59E0B
+Categoria Movies
+
+
+Lima Memes
+#84CC16
+Categoria Memes
+
+Regra de contraste: toda pill de categoria deve usar a cor acima como fundo e branco (#FFFFFF) como texto. Contraste mínimo exigido: 4.5:1 (WCAG AA).
+
+
+3. Tipografia
+O sistema usa duas famílias tipográficas com papéis distintos. Space Grotesk nos títulos de alto impacto e Inter em todo o resto — corpo de texto, labels, botões, inputs e dados. Ambas são gratuitas no Google Fonts.
+3.1 Famílias Tipográficas
+Space Grotesk — Display e H1
+Usada exclusivamente em títulos de página (H1) e no display do hero. Possui personalidade forte com suas formas geométricas ligeiramente imperfeitas, que remetem ao universo digital e tech. Deve ser usada com restrição — máximo dois usos por tela — para preservar o impacto.
+Google Fonts: fonts.google.com/specimen/Space+Grotesk
+Pesos disponíveis: 300 (Light), 400 (Regular), 500 (Medium), 600 (SemiBold), 700 (Bold)
+No sistema Clouds, usar apenas 700 para H1 e display.
+Inter — UI, Corpo e Dados
+Usada em tudo que não é H1 ou display. Inter foi projetada especificamente para interfaces digitais, com excelente legibilidade em tamanhos pequenos. É a espinha dorsal do sistema.
+Google Fonts: fonts.google.com/specimen/Inter
+Pesos usados no sistema: 400 (Regular) para corpo, 500 (Medium) para títulos de card e labels, 600 (SemiBold) para H2 e H3.
+3.2 Escala Tipográfica Completa
+A escala é baseada em passos de razão aproximada 1.25 (escala musical maior). Todos os tamanhos são em pixels para telas — usar rem em CSS (dividir por 16).
+
+Nível
+Especificação
+Aplicação
+Display / Hero
+Space Grotesk 700 · 64px / 4rem · lh 1.05
+Headline principal da homepage e telas de onboarding
+H1 — Título de página
+Space Grotesk 700 · 32px / 2rem · lh 1.15
+Títulos de seções principais: FEED, MEET, MENSAGENS
+H2 — Título de seção
+Inter 600 · 22px / 1.375rem · lh 1.3
+Agrupamentos internos: TOP HYPADOS, PREVIEW
+H3 — Subtítulo / Card
+Inter 500 · 16px / 1rem · lh 1.4
+Título de card de cloud, nome de usuário em destaque
+Body — Texto corrido
+Inter 400 · 14px / 0.875rem · lh 1.65
+Descrições, instruções, conteúdo de mensagens
+Caption / Label
+Inter 500 · 12px / 0.75rem · lh 1.4 · spacing 0.08em · uppercase
+Labels de seção (FEED, CREATE, RANKING), status
+Micro / Timestamp
+Inter 400 · 11px / 0.6875rem · lh 1.4
+Horários, contadores, counters de badges
+Code / Mono
+Courier New 400 · 13px · lh 1.6
+IDs de usuário, tokens, URLs de cloud
+
+
+3.3 Regras de Uso Tipográfico
+Letter-spacing: apenas em labels e captions (+ 0.08em a +0.12em). Nunca em corpo de texto ou títulos.
+Maiúsculas (uppercase): reservadas exclusivamente para labels de seção e eyebrows (ex: FEED, RANKING). Nunca use em botões, títulos de card ou corpo.
+Alinhamento: padrão à esquerda. Centralizado apenas em estados vazios (empty states) e elementos de pódio (ranking).
+Truncamento: textos longos em cards devem ser truncados com reticências após a segunda linha (CSS: -webkit-line-clamp: 2).
+Hierarquia por cor, não por tamanho: dentro de um card, use texto primário para o título e secundário para a descrição — o tamanho de fonte pode ser o mesmo.
+
+
+4. Componentes
+4.1 Botões
+Todos os botões do sistema têm border-radius de 999px (pill). Esta é uma decisão de identidade — nunca use botões quadrados ou com cantos levemente arredondados. A forma pill comunica a leveza e o tom amigável da plataforma.
+Botão Primário — Ação Principal
+Usado para a ação mais importante de uma tela ou seção. Fundo sólido roxo, texto branco.
+Propriedade
+Valor
+Detalhe
+Fundo
+#9333EA (Roxo 500)
+Cor de base
+Fundo hover
+#7C3AED (Roxo 600)
+Escurece 1 passo ao passar o mouse
+Fundo active
+#6D28D9 (Roxo 700)
+Escurece mais 1 passo ao pressionar
+Texto
+#FFFFFF
+Sempre branco, nunca cinza
+Borda
+Nenhuma
+Sem borda no botão primário
+Padding
+10px 24px
+Vertical 10px · Horizontal 24px
+Border-radius
+999px
+Sempre pill, sem exceção
+Font
+Inter 500 · 14px
+Medium, não bold
+Tamanho mínimo
+44px de altura
+Acessibilidade — área de toque mínima
+Foco (keyboard)
+outline: 2px solid #C084FC, offset 2px
+Visível para navegação por teclado
+Desabilitado
+opacity 0.4, cursor not-allowed
+Nunca remover da DOM, apenas desabilitar
+
+
+Botão Secundário — Ação Alternativa
+Para ações secundárias como Compartilhar, Ver perfil e Voltar. Sem fundo, com borda visível.
+Propriedade
+Valor
+Detalhe
+Fundo
+Transparente
+Sem cor de fundo
+Fundo hover
+rgba(255,255,255,0.06)
+Leve fill ao passar o mouse
+Texto
+#F9FAFB (Texto primário)
+Mesma cor do texto padrão
+Borda
+1.5px solid rgba(255,255,255,0.20)
+Borda branca semitransparente
+Borda hover
+1.5px solid rgba(255,255,255,0.40)
+Aumenta opacidade no hover
+Padding
+10px 24px
+Mesmo do primário
+Border-radius
+999px
+Pill
+
+
+Botão Ghost — Ação Terciária
+Para ações de menor peso como links internos e opções adicionais. Apenas texto colorido, sem fundo nem borda.
+Propriedade
+Valor
+Detalhe
+Fundo
+Transparente
+Nenhum
+Texto
+#C084FC
+Roxo 300 — versão mais clara do primário
+Texto hover
+#E9D5FF
+Clareia mais no hover
+Underline
+none por padrão, underline no hover
+Indicação de interatividade
+Padding
+4px 8px
+Mínimo para área de toque adequada
+
+
+Botão Destrutivo — Ações Irreversíveis
+Para ações críticas como Sair da conta, Excluir cloud e Bloquear usuário. Usa a cor de erro para comunicar risco.
+Propriedade
+Valor
+Detalhe
+Fundo
+Transparente
+Sem fundo para não alarmar desnecessariamente
+Texto
+#EF4444
+Vermelho de erro
+Borda
+1.5px solid #EF4444
+Borda vermelha
+Fundo hover
+rgba(239,68,68,0.10)
+Fill sutil no hover
+Confirmação
+Obrigatória
+Sempre exigir confirmação em modal antes de executar
+
+
+Botão Pequeno (Small)
+Versão compacta do botão primário usada dentro de cards, como Seguir e Hypar. Mesmos tokens visuais, padding reduzido.
+Propriedade
+Valor
+Detalhe
+Padding
+6px 16px
+Reduzido para uso em espaços pequenos
+Font
+Inter 500 · 12px
+1 passo menor que o padrão
+Altura mín.
+32px
+Mínimo aceitável de área de toque
+
+Nunca use botões pequenos como ação principal de uma tela. Eles devem sempre coexistir com um botão de tamanho normal próximo, ou ser ações secundárias dentro de um card.
+4.2 Inputs de Formulário
+Todos os campos de formulário compartilham o mesmo fundo (Surface 2 — #252840), com borda sutil que ganha cor roxa ao entrar em foco. O border-radius é 12px — maior que botões pequenos, menor que cards.
+Campo de Texto (Text Input)
+Propriedade
+Valor
+Detalhe
+Fundo
+#252840 (Surface 2)
+Elevação acima do card container
+Borda padrão
+0.5px solid rgba(255,255,255,0.08)
+Quase invisível — superfície limpa
+Borda hover
+1px solid rgba(255,255,255,0.20)
+Indica interatividade
+Borda foco
+1.5px solid #9333EA
+Roxo primário indica qual campo está ativo
+Borda erro
+1.5px solid #EF4444
+Vermelho de erro substituindo o roxo
+Border-radius
+12px
+Suave, mas não pill
+Padding
+10px 14px
+Vertical 10px · Horizontal 14px
+Texto digitado
+#F9FAFB (Primário)
+Máxima legibilidade
+Placeholder
+#6B7280 (Terciário)
+Dica leve, não confunde com conteúdo
+Altura
+44px
+Padrão de acessibilidade
+Font
+Inter 400 · 14px
+Regular, não medium
+
+
+Select / Dropdown
+Segue os mesmos tokens do text input. O ícone de seta (chevron) à direita deve ser #6B7280 e rotacionar 180° quando aberto. O dropdown expandido flutua como Surface 4 (#3B3E6B) com cada opção em 44px de altura e hover em Surface 3 (#2E3157).
+Textarea
+Mesmos tokens do text input. Altura mínima de 88px (2 linhas visíveis + padding). Resize apenas vertical (resize: vertical). Contador de caracteres aparece no canto inferior direito em Texto Terciário quando o campo tem limite definido.
+Seletor de Duração (Duration Picker)
+Componente único da plataforma, usado na criação de clouds. É um grupo de pills selecionáveis — não são botões de ação, são opções de seleção única (radio visual).
+Estado
+Tokens
+Uso
+Estado padrão
+Fundo: #252840 · Borda: 0.5px rgba(255,255,255,0.15) · Texto: #9CA3AF
+Não selecionado
+Estado selecionado
+Fundo: #9333EA · Sem borda · Texto: #FFFFFF
+Ativo
+Estado hover
+Fundo: #2E3157 · Borda: 0.5px rgba(255,255,255,0.30) · Texto: #F9FAFB
+Sobre o item
+Border-radius
+999px
+Pill
+Padding
+8px 18px
+
+
+Font
+Inter 500 · 13px
+Medium para distinção
+
+4.3 Cards
+Card de Cloud — Componente Central
+É o componente mais importante da plataforma. Aparece no feed, nos previews de criação e em resultados de busca. Deve comunicar em menos de 3 segundos: qual o assunto, quão popular é, quanto tempo resta e como entrar.
+Propriedade
+Valor
+Detalhe
+Fundo
+#1C1F2E (Surface 1)
+1 passo acima do fundo da página
+Borda
+0.5px solid rgba(255,255,255,0.08)
+Quase invisível no tema escuro
+Borda hover
+1px solid rgba(147,51,234,0.40)
+Toque sutil de roxo no hover
+Border-radius
+16px
+O maior radius de cards no sistema
+Padding
+16px 20px
+Generoso para respiração do conteúdo
+Gap interno
+12px
+Entre badge, título, preview e ações
+Sombra
+Nenhuma
+O sistema não usa box-shadow; profundidade vem da cor
+Cursor
+pointer em todo o card
+Todo o card é clicável, não apenas o botão
+
+
+Anatomia do Card de Cloud (de cima para baixo):
+Linha 1 — Topo: Badge de categoria (esquerda) + indicador AO VIVO com timer (centro) + stack de avatares + contador de pessoas (direita)
+Linha 2 — Título: H3 em texto primário. Máximo 2 linhas com truncamento.
+Linha 3 — Preview: Para clouds de texto, exibe as 1–2 primeiras mensagens em texto secundário. Para clouds de áudio, exibe o player inline com waveform.
+Linha 4 — Rodapé: Call-to-action em texto secundário (ex: 'Opiniões divididas. Entre na conversa') + botões de ação.
+Botões de ação: Compartilhar (outline) · Hypar N (outline com ícone de chama) · Entrar na conversa (primário, roxo sólido).
+Card de Preview (Criação de Cloud)
+Aparece na coluna direita durante a criação de uma cloud. Simula em tempo real como o card aparecerá no feed. Possui borda mais espessa (#9333EA, 1px) para indicar que é uma prévia ativa, não um card inerte.
+Card de Ranking (Meet)
+Exibe posição, avatar, nome e contagem de hypes. O card do 1º lugar tem tamanho vertical maior que o 2º e 3º. A escala de altura 1º:2º:3º é aproximadamente 3:2:2 (o líder domina o pódio visualmente).
+Elemento
+Valor
+Detalhe
+1º lugar — fundo
+#2E1065
+Roxo muito escuro — distingue o líder
+2º lugar — fundo
+#1C1F2E
+Surface 1 padrão
+3º lugar — fundo
+#1C1F2E
+Surface 1 padrão
+Avatar 1º
+56px
+Tamanho do círculo de avatar
+Avatar 2º e 3º
+44px
+Menor que o líder
+Número da posição
+Space Grotesk 700 · 48px · opacity 0.15
+Número grande e apagado — decorativo
+
+
+
+5. Estética — Raios, Espaçamentos e Bordas
+5.1 Sistema de Border-Radius
+O sistema usa 5 valores de border-radius com significados específicos. Nunca usar valores fora desta escala, pois cada valor comunica o tipo de componente ao usuário.
+
+Valor
+Token CSS
+Uso
+4px
+--radius-xs
+Badges de status, indicadores, tooltips pequenos
+8px
+--radius-sm
+Inputs e campos de formulário (texto, select, textarea)
+12px
+--radius-md
+Inputs de formulário maiores, botões de seleção de duração, dropdowns
+16px
+--radius-lg
+Cards principais (cloud card, ranking card, preview card)
+24px
+--radius-xl
+Painéis e containers de seção (ex: bloco CREATE, bloco PREVIEW)
+999px
+--radius-pill
+Botões de ação, pills de categoria, avatares — qualquer elemento oval
+
+
+5.2 Escala de Espaçamento
+O espaçamento segue uma base de 4px. Todos os valores de margin, padding e gap devem ser múltiplos de 4. Isso garante consistência em toda a interface e alinha com o grid padrão de design.
+
+Valor
+Token CSS
+Uso
+4px
+--space-1
+Gap mínimo entre ícone e texto; separador visual interno
+8px
+--space-2
+Gap entre elementos relacionados dentro de um componente (ícone + label)
+12px
+--space-3
+Gap entre cards em grid; espaço interno de pills
+16px
+--space-4
+Padding interno de cards; gap entre seções de um formulário
+20px
+--space-5
+Padding horizontal de cards maiores
+24px
+--space-6
+Espaçamento entre seções de conteúdo dentro de uma página
+32px
+--space-8
+Margem entre grupos principais de conteúdo na página
+48px
+--space-12
+Espaçamento entre seções principais (ex: entre o hero e o feed)
+64px
+--space-16
+Padding vertical do header; espaços maiores na landing page
+
+
+5.3 Sistema de Bordas e Elevação
+O sistema não usa box-shadow para criar profundidade. Em vez disso, a elevação é comunicada pela cor de fundo (camadas mais escuras = mais baixas). Bordas são usadas para delimitar componentes, não para decoração.
+
+Estado
+Valor CSS
+Descrição
+Padrão (repouso)
+0.5px solid rgba(255,255,255,0.08)
+Borda quase invisível — delimita sem poluir
+Hover
+1px solid rgba(255,255,255,0.20)
+Aumenta espessura e opacidade
+Foco / Input ativo
+1.5px solid #9333EA
+Roxo primário indica campo em uso
+Card em hover
+1px solid rgba(147,51,234,0.40)
+Toque de cor da marca
+Erro
+1.5px solid #EF4444
+Vermelho substitui o roxo em foco com erro
+Sucesso
+1.5px solid #22C55E
+Verde substitui o roxo em foco com sucesso
+Destaque / Featured
+2px solid #9333EA
+Único caso de borda de 2px — item destacado
+Desabilitado
+0.5px solid rgba(255,255,255,0.04)
+Ainda mais sutil que o padrão
+
+Regra de espessura: nunca use bordas com mais de 2px, exceto em divisores decorativos de seção. Bordas grossas comunicam 'erro grave' ou 'seleção principal' — usar com parcimônia.
+5.4 Sombras — Uso Restrito
+O sistema evita sombras como regra geral. As únicas exceções permitidas são:
+Focus ring em inputs: box-shadow: 0 0 0 3px rgba(147,51,234,0.30) — cria um halo roxo ao redor do campo focado, em adição à borda colorida.
+Tooltips e popovers: box-shadow: 0 8px 24px rgba(0,0,0,0.40) — sombra preta forte para comunicar que o elemento flutua acima de tudo.
+Modais: box-shadow: 0 24px 64px rgba(0,0,0,0.60) — sombra mais intensa para modais de tela cheia.
+Nesses três casos, o uso de sombra é funcional — comunica elevação real, não decoração.
+
+
+6. Componentes Especiais da Plataforma
+6.1 Pills de Categoria
+As pills são o principal mecanismo de navegação do feed. O usuário vê imediatamente quais categorias existem e a cor de cada uma. Regras:
+For You (selecionado como padrão): fundo branco (#FFFFFF), texto preto (#111827), borda branca. Único item com fundo branco na lista.
+Trending, Drama, Funny etc.: fundo na cor da categoria, texto branco, sem borda.
+Item não selecionado: fundo transparente, texto secundário (#9CA3AF), borda 0.5px sutil.
+Só um item pode estar selecionado por vez (seleção exclusiva).
+A lista é scrollável horizontalmente em mobile com botão de avanço visível em desktop.
+6.2 Player de Áudio Inline
+Usado em cards de cloud de áudio e no chat de mensagens. O design do player varia conforme o contexto:
+No feed (card de cloud): fundo roxo escuro (#3B0764), waveform em roxo claro (#C084FC), botão play circular roxo sólido. Exibe nome do autor e duração.
+No chat (mensagem enviada): fundo roxo primário (#9333EA) com waveform branca semitransparente. Visual de 'bolha de mensagem' com border-radius assimétrico.
+Waveform: série de barras verticais de altura variável, representando a amplitude do áudio. As barras já reproduzidas ficam em roxo claro; as não reproduzidas em branco com 30% de opacidade.
+6.3 Avatar com Inicial
+Quando o usuário não tem foto de perfil (ou ela não carregou), o sistema exibe um círculo com a inicial do nome.
+Propriedade
+Valor
+Detalhe
+Tamanho padrão (feed/chat)
+40px
+Diâmetro do círculo
+Tamanho grande (perfil)
+80px
+Tela de perfil e configurações
+Tamanho ranking 1º
+56px
+Pódio do Meet
+Tamanho ranking 2º e 3º
+44px
+Pódio do Meet
+Fundo
+#9333EA
+Roxo primário como padrão
+Texto
+#FFFFFF
+Inicial em branco, Inter 500
+Tamanho da fonte
+40% do diâmetro
+Proporcional ao avatar
+Indicador de status
+Círculo de 10px na posição 8h (inferior esquerda)
+Verde (#22C55E) online · Cinza (#6B7280) offline
+Borda em stacks
+1.5px solid Surface 1 (#1C1F2E)
+Separa avatares em sobreposição
+
+6.4 Badge AO VIVO
+Indica que uma cloud está ativa no momento. Deve chamar atenção sem competir com o conteúdo.
+Composição: ponto verde animado (pulse de 1s) + texto 'AO VIVO' em Inter 500 11px uppercase + tempo restante em texto terciário.
+Posição: sempre no canto superior direito do card, alinhado ao centro vertical com o badge de categoria.
+Animação do ponto: scale de 1.0 a 1.4 e volta, com opacity de 1.0 a 0.6, loop infinito de 1.2s. Respeitar prefers-reduced-motion.
+6.5 Hypar — Reação da Plataforma
+O Hypar é o equivalente do 'curtir' no Clouds. Usa o ícone de chama (🔥) para diferenciar do coração tradicional e reforçar o conceito de conteúdo 'em alta'.
+Botão inativo: ícone de chama em texto secundário + contador em texto terciário.
+Botão ativo (hypado): ícone de chama em #F97316 (laranja) + contador em #F97316.
+Animação ao dar hypar: scale de 1.0 → 1.4 → 1.0 em 300ms com spring easing. O contador incrementa com um flip vertical de 150ms.
+Reverter hypar: mesma animação, contador decrementa.
+
+
+7. Diretrizes de Usabilidade para Novos Usuários
+Por ser uma plataforma com mecânicas proprietárias (Clouds efêmeras, Hypar, pódio de hypes), o sistema deve guiar novos usuários sem tutoriais explícitos. Cada componente deve ser autoexplicativo.
+7.1 Primeiras Impressões — Tela de Feed
+O título 'Descubra conversas acontecendo agora.' deve aparecer completo, sem truncamento, em qualquer tamanho de tela.
+O subtítulo 'Explore topics quentes...' deve estar sempre visível — não ocultar em mobile.
+Cards devem mostrar o timer imediatamente — o senso de urgência ('29:57 restantes') é o principal motivador de engajamento.
+O botão 'Entrar na conversa' deve ser o elemento mais saliente de cada card — maior, mais colorido e com ícone (+).
+7.2 Estados Vazios
+Quando não há conteúdo, o estado vazio deve convidar à ação, não apenas informar a ausência de conteúdo.
+Ícone: versão do logo Clouds com X ou símbolo de espera, em roxo com 30% de opacidade.
+Título: curto e direto. Ex: 'Nenhuma Cloud ativa aqui.'
+Subtítulo: convite claro. Ex: 'Seja o primeiro a iniciar uma conversa nesta categoria.'
+CTA: botão primário visível. Ex: 'Criar uma Cloud agora'.
+7.3 Feedback de Ações
+O sistema deve confirmar toda ação do usuário em menos de 100ms.
+Publicar cloud: transição do botão 'Publish cloud' para estado loading (spinner), depois redirect para o card no feed com animação de entrada.
+Hypar: feedback imediato via animação (veja seção 6.5). Nunca aguardar resposta do servidor para atualizar o visual.
+Seguir usuário: botão muda imediatamente de 'Seguir' (roxo) para 'Seguindo' (outline), independente da latência.
+Erro de rede: toast na parte inferior da tela com fundo vermelho escuro (#7F1D1D), ícone de alerta e mensagem clara do problema com ação de tentar novamente.
+7.4 Acessibilidade Mínima
+Contraste de texto: mínimo 4.5:1 para texto normal, 3:1 para texto grande (WCAG AA).
+Área de toque mínima: 44x44px em todos os elementos interativos.
+Focus visible: todos os elementos interativos devem ter outline visível ao navegar por teclado.
+Reduced motion: todas as animações devem ser desativadas via @media (prefers-reduced-motion: reduce).
+Alt text: avatares devem ter alt='Avatar de [nome]'; ícones decorativos devem ter aria-hidden='true'.
+
+
+8. Referência de Tokens CSS
+Abaixo, os tokens CSS centralizados no :root para uso em toda a aplicação. Centralizar aqui garante que uma única mudança atualize toda a interface.
+
+:root {
+  /* Cores principais */
+  --color-primary:       #9333EA;
+  --color-primary-hover: #7C3AED;
+  --color-primary-press: #6D28D9;
+  --color-primary-light: #C084FC;
+  --color-primary-faint: #E9D5FF;
+
+  /* Superfícies */
+  --bg-root:    #09090B;
+  --bg-nav:     #111827;
+  --surface-1:  #1C1F2E;
+  --surface-2:  #252840;
+  --surface-3:  #2E3157;
+  --surface-4:  #3B3E6B;
+
+  /* Texto */
+  --text-primary:   #F9FAFB;
+  --text-secondary: #9CA3AF;
+  --text-tertiary:  #6B7280;
+
+  /* Status */
+  --color-success: #22C55E;
+  --color-error:   #EF4444;
+  --color-hypar:   #F97316;
+
+  /* Border-radius */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-pill: 999px;
+
+  /* Espaçamento */
+  --space-1:  4px;  --space-2:  8px;  --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;  --space-6: 24px;
+  --space-8: 32px;  --space-12: 48px; --space-16: 64px;
+
+  /* Tipografia */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-ui:      'Inter', system-ui, sans-serif;
+  --font-mono:    'Courier New', monospace;
+}
+

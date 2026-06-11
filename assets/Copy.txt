@@ -1,0 +1,193 @@
+Clouds Community — Estrutura de Seções
+
+Navegação Global (presente em todas as páginas)
+Header / Barra de Navegação
+
+Logo + nome "Clouds Community" (canto esquerdo)
+Links principais: Home | Messages | Meet
+Ícones de ação: Busca | Publicar | Notificações | Configurações
+Avatar do usuário logado (canto direito)
+
+
+Página 1 — Feed (Home)
+Seção: Cabeçalho do Feed
+
+Label "FEED" em destaque colorido
+Título principal: "Descubra conversas acontecendo agora."
+Subtítulo: "Explore topics quentes, navegue por categorias e seja o primeiro a iniciar uma conversa."
+
+Seção: Filtros de Categoria
+
+Filtros em formato de pills/tags coloridas: For You | Trending | Drama | Funny | Sports | Real Life | Pop | Politics | Tech | Gaming | Music | Movies | Memes | ...
+Navegação horizontal com botão de avanço (">")
+
+Seção: Lista de Clouds Ativas
+
+Cards de conversas/clouds ativas
+Cada card exibe: badge de categoria, título da cloud, tempo restante ("AO VIVO" + timer), avatares dos participantes, contador de pessoas online, preview de conteúdo (texto ou player de áudio), botões de ação (Compartilhar, Hypar, Entrar na conversa)
+
+Estado vazio:
+
+Ícone de cloud
+Título: "Nenhuma Cloud ativa"
+Mensagem: "Está muito quieto por aqui. Seja o primeiro a iniciar uma conversa!"
+
+Botões flutuantes (lateral direita):
+
+Ação rápida: criar cloud | listar clouds | gravar áudio
+
+
+Página 2 — Criar Cloud (Texto)
+Seção: Cabeçalho da Página
+
+Label "CREATE"
+Título: "Start a new Cloud"
+Descrição: "Write 2–4 quick messages, choose a category and lifetime, and publish a cloud that disappears when the time ends."
+Botão: "Back to feed"
+
+Seção: Formulário de Criação
+
+Campo: Cloud title (placeholder: "A short, chat-style conversation title")
+Seletor: Category (dropdown — ex: Trending)
+Seletor: Duration (botões: 05 min | 10 min | 30 min | 1h | 24h)
+Campo: Initial messages (Message 1, Message 2 + botão "Add line")
+Botão de envio: "Publish cloud"
+
+Seção: Preview (ao vivo)
+
+Visualização em tempo real do card que será publicado no feed
+Exibe: título, categoria, tempo de duração, mensagens iniciais
+
+
+Página 3 — Criar Cloud (Áudio)
+Seção: Cabeçalho da Página
+
+Label "CREATE"
+Título: "Gravar Áudio no Feed"
+Descrição: "Grave um áudio que será publicado como uma Cloud no feed. Os ouvintes poderão participar da conversa."
+Botão: "Back to feed"
+
+Seção: Formulário de Gravação
+
+Seletor: Category (dropdown)
+Seletor: Duration (botões: 05 min | 10 min | 30 min | 1h | 24h)
+Controle de gravação: botão de gravar (record button)
+Botão de envio: "Publicar áudio no feed"
+
+Seção: Preview (ao vivo)
+
+Visualização do card de áudio que será publicado
+Exibe: título placeholder, categoria, duração, instrução para gravar
+
+
+Página 4 — Criar Enquete
+Seção: Cabeçalho da Página
+
+Label "NOVA ENQUETE"
+Título: "Criar enquete"
+Descrição: "Publique uma enquete no feed. Outros usuários poderão votar e comentar."
+Botão: "Voltar"
+
+Seção: Formulário da Enquete
+
+Campo: Pergunta da enquete (max. 120 caracteres, com contador)
+Campo: Opções (mínimo 2, máximo 6; identificadas por letras A, B, C...)
+
+Botão "+ Adicionar" para incluir mais opções
+Botão "×" para remover opções
+
+
+Seletor: Categoria (dropdown)
+Seletor: Duração (botões: 05 min | 10 min | 30 min | 1h | 24h)
+
+Seção: Preview
+
+Visualização em tempo real da enquete publicada no feed
+
+
+Página 5 — Meet (Ranking)
+Seção: Cabeçalho do Meet
+
+Label "RANKING"
+Título: "Meet 🔥"
+Descrição: "Os perfis mais hypados da plataforma. Quanto mais hypes recebidos, maior o posto no ranking."
+Contador: N perfis ativos
+
+Seção: Filtros de Região
+
+Pills de filtro: Todas as regiões | Norte | Nordeste | Centro-Oeste | Sudeste | Sul
+Campo de busca: "Buscar perfil..."
+
+Seção: Top 3 Hypados (Pódio)
+
+Exibição em formato de pódio (1º lugar no centro, 2º à esquerda, 3º à direita)
+Cada posição exibe: avatar, nome, quantidade de hypes, número da posição
+Botões: "Ver perfil" | "Seguir"
+
+Seção: Lista de Ranking (4º em diante)
+
+Lista ordenada com: posição, avatar, nome, cargo/descrição, quantidade de hypes, botões "Ver perfil" e "Seguir"
+
+
+Página 6 — Messages (Mensagens Diretas)
+Seção: Painel Lateral — Lista de Conversas
+
+Label "Mensagens" + botão "+" para nova conversa
+Campo de busca: "Buscar..."
+Lista de conversas com: avatar, nome do contato, status online (indicador verde), prévia da última mensagem, timestamp, contador de mensagens não lidas
+
+Seção: Área Principal — Conversa Aberta
+
+Cabeçalho do chat: nome do contato, status ("online"), ícones de busca, perfil e mais opções
+Histórico de mensagens: agrupado por data (ex: "02 de junho de 2026", "Hoje"), com avatares, nomes e horários
+Suporte a diferentes tipos de mensagem: texto, emoji, imagem, áudio (player inline), link de cloud compartilhada
+Campo de input: "Mensagem..." + botão de emoji + botão de áudio
+
+
+Página 7 — Configurações (Preferências)
+Seção: Cabeçalho da Página
+
+Label "CONFIGURAÇÕES"
+Título: "Preferências"
+Avatar do usuário
+
+Seção: Menu Lateral de Navegação
+
+Conta (Email, nome, sessão)
+Perfil (Foto, bio, região)
+Privacidade (Visibilidade, bloqueios)
+Notificações (Alertas e canais)
+Aparência (Tema, cores, texto)
+Acessibilidade (Contraste, atalhos)
+Segurança (Senha, 2FA)
+Dados (Export, exclusão)
+Sobre (App, legal, suporte)
+
+Seção: Painel de Conteúdo — Conta (exemplo)
+Sub-seção "Informações":
+
+Campo: Nome
+Campo: Email
+Campo: Telefone
+Botão: "Salvar"
+
+Sub-seção "Detalhes":
+
+ID da conta
+Membro desde (data)
+Clouds criadas (contador)
+Status da conta
+
+Sub-seção "Sessão":
+
+Botão: "Sair da conta"
+
+
+Componentes Reutilizáveis
+Card de Cloud — usado no Feed e nos previews de criação
+Player de Áudio — usado no Feed e no chat de mensagens
+Pills de Categoria — usadas no Feed, criação de cloud, criação de enquete
+Seletor de Duração — usado em criação de cloud, áudio e enquete
+Avatar com inicial — usado em todo o sistema
+Badge "AO VIVO" — indicador de conteúdo em tempo real
+Botão Hypar — ação de reação/curtida da plataforma
