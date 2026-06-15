@@ -1,3 +1,5 @@
+import Link from "next/link";
+import Image from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 
 type Category = {
@@ -132,8 +134,8 @@ function Icon({
     case "settings":
       return (
         <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-          <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" {...common} />
-          <path d="M19.4 15a7.9 7.9 0 0 0 .06-6l2-1.2-2-3.5-2.3.8a8.2 8.2 0 0 0-5.1-3L11.7 0h-3.4l-.3 2.1a8.2 8.2 0 0 0-5.1 3l-2.3-.8-2 3.5 2 1.2a7.9 7.9 0 0 0 0 6l-2 1.2 2 3.5 2.3-.8a8.2 8.2 0 0 0 5.1 3L8.3 24h3.4l.3-2.1a8.2 8.2 0 0 0 5.1-3l2.3.8 2-3.5-2-1.2Z" {...common} />
+          <circle cx="12" cy="12" r="3.5" {...common} />
+          <path d="M12 2.75v2.1M12 19.15v2.1M4.85 4.85l1.48 1.48M17.67 17.67l1.48 1.48M2.75 12h2.1M19.15 12h2.1M4.85 19.15l1.48-1.48M17.67 6.33l1.48-1.48" {...common} />
         </svg>
       );
     case "cloud":
@@ -210,9 +212,7 @@ function Icon({
 function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="text-white/90">
-        <Icon name="cloud" className="h-11 w-11" />
-      </div>
+      <Image src="/logo_clouds.png" alt="Clouds Community" width={44} height={44} className="h-11 w-11 object-contain" priority />
       <div className="leading-none">
         <div className="text-[28px] font-extrabold tracking-[-0.04em] text-white sm:text-[32px]">Clouds</div>
         <div className="text-[14px] font-medium uppercase tracking-[0.44em] text-white/60">Community</div>
@@ -455,15 +455,24 @@ export default function Page() {
           </a>
 
           <nav aria-label="Navegação principal" className="hidden items-center gap-4 md:flex">
-            {["Home", "Messages", "Meet"].map((item) => (
-              <a
-                key={item}
-                href="#feed"
-                className="inline-flex h-12 items-center rounded-full bg-[#1A1A1D] px-6 text-[18px] font-bold text-white transition-colors hover:bg-[#232327] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]"
-              >
-                {item}
-              </a>
-            ))}
+            <a
+              href="#feed"
+              className="inline-flex h-12 items-center rounded-full bg-[#1A1A1D] px-6 text-[18px] font-bold text-white transition-colors hover:bg-[#232327] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]"
+            >
+              Home
+            </a>
+            <a
+              href="#feed"
+              className="inline-flex h-12 items-center rounded-full bg-[#1A1A1D] px-6 text-[18px] font-bold text-white transition-colors hover:bg-[#232327] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]"
+            >
+              Messages
+            </a>
+            <Link
+              href="/meet"
+              className="inline-flex h-12 items-center rounded-full bg-[#1A1A1D] px-6 text-[18px] font-bold text-white transition-colors hover:bg-[#232327] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]"
+            >
+              Meet
+            </Link>
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
