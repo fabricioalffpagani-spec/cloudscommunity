@@ -21,6 +21,7 @@
   --color-background: var(--bg-root);
   --color-foreground: var(--text-primary);
   --font-sans: "Inter", "Segoe UI", Arial, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-mono: "Courier New", monospace;
 }
 
@@ -30,11 +31,15 @@ html {
 
 body {
   min-height: 100vh;
-  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  font-family: "DM Sans", "Inter", "Segoe UI", Arial, sans-serif;
   background:
     radial-gradient(circle at top, rgba(147, 51, 234, 0.16), transparent 28%),
     linear-gradient(180deg, #09090B 0%, #09090B 100%);
   color: var(--text-primary);
+}
+
+.font-display {
+  font-family: "Space Grotesk", system-ui, sans-serif;
 }
 
 * {
