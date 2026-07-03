@@ -215,8 +215,6 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
   const canceledRef = useRef(false);
   const waveformRef = useRef<number[]>([]);
 
-  const fmt = useMemo(() => (s: number) => formatSeconds(s), []);
-
   const start = useCallback(async () => {
     try {
       canceledRef.current = false;
@@ -227,6 +225,7 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
 
       const rec = new MediaRecorder(stream);
       chunksRef.current = [];
+
 
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
