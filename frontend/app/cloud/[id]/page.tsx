@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CloudChat from "./CloudChat";
+import CloudActions from "./CloudActions";
 
 type CloudPageProps = {
   params?: {
@@ -83,10 +84,7 @@ export default function CloudPage({ params }: CloudPageProps) {
                   <p className="mt-1 text-sm text-white/50">AO VIVO · 240 online</p>
                 </div>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-white/80">
-                <FlameIcon className="text-[#F97316]" />
-                24
-              </div>
+              <CloudActions />
             </div>
             <div className="flex-1 overflow-hidden">
               <CloudChat cloudId={params?.id ?? "unknown"} />

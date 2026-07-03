@@ -4,8 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { CSSProperties } from "react";
-import Footer from "./components/Footer";
+import CloudChat from "./cloud/[id]/CloudChat";
 
 // ─── Types
 
@@ -39,6 +38,75 @@ type Poll = {
 type FeedItem = ({ kind: "cloud" } & Cloud) | ({ kind: "poll" } & Poll);
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
+
+const SEED_CLOUDS: Cloud[] = [
+  {
+    id: "seed-1",
+    title: "Tendências da semana em Tech",
+    category: "Tech",
+    duration: "1h",
+    createdAt: new Date(Date.now() - 8 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-1",
+    hypes: 42,
+  },
+  {
+    id: "seed-2",
+    title: "Qual album do ano vai dominar?",
+    category: "Music",
+    duration: "30 min",
+    createdAt: new Date(Date.now() - 14 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-2",
+    hypes: 87,
+  },
+  {
+    id: "seed-3",
+    title: "Gaming: o melhor lançamento de 2025",
+    category: "Gaming",
+    duration: "1h",
+    createdAt: new Date(Date.now() - 3 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-3",
+    hypes: 31,
+  },
+  {
+    id: "seed-4",
+    title: "Drama das redes: o que você acha?",
+    category: "Drama",
+    duration: "24h",
+    createdAt: new Date(Date.now() - 30 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-4",
+    hypes: 113,
+  },
+  {
+    id: "seed-5",
+    title: "Futebol: tabela e expectativas",
+    category: "Sports",
+    duration: "30 min",
+    createdAt: new Date(Date.now() - 2 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-5",
+    hypes: 58,
+  },
+  {
+    id: "seed-6",
+    title: "Memes do momento — compartilhe o seu",
+    category: "Memes",
+    duration: "10 min",
+    createdAt: new Date(Date.now() - 1 * 60 * 1000),
+    mode: "text",
+    visibility: "public",
+    href: "/cloud/seed-6",
+    hypes: 204,
+  },
+];
 
 const CATEGORIES: Category[] = [
   { name: "For You",   bg: "#FFFFFF", color: "#111827" },
@@ -129,8 +197,9 @@ function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
 function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M12 2C8.5 7.5 8 10.25 8 13.5c0 4.142 3.358 7.5 7.5 7.5 2.429 0 4.5-1.821 4.5-4.5 0-2.622-2.736-4.744-4.695-7.074C14.007 6.88 14.5 4.119 12 2Z" />
-      <path opacity="0.45" d="M12 4.5c1.225 1.865 1.966 3.61 1.966 5.5 0 1.954-1.036 3.548-2.466 4.5-.584-1.216-1.15-2.721-1.15-4.5 0-1.666.58-3.366 1.65-5.5Z" />
+      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
+      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
+      <path opacity="0.4" d="M12 7.5c.5 1.5 1 3 1 4.5 0 2.5-1 4.5-1 5-.5-1-1-2.5-1-5 0-1.5.5-3 1-4.5Z" />
     </svg>
   );
 }
@@ -978,34 +1047,71 @@ export default function Page() {
   const [clouds, setClouds] = useState<Cloud[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const router = useRouter();
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
+  // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
+  const [participants, setParticipants] = useState<number>(0);
+
+  // Slide animation: "left" = next, "right" = prev, null = settled
+  const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
 
   const navigateCloud = (direction: number) => {
-    setCurrentCloudIndex(prev => {
-      const newIndex = prev + direction;
-      if (newIndex < 0) return clouds.length - 1;
-      if (newIndex >= clouds.length) return 0;
-      return newIndex;
-    });
+    const dir = direction > 0 ? "left" : "right";
+    setSlideAnim(dir);
+    setTimeout(() => {
+      setCurrentCloudIndex(prev => {
+        const newIndex = prev + direction;
+        if (newIndex < 0) return clouds.length - 1;
+        if (newIndex >= clouds.length) return 0;
+        return newIndex;
+      });
+      setSlideAnim(null);
+    }, 260);
   };
 
 
   useEffect(() => {
+    // Gate de primeira visita: primeiro acesso vai para /login,
+    // visitas seguintes renderizam o feed normalmente.
+    let firstVisit = false;
+    try {
+      const key = "cloudscommunity:seen";
+      const seen = localStorage.getItem(key);
+      if (!seen) {
+        localStorage.setItem(key, "1");
+        firstVisit = true;
+      }
+    } catch {
+      // ignore (ex: SSR ou modo privado restrito)
+    }
+
+    if (firstVisit) {
+      router.replace("/login");
+      // Não hidrata o feed — a página será substituída pelo /login.
+      return;
+    }
+
     try {
       const storedClouds = localStorage.getItem("cloudscommunity:clouds");
       if (storedClouds) {
         const parsed = JSON.parse(storedClouds) as Array<Omit<Cloud, "createdAt"> & { createdAt: string }>;
-        setClouds(parsed.map((cloud) => ({
+        const loaded = parsed.map((cloud) => ({
           ...cloud,
           createdAt: new Date(cloud.createdAt),
-        })));
+        }));
+        // Merge seed clouds that are not already stored
+        const existingIds = new Set(loaded.map(c => c.id));
+        const missing = SEED_CLOUDS.filter(c => !existingIds.has(c.id));
+        setClouds([...loaded, ...missing]);
+      } else {
+        setClouds(SEED_CLOUDS);
       }
     } catch {
-      // ignore invalid stored clouds
+      setClouds(SEED_CLOUDS);
     }
+
     try {
       const storedPolls = localStorage.getItem("cloudscommunity:polls");
       if (storedPolls) {
@@ -1018,7 +1124,10 @@ export default function Page() {
     } catch {
       // ignore invalid stored polls
     }
+
     setHydrated(true);
+    // router from next/navigation is stable; keeping deps empty is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1035,6 +1144,25 @@ export default function Page() {
     const interval = setInterval(() => setTick((value) => value + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Reset + seed participants when active cloud changes
+  useEffect(() => {
+    if (clouds.length === 0) return;
+    const base = 12 + ((clouds[currentCloudIndex]?.id.charCodeAt(0) ?? 0) % 40);
+    setParticipants(base);
+  }, [currentCloudIndex, clouds]);
+
+  // Simulate users joining/leaving every 3–7 seconds
+  useEffect(() => {
+    if (clouds.length === 0) return;
+    const iv = setInterval(() => {
+      setParticipants(p => {
+        const delta = Math.floor(Math.random() * 5) - 2; // -2 to +2
+        return Math.max(1, p + delta);
+      });
+    }, 3000 + Math.floor(Math.random() * 4000));
+    return () => clearInterval(iv);
+  }, [currentCloudIndex, clouds.length]);
 
   const closeModal = () => setModal(null);
 
@@ -1080,6 +1208,8 @@ export default function Page() {
   // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
   const visibleItems = allItems;
 
+  // Aguarda hidratação para evitar flash do feed antes de um possível redirect.
+  if (!hydrated) return null;
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
@@ -1096,10 +1226,10 @@ export default function Page() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
           <a href="#feed" className="flex shrink-0 items-center gap-3">
-            <Image src="/logo_clouds.png" alt="Clouds Community" width={54} height={54} className="object-contain" style={{ width: 54, height: 54 }} priority />
+            <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain" style={{ width: 64, height: 64 }} priority />
             <div className="leading-none">
-              <div className="text-[30px] font-bold tracking-[-0.01em] text-white">Clouds</div>
-              <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.5em] text-white/45">Community</div>
+              <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
+              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
             </div>
           </a>
 
@@ -1111,9 +1241,7 @@ export default function Page() {
             <Link href="/following" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
               Seguindo
             </Link>
-            <Link href="/login" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
-              Login
-            </Link>
+
           </nav>
 
           <div className="flex items-center gap-3">
@@ -1136,85 +1264,145 @@ export default function Page() {
         </div>
       </header>
 
-      {/* Main */}
-      <main className="mx-auto max-w-[1280px] px-5 pb-32 pt-[108px] lg:px-8">
-        <section id="feed" className="relative">
-          {/* Cloud Chat View */}
-          {clouds.length > 0 && (
-            <div className="mt-8 relative">
-              {/* Left Arrow Navigation */}
-              <div className="absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10">
+      {/* Main — ocupa o restante da viewport abaixo do header fixo (88px) e acima da nav (72px) */}
+      <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-hidden">
+        <div className="mx-auto flex h-full max-w-[1280px] flex-col px-5 lg:px-8">
+
+          {/* ── Cloud ativa ── */}
+          {clouds.length > 0 && (() => {
+            const cloud = clouds[currentCloudIndex];
+            const durationSecs = parseDurationSeconds(cloud.duration);
+            const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
+            const remaining = Math.max(durationSecs - elapsed, 0);
+            const isLive = remaining > 0;
+            void tick;
+            return (
+              <div className="relative flex flex-1 flex-col overflow-hidden py-4">
+                {/* Arrow left */}
                 <button
                   onClick={() => navigateCloud(-1)}
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
+                  aria-label="Cloud anterior"
+                  className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
                 >
-                  <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m15 18-6-6 6-6" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                 </button>
-              </div>
 
-              {/* Cloud Content */}
-              <div className="mx-16 rounded-2xl border border-white/[0.08] bg-[#111116] p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-[24px] font-semibold text-white">{clouds[currentCloudIndex].title}</h2>
-                    <div className="mt-2 flex items-center gap-3">
-                      <span className="rounded-full bg-[#7C3AED]/20 px-3 py-1 text-[12px] font-semibold text-[#C084FC]">{clouds[currentCloudIndex].category}</span>
-                      <span className="text-[13px] text-white/50">{clouds[currentCloudIndex].duration}</span>
-                      <div className="flex items-center gap-2 text-[12px] text-white/50">
-                        <span className="relative flex h-2 w-2">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
+                {/* Card — slide animation */}
+                <div
+                  className="mx-12 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111116]"
+                  style={{
+                    transition: "transform 0.26s cubic-bezier(0.4,0,0.2,1), opacity 0.26s ease",
+                    transform: slideAnim === "left"
+                      ? "translateX(-48px)"
+                      : slideAnim === "right"
+                      ? "translateX(48px)"
+                      : "translateX(0)",
+                    opacity: slideAnim ? 0 : 1,
+                  }}
+                >
+
+                  {/* ── Cabeçalho fixo dentro do card ── */}
+                  <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] px-6 py-4">
+                    <div className="min-w-0">
+                      <h2 className="text-[20px] font-semibold text-white truncate">{cloud.title}</h2>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-[#7C3AED]/20 px-3 py-0.5 text-[11px] font-semibold text-[#C084FC]">{cloud.category}</span>
+
+                        {/* AO VIVO + countdown */}
+                        {isLive ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#22C55E]/15 px-3 py-0.5 text-[11px] font-semibold text-[#22C55E]">
+                            <span className="relative flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
+                            </span>
+                            AO VIVO · {formatCountdown(remaining)}
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-white/10 px-3 py-0.5 text-[11px] font-semibold text-white/40">ENCERRADA</span>
+                        )}
+
+                        {/* Participantes */}
+                        <span className="inline-flex items-center gap-1 text-[11px] text-white/50">
+                          <UserIcon s={12} />
+                          {participants} online
                         </span>
-                        <span>{Math.floor(Math.random() * 50) + 10} participantes</span>
                       </div>
                     </div>
+
+                    <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-[#F97316]">
+                      <FireIcon s={14} />
+                      {cloud.hypes || 0}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[12px] text-white/50">
-                    <UserIcon s={14} />
-                    <span>{clouds[currentCloudIndex].hypes || 0}</span>
+
+                  {/* ── Chat (ocupa o restante) ── */}
+                  <div className="flex-1 overflow-hidden">
+                    <CloudChat cloudId={cloud.id} />
                   </div>
                 </div>
 
-                {/* Chat Messages Area */}
-                <div className="h-[680px] overflow-y-auto rounded-2xl bg-[#0D0D10] p-5 space-y-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
-                  <div className="text-center py-10">
-                    <p className="text-[14px] text-white/40">Nenhuma mensagem ainda. Seja o primeiro a participar!</p>
-                  </div>
-                </div>
-
-
-                {/* Chat Input */}
-                <div className="mt-4 flex gap-3">
-                  <input
-                    type="text"
-                    placeholder="Digite sua mensagem..."
-                    className="flex-1 rounded-full bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#A855F7] transition"
-                  />
-                  <button className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
-                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 2L11 13" />
-                      <path d="M22 2l-7 20-4-9-9-4 20-7Z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Right Arrow Navigation */}
-              <div className="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10">
+                {/* Arrow right */}
                 <button
                   onClick={() => navigateCloud(1)}
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
+                  aria-label="Próxima Cloud"
+                  className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
                 >
-                  <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 18 6-6-6-6" />
-                  </svg>
+                  <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
                 </button>
+
+                {/* Dot indicator */}
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-1.5 pb-1">
+                  {clouds.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        const dir = i > currentCloudIndex ? "left" : "right";
+                        setSlideAnim(dir);
+                        setTimeout(() => { setCurrentCloudIndex(i); setSlideAnim(null); }, 260);
+                      }}
+                      aria-label={`Ir para Cloud ${i + 1}`}
+                      className="rounded-full transition-all"
+                      style={{
+                        width: i === currentCloudIndex ? 20 : 6,
+                        height: 6,
+                        background: i === currentCloudIndex ? "#A855F7" : "rgba(255,255,255,0.2)",
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
+            );
+          })()}
+
+          {/* ── Estado vazio ── */}
+          {clouds.length === 0 && (
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/[0.08]">
+                <svg viewBox="0 0 24 24" width={36} height={36} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
+                  <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
+                  <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[18px] font-semibold text-white">Nenhuma Cloud ativa</p>
+                <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
+                  Está muito quieto por aqui. Seja o primeiro a iniciar uma conversa!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModal("create")}
+                className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+              >
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 5v14" /><path d="M5 12h14" />
+                </svg>
+                Criar uma Cloud
+              </button>
             </div>
           )}
-        </section>
+
+        </div>
       </main>
 
 
@@ -1235,6 +1423,18 @@ export default function Page() {
           </Link>
         </div>
       </nav>
+
+      {/* FAB — criar nova Cloud */}
+      <button
+        type="button"
+        aria-label="Criar nova Cloud"
+        onClick={() => setModal("create")}
+        className="fixed bottom-[120px] right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] text-white shadow-[0_4px_24px_rgba(147,51,234,0.5)] transition hover:bg-[#7C3AED] hover:scale-105 active:scale-95"
+      >
+        <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 5v14" /><path d="M5 12h14" />
+        </svg>
+      </button>
 
     </div>
   );

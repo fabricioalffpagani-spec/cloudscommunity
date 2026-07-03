@@ -3,7 +3,6 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import Footer from "../components/Footer";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aparencia" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -264,10 +263,10 @@ function Header() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
       <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
         <Link href="/" className="flex shrink-0 items-center gap-3">
-          <Image src="/logo_clouds.png" alt="Clouds Community" width={54} height={54} className="object-contain" style={{width:54,height:54}} priority/>
+          <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain" style={{width:64,height:64}} priority/>
           <div className="leading-none">
-            <div className="text-[30px] font-bold tracking-[-0.01em] text-white">Clouds</div>
-            <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.5em] text-white/45">Community</div>
+            <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
+            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
           </div>
         </Link>
         <nav className="hidden items-center gap-3 md:flex">
@@ -318,8 +317,6 @@ export default function SettingsPage() {
         </div>
         <main className="flex-1 min-w-0 pt-8">{panels[active]}</main>
       </div>
-      
-      <Footer />
     </div>
   );
 }

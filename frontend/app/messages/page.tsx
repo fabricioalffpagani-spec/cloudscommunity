@@ -5,7 +5,6 @@ import Image from "next/image";
 import {
   useState, useRef, useEffect, useCallback,
 } from "react";
-import Footer from "../components/Footer";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -210,7 +209,7 @@ function MsgBubble({
 
   const bubble = () => {
     if (msg.type === "text") return (
-      <div className={`rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`}>
+      <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`}>
         {msg.content}
       </div>
     );
@@ -218,40 +217,40 @@ function MsgBubble({
       <AudioMessageBubble isRight={isRight} msg={msg} />
     );
     if (msg.type === "link") return (
-      <div className={`flex flex-col gap-2 rounded-2xl px-4 py-3 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ maxWidth: 320 }}>
-        <p className="text-[14px] leading-relaxed text-white">{msg.content}</p>
+      <div className={`flex flex-col gap-2 rounded-2xl px-4 py-3.5 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ maxWidth: 340 }}>
+        <p className="text-[15px] leading-relaxed text-white">{msg.content}</p>
         <div className="rounded-xl bg-black/25 px-3 py-2">
-          <p className="text-[10px] text-white/50 mb-0.5">Link:</p>
+          <p className="text-[11px] text-white/50 mb-0.5">Link:</p>
           <a href={msg.url} target="_blank" rel="noopener noreferrer"
-            className="break-all text-[11px] text-[#C084FC] underline hover:text-white/80">{msg.url}</a>
+            className="break-all text-[12px] text-[#C084FC] underline hover:text-white/80">{msg.url}</a>
         </div>
       </div>
     );
   };
 
   return (
-    <div className={`flex items-end gap-2 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="w-8 shrink-0"><Avatar initials={initials} size={30} color={color} /></div>
+    <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
+      <div className="w-9 shrink-0"><Avatar initials={initials} size={34} color={color} /></div>
       <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
-        <span className="px-1 text-[11px] font-semibold text-white/40">{msg.sender}</span>
+        <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
         {msg.replyTo && (
-          <div className="rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2 text-[12px] text-white/70">
+          <div className="rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2.5 text-[13px] text-white/70">
             <p className="font-semibold text-white">{msg.replyTo.sender}</p>
             <p className="mt-1 leading-snug line-clamp-2">{msg.replyTo.content}</p>
           </div>
         )}
         {bubble()}
-        <div className={`flex flex-wrap items-center gap-2 px-1 text-[11px] text-white/40 ${isRight ? "flex-row-reverse" : ""}`}>
+        <div className={`flex flex-wrap items-center gap-2 px-1 text-[12px] text-white/40 ${isRight ? "flex-row-reverse" : ""}`}>
           <button type="button" onClick={() => startReply(msg)}
-            className="rounded-full px-2 py-1 transition hover:bg-white/10">
+            className="rounded-full px-2.5 py-1 transition hover:bg-white/10">
             Responder
           </button>
           <button type="button" onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
-            className="rounded-full px-2 py-1 transition hover:bg-white/10">
+            className="rounded-full px-2.5 py-1 transition hover:bg-white/10">
             Reagir
           </button>
           {msg.reaction && (
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[12px]">
+            <span className="rounded-full bg-white/10 px-2 py-1 text-[14px]">
               {msg.reaction}
             </span>
           )}
@@ -260,17 +259,17 @@ function MsgBubble({
           <div className="mt-2 flex flex-wrap gap-2 px-1">
             {EMOJI_BANK.map(emoji => (
               <button key={emoji} type="button" onClick={() => addReaction(msg.id, emoji)}
-                className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2 text-[18px] transition hover:border-white/20 hover:bg-white/10">
+                className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2.5 text-[20px] transition hover:border-white/20 hover:bg-white/10">
                 {emoji}
               </button>
             ))}
             <button type="button" onClick={() => setReactionPickerFor(null)}
-              className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2 text-[14px] text-white/80 transition hover:border-white/20 hover:bg-white/10">
+              className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2.5 text-[15px] text-white/80 transition hover:border-white/20 hover:bg-white/10">
               Fechar
             </button>
           </div>
         )}
-        <div className={`flex items-center gap-1 px-1 text-[10px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
+        <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
           <span>{msg.time}</span>
           {isRight && <span className="text-[#C084FC]">{icons.check2()}</span>}
         </div>
@@ -298,23 +297,23 @@ function AudioMessageBubble({ isRight, msg }: { isRight: boolean; msg: Extract<M
   };
 
   return (
-    <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ minWidth: 220 }}>
+    <div className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ minWidth: 250 }}>
       <button type="button" aria-label={playing ? "Pause" : "Play"}
         onClick={toggle}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}>
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}>
         {playing ? icons.x(14) : icons.play()}
       </button>
 
       <div className="flex flex-1 flex-col gap-2">
         <div className="flex items-end">
-          <div className="flex items-end gap-[4px]" style={{ height: 26 }}>
+          <div className="flex items-end gap-[4px]" style={{ height: 30 }}>
             {(msg.waveform ?? Array.from({ length: 28 }, () => 6)).map((h, i) => (
               <span key={i} className="block w-[3px] rounded-full bg-white/80" style={{ height: `${h}px` }} />
             ))}
           </div>
         </div>
 
-        <div className="flex justify-between text-[10px] text-white/50"><span>{msg.audioUrl ? "" : "0:00"}</span><span>{msg.duration}</span></div>
+        <div className="flex justify-between text-[11px] text-white/50"><span>{msg.audioUrl ? "" : "0:00"}</span><span>{msg.duration}</span></div>
         {msg.audioUrl && <audio ref={audioRef} src={msg.audioUrl} className="hidden" />}
       </div>
     </div>
@@ -455,20 +454,13 @@ export default function MessagesPage() {
 
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
-            <Image src="/logo_clouds.png" alt="Clouds Community" width={54} height={54}
-              className="object-contain" style={{ width: 54, height: 54 }} priority />
+            <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64}
+              className="object-contain" style={{ width: 64, height: 64 }} priority />
             <div className="leading-none">
-              <div className="text-[30px] font-bold tracking-[-0.01em] text-white">Clouds</div>
-              <div className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.5em] text-white/45">Community</div>
+              <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
+              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
             </div>
           </Link>
-
-          {/* Nav — Messages highlighted */}
-          <nav aria-label="Navegação principal" className="hidden items-center gap-3 md:flex">
-            <Link href="/"        className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white transition hover:bg-[#28282C]">Home</Link>
-            <Link href="/messages" className="inline-flex h-12 items-center rounded-full bg-[#7C3AED] px-7 text-[17px] font-semibold text-white transition hover:bg-[#6D28D9]">Messages</Link>
-            <Link href="/meet"    className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white transition hover:bg-[#28282C]">Meet</Link>
-          </nav>
 
           {/* Action icons */}
           <div className="flex items-center gap-3">
@@ -488,19 +480,19 @@ export default function MessagesPage() {
       <div className="flex flex-1 overflow-hidden pt-[88px]">
 
         {/* Sidebar */}
-        <aside className="flex w-[280px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
-            <span className="text-[15px] font-bold text-white">Mensagens</span>
+        <aside className="flex w-[320px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+            <span className="text-[17px] font-bold text-white">Mensagens</span>
             <button type="button" aria-label="Nova conversa"
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">
-              {icons.plus(16)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">
+              {icons.plus(18)}
             </button>
           </div>
 
-          <div className="px-3 py-2.5">
-            <div className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-3 py-2">
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-3 py-2.5">
               {icons.search_sm()}
-              <input type="search" placeholder="Buscar..." className="w-full bg-transparent text-[13px] text-white placeholder:text-white/30 outline-none" />
+              <input type="search" placeholder="Buscar..." className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none" />
             </div>
           </div>
 
@@ -508,30 +500,30 @@ export default function MessagesPage() {
             {convs.map(conv => (
               <div key={conv.id} role="button" tabIndex={0} onClick={() => setActiveId(conv.id)}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveId(conv.id); } }}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition cursor-pointer ${activeId === conv.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}>
+                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition cursor-pointer ${activeId === conv.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}>
                 <Link href={`/users/${conv.id}`} className="relative shrink-0">
-                  <Avatar initials={conv.avatar} size={38} color={conv.color} />
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[1.5px] border-[#0D0D10] ${statusDot[conv.status]}`} />
+                  <Avatar initials={conv.avatar} size={44} color={conv.color} />
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conv.status]}`} />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[13px] font-semibold text-white">{conv.name}</span>
-                    <span className="shrink-0 text-[11px] text-white/40">{conv.time}</span>
+                    <span className="truncate text-[14px] font-semibold text-white">{conv.name}</span>
+                    <span className="shrink-0 text-[12px] text-white/40">{conv.time}</span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
-                    {conv.lastMsgType === "audio" && <svg viewBox="0 0 16 16" className="h-3 w-3 shrink-0 text-white/50" aria-hidden="true"><path d="M8 10a2 2 0 0 0 2-2V5a2 2 0 1 0-4 0v3a2 2 0 0 0 2 2ZM13 8a5 5 0 0 1-10 0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-                    <span className="truncate text-[12px] text-white/50">{conv.lastMessage}</span>
-                    {(conv.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[10px] font-bold text-white">{conv.unread}</span>}
+                    {conv.lastMsgType === "audio" && <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden="true"><path d="M8 10a2 2 0 0 0 2-2V5a2 2 0 1 0-4 0v3a2 2 0 0 0 2 2ZM13 8a5 5 0 0 1-10 0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+                    <span className="truncate text-[13px] text-white/50">{conv.lastMessage}</span>
+                    {(conv.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conv.unread}</span>}
                   </div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-white/[0.07] px-4 py-3">
-            <Link href="/profile" className="flex items-center gap-2.5">
-              <Avatar initials="F" size={32} color="#8B5CF6" />
-              <span className="text-[13px] font-medium text-white/70">Você</span>
+          <div className="border-t border-white/[0.07] px-5 py-4">
+            <Link href="/profile" className="flex items-center gap-3">
+              <Avatar initials="F" size={38} color="#8B5CF6" />
+              <span className="text-[14px] font-medium text-white/70">Você</span>
             </Link>
           </div>
         </aside>
@@ -540,28 +532,28 @@ export default function MessagesPage() {
         <main className="flex flex-1 flex-col overflow-hidden">
 
           {/* Chat header */}
-          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#0D0D10] px-5 py-3">
+          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#0D0D10] px-6 py-4">
             <div className="flex items-center gap-3">
               <Link href={`/users/${activeConv.id}`} className="relative">
-                <Avatar initials={activeConv.avatar} size={38} color={activeConv.color} />
-                <span className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-[1.5px] border-[#0D0D10] ${statusDot[activeConv.status]}`} />
+                <Avatar initials={activeConv.avatar} size={44} color={activeConv.color} />
+                <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConv.status]}`} />
               </Link>
               <div>
-                <p className="text-[14px] font-semibold text-white">{activeConv.name}</p>
-                <p className={`text-[11px] ${activeConv.status === "online" ? "text-[#22C55E]" : activeConv.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
+                <p className="text-[16px] font-semibold text-white">{activeConv.name}</p>
+                <p className={`text-[13px] ${activeConv.status === "online" ? "text-[#22C55E]" : activeConv.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
                   {activeConv.status === "online" ? "online" : activeConv.status === "busy" ? "ocupado" : "offline"}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {/* Call button */}
               <button type="button" aria-label="Ligar"
                 onClick={() => setCalling(true)}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
                 {icons.phone()}
               </button>
               <button type="button" aria-label="Buscar na conversa"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
                 {icons.search_sm()}
               </button>
             </div>
@@ -573,7 +565,7 @@ export default function MessagesPage() {
           )}
 
           {/* Messages list */}
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
             {msgs.map(msg =>
               msg.type === "date" ? (
                 <div key={msg.id} className="flex justify-center py-1">
@@ -594,12 +586,12 @@ export default function MessagesPage() {
           </div>
 
           {/* Input bar */}
-          <div className="border-t border-white/[0.07] bg-[#0D0D10] px-4 py-3">
+          <div className="border-t border-white/[0.07] bg-[#0D0D10] px-5 py-4">
             {emojiOpen && (
-              <div className="mb-3 grid grid-cols-5 gap-2 rounded-3xl bg-[#15161C] p-3">
+              <div className="mb-3 grid grid-cols-5 gap-2 rounded-3xl bg-[#15161C] p-4">
                 {EMOJI_BANK.map(emoji => (
                   <button key={emoji} type="button" onClick={() => handleSelectEmoji(emoji)}
-                    className="rounded-2xl border border-white/[0.08] bg-[#0E0F15] px-3 py-2 text-[18px] transition hover:border-white/20 hover:bg-white/10">
+                    className="rounded-2xl border border-white/[0.08] bg-[#0E0F15] px-3 py-2.5 text-[20px] transition hover:border-white/20 hover:bg-white/10">
                     {emoji}
                   </button>
                 ))}
@@ -607,37 +599,37 @@ export default function MessagesPage() {
             )}
             {recorder.state === "recording" || recorder.state === "paused" ? (
               /* Recording UI with waveform, pause/resume, send, cancel */
-              <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-[#12070f] px-4 py-2.5">
+              <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-[#12070f] px-5 py-3">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center">
                     <Waveform active={recorder.state === "recording"} paused={recorder.state === "paused"} />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <div className="text-[14px] font-mono text-white">{recorder.state === "paused" ? "Pausado" : "Gravando…"} {recorder.fmt(recorder.seconds)}</div>
+                  <div className="text-[15px] font-mono text-white">{recorder.state === "paused" ? "Pausado" : "Gravando…"} {recorder.fmt(recorder.seconds)}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {recorder.state === "recording" ? (
                     <button type="button" aria-label="Pausar" onClick={recorder.pause}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition"> 
-                      <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">
+                      <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
                     </button>
                   ) : (
                     <button type="button" aria-label="Retomar" onClick={recorder.resume}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.play()}</button>
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.play()}</button>
                   )}
 
                   <button type="button" aria-label="Enviar" onClick={recorder.stop}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">{icons.send()}</button>
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">{icons.send()}</button>
 
                   <button type="button" aria-label="Cancelar" onClick={recorder.cancel}
-                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.x(16)}</button>
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.x(18)}</button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-4 py-2.5">
+              <div className="flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-5 py-3">
                 {replyTo && (
-                  <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2 text-[12px] text-white/80">
+                  <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/5 px-4 py-2.5 text-[13px] text-white/80">
                     <div>
                       <p className="font-semibold">Respondendo a {replyTo.sender}</p>
                       <p className="text-white/50 line-clamp-1">{replyTo.content}</p>
@@ -645,7 +637,7 @@ export default function MessagesPage() {
                     <button type="button" onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white">✕</button>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <button type="button" aria-label="Emoji" onClick={() => { setEmojiOpen(o => !o); setReactionPickerFor(null); }}
                     className="text-white/40 hover:text-white/70 transition">{icons.emoji()}</button>
                   <input
@@ -654,16 +646,16 @@ export default function MessagesPage() {
                     onChange={e => setText(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendText())}
                     placeholder="Mensagem..."
-                    className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                    className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none"
                   />
                   {text.trim() ? (
                     <button type="button" aria-label="Enviar" onClick={sendText}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">
                       {icons.send()}
                     </button>
                   ) : (
                     <button type="button" aria-label="Gravar áudio" onClick={recorder.start}
-                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/10 text-white/60 hover:text-white hover:border-[#7C3AED] transition">
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/10 text-white/60 hover:text-white hover:border-[#7C3AED] transition">
                       {icons.mic()}
                     </button>
                   )}
@@ -673,8 +665,6 @@ export default function MessagesPage() {
           </div>
         </main>
       </div>
-
-      <Footer />
 
       {/* ── Call overlay ── */}
       {calling && (
