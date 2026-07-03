@@ -1,7 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import RecommendedProfiles from "./RecommendedProfiles";
+import Footer from "../components/Footer";
 import type { ReactNode } from "react";
+
 
 type RankUser = {
   id: string;
@@ -138,7 +140,7 @@ function Navbar() {
       <div className="mx-auto flex h-[92px] max-w-[1280px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link href="/" className="shrink-0">
           <div className="flex items-center gap-3">
-            <Image src="/logo_clouds.png" alt="Clouds Community" width={44} height={44} className="h-11 w-11 object-contain" priority />
+            <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="h-16 w-16 object-contain" priority />
             <div className="leading-none">
               <div className="text-[28px] font-extrabold tracking-[-0.04em] text-white sm:text-[32px]">Clouds</div>
               <div className="text-[14px] font-medium uppercase tracking-[0.44em] text-white/60">Community</div>
@@ -169,9 +171,9 @@ function Navbar() {
             </svg>
           </button>
           <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1C1C1C] text-white transition-colors hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]">
-            <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
-              <circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" strokeWidth="2" />
-              <path d="M12 2.75v2.1M12 19.15v2.1M4.85 4.85l1.48 1.48M17.67 17.67l1.48 1.48M2.75 12h2.1M19.15 12h2.1M4.85 19.15l1.48-1.48M17.67 6.33l1.48-1.48" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
             </svg>
           </Link>
           <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#8B5CF6] text-[16px] font-extrabold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.12)] transition-transform hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C084FC]">
@@ -283,6 +285,8 @@ export default function MeetPage() {
           <RecommendedProfiles profiles={ranking} />
         </section>
       </main>
+
+      <Footer />
     </div>
   );
 }

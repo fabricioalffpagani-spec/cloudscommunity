@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import Footer from "../components/Footer";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aparencia" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -317,6 +318,8 @@ export default function SettingsPage() {
         </div>
         <main className="flex-1 min-w-0 pt-8">{panels[active]}</main>
       </div>
+      
+      <Footer />
     </div>
   );
 }

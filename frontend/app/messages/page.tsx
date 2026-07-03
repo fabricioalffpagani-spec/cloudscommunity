@@ -5,6 +5,8 @@ import Image from "next/image";
 import {
   useState, useRef, useEffect, useCallback,
 } from "react";
+import Footer from "../components/Footer";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -446,6 +448,7 @@ export default function MessagesPage() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090B] text-white">
 
+
       {/* ── HEADER — identical to Home ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
@@ -671,8 +674,12 @@ export default function MessagesPage() {
         </main>
       </div>
 
+      <Footer />
+
       {/* ── Call overlay ── */}
       {calling && (
+
+
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md">
           <div className="flex flex-col items-center gap-6 rounded-3xl border border-white/10 bg-[#1C1F2E] px-12 py-10">
             <Avatar initials={activeConv.avatar} size={80} color={activeConv.color} />

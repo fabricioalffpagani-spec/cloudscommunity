@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Footer from "../components/Footer";
 
 function Avatar({ initials, size = 96, color = "#8B5CF6" }: { initials: string; size?: number; color?: string }) {
   return (
@@ -143,6 +144,8 @@ export default function Page() {
           </div>
         </div>
       )}
+      
+      <Footer />
     </div>
   );
 }

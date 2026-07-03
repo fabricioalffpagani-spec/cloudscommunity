@@ -5,8 +5,9 @@ import Image from "next/image";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
+import Footer from "./components/Footer";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types
 
 type Category = { name: string; bg: string; color?: string };
 
@@ -116,18 +117,18 @@ function ChevronRightIcon() {
     </svg>
   );
 }
-function CloudIcon({ s = 22 }: { s?: number }) {
+function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
       <path d="M8 16 C8 17.5 7.5 18.5 6.5 19.5 C7.5 19 9 18 9.5 16" />
     </svg>
   );
 }
 
-function FireIcon({ s = 20 }: { s?: number }) {
+function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
       <path d="M12 2C8.5 7.5 8 10.25 8 13.5c0 4.142 3.358 7.5 7.5 7.5 2.429 0 4.5-1.821 4.5-4.5 0-2.622-2.736-4.744-4.695-7.074C14.007 6.88 14.5 4.119 12 2Z" />
       <path opacity="0.45" d="M12 4.5c1.225 1.865 1.966 3.61 1.966 5.5 0 1.954-1.036 3.548-2.466 4.5-.584-1.216-1.15-2.721-1.15-4.5 0-1.666.58-3.366 1.65-5.5Z" />
     </svg>
@@ -173,9 +174,9 @@ function PlusIcon({ s = 18 }: { s?: number }) {
     </svg>
   );
 }
-function UserIcon({ s = 16 }: { s?: number }) {
+function UserIcon({ s = 16, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   );
@@ -201,6 +202,78 @@ function PollIcon({ s = 18 }: { s?: number }) {
       <rect x="3" y="14" width="4" height="7" rx="1" />
       <rect x="10" y="9" width="4" height="12" rx="1" />
       <rect x="17" y="4" width="4" height="17" rx="1" />
+    </svg>
+  );
+}
+
+function HashtagIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M4 9l3 3-3 3" />
+      <path d="M20 9l-3 3 3 3" />
+      <path d="M12 4v16" />
+    </svg>
+  );
+}
+
+function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function HeartIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    </svg>
+  );
+}
+
+function PaperPlaneIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M22 2L11 13" />
+      <path d="M22 2l-7 20-4-9-9-4 20-7Z" />
+    </svg>
+  );
+}
+
+function ChatBubbleIcon({ s = 32, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function HomeIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 22V12h6v10" />
+    </svg>
+  );
+}
+
+function MessageIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
@@ -900,15 +973,25 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Page() {
-  const [activeCategory, setActiveCategory] = useState("For You");
-  const [fabOpen, setFabOpen] = useState(true);
+  // Menu de categorias removido: feed sem filtro.
+
   const [clouds, setClouds] = useState<Cloud[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [, setTick] = useState(0);
   const router = useRouter();
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
-  const pillsRef = useRef<HTMLDivElement>(null);
+  const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
+
+  const navigateCloud = (direction: number) => {
+    setCurrentCloudIndex(prev => {
+      const newIndex = prev + direction;
+      if (newIndex < 0) return clouds.length - 1;
+      if (newIndex >= clouds.length) return 0;
+      return newIndex;
+    });
+  };
+
 
   useEffect(() => {
     try {
@@ -994,9 +1077,9 @@ export default function Page() {
     ...polls.map(p => ({ kind: "poll" as const, ...p })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  const visibleItems = activeCategory === "For You"
-    ? allItems
-    : allItems.filter(item => item.category === activeCategory);
+  // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
+  const visibleItems = allItems;
+
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
@@ -1020,10 +1103,17 @@ export default function Page() {
             </div>
           </a>
 
-          <nav aria-label="Navegação principal" className="hidden items-center gap-3 md:flex">
-            <a href="#feed" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white transition-colors hover:bg-[#28282C]">Home</a>
-            <Link href="/messages" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white transition-colors hover:bg-[#28282C]">Messages</Link>
-            <Link href="/meet" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white transition-colors hover:bg-[#28282C]">Meet</Link>
+          <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
+            <Link href="/" className="relative inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white transition-colors hover:text-white/80">
+              For You
+              <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#A855F7]"></span>
+            </Link>
+            <Link href="/following" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
+              Seguindo
+            </Link>
+            <Link href="/login" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
+              Login
+            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -1047,94 +1137,104 @@ export default function Page() {
       </header>
 
       {/* Main */}
-      <main className="mx-auto max-w-[1280px] px-5 pb-24 pt-[108px] lg:px-8">
-        <section id="feed">
-          <p className="mt-8 text-[13px] font-bold uppercase tracking-[0.28em] text-[#FF5C3C]">FEED</p>
-          <h1 className="mt-3 text-[56px] font-semibold leading-[1.1] tracking-[-0.03em] text-white sm:text-[64px]">
-            Descubra conversas acontecendo agora.
-          </h1>
-          <p className="mt-4 max-w-[720px] text-[15px] leading-[1.7] text-white/60">
-            Explore topics quentes, navegue por categorias e seja o primeiro a iniciar uma conversa.
-          </p>
-
-          {/* Category pills */}
-          <div className="mt-7 flex items-center gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {CATEGORIES.map((cat) => {
-              const isActive = activeCategory === cat.name;
-              return (
+      <main className="mx-auto max-w-[1280px] px-5 pb-32 pt-[108px] lg:px-8">
+        <section id="feed" className="relative">
+          {/* Cloud Chat View */}
+          {clouds.length > 0 && (
+            <div className="mt-8 relative">
+              {/* Left Arrow Navigation */}
+              <div className="absolute left-0 top-0 bottom-0 w-16 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10">
                 <button
-                  key={cat.name}
-                  type="button"
-                  onClick={() => setActiveCategory(cat.name)}
-                  aria-pressed={isActive}
-                  className="shrink-0 rounded-full px-5 py-2 text-[13px] font-semibold transition-transform hover:scale-105"
-                  style={{
-                    backgroundColor: cat.bg,
-                    color: cat.color ?? "#fff",
-                    boxShadow: isActive ? "0 10px 30px rgba(124,58,237,0.18)" : "0 6px 18px rgba(0,0,0,0.35)",
-                    transform: isActive ? "translateY(-2px)" : undefined,
-                  } as CSSProperties}
+                  onClick={() => navigateCloud(-1)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
                 >
-                  {cat.name}
+                  <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
                 </button>
-              );
-            })}
-            <button type="button" aria-label="Mais categorias"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#5B21B6] text-white shadow-[0_8px_30px_rgba(124,58,237,0.28)] transition hover:opacity-95">
-              <ChevronRightIcon />
-            </button>
-          </div>
-
-          {/* Feed — clouds + polls or empty state */}
-          <div className="mt-8 flex flex-col items-center gap-5 w-full">
-            {visibleItems.length > 0 ? (
-                      visibleItems.map(item =>
-                item.kind === "cloud"
-                  ? <CloudCard key={item.id} cloud={item} onHypar={() => hyparCloud(item.id)} />
-                  : <PollCard key={item.id} poll={item} onVote={voteOnPoll} />
-              )
-            ) : (
-              <div className="flex w-full max-w-[880px] flex-col items-center justify-center rounded-[28px] bg-[#05050a] px-10 py-20 text-center"
-                style={{ boxShadow: "0 40px 120px rgba(2,6,23,0.6), 0 0 0 1px rgba(124,58,237,0.06) inset, 0 8px 40px rgba(124,58,237,0.12)" }}>
-                  <div className="-mt-8 mb-4">
-                    <CloudBadge s={36} />
-                  </div>
-                  <h2 className="text-[28px] sm:text-[36px] font-extrabold text-white">Nenhuma Cloud ativa</h2>
-                  <p className="mt-3 max-w-[760px] text-[15px] leading-[1.7] text-white/60">
-                    Está muito quieto por aqui na categoria {activeCategory}. Seja o primeiro a iniciar uma conversa!
-                  </p>
               </div>
-            )}
-          </div>
+
+              {/* Cloud Content */}
+              <div className="mx-16 rounded-2xl border border-white/[0.08] bg-[#111116] p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-[24px] font-semibold text-white">{clouds[currentCloudIndex].title}</h2>
+                    <div className="mt-2 flex items-center gap-3">
+                      <span className="rounded-full bg-[#7C3AED]/20 px-3 py-1 text-[12px] font-semibold text-[#C084FC]">{clouds[currentCloudIndex].category}</span>
+                      <span className="text-[13px] text-white/50">{clouds[currentCloudIndex].duration}</span>
+                      <div className="flex items-center gap-2 text-[12px] text-white/50">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
+                        </span>
+                        <span>{Math.floor(Math.random() * 50) + 10} participantes</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[12px] text-white/50">
+                    <UserIcon s={14} />
+                    <span>{clouds[currentCloudIndex].hypes || 0}</span>
+                  </div>
+                </div>
+
+                {/* Chat Messages Area */}
+                <div className="h-[680px] overflow-y-auto rounded-2xl bg-[#0D0D10] p-5 space-y-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]">
+                  <div className="text-center py-10">
+                    <p className="text-[14px] text-white/40">Nenhuma mensagem ainda. Seja o primeiro a participar!</p>
+                  </div>
+                </div>
+
+
+                {/* Chat Input */}
+                <div className="mt-4 flex gap-3">
+                  <input
+                    type="text"
+                    placeholder="Digite sua mensagem..."
+                    className="flex-1 rounded-full bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#A855F7] transition"
+                  />
+                  <button className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
+                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 2L11 13" />
+                      <path d="M22 2l-7 20-4-9-9-4 20-7Z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Arrow Navigation */}
+              <div className="absolute right-0 top-0 bottom-0 w-16 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity z-10">
+                <button
+                  onClick={() => navigateCloud(1)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
+                >
+                  <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       </main>
 
-      {/* Floating action buttons */}
-      <div className="fixed bottom-6 right-5 z-40 flex flex-col items-center gap-3 lg:right-8">
-        {fabOpen && (
-          <>
-            <button type="button" aria-label="Criar cloud" onClick={() => setModal("create")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#18181B] text-white/80 transition hover:bg-[#27272A] hover:text-white shadow-lg">
-              <CloudIcon s={24} />
-            </button>
-            <button type="button" aria-label="Criar enquete" onClick={() => setModal("poll")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#18181B] text-white/80 transition hover:bg-[#27272A] hover:text-white shadow-lg">
-              <PollIcon s={22} />
-            </button>
-            <button type="button" aria-label="Gravar áudio" onClick={() => setModal("record")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#18181B] text-white/80 transition hover:bg-[#27272A] hover:text-white shadow-lg">
-              <MicIcon s={22} />
-            </button>
-          </>
-        )}
-        {/* Toggle — X when open, + when closed */}
-        <button type="button" aria-label={fabOpen ? "Fechar ações" : "Abrir ações"} onClick={() => setFabOpen(o => !o)}
-          className={`flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition ${
-            fabOpen ? "bg-[#7C3AED] text-white hover:bg-[#6D28D9]" : "bg-[#18181B] text-white/80 hover:bg-[#27272A]"
-          }`}>
-          {fabOpen ? <XIcon s={22} /> : <PlusIcon s={22} />}
-        </button>
-      </div>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
+          <Link href="/" className="flex flex-col items-center gap-1.5">
+            <HomeIcon s={24} className="text-[#A855F7]" />
+            <span className="text-[12px] font-semibold text-[#A855F7]">Home</span>
+          </Link>
+          <Link href="/messages" className="flex flex-col items-center gap-1.5">
+            <MessageIcon s={24} className="text-white/40" />
+            <span className="text-[12px] font-semibold text-white/40">Messages</span>
+          </Link>
+          <Link href="/meet" className="flex flex-col items-center gap-1.5">
+            <MeetIcon s={24} className="text-white/40" />
+            <span className="text-[12px] font-semibold text-white/40">Meet</span>
+          </Link>
+        </div>
+      </nav>
 
     </div>
   );
