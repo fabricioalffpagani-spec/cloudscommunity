@@ -1,23 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
-function HashtagIcon({ s = 24, className }: { s?: number; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M4 9l3 3-3 3" />
-      <path d="M20 9l-3 3 3 3" />
-      <path d="M12 4v16" />
-    </svg>
-  );
-}
-
-function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
+function EyeIcon({ s = 20, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -26,19 +15,23 @@ function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
   );
 }
 
-function HeartIcon({ s = 24, className }: { s?: number; className?: string }) {
+function EyeSlashIcon({ s = 20, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+      <path d="M3 3l18 18" />
+      <path d="M10.58 10.58A1.5 1.5 0 0 0 12 12a1.5 1.5 0 0 0 1.42-.92" />
+      <path d="M9.9 4.24A17.4 17.4 0 0 1 12 4c7 0 10 8 10 8a18.6 18.6 0 0 1-3.2 4.6" />
+      <path d="M6.3 6.3C3.7 8.2 2 12 2 12s3 8 10 8a17.5 17.5 0 0 0 4.08-.49" />
     </svg>
   );
 }
 
-function PaperPlaneIcon({ s = 24, className }: { s?: number; className?: string }) {
+function HashtagIcon({ s = 24, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M22 2L11 13" />
-      <path d="M22 2l-7 20-4-9-9-4 20-7Z" />
+      <path d="M4 9l3 3-3 3" />
+      <path d="M20 9l-3 3 3 3" />
+      <path d="M12 4v16" />
     </svg>
   );
 }
@@ -63,8 +56,14 @@ function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
       <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-      <path opacity="0.4" d="M12 7.5c.5 1.5 1 3 1 4.5 0 2.5-1 4.5-1 5-.5-1-1-2.5-1-5 0-1.5.5-3 1-4.5Z" />
+    </svg>
+  );
+}
+
+function HeartIcon({ s = 24, className }: { s?: number; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     </svg>
   );
 }
@@ -81,9 +80,11 @@ function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
 // ─── Login Page ────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,15 +100,25 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        user?: { id: string; email: string; name: string; username: string };
+      } | null;
+
       if (!res.ok) {
         throw new Error(data?.error || "Falha ao entrar.");
       }
 
-      // demo: guarda só o email (sem sessão real)
-      localStorage.setItem("cloudscommunity:remember_email", email);
+      // The server sets an HttpOnly cookie (cc_session).
+      // We also persist a lightweight client-readable snapshot for UI convenience.
+      if (data?.user) {
+        localStorage.setItem(
+          "cloudscommunity:user",
+          JSON.stringify(data.user)
+        );
+      }
 
-      window.location.href = "/";
+      router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao entrar.");
     } finally {
@@ -117,73 +128,34 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
-      {/* Main */}
       <main className="mx-auto max-w-[1280px] px-5 pb-32 pt-[108px] lg:px-8">
         <section className="relative">
-          {/* Decorative elements */}
-          <div className="absolute -top-8 -left-12 opacity-20">
+          {/* Decorative icons */}
+          <div className="pointer-events-none absolute -top-8 -left-12 opacity-20">
             <ChatBubbleIcon s={48} className="text-[#A855F7]" />
           </div>
-          <div className="absolute top-20 -right-16 opacity-15">
+          <div className="pointer-events-none absolute top-20 -right-16 opacity-15">
             <ChatBubbleIcon s={64} className="text-[#7C3AED]" />
           </div>
-          <div className="absolute top-32 -left-8 opacity-20">
+          <div className="pointer-events-none absolute top-32 -left-8 opacity-20">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7]/20">
               <UserIcon s={20} className="text-[#A855F7]" />
             </div>
           </div>
-          <div className="absolute top-16 right-1/4 opacity-15">
+          <div className="pointer-events-none absolute top-16 right-1/4 opacity-15">
             <HashtagIcon s={36} className="text-[#C084FC]" />
           </div>
-          <div className="absolute top-48 -right-8 opacity-20">
+          <div className="pointer-events-none absolute top-48 -right-8 opacity-20">
             <FireIcon s={32} className="text-[#FF6A00]" />
           </div>
-          <div className="absolute bottom-0 left-1/4 opacity-15">
+          <div className="pointer-events-none absolute bottom-0 left-1/4 opacity-15">
             <CloudIcon s={40} className="text-[#A855F7]" />
           </div>
-          <div className="absolute top-40 left-1/3 opacity-15">
+          <div className="pointer-events-none absolute top-40 left-1/3 opacity-15">
             <EyeIcon s={28} className="text-[#C084FC]" />
           </div>
-          <div className="absolute bottom-8 right-1/3 opacity-15">
+          <div className="pointer-events-none absolute bottom-8 right-1/3 opacity-15">
             <HeartIcon s={28} className="text-[#EC4899]" />
-          </div>
-          <div className="absolute top-24 right-1/2 opacity-15">
-            <PaperPlaneIcon s={28} className="text-[#A855F7]" />
-          </div>
-          <div className="absolute top-12 left-1/2 opacity-12">
-            <ChatBubbleIcon s={32} className="text-[#A855F7]" />
-          </div>
-          <div className="absolute bottom-16 left-1/6 opacity-18">
-            <HashtagIcon s={24} className="text-[#C084FC]" />
-          </div>
-          <div className="absolute top-56 left-1/6 opacity-14">
-            <HeartIcon s={20} className="text-[#EC4899]" />
-          </div>
-          <div className="absolute bottom-20 right-1/6 opacity-16">
-            <EyeIcon s={22} className="text-[#C084FC]" />
-          </div>
-          <div className="absolute top-36 right-1/6 opacity-13">
-            <PaperPlaneIcon s={20} className="text-[#A855F7]" />
-          </div>
-          <div className="absolute bottom-32 left-1/3 opacity-15">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/15">
-              <UserIcon s={16} className="text-[#A855F7]" />
-            </div>
-          </div>
-          <div className="absolute top-8 left-1/5 opacity-12">
-            <CloudIcon s={28} className="text-[#A855F7]" />
-          </div>
-          <div className="absolute bottom-4 right-1/4 opacity-14">
-            <FireIcon s={24} className="text-[#FF6A00]" />
-          </div>
-          <div className="absolute top-44 right-1/5 opacity-11">
-            <ChatBubbleIcon s={24} className="text-[#7C3AED]" />
-          </div>
-          <div className="absolute top-28 left-2/3 opacity-13">
-            <HashtagIcon s={20} className="text-[#C084FC]" />
-          </div>
-          <div className="absolute bottom-12 left-2/3 opacity-16">
-            <HeartIcon s={18} className="text-[#EC4899]" />
           </div>
 
           <p className="mt-8 text-[13px] font-bold uppercase tracking-[0.28em] text-[#FF5C3C]">LOGIN</p>
@@ -194,46 +166,63 @@ export default function LoginPage() {
             <span>agora.</span>
           </h1>
 
-          {/* Login Form */}
           <div className="mt-12 max-w-[400px]">
             {error && (
               <div className="mb-4 rounded-xl border border-red-500/30 bg-red-600/10 px-4 py-3 text-[13px] text-red-300">
                 {error}
               </div>
             )}
+
             <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="email" className="sr-only">Email</label>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="email" className="text-[12px] font-medium uppercase tracking-wider text-white/50">
+                  Email
+                </label>
                 <input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
+                  placeholder="seu@email.com"
                   required
                   className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#A855F7] transition"
                 />
               </div>
-              <div>
-                <label htmlFor="password" className="sr-only">Senha</label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Senha"
-                  required
-                  className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#A855F7] transition"
-                />
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="password" className="text-[12px] font-medium uppercase tracking-wider text-white/50">
+                  Senha
+                </label>
+                <div className="relative">
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Sua senha"
+                    required
+                    className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 pr-12 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#A855F7] transition"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                  >
+                    {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
+                  </button>
+                </div>
               </div>
+
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !email || !password}
                 className="w-full rounded-full bg-[#7C3AED] px-6 py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {submitting ? "Entrando..." : "Entrar"}
               </button>
             </form>
+
             <p className="mt-4 text-center text-[13px] text-white/60">
               Não tem uma conta?{" "}
               <Link href="/signup" className="text-[#A855F7] hover:underline">

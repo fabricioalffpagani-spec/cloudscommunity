@@ -1,9 +1,79 @@
 {
   "users": [
     {
+      "id": "usr_demo",
       "email": "fabricioalffpagani@gmail.com",
       "password": "fabricio123",
+      "name": "Fabricio Pagani",
+      "username": "fabricio",
+      "bio": "Desenvolvedor apaixonado por tecnologia.",
+      "birthDate": "1995-04-20",
+      "region": "sudeste",
+      "gender": "masculino",
+      "verified": true,
       "createdAt": "2026-07-03T13:00:12.476Z"
+    }
+  ],
+  "pending_verifications": [
+    {
+      "email": "fapoupp@gmail.com",
+      "code": "550247",
+      "expiresAt": "2026-07-07T14:13:25.659Z",
+      "payload": {
+        "email": "fapoupp@gmail.com",
+        "password": "",
+        "name": "",
+        "username": "",
+        "bio": "",
+        "birthDate": "",
+        "region": "",
+        "gender": ""
+      }
+    },
+    {
+      "email": "fabricio@poupp.com.br",
+      "code": "799700",
+      "expiresAt": "2026-07-07T14:16:57.096Z",
+      "payload": {
+        "email": "fabricio@poupp.com.br",
+        "password": "",
+        "name": "",
+        "username": "",
+        "bio": "",
+        "birthDate": "",
+        "region": "",
+        "gender": ""
+      }
+    },
+    {
+      "email": "test@example.com",
+      "code": "791297",
+      "expiresAt": "2026-07-07T14:25:21.587Z",
+      "payload": {
+        "email": "test@example.com",
+        "password": "",
+        "name": "",
+        "username": "",
+        "bio": "",
+        "birthDate": "",
+        "region": "",
+        "gender": ""
+      }
+    },
+    {
+      "email": "novo.teste@example.com",
+      "code": "316455",
+      "expiresAt": "2026-07-07T14:29:31.345Z",
+      "payload": {
+        "email": "novo.teste@example.com",
+        "password": "",
+        "name": "",
+        "username": "",
+        "bio": "",
+        "birthDate": "",
+        "region": "",
+        "gender": ""
+      }
     }
   ]
 }

@@ -1,23 +1,12 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
+/**
+ * POST /api/auth/login
+ * Validates credentials and sets an HttpOnly session cookie.
+ *
+ * Body: { email, password }
+ * Returns: { ok: true, user: { id, email, name, username } }
+ */
 import { NextResponse } from "next/server";
-
-type DbShape = {
-  users: Array<{ email: string; password: string; createdAt: string }>;
-};
-
-const DB_FILE = path.join(process.cwd(), "app", "api", "auth", "_db.json");
-
-async function readDb(): Promise<DbShape> {
-  try {
-    const raw = await fs.readFile(DB_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as DbShape;
-    if (!parsed?.users) return { users: [] };
-    return parsed;
-  } catch {
-    return { users: [] };
-  }
-}
+import { readDb } from "../_db";
 
 export async function POST(req: Request) {
   try {
@@ -26,19 +15,50 @@ export async function POST(req: Request) {
     const password = body.password ?? "";
 
     if (!email || !password) {
-      return NextResponse.json({ error: "Email e senha são obrigatórios." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Email e senha são obrigatórios." },
+        { status: 400 }
+      );
     }
 
     const db = await readDb();
     const user = db.users.find((u) => u.email === email);
+
     if (!user || user.password !== password) {
-      return NextResponse.json({ error: "Credenciais inválidas." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Credenciais inválidas." },
+        { status: 401 }
+      );
     }
 
-    // Sessão (demo): retorna sucesso. A UI pode guardar em localStorage/cookie.
-    return NextResponse.json({ ok: true, email: user.email });
+    // ── Set session cookie ──────────────────────────────────────────────────
+    const sessionPayload = JSON.stringify({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      username: user.username,
+    });
+    const sessionValue = Buffer.from(sessionPayload).toString("base64");
+
+    const response = NextResponse.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+      },
+    });
+
+    response.cookies.set("cc_session", sessionValue, {
+      httpOnly: true,
+      path: "/",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    });
+
+    return response;
   } catch {
     return NextResponse.json({ error: "Erro ao entrar." }, { status: 500 });
   }
 }
-
