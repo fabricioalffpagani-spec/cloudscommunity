@@ -1,0 +1,103 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clouds-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGX_ADMIN_USER}
+      POSTGRES_PASSWORD: ${PGX_ADMIN_PASS}
+      POSTGRES_DB: ${PGX_DB_NAME}
+    volumes:
+      - clouds_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGX_ADMIN_USER} -d ${PGX_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: clouds-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - clouds_redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clouds-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PGX_CONN_STR: ${PGX_CONN_STR}
+      CACHE_NODE_ENDPOINT: ${CACHE_NODE_ENDPOINT}
+      APP_HTTP_PORT: ${APP_HTTP_PORT}
+      APP_WEB_ORIGIN: ${APP_WEB_ORIGIN}
+    volumes:
+      - ./backend:/app
+      - clouds_backend_node_modules:/app/node_modules
+    ports:
+      - "${APP_HTTP_PORT}:${APP_HTTP_PORT}"
+    command: ["sh", "-c", "npx prisma generate && npm run start:dev"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(async (r) => { const body = await r.json().catch(() => null); process.exit(body?.healthy ? 0 : 1); }).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: clouds-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      CLOUDS_BRIDGE_URL: ${CLOUDS_BRIDGE_URL}
+      UI_HTTP_PORT: ${UI_HTTP_PORT}
+    volumes:
+      - ./frontend:/app
+      - clouds_frontend_node_modules:/app/node_modules
+    ports:
+      - "${UI_HTTP_PORT}:3000"
+    command: ["sh", "-c", "npm run dev -- --hostname 0.0.0.0 --port ${UI_HTTP_PORT}"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  clouds_postgres_data:
+  clouds_redis_data:
+  clouds_backend_node_modules:
+  clouds_frontend_node_modules:

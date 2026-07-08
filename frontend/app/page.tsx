@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
 
@@ -142,6 +142,14 @@ function formatCountdown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function useSiteOrigin() {
+  return useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => "http://localhost:3000",
+  );
 }
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
@@ -352,6 +360,7 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
 function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   const [shareOpen, setShareOpen] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
+  const siteOrigin = useSiteOrigin();
 
   useEffect(() => {
     const handleClick = (event: MouseEvent) => {
@@ -365,8 +374,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
 
   const cat = CATEGORIES.find(c => c.name === cloud.category) ?? CATEGORIES[1];
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-  const fullShareUrl = `${baseUrl}${shareUrl}`;
+  const fullShareUrl = `${siteOrigin}${shareUrl}`;
   const messengerHref = `/messages?share=${encodeURIComponent(fullShareUrl)}`;
   const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`Participe da Cloud "${cloud.title}" aqui: ${fullShareUrl}`)}`;
   const durationSeconds = parseDurationSeconds(cloud.duration);

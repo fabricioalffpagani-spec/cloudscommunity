@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  active
+  pending
+  blocked
+}
+
+enum CloudMode {
+  text
+  audio
+}
+
+enum CloudVisibility {
+  public
+  private
+}
+
+enum CloudStatus {
+  active
+  ended
+  archived
+  deleted
+}
+
+enum MessageType {
+  text
+  audio
+  image
+  link
+}
+
+model User {
+  id            String      @id @default(uuid()) @db.Uuid
+  email         String      @unique @db.VarChar(255)
+  passwordHash  String      @db.Text
+  status        UserStatus  @default(active)
+  emailVerifiedAt DateTime?
+  lastLoginAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+
+  profile                  Profile?
+  authoredClouds            Cloud[]         @relation("CloudAuthor")
+  cloudHypes                CloudHype[]
+  following                 Follow[]        @relation("FollowFollower")
+  followers                 Follow[]        @relation("FollowFollowing")
+  cloudMessages             CloudMessage[]
+  directMessages            DirectMessage[]
+  participantOneConversations Conversation[] @relation("ConversationParticipantOne")
+  participantTwoConversations Conversation[] @relation("ConversationParticipantTwo")
+  sessions                  Session[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Profile {
+  userId      String   @id @db.Uuid
+  username    String   @unique @db.VarChar(50)
+  displayName String   @db.VarChar(120)
+  birthDate   DateTime @db.Date
+  bio         String?  @db.VarChar(500)
+  avatarUrl   String?  @db.Text
+  coverUrl    String?  @db.Text
+  location    String?  @db.VarChar(120)
+  website     String?  @db.VarChar(255)
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([displayName])
+}
+
+model Cloud {
+  id           String          @id @default(uuid()) @db.Uuid
+  authorId     String          @db.Uuid
+  title        String          @db.VarChar(180)
+  content      String?         @db.Text
+  category     String          @db.VarChar(50)
+  mode         CloudMode       @default(text)
+  visibility   CloudVisibility @default(public)
+  status       CloudStatus     @default(active)
+  duration     String          @db.VarChar(20)
+  audioUrl     String?         @db.Text
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+
+  author       User            @relation("CloudAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  hypes        CloudHype[]
+  messages     CloudMessage[]
+
+  @@index([authorId, createdAt])
+  @@index([category])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CloudHype {
+  cloudId    String   @db.Uuid
+  userId     String   @db.Uuid
+  createdAt  DateTime @default(now())
+
+  cloud      Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([cloudId, userId])
+  @@index([userId])
+}
+
+model Follow {
+  followerId String   @db.Uuid
+  followingId String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  follower   User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following  User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+model CloudMessage {
+  id               String       @id @default(uuid()) @db.Uuid
+  cloudId          String       @db.Uuid
+  userId           String       @db.Uuid
+  type             MessageType  @default(text)
+  content          String?      @db.Text
+  mediaUrl         String?      @db.Text
+  replyToMessageId String?      @db.Uuid
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?
+
+  cloud            Cloud        @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyToMessage   CloudMessage?  @relation("CloudMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies          CloudMessage[] @relation("CloudMessageReplies")
+
+  @@index([cloudId, createdAt])
+  @@index([userId])
+  @@index([replyToMessageId])
+}
+
+model Conversation {
+  id                      String   @id @default(uuid()) @db.Uuid
+  participantOneId        String   @db.Uuid
+  participantTwoId        String   @db.Uuid
+  lastMessageAt           DateTime?
+  lastMessagePreview      String?  @db.VarChar(255)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  deletedAt               DateTime?
+
+  participantOne          User          @relation("ConversationParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
+  participantTwo          User          @relation("ConversationParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
+  messages                DirectMessage[]
+
+  @@unique([participantOneId, participantTwoId])
+  @@index([participantOneId])
+  @@index([participantTwoId])
+  @@index([lastMessageAt])
+}
+
+model DirectMessage {
+  id               String        @id @default(uuid()) @db.Uuid
+  conversationId   String        @db.Uuid
+  senderId         String        @db.Uuid
+  type             MessageType   @default(text)
+  content          String?       @db.Text
+  mediaUrl         String?       @db.Text
+  replyToMessageId String?       @db.Uuid
+  readAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime?
+
+  conversation     Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender           User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyToMessage   DirectMessage?  @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies          DirectMessage[] @relation("DirectMessageReplies")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([replyToMessageId])
+}
+
+model Session {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  refreshTokenHash String  @db.Text
+  deviceName      String?  @db.VarChar(120)
+  ipAddress       String?  @db.VarChar(45)
+  userAgent       String?  @db.Text
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}

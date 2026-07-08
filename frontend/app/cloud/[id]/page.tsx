@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import CloudChat from "./CloudChat";
 import CloudActions from "./CloudActions";
 
@@ -43,8 +44,22 @@ function MailIcon() {
   );
 }
 
-export default function CloudPage({ params }: CloudPageProps) {
+async function getSiteOrigin() {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
+
+  if (!host) {
+    return "http://localhost:3000";
+  }
+
+  return `${protocol}://${host}`;
+}
+
+export default async function CloudPage({ params }: CloudPageProps) {
   const title = formatCloudTitle(params?.id);
+  const siteOrigin = await getSiteOrigin();
+  const shareTarget = `${siteOrigin}/cloud/${params?.id ?? ""}`;
 
   return (
     <main className="min-h-screen bg-[#040510] text-white">
@@ -63,7 +78,7 @@ export default function CloudPage({ params }: CloudPageProps) {
 
           <div className="flex items-center gap-3">
             <a
-              href={`mailto:?subject=${encodeURIComponent(`Participe da Cloud ${title}`)}&body=${encodeURIComponent(`Oi!\n\nQuero te convidar para a Cloud "${title}". Acesse o link e participe:\n${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/cloud/${params?.id ?? ""}`)}`}
+              href={`mailto:?subject=${encodeURIComponent(`Participe da Cloud ${title}`)}&body=${encodeURIComponent(`Oi!\n\nQuero te convidar para a Cloud "${title}". Acesse o link e participe:\n${shareTarget}`)}`}
               className="inline-flex items-center gap-2 rounded-3xl bg-[#7C3AED] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:bg-[#6D28D9]"
             >
               <MailIcon />
