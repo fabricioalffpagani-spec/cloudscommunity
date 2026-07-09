@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Clouds Community",
   description: "Interface front-end da rede social Clouds Community.",
   icons: {
-    icon: "/logo_ico.png",
+    icon: "/clouds_icon.png",
   },
 };
 
