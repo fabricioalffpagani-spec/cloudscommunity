@@ -1018,6 +1018,29 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
 }
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      router.replace("/login");
+      router.refresh();
+      onClose();
+    } catch {
+      return;
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[100]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30" />
@@ -1038,7 +1061,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
           <span className="text-white/50"><GearIcon s={16} /></span> Configurações
         </button>
         <div className="border-t border-white/[0.07]">
-          <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition">
+          <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition">
             Sair da conta
           </button>
         </div>
@@ -1056,7 +1079,6 @@ export default function Page() {
   const [polls, setPolls] = useState<Poll[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
-  const router = useRouter();
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
@@ -1081,26 +1103,6 @@ export default function Page() {
 
 
   useEffect(() => {
-    // Gate de primeira visita: primeiro acesso vai para /login,
-    // visitas seguintes renderizam o feed normalmente.
-    let firstVisit = false;
-    try {
-      const key = "cloudscommunity:seen";
-      const seen = localStorage.getItem(key);
-      if (!seen) {
-        localStorage.setItem(key, "1");
-        firstVisit = true;
-      }
-    } catch {
-      // ignore (ex: SSR ou modo privado restrito)
-    }
-
-    if (firstVisit) {
-      router.replace("/login");
-      // Não hidrata o feed — a página será substituída pelo /login.
-      return;
-    }
-
     try {
       const storedClouds = localStorage.getItem("cloudscommunity:clouds");
       if (storedClouds) {
