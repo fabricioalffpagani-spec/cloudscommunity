@@ -1,10 +1,10 @@
-## TODO (cloudscommunity)
+# TODO — Clouds Community (Auth OTP)
 
-- [x] Remover link "Login" do Header na rota inicial (`frontend/app/page.tsx`).
-  - (Verificado: o header em `page.tsx` não continha link de Login — item já estava resolvido.)
-- [x] Implementar no `frontend/app/page.tsx` um check de primeira visita via `localStorage`.
-  - [x] Se primeira visita: fazer `router.replace('/login')`.
-  - [x] Se já visitou: renderizar o feed normal.
-- [x] Validar comportamento em:
-  - [x] Primeira abertura (rota `/` vai para `/login`).
-  - [x] Reabertura após refresh (rota `/` permanece no feed).
+- [ ] Implementar envio real do OTP por e-mail via Resend
+- [x] Instalar dependência `resend`
+- [x] Atualizar endpoint `/api/auth/send-code` para enviar via Resend
+- [ ] Configurar variáveis de ambiente no ambiente de execução:
+  - [ ] `RESEND_API_KEY`
+  - [ ] (opcional) `RESEND_FROM` (fallback usado: `@cloudscommunity.site`)
+- [ ] Testar fluxo de signup: solicitar código → verificar e-mail
+
