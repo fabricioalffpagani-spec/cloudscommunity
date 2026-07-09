@@ -79,17 +79,8 @@ export default function LoginPage() {
           <div className="relative">
             <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">Login</p>
             <h1 className="mt-4 max-w-[10ch] text-[56px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[72px]">
-              Entre no seu feed.
+              Faça login no Clouds.
             </h1>
-            <p className="mt-5 max-w-[44ch] text-[16px] leading-7 text-white/55">
-              A autenticacao agora passa por sessao httpOnly. Se voce ja estiver logado, o sistema redireciona voce automaticamente para o feed.
-            </p>
-
-            <div className="mt-8 flex flex-wrap gap-3 text-[12px] text-white/45">
-              <span className="rounded-full border border-white/10 px-3 py-1">Sessao segura</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">BFF no Next</span>
-              <span className="rounded-full border border-white/10 px-3 py-1">Sem token no browser</span>
-            </div>
           </div>
 
           <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur">
