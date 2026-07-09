@@ -38,3 +38,9 @@ export type UsernameAvailabilityResponse = {
   available: boolean;
   username: string;
 };
+
+export type EmailAvailabilityResponse = {
+  ok: true;
+  available: boolean;
+  email: string;
+};

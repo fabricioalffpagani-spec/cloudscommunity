@@ -6,6 +6,7 @@ import {
   AuthResult,
   AuthSessionPayload,
   AuthUserPayload,
+  EmailAvailabilityResponse,
   UsernameAvailabilityResponse,
 } from './auth.types';
 import {
@@ -276,6 +277,20 @@ export class AuthService {
       ok: true,
       available: !existing,
       username,
+    };
+  }
+
+  async emailAvailability(emailInput: string): Promise<EmailAvailabilityResponse> {
+    const email = validateEmail(emailInput);
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    return {
+      ok: true,
+      available: !existing,
+      email,
     };
   }
 

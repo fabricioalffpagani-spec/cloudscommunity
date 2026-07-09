@@ -103,4 +103,9 @@ export class AuthController {
   async usernameAvailability(@Query('username') username: string) {
     return this.authService.usernameAvailability(username ?? '');
   }
+
+  @Get('email-availability')
+  async emailAvailability(@Query('email') email: string) {
+    return this.authService.emailAvailability(email ?? '');
+  }
 }

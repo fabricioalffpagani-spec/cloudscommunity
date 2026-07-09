@@ -64,8 +64,30 @@ function TRow({ label, desc, checked, onChange }: { label:string; desc?:string; 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 function PanelConta() {
   const [nome, setNome] = useState("Fabrício"); const [email, setEmail] = useState("fabricio@example.com");
-  const [telefone, setTelefone] = useState("+55 11 99999-0000"); const [saved, setSaved] = useState(false);
+  const [telefone, setTelefone] = useState("+55 11 99999-0000"); const [saved, setSaved] = useState(false); const [loggingOut, setLoggingOut] = useState(false);
   const save = () => { setSaved(true); setTimeout(()=>setSaved(false),2000); };
+  const handleLogout = async () => {
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
+
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        window.location.assign("/login");
+      }
+    } finally {
+      setLoggingOut(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-[20px] font-bold text-white">Conta</h2>
@@ -90,7 +112,7 @@ function PanelConta() {
       <Card><Sub>Sessão</Sub>
         <div className="flex items-center justify-between">
           <div><p className="text-[14px] font-medium text-white">Sair da conta</p><p className="text-[12px] text-[#6B7280]">Encerra sua sessão em todos os dispositivos.</p></div>
-          <button className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-600/10 px-5 py-2.5 text-[13px] font-semibold text-red-400 hover:bg-red-600/20 transition"><LogOutIcon s={15}/>Sair</button>
+          <button type="button" onClick={handleLogout} disabled={loggingOut} className="inline-flex items-center gap-2 rounded-full border border-red-500/30 bg-red-600/10 px-5 py-2.5 text-[13px] font-semibold text-red-400 hover:bg-red-600/20 transition disabled:cursor-not-allowed disabled:opacity-50"><LogOutIcon s={15}/> {loggingOut ? "Saindo..." : "Sair"}</button>
         </div>
       </Card>
     </div>
@@ -320,3 +342,9 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+
+
+
+
+
