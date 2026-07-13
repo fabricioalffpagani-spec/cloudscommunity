@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
+import { HeaderBrand } from "./components/HeaderBrand";
 
 // ─── Types
 
@@ -21,6 +22,11 @@ type Cloud = {
   href?: string;
   hypes?: number;
   audioUrl?: string;
+  authorName?: string;
+  authorHandle?: string;
+  authorPhoto?: string;
+  description?: string;
+  liveParticipants?: number;
 };
 
 type PollOption = { id: string; text: string; votes: number };
@@ -142,6 +148,82 @@ function formatCountdown(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function getTopicCountdown(cloud: Cloud) {
+  const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
+  const remaining = Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0);
+  return remaining;
+}
+
+function getTopicProfile(cloud: Cloud, index: number) {
+  const categoryProfiles: Record<string, {
+    name: string;
+    handle: string;
+    description: string;
+    avatar: string;
+    participants: number;
+  }> = {
+    Tech: {
+      name: "pedro.dev",
+      handle: "pedro.dev",
+      description: "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
+      avatar: "https://i.pravatar.cc/120?img=12",
+      participants: 54,
+    },
+    Music: {
+      name: "lais_moraes",
+      handle: "lais_moraes",
+      description: "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
+      avatar: "https://i.pravatar.cc/120?img=32",
+      participants: 112,
+    },
+    Gaming: {
+      name: "lucasx7",
+      handle: "lucasx7",
+      description: "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
+      avatar: "https://i.pravatar.cc/120?img=8",
+      participants: 91,
+    },
+    Drama: {
+      name: "mariana_rib",
+      handle: "mariana_rib",
+      description: "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
+      avatar: "https://i.pravatar.cc/120?img=47",
+      participants: 417,
+    },
+    Sports: {
+      name: "gabriel_souza",
+      handle: "gabriel_souza",
+      description: "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
+      avatar: "https://i.pravatar.cc/120?img=14",
+      participants: 326,
+    },
+    Memes: {
+      name: "ana_santos",
+      handle: "ana_santos",
+      description: "Memes, cortes e o caos leve da internet, tudo organizado em uma conversa ao vivo.",
+      avatar: "https://i.pravatar.cc/120?img=45",
+      participants: 78,
+    },
+  };
+
+  const fallbackAvatar = `https://i.pravatar.cc/120?img=${(hashString(cloud.id) % 70) + 1}`;
+  return {
+    name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
+    handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
+    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
+    avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
+    participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
+  };
 }
 
 function useSiteOrigin() {
@@ -1070,6 +1152,175 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
+function TopicFeedStage({
+  clouds,
+  expandedTopicId,
+  onToggleExpand,
+  onEnterConversation,
+  onCreateCloud,
+}: {
+  clouds: Cloud[];
+  expandedTopicId: string | null;
+  onToggleExpand: (cloudId: string) => void;
+  onEnterConversation: (cloudId: string) => void;
+  onCreateCloud: () => void;
+}) {
+  return (
+    <div className="topic-scroll flex h-full flex-col gap-4 overflow-y-auto py-4 pr-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/80">
+          <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
+          Ao vivo agora
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
+        >
+          Todos os tópicos
+          <ChevronRightIcon />
+        </button>
+      </div>
+
+      {clouds.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.08] bg-[#1C1F2E]">
+            <svg viewBox="0 0 24 24" width={36} height={36} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
+              <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
+              <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-[18px] font-semibold text-white">Nenhum tópico disponível</p>
+            <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
+              Ainda não há tópicos ativos. Quando alguém publicar, eles aparecem aqui primeiro.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCreateCloud}
+            className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+          >
+            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14" /><path d="M5 12h14" />
+            </svg>
+            Criar uma Cloud
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 pb-2">
+          {clouds
+            .map((cloud, index) => ({
+              cloud,
+              index,
+              profile: getTopicProfile(cloud, index),
+              remaining: getTopicCountdown(cloud),
+            }))
+            .map(({ cloud, profile, remaining }) => {
+              const isEnded = remaining <= 0;
+              const isEndingSoon = remaining > 0 && remaining < 5 * 60;
+              const expanded = expandedTopicId === cloud.id;
+              const countdownLabel = isEnded ? "ENCERRADA" : formatCountdown(remaining);
+
+              return (
+                <article
+                  key={cloud.id}
+                  className={`rounded-2xl border border-white/[0.07] bg-[#0B0C12] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_60px_rgba(0,0,0,0.26)] transition-all duration-300 ease-out hover:border-white/[0.14] md:px-5 ${
+                    expanded ? "md:py-5" : "md:py-4"
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={profile.avatar}
+                          alt={profile.name}
+                          className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-white/70">@{profile.handle}</p>
+                          <h3 className="mt-1 text-[20px] font-extrabold leading-[1.05] tracking-[-0.04em] text-white md:text-[26px]">
+                            {cloud.title}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div
+                        className={`mt-3 overflow-hidden transition-all duration-300 ease-out ${
+                          expanded ? "max-h-[220px] opacity-100" : "max-h-[58px] opacity-95"
+                        }`}
+                      >
+                        <p className="text-[15px] leading-6 text-white/66">
+                          {profile.description}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onToggleExpand(cloud.id)}
+                        className="mt-2 text-[13px] font-semibold text-white/55 transition hover:text-white"
+                      >
+                        {expanded ? "Ler menos" : "Ler mais"}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3 md:min-w-[240px] md:gap-4">
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                        <div className="min-w-[78px]">
+                          <p className={`text-[26px] font-semibold tracking-[-0.03em] ${isEndingSoon ? "text-[#FF5B5B]" : "text-white"}`}>
+                            {countdownLabel}
+                          </p>
+                          <p className="text-[12px] text-white/40">{isEnded ? "encerrada" : "restantes"}</p>
+                        </div>
+
+                        <div className="h-12 w-px bg-white/[0.08]" />
+
+                        <div className="min-w-[90px]">
+                          <div className="flex items-center gap-2 text-[18px] font-semibold text-white">
+                            <UserIcon s={16} />
+                            {profile.participants}
+                          </div>
+                          <p className="text-[12px] text-white/40">online</p>
+                        </div>
+                      </div>
+
+                      <div className="md:pt-1">
+                        <div className="rounded-[19px] bg-gradient-to-br from-[#2563EB] via-[#4F46E5] to-[#A855F7] p-px shadow-[0_20px_50px_rgba(59,130,246,0.15)]">
+                          <button
+                            type="button"
+                            onClick={() => onEnterConversation(cloud.id)}
+                            className="flex h-[52px] w-full items-center justify-center rounded-[18px] bg-[#0B1020] px-8 text-[16px] font-semibold text-white transition hover:bg-[#101729]"
+                          >
+                            Entrar na conversa
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-white/45 md:mt-5">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
+                      <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
+                      {cloud.category}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
+                      <UserIcon s={12} />
+                      {profile.participants} ao vivo
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
+                      <FireIcon s={12} className="text-[#F97316]" />
+                      <span className="text-[#F97316]">{cloud.hypes || 0} hypes</span>
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Page() {
@@ -1080,6 +1331,8 @@ export default function Page() {
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
+  const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
+  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
   const [participants, setParticipants] = useState<number>(0);
@@ -1099,6 +1352,14 @@ export default function Page() {
       });
       setSlideAnim(null);
     }, 260);
+  };
+
+  const enterConversation = (cloudId: string) => {
+    const nextIndex = clouds.findIndex((cloud) => cloud.id === cloudId);
+    setCurrentCloudIndex(nextIndex >= 0 ? nextIndex : 0);
+    setSlideAnim(null);
+    setExpandedTopicId(null);
+    setHomeStage("live");
   };
 
 
@@ -1236,11 +1497,7 @@ export default function Page() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
           <a href="#feed" className="flex shrink-0 items-center gap-3">
-            <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain" style={{ width: 64, height: 64 }} priority />
-            <div className="leading-none">
-              <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
-              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
-            </div>
+            <HeaderBrand />
           </a>
 
           <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
@@ -1276,7 +1533,36 @@ export default function Page() {
 
       {/* Main — ocupa o restante da viewport abaixo do header fixo (88px) e acima da nav (72px) */}
       <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-hidden">
-        <div className="mx-auto flex h-full max-w-[1280px] flex-col px-5 lg:px-8">
+        <div className="relative mx-auto h-full max-w-[1280px] px-5 lg:px-8">
+          {homeStage === "topics" && (
+            <div className="absolute inset-0">
+              <TopicFeedStage
+                clouds={clouds}
+                expandedTopicId={expandedTopicId}
+                onToggleExpand={(cloudId) => setExpandedTopicId((current) => (current === cloudId ? null : cloudId))}
+                onEnterConversation={enterConversation}
+                onCreateCloud={() => setModal("create")}
+              />
+            </div>
+          )}
+
+          {homeStage === "live" && (
+            <div className="absolute inset-0 flex h-full flex-col">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setHomeStage("topics")}
+                className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
+              >
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+                Voltar aos tópicos
+              </button>
+              <span className="hidden text-[12px] font-semibold uppercase tracking-[0.18em] text-white/35 md:inline">
+                Conversa ao vivo
+              </span>
+            </div>
 
           {/* ── Cloud ativa ── */}
           {clouds.length > 0 && (() => {
@@ -1285,6 +1571,7 @@ export default function Page() {
             const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
             const remaining = Math.max(durationSecs - elapsed, 0);
             const isLive = remaining > 0;
+            const isEndingSoon = remaining > 0 && remaining < 5 * 60;
             void tick;
             return (
               <div className="relative flex flex-1 flex-col overflow-hidden py-4">
@@ -1320,10 +1607,10 @@ export default function Page() {
 
                         {/* AO VIVO + countdown */}
                         {isLive ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#22C55E]/15 px-3 py-0.5 text-[11px] font-semibold text-[#22C55E]">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[11px] font-semibold ${isEndingSoon ? "bg-[#FF5B5B]/15 text-[#FF5B5B]" : "bg-[#22C55E]/15 text-[#22C55E]"}`}>
                             <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
+                              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
+                              <span className={`relative inline-flex h-2 w-2 rounded-full ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
                             </span>
                             AO VIVO · {formatCountdown(remaining)}
                           </span>
@@ -1411,7 +1698,8 @@ export default function Page() {
               </button>
             </div>
           )}
-
+            </div>
+          )}
         </div>
       </main>
 

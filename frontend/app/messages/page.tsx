@@ -1,10 +1,10 @@
 ﻿"use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import {
   useState, useRef, useEffect, useCallback,
 } from "react";
+import { HeaderBrand } from "../components/HeaderBrand";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -454,12 +454,7 @@ export default function MessagesPage() {
 
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
-            <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64}
-              className="object-contain" style={{ width: 64, height: 64 }} priority />
-            <div className="leading-none">
-              <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
-              <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
-            </div>
+            <HeaderBrand />
           </Link>
 
           {/* Action icons */}

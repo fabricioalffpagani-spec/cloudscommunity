@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
+import { HeaderBrand } from "../components/HeaderBrand";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aparencia" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -285,11 +286,7 @@ function Header() {
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
       <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
         <Link href="/" className="flex shrink-0 items-center gap-3">
-          <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain" style={{width:64,height:64}} priority/>
-          <div className="leading-none">
-            <div className="text-[34px] font-extrabold tracking-[-0.02em] text-white">Clouds</div>
-            <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.6em] text-white/50">Community</div>
-          </div>
+          <HeaderBrand />
         </Link>
         <nav className="hidden items-center gap-3 md:flex">
           <Link href="/" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white hover:bg-[#28282C]">Home</Link>
