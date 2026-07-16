@@ -35,14 +35,15 @@ function FlameIcon({ className = "" }: { className?: string }) {
   );
 }
 
-function MailIcon() {
+function PaperPlaneIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7" />
-      <path d="m3 7 9 6 9-6" />
+      <path d="M22 2 11 13" />
+      <path d="M22 2 15 22 11 13 2 9 22 2" />
     </svg>
   );
 }
+
 
 async function getSiteOrigin() {
   const requestHeaders = await headers();
@@ -81,7 +82,7 @@ export default async function CloudPage({ params }: CloudPageProps) {
               href={`mailto:?subject=${encodeURIComponent(`Participe da Cloud ${title}`)}&body=${encodeURIComponent(`Oi!\n\nQuero te convidar para a Cloud "${title}". Acesse o link e participe:\n${shareTarget}`)}`}
               className="inline-flex items-center gap-2 rounded-3xl bg-[#7C3AED] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(124,58,237,0.35)] transition hover:bg-[#6D28D9]"
             >
-              <MailIcon />
+              <PaperPlaneIcon />
               Compartilhar
             </a>
           </div>

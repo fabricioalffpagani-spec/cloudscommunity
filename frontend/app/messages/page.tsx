@@ -52,6 +52,8 @@ const INIT_MSGS: Record<string, Msg[]> = {
   pedro: [{ id: "d1", type: "date", label: "Hoje" }, { id: "m1", side: "left", type: "text", sender: "Pedro", content: "Oi! Tudo bem?", time: "09:05" }],
 };
 
+const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function I({ d, size = 20, fill }: { d: string | string[]; size?: number; fill?: boolean }) {
@@ -133,8 +135,13 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         if (!canceledRef.current) {
           const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          const url = URL.createObjectURL(blob);
-          onDone(url, fmt(seconds), waveformRef.current.slice());
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === "string") {
+              onDone(reader.result, fmt(seconds), waveformRef.current.slice());
+            }
+          };
+          reader.readAsDataURL(blob);
         }
         stream.getTracks().forEach(t => t.stop());
         setSeconds(0);
@@ -357,6 +364,7 @@ function Waveform({ active, paused }: { active?: boolean; paused?: boolean }) {
 export default function MessagesPage() {
   const [convs, setConvs] = useState<Conversation[]>(INIT_CONVS);
   const [activeId, setActiveId] = useState("joao");
+  const [contactSearch, setContactSearch] = useState("");
   const [messages, setMessages] = useState<Record<string, Msg[]>>(INIT_MSGS);
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -364,10 +372,42 @@ export default function MessagesPage() {
   const [typing, setTyping] = useState(false);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [calling, setCalling] = useState(false);
+  const [messagesHydrated, setMessagesHydrated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeConv = convs.find(c => c.id === activeId)!;
   const msgs = messages[activeId] ?? [];
+  const normalizedSearch = contactSearch
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+  const filteredConvs = convs.filter(conv =>
+    conv.name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .includes(normalizedSearch)
+  );
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(DIRECT_MESSAGES_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Record<string, Msg[]>;
+        setMessages(prev => ({ ...prev, ...parsed }));
+      }
+    } catch {
+      // Ignore malformed local data and continue with the seed conversations.
+    } finally {
+      setMessagesHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!messagesHydrated) return;
+    localStorage.setItem(DIRECT_MESSAGES_STORAGE_KEY, JSON.stringify(messages));
+  }, [messages, messagesHydrated]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -450,7 +490,7 @@ export default function MessagesPage() {
 
       {/* ── HEADER — identical to Home ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
-        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
+        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
 
           {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
@@ -475,24 +515,31 @@ export default function MessagesPage() {
       <div className="flex flex-1 overflow-hidden pt-[88px]">
 
         {/* Sidebar */}
-        <aside className="flex w-[320px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
+        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
           <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
             <span className="text-[17px] font-bold text-white">Mensagens</span>
-            <button type="button" aria-label="Nova conversa"
+            <Link href="/meet" aria-label="Nova conversa"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">
               {icons.plus(18)}
-            </button>
+            </Link>
           </div>
 
           <div className="px-4 py-3">
             <div className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-3 py-2.5">
               {icons.search_sm()}
-              <input type="search" placeholder="Buscar..." className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none" />
+              <input
+                type="search"
+                value={contactSearch}
+                onChange={e => setContactSearch(e.target.value)}
+                placeholder="Buscar contatos..."
+                aria-label="Buscar contatos"
+                className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+              />
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-            {convs.map(conv => (
+            {filteredConvs.map(conv => (
               <div key={conv.id} role="button" tabIndex={0} onClick={() => setActiveId(conv.id)}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveId(conv.id); } }}
                 className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition cursor-pointer ${activeId === conv.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}>
@@ -513,6 +560,11 @@ export default function MessagesPage() {
                 </div>
               </div>
             ))}
+            {filteredConvs.length === 0 && (
+              <p className="px-3 py-6 text-center text-[14px] text-white/40">
+                Nenhum contato encontrado.
+              </p>
+            )}
           </div>
 
           <div className="border-t border-white/[0.07] px-5 py-4">

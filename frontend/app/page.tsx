@@ -285,11 +285,10 @@ function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
 }
 
 function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
+  // Path traced from classic 3-tongue flame silhouette
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-      <path opacity="0.4" d="M12 7.5c.5 1.5 1 3 1 4.5 0 2.5-1 4.5-1 5-.5-1-1-2.5-1-5 0-1.5.5-3 1-4.5Z" />
+    <svg viewBox="0 0 384 512" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1zM128 480c-52.9 0-96-43.1-96-96 0-41.3 17.7-78.5 46.1-104.5V288c0 39.8 32.2 72 72 72s72-32.2 72-72c0-53-20.8-98.8-50.5-138.3C185.6 183.4 224 226.6 224 288c0 70.7-57.3 128-96 128z" />
     </svg>
   );
 }
@@ -437,29 +436,288 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
   );
 }
 
+// ─── Contacts (shared with share modal) ──────────────────────────────────────
+
+const PLATFORM_CONTACTS = [
+  { id: "joao",  name: "João Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
+  { id: "ana",   name: "Ana Costa",  avatar: "AC", color: "#3B82F6", status: "busy"    as const },
+  { id: "pedro", name: "Pedro Lima", avatar: "PL", color: "#22C55E", status: "offline" as const },
+];
+
+const statusDotColor = { online: "#22C55E", busy: "#F59E0B", offline: "#6B7280" };
+const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
+
+// ─── Share Modal ──────────────────────────────────────────────────────────────
+
+function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
+  const [view, setView] = useState<"main" | "contacts" | "external">("main");
+  const [sent, setSent] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState(false);
+
+  const encodedText = encodeURIComponent(`Participe da Cloud "${cloudTitle}" aqui: ${cloudUrl}`);
+
+  const handleSendToContact = (contactId: string) => {
+    const invitation = {
+      id: `cloud-invite-${Date.now()}`,
+      side: "right" as const,
+      type: "link" as const,
+      sender: "Você",
+      content: `Participe da Cloud "${cloudTitle}" comigo!`,
+      url: cloudUrl,
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    try {
+      const stored = localStorage.getItem(DIRECT_MESSAGES_STORAGE_KEY);
+      const conversations = stored ? JSON.parse(stored) as Record<string, unknown[]> : {};
+      conversations[contactId] = [...(conversations[contactId] ?? []), invitation];
+      localStorage.setItem(DIRECT_MESSAGES_STORAGE_KEY, JSON.stringify(conversations));
+    } catch {
+      // The visual confirmation remains available even if browser storage is unavailable.
+    }
+    setSent(prev => ({ ...prev, [contactId]: true }));
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(cloudUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const externalOptions = [
+    {
+      label: "WhatsApp",
+      color: "#25D366",
+      href: `https://wa.me/?text=${encodedText}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/>
+        </svg>
+      ),
+    },
+    {
+      label: "Instagram",
+      color: "#E1306C",
+      href: `https://www.instagram.com/`,
+      icon: (
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/>
+        </svg>
+      ),
+    },
+    {
+      label: "Facebook",
+      color: "#1877F2",
+      href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(cloudUrl)}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+        </svg>
+      ),
+    },
+    {
+      label: "X (Twitter)",
+      color: "#000000",
+      href: `https://twitter.com/intent/tweet?text=${encodedText}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.259 5.627L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/>
+        </svg>
+      ),
+    },
+    {
+      label: "Telegram",
+      color: "#229ED9",
+      href: `https://t.me/share/url?url=${encodeURIComponent(cloudUrl)}&text=${encodeURIComponent(`Participe da Cloud "${cloudTitle}"!`)}`,
+      icon: (
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+          <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-[#111116] shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+          {view !== "main" && (
+            <button type="button" onClick={() => setView("main")} className="mr-3 text-white/40 hover:text-white transition">
+              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+            </button>
+          )}
+          <span className="text-[16px] font-bold text-white flex-1">
+            {view === "main" ? "Compartilhar Cloud" : view === "contacts" ? "Enviar para contato" : "Compartilhar fora da plataforma"}
+          </span>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white transition">
+            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 6l12 12" /><path d="M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* ── Cloud title preview ── */}
+        {view === "main" && (
+          <div className="mx-5 mt-4 rounded-xl border border-white/[0.07] bg-[#1C1F2E] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
+            <p className="text-[14px] font-semibold text-white truncate">{cloudTitle}</p>
+          </div>
+        )}
+
+        {/* ── Main view: two options ── */}
+        {view === "main" && (
+          <div className="flex flex-col gap-3 p-5">
+            {/* Mensageiro */}
+            <button
+              type="button"
+              onClick={() => setView("contacts")}
+              className="flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#1C1F2E] px-5 py-4 text-left transition hover:border-[#9333EA]/40 hover:bg-[#9333EA]/10 group"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#9333EA]/20 text-[#C084FC] group-hover:bg-[#9333EA]/30">
+                <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-white">Enviar no mensageiro</p>
+                <p className="text-[12px] text-white/45 mt-0.5">Escolha um contato da plataforma</p>
+              </div>
+              <svg className="ml-auto text-white/30" viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+
+            {/* Redes sociais */}
+            <button
+              type="button"
+              onClick={() => setView("external")}
+              className="flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#1C1F2E] px-5 py-4 text-left transition hover:border-[#3B82F6]/40 hover:bg-[#3B82F6]/10 group"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3B82F6]/15 text-[#93C5FD] group-hover:bg-[#3B82F6]/25">
+                <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                  <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>
+                </svg>
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-white">Enviar para fora</p>
+                <p className="text-[12px] text-white/45 mt-0.5">WhatsApp, Instagram, Facebook e mais</p>
+              </div>
+              <svg className="ml-auto text-white/30" viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </button>
+
+            {/* Copy link */}
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-3 rounded-xl px-4 py-3 text-[13px] font-medium text-white/50 transition hover:bg-white/[0.04] hover:text-white/80"
+            >
+              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              {copied ? "✓ Link copiado!" : "Copiar link"}
+            </button>
+          </div>
+        )}
+
+        {/* ── Contacts view ── */}
+        {view === "contacts" && (
+          <div className="p-4">
+            <p className="mb-3 px-1 text-[12px] text-white/40">Selecione quem deve receber o link desta Cloud:</p>
+            <div className="flex flex-col gap-1">
+              {PLATFORM_CONTACTS.map(contact => (
+                <div key={contact.id} className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.04]">
+                  <div className="relative shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                      style={{ backgroundColor: contact.color }}>
+                      {contact.avatar}
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#111116]"
+                      style={{ backgroundColor: statusDotColor[contact.status] }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-semibold text-white truncate">{contact.name}</p>
+                    <p className="text-[11px] text-white/40">{contact.status === "online" ? "online" : contact.status === "busy" ? "ocupado" : "offline"}</p>
+                  </div>
+                  {sent[contact.id] ? (
+                    <span className="text-[12px] font-semibold text-[#22C55E] flex items-center gap-1">
+                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+                      Enviado
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSendToContact(contact.id)}
+                      className="shrink-0 rounded-full bg-[#9333EA] px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#7C3AED]"
+                    >
+                      Enviar
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── External view ── */}
+        {view === "external" && (
+          <div className="p-5">
+            <p className="mb-4 text-[12px] text-white/40">Compartilhe o convite desta Cloud nas redes sociais:</p>
+            <div className="grid grid-cols-2 gap-3">
+              {externalOptions.map(opt => (
+                <a
+                  key={opt.label}
+                  href={opt.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {}}
+                  className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-[#1C1F2E] px-4 py-3 text-[13px] font-semibold text-white transition hover:border-white/20 hover:bg-[#252840]"
+                >
+                  <span style={{ color: opt.color }}>{opt.icon}</span>
+                  {opt.label}
+                </a>
+              ))}
+            </div>
+            {/* Copy link */}
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-3 text-[13px] font-medium text-white/50 transition hover:border-white/20 hover:text-white/80"
+            >
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              {copied ? "✓ Link copiado!" : "Copiar link"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
 function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState(cloud.likes ?? 0);
+  const [hyped, setHyped] = useState(false);
+  const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [shareOpen, setShareOpen] = useState(false);
-  const shareRef = useRef<HTMLDivElement>(null);
   const siteOrigin = useSiteOrigin();
 
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      if (shareRef.current && !shareRef.current.contains(event.target as Node)) {
-        setShareOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  const cat = CATEGORIES.find(c => c.name === cloud.category) ?? CATEGORIES[1];
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
-  const fullShareUrl = `${siteOrigin}${shareUrl}`;
-  const messengerHref = `/messages?share=${encodeURIComponent(fullShareUrl)}`;
-  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(`Participe da Cloud "${cloud.title}" aqui: ${fullShareUrl}`)}`;
-  const durationSeconds = parseDurationSeconds(cloud.duration);
+  const fullShareUrl = `${siteOrigin}${shareUrl}`;  const durationSeconds = parseDurationSeconds(cloud.duration);
   const elapsedSeconds = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
@@ -471,15 +729,22 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
     return `${Math.floor(diff / 3600)}h atrás`;
   })();
 
+  const handleLike = () => {
+    setLiked(v => !v);
+    setLikes(v => liked ? v - 1 : v + 1);
+  };
+
+  const handleHypar = () => {
+    setHyped(v => !v);
+    setHypes(v => hyped ? v - 1 : v + 1);
+    onHypar();
+  };
+
   return (
     <article className="w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <span
-          className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold text-white"
-          style={{ backgroundColor: cat.bg, color: cat.color ?? "#fff" }}
-        >
-          {cloud.category.toUpperCase()}
-        </span>
+
+      {/* Top row: live indicator + countdown */}
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-[12px]">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full" style={{ backgroundColor: isLive ? "#22C55E" : "#F87171", opacity: 0.7 }} />
@@ -488,73 +753,93 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
           <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
             {isLive ? "AO VIVO" : "ENCERRADA"} · {cloud.duration}
           </span>
-          {isLive ? (
-            <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/80">{countdownLabel}</span>
-          ) : (
-            <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">00:00</span>
-          )}
+          <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">
+            {isLive ? countdownLabel : "00:00"}
+          </span>
         </div>
-        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
           {cloud.visibility === "public" ? "Público" : "Privado"}
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <h2 className="text-[20px] font-semibold text-white leading-snug">{cloud.title}</h2>
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-[12px] font-semibold text-white/80">
-          <FireIcon s={16} /> {cloud.hypes ?? 0} hypes
-        </span>
-      </div>
+      {/* Title */}
+      <h2 className="mt-4 text-[20px] font-semibold text-white leading-snug">{cloud.title}</h2>
 
+      {/* Audio player */}
       {cloud.mode === "audio" && cloud.audioUrl && (
-        <div className="mt-4 flex items-center gap-3 rounded-xl bg-[#1C1730] px-4 py-3">
+        <div className="mt-4 rounded-xl bg-[#1C1730] px-4 py-3">
           <audio controls src={cloud.audioUrl} className="w-full h-8 accent-[#9333EA]" />
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
-        <span className="text-[12px] text-white/40">Publicado {timeAgo}</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={cloud.href ?? "/"} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-white/10">
-            Entrar na conversa
-          </Link>
+      {/* Footer: action buttons */}
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
+
+        {/* Left — reaction buttons */}
+        <div className="flex items-center gap-2">
+
+          {/* Curtir */}
           <button
             type="button"
-            onClick={onHypar}
-            className="inline-flex items-center gap-2 rounded-full bg-[#FF6A00] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#ff7e24] transition"
+            onClick={handleLike}
+            aria-label="Curtir"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+              liked
+                ? "border-pink-500/40 bg-pink-500/15 text-pink-400"
+                : "border-white/10 bg-white/5 text-white/70 hover:border-pink-500/40 hover:text-pink-400"
+            }`}
           >
-            <FireIcon s={16} /> Hypar
+            <svg viewBox="0 0 24 24" width={15} height={15} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
+            </svg>
+            {likes > 0 && <span>{likes}</span>}
           </button>
-          <div className="relative" ref={shareRef}>
-            <button
-              type="button"
-              onClick={() => setShareOpen((open) => !open)}
-              className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#7C3AED] transition"
-            >
-              <ShareIcon /> Compartilhar Cloud
-            </button>
-            {shareOpen && (
-              <div className="absolute right-0 z-20 mt-2 w-[220px] rounded-2xl border border-white/10 bg-[#0F172A] p-2 shadow-[0_20px_80px_rgba(0,0,0,0.45)]">
-                <Link
-                  href={messengerHref}
-                  className="block rounded-xl px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-white/5"
-                  onClick={() => setShareOpen(false)}
-                >
-                  Enviar no mensageiro
-                </Link>
-                <a
-                  href={whatsappHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 block rounded-xl px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-white/5"
-                  onClick={() => setShareOpen(false)}
-                >
-                  Enviar pelo WhatsApp
-                </a>
-              </div>
-            )}
-          </div>
+
+          {/* Hypar */}
+          <button
+            type="button"
+            onClick={handleHypar}
+            aria-label="Hypar"
+            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+              hyped
+                ? "border-orange-500/40 bg-orange-500/15 text-orange-400"
+                : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
+            }`}
+          >
+            <svg viewBox="0 0 384 512" width={24} height={24} fill="currentColor" aria-hidden="true">
+              <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" style={{ opacity: hyped ? 1 : 0.6 }} />
+            </svg>
+            {hypes > 0 && <span>{hypes}</span>}
+          </button>
+
+          {/* Compartilhar */}
+          {shareOpen && (
+            <ShareModal
+              cloudTitle={cloud.title}
+              cloudUrl={fullShareUrl}
+              onClose={() => setShareOpen(false)}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            aria-label="Compartilhar"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white/70 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
+          >
+            <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
+            </svg>
+            Compartilhar
+          </button>
         </div>
+
+        {/* Right — enter */}
+        <Link
+          href={cloud.href ?? "/"}
+          className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
+        >
+          Entrar na conversa
+        </Link>
       </div>
     </article>
   );
@@ -1165,8 +1450,12 @@ function TopicFeedStage({
   onEnterConversation: (cloudId: string) => void;
   onCreateCloud: () => void;
 }) {
+  const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
+  const siteOrigin = useSiteOrigin();
+
   return (
-    <div className="topic-scroll flex h-full flex-col gap-4 overflow-y-auto py-4 pr-2">
+    <>
+      <div className="topic-scroll flex h-full flex-col gap-4 overflow-y-auto py-4 pr-2">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/80">
           <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
@@ -1219,105 +1508,189 @@ function TopicFeedStage({
               const isEnded = remaining <= 0;
               const isEndingSoon = remaining > 0 && remaining < 5 * 60;
               const expanded = expandedTopicId === cloud.id;
-              const countdownLabel = isEnded ? "ENCERRADA" : formatCountdown(remaining);
+              const hours = Math.floor(remaining / 3600);
+              const minutes = Math.floor((remaining % 3600) / 60);
+              const seconds = remaining % 60;
+              const createdLabel = "há pouco";
+              const participantAvatars = [
+                profile.avatar,
+                `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
+                `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-2`) % 70) + 1}`,
+              ];
+              const participantLabel = profile.participants >= 1000
+                ? `${(profile.participants / 1000).toFixed(1).replace(".0", "")}K participantes`
+                : `${profile.participants} participantes`;
 
               return (
                 <article
                   key={cloud.id}
-                  className={`rounded-2xl border border-white/[0.07] bg-[#0B0C12] px-4 py-4 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_60px_rgba(0,0,0,0.26)] transition-all duration-300 ease-out hover:border-white/[0.14] md:px-5 ${
-                    expanded ? "md:py-5" : "md:py-4"
-                  }`}
+                  className="rounded-[22px] border border-white/[0.10] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition hover:border-white/[0.18] md:px-7 md:py-5"
                 >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={profile.avatar}
-                          alt={profile.name}
-                          className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-white/70">@{profile.handle}</p>
-                          <h3 className="mt-1 text-[20px] font-extrabold leading-[1.05] tracking-[-0.04em] text-white md:text-[26px]">
-                            {cloud.title}
-                          </h3>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <img
+                        src={profile.avatar}
+                        alt={profile.name}
+                        className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-white/15 md:h-14 md:w-14"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-[15px] font-semibold text-white md:text-[17px]">@{profile.handle}</p>
+                          <span className="rounded-full border border-[#A855F7]/70 px-2.5 py-0.5 text-[12px] font-medium text-[#C084FC]">Criador</span>
                         </div>
+                        <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
                       </div>
+                    </div>
+                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
+                      ⋮
+                    </button>
+                  </div>
 
-                      <div
-                        className={`mt-3 overflow-hidden transition-all duration-300 ease-out ${
-                          expanded ? "max-h-[220px] opacity-100" : "max-h-[58px] opacity-95"
-                        }`}
-                      >
-                        <p className="text-[15px] leading-6 text-white/66">
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_285px] lg:items-center">
+                    <div className="min-w-0">
+                      <h3 className="text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[31px]">
+                        {cloud.title}
+                      </h3>
+                      <div className={`mt-2 overflow-hidden transition-all duration-300 ${expanded ? "max-h-32" : "max-h-[26px]"}`}>
+                        <p className="text-[15px] leading-6 text-white/65 md:text-[16px]">
                           {profile.description}
                         </p>
                       </div>
-
                       <button
                         type="button"
                         onClick={() => onToggleExpand(cloud.id)}
-                        className="mt-2 text-[13px] font-semibold text-white/55 transition hover:text-white"
+                        className="mt-2 inline-flex items-center gap-2 text-[14px] font-medium text-[#C084FC] transition hover:text-[#DDD6FE] md:text-[15px]"
                       >
                         {expanded ? "Ler menos" : "Ler mais"}
+                        <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={expanded ? "rotate-180 transition-transform" : "transition-transform"}>
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
                       </button>
                     </div>
 
-                    <div className="flex flex-col gap-3 md:min-w-[240px] md:gap-4">
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                        <div className="min-w-[78px]">
-                          <p className={`text-[26px] font-semibold tracking-[-0.03em] ${isEndingSoon ? "text-[#FF5B5B]" : "text-white"}`}>
-                            {countdownLabel}
-                          </p>
-                          <p className="text-[12px] text-white/40">{isEnded ? "encerrada" : "restantes"}</p>
+                    <div className="lg:pb-0.5">
+                      <p className="text-center text-[13px] text-white/65 md:text-[15px]">{isEnded ? "Encerrada" : "Encerra em"}</p>
+                      {isEnded ? (
+                        <p className="mt-2 text-center text-[38px] font-semibold tracking-[0.14em] text-white/45">00:00:00</p>
+                      ) : (
+                        <div className={`mt-1 flex justify-center gap-1 text-[29px] font-semibold tracking-[0.05em] md:text-[35px] ${isEndingSoon ? "text-[#FF405C]" : "text-[#FF4B67]"}`} style={{ textShadow: "0 0 18px rgba(255,64,92,0.42)" }}>
+                          <span>{String(hours).padStart(2, "0")}</span><span>:</span><span>{String(minutes).padStart(2, "0")}</span><span>:</span><span>{String(seconds).padStart(2, "0")}</span>
                         </div>
-
-                        <div className="h-12 w-px bg-white/[0.08]" />
-
-                        <div className="min-w-[90px]">
-                          <div className="flex items-center gap-2 text-[18px] font-semibold text-white">
-                            <UserIcon s={16} />
-                            {profile.participants}
-                          </div>
-                          <p className="text-[12px] text-white/40">online</p>
-                        </div>
-                      </div>
-
-                      <div className="md:pt-1">
-                        <div className="rounded-[19px] bg-gradient-to-br from-[#2563EB] via-[#4F46E5] to-[#A855F7] p-px shadow-[0_20px_50px_rgba(59,130,246,0.15)]">
-                          <button
-                            type="button"
-                            onClick={() => onEnterConversation(cloud.id)}
-                            className="flex h-[52px] w-full items-center justify-center rounded-[18px] bg-[#0B1020] px-8 text-[16px] font-semibold text-white transition hover:bg-[#101729]"
-                          >
-                            Entrar na conversa
-                          </button>
-                        </div>
-                      </div>
+                      )}
+                      {!isEnded && <div className="mt-1 grid grid-cols-3 text-center text-[11px] uppercase text-white/50 md:text-[13px]"><span>horas</span><span>min</span><span>seg</span></div>}
+                      <button
+                        type="button"
+                        onClick={() => onEnterConversation(cloud.id)}
+                        className="mt-3 flex h-11 w-full items-center justify-center rounded-[20px] border border-[#9B6CFF] bg-[#0C0D18] px-6 text-[16px] font-semibold text-white shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_25px_rgba(124,58,237,0.12)] transition hover:bg-[#161128] md:text-[17px]"
+                      >
+                        Entrar na conversa
+                      </button>
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-white/45 md:mt-5">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
-                      <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
-                      {cloud.category}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
-                      <UserIcon s={12} />
-                      {profile.participants} ao vivo
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-3 py-1">
-                      <FireIcon s={12} className="text-[#F97316]" />
-                      <span className="text-[#F97316]">{cloud.hypes || 0} hypes</span>
-                    </span>
+                  <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:mt-5 md:flex-row md:items-center">
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
+                      <button type="button" className="inline-flex items-center gap-3 transition hover:text-pink-300">
+                        <HeartIcon s={25} className="text-white/65" />
+                        <span>{Math.max(1, Math.round((cloud.hypes ?? 0) * 3.05))}</span>
+                      </button>
+                      <button type="button" className="inline-flex items-center gap-3 transition hover:text-orange-300">
+                        <svg viewBox="0 0 384 512" width={21} height={25} fill="currentColor" className="text-[#FF632D]" aria-hidden="true"><path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" /></svg>
+                        <span>{cloud.hypes ?? 0}</span>
+                      </button>
+                      <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
+                        <PaperPlaneIcon s={25} className="text-white/65" />
+                        <span>Compartilhar</span>
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-3 self-start md:self-auto">
+                      <div className="flex -space-x-3">
+                        {participantAvatars.map(avatar => (
+                          <img key={avatar} src={avatar} alt="Participante" className="h-10 w-10 rounded-full border-2 border-[#0B0C12] object-cover md:h-12 md:w-12" referrerPolicy="no-referrer" />
+                        ))}
+                        {profile.participants > 3 && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">+{profile.participants >= 1000 ? "1K" : profile.participants - 3}</span>}
+                      </div>
+                      <span className="text-[14px] text-white/55 md:text-[17px]">{participantLabel}</span>
+                    </div>
                   </div>
                 </article>
               );
             })}
         </div>
       )}
-    </div>
+      </div>
+      {shareTarget && (
+        <ShareModal
+          cloudTitle={shareTarget.title}
+          cloudUrl={`${siteOrigin}${shareTarget.href ?? `/cloud/${shareTarget.id}`}`}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Live Card Action Buttons ────────────────────────────────────────────────
+
+function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; initialHypes: number }) {
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState(0);
+  const [hyped, setHyped] = useState(false);
+  const [hypes, setHypes] = useState(initialHypes);
+  const [shareOpen, setShareOpen] = useState(false);
+  const siteOrigin = useSiteOrigin();
+  const fullUrl = `${siteOrigin}/cloud/${cloudId}`;
+
+  return (
+    <>
+      {shareOpen && (
+        <ShareModal
+          cloudTitle="Cloud ao vivo"
+          cloudUrl={fullUrl}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {/* Curtir */}
+      <button
+        type="button"
+        aria-label="Curtir"
+        onClick={() => { setLiked(v => !v); setLikes(v => liked ? v - 1 : v + 1); }}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition ${liked ? "border-pink-500/40 bg-pink-500/15 text-pink-400" : "border-white/10 bg-white/5 text-white/60 hover:border-pink-500/40 hover:text-pink-400"}`}
+      >
+        <svg viewBox="0 0 24 24" width={14} height={14} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
+        </svg>
+        {likes > 0 ? likes : "Curtir"}
+      </button>
+
+      {/* Hypar */}
+      <button
+        type="button"
+        aria-label="Hypar"
+        onClick={() => { setHyped(v => !v); setHypes(v => hyped ? v - 1 : v + 1); }}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition ${hyped ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 bg-white/5 text-white/60 hover:border-orange-500/40 hover:text-orange-400"}`}
+      >
+        <svg viewBox="0 0 384 512" width={14} height={14} fill="currentColor" aria-hidden="true">
+          <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" style={{ opacity: hyped ? 1 : 0.6 }} />
+        </svg>
+        {hypes > 0 ? hypes : "Hypar"}
+      </button>
+
+      {/* Compartilhar */}
+      <button
+        type="button"
+        aria-label="Compartilhar"
+        onClick={() => setShareOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[12px] font-semibold text-white/60 transition hover:border-[#9333EA]/50 hover:text-[#C084FC]"
+      >
+        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
+        </svg>
+        Compartilhar
+      </button>
+    </>
   );
 }
 
@@ -1495,7 +1868,7 @@ export default function Page() {
 
       {/* Header */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
-        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
+        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <a href="#feed" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
           </a>
@@ -1600,11 +1973,9 @@ export default function Page() {
 
                   {/* ── Cabeçalho fixo dentro do card ── */}
                   <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] px-6 py-4">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] font-semibold text-white truncate">{cloud.title}</h2>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-[#7C3AED]/20 px-3 py-0.5 text-[11px] font-semibold text-[#C084FC]">{cloud.category}</span>
-
+                      <div className="mt-1.5 flex items-center gap-2">
                         {/* AO VIVO + countdown */}
                         {isLive ? (
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[11px] font-semibold ${isEndingSoon ? "bg-[#FF5B5B]/15 text-[#FF5B5B]" : "bg-[#22C55E]/15 text-[#22C55E]"}`}>
@@ -1617,19 +1988,16 @@ export default function Page() {
                         ) : (
                           <span className="rounded-full bg-white/10 px-3 py-0.5 text-[11px] font-semibold text-white/40">ENCERRADA</span>
                         )}
-
-                        {/* Participantes */}
-                        <span className="inline-flex items-center gap-1 text-[11px] text-white/50">
-                          <UserIcon s={12} />
-                          {participants} online
-                        </span>
                       </div>
                     </div>
 
-                    <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-[#F97316]">
-                      <FireIcon s={14} />
-                      {cloud.hypes || 0}
-                    </span>
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <LiveCardActionButton
+                        cloudId={cloud.id}
+                        initialHypes={cloud.hypes ?? 0}
+                      />
+                    </div>
                   </div>
 
                   {/* ── Chat (ocupa o restante) ── */}
@@ -1727,11 +2095,15 @@ export default function Page() {
         type="button"
         aria-label="Criar nova Cloud"
         onClick={() => setModal("create")}
-        className="fixed bottom-[120px] right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] text-white shadow-[0_4px_24px_rgba(147,51,234,0.5)] transition hover:bg-[#7C3AED] hover:scale-105 active:scale-95"
+        className="fixed bottom-[120px] right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] shadow-[0_4px_24px_rgba(147,51,234,0.5)] transition hover:bg-[#7C3AED] hover:scale-105 active:scale-95 overflow-hidden"
       >
-        <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 5v14" /><path d="M5 12h14" />
-        </svg>
+        <Image
+          src="/logo_clouds.png"
+          alt="Criar Cloud"
+          width={32}
+          height={32}
+          className="object-contain"
+        />
       </button>
 
     </div>

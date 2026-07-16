@@ -2,23 +2,23 @@ import Image from "next/image";
 
 export function HeaderBrand() {
   return (
-    <>
+    <span className="inline-flex items-center gap-4" aria-label="Clouds Community">
       <Image
         src="/logo_clouds.png"
         alt="Clouds Community"
-        width={72}
-        height={72}
+        width={64}
+        height={64}
         className="object-contain"
         priority
       />
-      <div className="leading-none">
-        <div className="text-[40px] font-black tracking-[-0.06em] text-white md:text-[52px]">
+      <span className="leading-none">
+        <span className="block text-[32px] font-black tracking-[-0.06em] text-white md:text-[40px]">
           Clouds
-        </div>
-        <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.72em] bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-[#C084FC] bg-clip-text text-transparent md:text-[13px]">
+        </span>
+        <span className="mt-1 block pl-1.5 text-[9px] font-semibold uppercase tracking-[0.42em] bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-[#C084FC] bg-clip-text text-transparent md:text-[11px]">
           Community
-        </div>
-      </div>
-    </>
+        </span>
+      </span>
+    </span>
   );
 }

@@ -284,7 +284,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
-      <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
+      <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-3">
           <HeaderBrand />
         </Link>
