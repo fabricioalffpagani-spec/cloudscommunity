@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSessionUser } from "../components/session-user";
 
 type SignupErrors = Partial<
   Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "form", string>
@@ -109,6 +110,7 @@ function getPasswordError(password: string) {
 
 export default function SignupPage() {
   const router = useRouter();
+  const { refresh } = useSessionUser();
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState({
     email: "",
@@ -291,6 +293,7 @@ export default function SignupPage() {
         }
 
         signupDraftRef.current = null;
+        await refresh();
         router.replace("/");
       } finally {
         setSubmitting(false);

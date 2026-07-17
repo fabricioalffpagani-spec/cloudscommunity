@@ -56,6 +56,13 @@ type UserWithProfile = Prisma.UserGetPayload<{
   };
 }>;
 
+type UserStats = {
+  followersCount: number;
+  followingCount: number;
+  cloudsCount: number;
+  hypesCount: number;
+};
+
 @Injectable()
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
@@ -238,7 +245,7 @@ export class AuthService {
 
     return {
       ok: true,
-      user: this.mapUser(current.user),
+      user: await this.mapUserWithStats(current.user),
       session: this.mapSession(current.session),
     };
   }
@@ -365,6 +372,22 @@ export class AuthService {
   }
 
   private mapUser(user: UserWithProfile): AuthUserPayload {
+    return this.buildUserPayload(user);
+  }
+
+  private async mapUserWithStats(user: UserWithProfile): Promise<AuthUserPayload> {
+    const profile = user.profile;
+
+    if (!profile) {
+      throw new Error('User profile is required.');
+    }
+
+    const userStats = await this.loadUserStats(user.id);
+
+    return this.buildUserPayload(user, userStats);
+  }
+
+  private buildUserPayload(user: UserWithProfile, stats?: UserStats): AuthUserPayload {
     const profile = user.profile;
 
     if (!profile) {
@@ -387,6 +410,26 @@ export class AuthService {
       status: user.status,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
+      followersCount: stats?.followersCount,
+      followingCount: stats?.followingCount,
+      cloudsCount: stats?.cloudsCount,
+      hypesCount: stats?.hypesCount,
+    };
+  }
+
+  private async loadUserStats(userId: string): Promise<UserStats> {
+    const [followersCount, followingCount, cloudsCount, hypesCount] = await Promise.all([
+      this.prisma.follow.count({ where: { followingId: userId } }),
+      this.prisma.follow.count({ where: { followerId: userId } }),
+      this.prisma.cloud.count({ where: { authorId: userId, deletedAt: null } }),
+      this.prisma.cloudHype.count({ where: { userId } }),
+    ]);
+
+    return {
+      followersCount,
+      followingCount,
+      cloudsCount,
+      hypesCount,
     };
   }
 

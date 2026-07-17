@@ -14,6 +14,10 @@ export type AuthUserPayload = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  followersCount?: number;
+  followingCount?: number;
+  cloudsCount?: number;
+  hypesCount?: number;
 };
 
 export type AuthSessionPayload = {

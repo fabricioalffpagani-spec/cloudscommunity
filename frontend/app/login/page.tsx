@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSessionUser } from "../components/session-user";
 
 type LoginErrors = Partial<Record<"identifier" | "password" | "form", string>>;
 
@@ -30,6 +31,7 @@ function EyeIcon({ open }: { open: boolean }) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useSessionUser();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -63,6 +65,7 @@ export default function LoginPage() {
         return;
       }
 
+      await refresh();
       router.replace("/");
       router.refresh();
     } finally {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SessionUserProvider } from "./components/session-user";
 
 export const metadata: Metadata = {
   title: "Clouds Community",
@@ -28,7 +29,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-[var(--bg-root)] text-[var(--text-primary)]">
-        {children}
+        <SessionUserProvider>{children}</SessionUserProvider>
       </body>
     </html>
   );

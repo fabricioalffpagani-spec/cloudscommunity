@@ -42,6 +42,16 @@ async function hasValidSession(request: NextRequest) {
   }
 }
 
+function clearSessionCookie(response: NextResponse) {
+  response.cookies.set("cc_session", "", {
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    expires: new Date(0),
+    maxAge: 0,
+  });
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -50,10 +60,17 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionExists = request.cookies.has("cc_session");
+  const sessionIsValid = sessionExists ? await hasValidSession(request) : false;
 
   if (PUBLIC_PATHS.includes(pathname)) {
-    if (sessionExists && (await hasValidSession(request))) {
+    if (sessionIsValid) {
       return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    if (sessionExists && !sessionIsValid) {
+      const response = NextResponse.next();
+      clearSessionCookie(response);
+      return response;
     }
 
     return NextResponse.next();
@@ -64,15 +81,9 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    if (!(await hasValidSession(request))) {
+    if (!sessionIsValid) {
       const response = NextResponse.redirect(new URL("/login", request.url));
-      response.cookies.set("cc_session", "", {
-        path: "/",
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        expires: new Date(0),
-        maxAge: 0,
-      });
+      clearSessionCookie(response);
       return response;
     }
   }

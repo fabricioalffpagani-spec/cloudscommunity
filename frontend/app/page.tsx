@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -6,8 +6,14 @@ import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "
 import { useRouter } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
 import { HeaderBrand } from "./components/HeaderBrand";
+import {
+  SessionUserAvatar,
+  getSessionUserDisplayName,
+  getSessionUserHandle,
+  useSessionUser,
+} from "./components/session-user";
 
-// ─── Types
+// â”€â”€â”€ Types
 
 type Category = { name: string; bg: string; color?: string };
 
@@ -20,6 +26,7 @@ type Cloud = {
   mode: "text" | "audio";
   visibility: "public" | "private";
   href?: string;
+  likes?: number;
   hypes?: number;
   audioUrl?: string;
   authorName?: string;
@@ -43,12 +50,12 @@ type Poll = {
 
 type FeedItem = ({ kind: "cloud" } & Cloud) | ({ kind: "poll" } & Poll);
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const SEED_CLOUDS: Cloud[] = [
   {
     id: "seed-1",
-    title: "Tendências da semana em Tech",
+    title: "TendÃªncias da semana em Tech",
     category: "Tech",
     duration: "1h",
     createdAt: new Date(Date.now() - 8 * 60 * 1000),
@@ -70,7 +77,7 @@ const SEED_CLOUDS: Cloud[] = [
   },
   {
     id: "seed-3",
-    title: "Gaming: o melhor lançamento de 2025",
+    title: "Gaming: o melhor lanÃ§amento de 2025",
     category: "Gaming",
     duration: "1h",
     createdAt: new Date(Date.now() - 3 * 60 * 1000),
@@ -81,7 +88,7 @@ const SEED_CLOUDS: Cloud[] = [
   },
   {
     id: "seed-4",
-    title: "Drama das redes: o que você acha?",
+    title: "Drama das redes: o que vocÃª acha?",
     category: "Drama",
     duration: "24h",
     createdAt: new Date(Date.now() - 30 * 60 * 1000),
@@ -103,7 +110,7 @@ const SEED_CLOUDS: Cloud[] = [
   },
   {
     id: "seed-6",
-    title: "Memes do momento — compartilhe o seu",
+    title: "Memes do momento â€” compartilhe o seu",
     category: "Memes",
     duration: "10 min",
     createdAt: new Date(Date.now() - 1 * 60 * 1000),
@@ -175,35 +182,35 @@ function getTopicProfile(cloud: Cloud, index: number) {
     Tech: {
       name: "pedro.dev",
       handle: "pedro.dev",
-      description: "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
+      description: "IA vai substituir programadores? Debate com exemplos, dÃºvidas prÃ¡ticas e opiniÃµes sem filtro.",
       avatar: "https://i.pravatar.cc/120?img=12",
       participants: 54,
     },
     Music: {
       name: "lais_moraes",
       handle: "lais_moraes",
-      description: "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
+      description: "Qual Ã¡lbum do ano merece o topo? VocÃª entra, comenta e acompanha a conversa ao vivo.",
       avatar: "https://i.pravatar.cc/120?img=32",
       participants: 112,
     },
     Gaming: {
       name: "lucasx7",
       handle: "lucasx7",
-      description: "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
+      description: "Jogos, lanÃ§amentos e tretas da semana em um papo rÃ¡pido que muda a cada minuto.",
       avatar: "https://i.pravatar.cc/120?img=8",
       participants: 91,
     },
     Drama: {
       name: "mariana_rib",
       handle: "mariana_rib",
-      description: "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
+      description: "Os tÃ³picos mais comentados do momento, com espaÃ§o para leitura rÃ¡pida e discussÃ£o ao vivo.",
       avatar: "https://i.pravatar.cc/120?img=47",
       participants: 417,
     },
     Sports: {
       name: "gabriel_souza",
       handle: "gabriel_souza",
-      description: "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
+      description: "BrasileirÃ£o, seleÃ§Ã£o, bastidores e tudo que estÃ¡ puxando a conversa esportiva agora.",
       avatar: "https://i.pravatar.cc/120?img=14",
       participants: 326,
     },
@@ -220,7 +227,7 @@ function getTopicProfile(cloud: Cloud, index: number) {
   return {
     name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
     handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
-    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
+    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `TÃ³pico em alta sobre ${cloud.category.toLowerCase()}.`,
     avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
     participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
   };
@@ -234,7 +241,7 @@ function useSiteOrigin() {
   );
 }
 
-// ─── Icons ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SearchIcon({ s = 20 }: { s?: number }) {
   return (
@@ -436,10 +443,10 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
   );
 }
 
-// ─── Contacts (shared with share modal) ──────────────────────────────────────
+// â”€â”€â”€ Contacts (shared with share modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const PLATFORM_CONTACTS = [
-  { id: "joao",  name: "João Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
+  { id: "joao",  name: "JoÃ£o Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
   { id: "ana",   name: "Ana Costa",  avatar: "AC", color: "#3B82F6", status: "busy"    as const },
   { id: "pedro", name: "Pedro Lima", avatar: "PL", color: "#22C55E", status: "offline" as const },
 ];
@@ -447,7 +454,7 @@ const PLATFORM_CONTACTS = [
 const statusDotColor = { online: "#22C55E", busy: "#F59E0B", offline: "#6B7280" };
 const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
 
-// ─── Share Modal ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Share Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
   const [view, setView] = useState<"main" | "contacts" | "external">("main");
@@ -461,7 +468,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
       id: `cloud-invite-${Date.now()}`,
       side: "right" as const,
       type: "link" as const,
-      sender: "Você",
+      sender: "VocÃª",
       content: `Participe da Cloud "${cloudTitle}" comigo!`,
       url: cloudUrl,
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -545,7 +552,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
         className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-[#111116] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* ── Header ── */}
+        {/* â”€â”€ Header â”€â”€ */}
         <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
           {view !== "main" && (
             <button type="button" onClick={() => setView("main")} className="mr-3 text-white/40 hover:text-white transition">
@@ -564,7 +571,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </button>
         </div>
 
-        {/* ── Cloud title preview ── */}
+        {/* â”€â”€ Cloud title preview â”€â”€ */}
         {view === "main" && (
           <div className="mx-5 mt-4 rounded-xl border border-white/[0.07] bg-[#1C1F2E] px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
@@ -572,7 +579,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </div>
         )}
 
-        {/* ── Main view: two options ── */}
+        {/* â”€â”€ Main view: two options â”€â”€ */}
         {view === "main" && (
           <div className="flex flex-col gap-3 p-5">
             {/* Mensageiro */}
@@ -625,12 +632,12 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
               <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              {copied ? "✓ Link copiado!" : "Copiar link"}
+              {copied ? "âœ“ Link copiado!" : "Copiar link"}
             </button>
           </div>
         )}
 
-        {/* ── Contacts view ── */}
+        {/* â”€â”€ Contacts view â”€â”€ */}
         {view === "contacts" && (
           <div className="p-4">
             <p className="mb-3 px-1 text-[12px] text-white/40">Selecione quem deve receber o link desta Cloud:</p>
@@ -669,7 +676,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </div>
         )}
 
-        {/* ── External view ── */}
+        {/* â”€â”€ External view â”€â”€ */}
         {view === "external" && (
           <div className="p-5">
             <p className="mb-4 text-[12px] text-white/40">Compartilhe o convite desta Cloud nas redes sociais:</p>
@@ -697,7 +704,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
               <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              {copied ? "✓ Link copiado!" : "Copiar link"}
+              {copied ? "âœ“ Link copiado!" : "Copiar link"}
             </button>
           </div>
         )}
@@ -706,7 +713,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
   );
 }
 
-// ─── Cloud Card ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Cloud Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   const [liked, setLiked] = useState(false);
@@ -725,8 +732,8 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
-    if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
-    return `${Math.floor(diff / 3600)}h atrás`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min atrÃ¡s`;
+    return `${Math.floor(diff / 3600)}h atrÃ¡s`;
   })();
 
   const handleLike = () => {
@@ -751,14 +758,14 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
             <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: isLive ? "#22C55E" : "#F87171" }} />
           </span>
           <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
-            {isLive ? "AO VIVO" : "ENCERRADA"} · {cloud.duration}
+            {isLive ? "AO VIVO" : "ENCERRADA"} Â· {cloud.duration}
           </span>
           <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">
             {isLive ? countdownLabel : "00:00"}
           </span>
         </div>
         <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
-          {cloud.visibility === "public" ? "Público" : "Privado"}
+          {cloud.visibility === "public" ? "PÃºblico" : "Privado"}
         </span>
       </div>
 
@@ -775,7 +782,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
       {/* Footer: action buttons */}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
 
-        {/* Left — reaction buttons */}
+        {/* Left â€” reaction buttons */}
         <div className="flex items-center gap-2">
 
           {/* Curtir */}
@@ -833,7 +840,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
           </button>
         </div>
 
-        {/* Right — enter */}
+        {/* Right â€” enter */}
         <Link
           href={cloud.href ?? "/"}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
@@ -845,7 +852,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   );
 }
 
-// ─── Create Cloud Modal ───────────────────────────────────────────────────────
+// â”€â”€â”€ Create Cloud Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function ShareIcon() {
   return (
@@ -885,14 +892,14 @@ function CreateCloudModal({
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Título</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">TÃ­tulo</label>
             <input
               autoFocus
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handlePublish()}
-              placeholder="Título da sua Cloud..."
+              placeholder="TÃ­tulo da sua Cloud..."
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
           </div>
@@ -907,7 +914,7 @@ function CreateCloudModal({
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Duração</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">DuraÃ§Ã£o</label>
             <div className="flex gap-2 flex-wrap">
               {DURATIONS.map(d => (
                 <button
@@ -939,7 +946,7 @@ function CreateCloudModal({
                       : "bg-[#252840] border border-white/[0.08] text-white/60 hover:border-[#9333EA] hover:text-white"
                   }`}
                 >
-                  {option === "public" ? "Público" : "Privado"}
+                  {option === "public" ? "PÃºblico" : "Privado"}
                 </button>
               ))}
             </div>
@@ -957,7 +964,7 @@ function CreateCloudModal({
   );
 }
 
-// ─── Record Audio Modal ───────────────────────────────────────────────────────
+// â”€â”€â”€ Record Audio Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function RecordAudioModal({
   onClose,
@@ -997,7 +1004,7 @@ function RecordAudioModal({
       setStatus("recording");
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     } catch {
-      setError("Permissão de microfone negada. Verifique as configurações do navegador.");
+      setError("PermissÃ£o de microfone negada. Verifique as configuraÃ§Ãµes do navegador.");
     }
   }, []);
 
@@ -1013,7 +1020,7 @@ function RecordAudioModal({
 
   const handlePublish = () => {
     if (!audioUrl) return;
-    onPublish({ title: `Áudio · ${fmt(seconds)}`, category, duration, visibility, audioUrl });
+    onPublish({ title: `Ãudio Â· ${fmt(seconds)}`, category, duration, visibility, audioUrl });
     onClose();
   };
 
@@ -1022,7 +1029,7 @@ function RecordAudioModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[18px] font-bold text-white">Gravar Áudio</h2>
+          <h2 className="text-[18px] font-bold text-white">Gravar Ãudio</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white p-1"><XIcon s={18} /></button>
         </div>
 
@@ -1067,7 +1074,7 @@ function RecordAudioModal({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">Duração no feed</label>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">DuraÃ§Ã£o no feed</label>
                 <div className="flex gap-2 flex-wrap">
                   {DURATIONS.map(d => (
                     <button key={d} type="button" onClick={() => setDuration(d)}
@@ -1091,7 +1098,7 @@ function RecordAudioModal({
                         visibility === option ? "bg-[#9333EA] text-white" : "bg-[#252840] border border-white/[0.08] text-white/60 hover:text-white"
                       }`}
                     >
-                      {option === "public" ? "Público" : "Privado"}
+                      {option === "public" ? "PÃºblico" : "Privado"}
                     </button>
                   ))}
                 </div>
@@ -1104,7 +1111,7 @@ function RecordAudioModal({
             {status === "idle" && (
               <button onClick={startRecording}
                 className="flex-1 rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition flex items-center justify-center gap-2">
-                <MicIcon s={18} /> Iniciar gravação
+                <MicIcon s={18} /> Iniciar gravaÃ§Ã£o
               </button>
             )}
             {status === "recording" && (
@@ -1132,7 +1139,7 @@ function RecordAudioModal({
   );
 }
 
-// ─── Poll Card ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Poll Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optionId: string) => void }) {
   const cat = CATEGORIES.find(c => c.name === poll.category) ?? CATEGORIES[1];
@@ -1140,8 +1147,8 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - poll.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
-    if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
-    return `${Math.floor(diff / 3600)}h atrás`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min atrÃ¡s`;
+    return `${Math.floor(diff / 3600)}h atrÃ¡s`;
   })();
 
   return (
@@ -1161,7 +1168,7 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-70" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
           </span>
-          AO VIVO · {poll.duration}
+          AO VIVO Â· {poll.duration}
         </div>
       </div>
 
@@ -1206,17 +1213,17 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
 
       <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-4">
         <span className="text-[12px] text-white/40">
-          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} · publicado {timeAgo}
+          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} Â· publicado {timeAgo}
         </span>
         {poll.votedOptionId && (
-          <span className="text-[12px] text-[#22C55E]">✓ Você votou</span>
+          <span className="text-[12px] text-[#22C55E]">âœ“ VocÃª votou</span>
         )}
       </div>
     </article>
   );
 }
 
-// ─── Create Poll Modal ────────────────────────────────────────────────────────
+// â”€â”€â”€ Create Poll Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function CreatePollModal({
   onClose,
@@ -1272,7 +1279,7 @@ function CreatePollModal({
               type="text"
               value={question}
               onChange={e => setQuestion(e.target.value.slice(0, 120))}
-              placeholder="O que você quer perguntar?"
+              placeholder="O que vocÃª quer perguntar?"
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
           </div>
@@ -1280,7 +1287,7 @@ function CreatePollModal({
           {/* Options */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
-              Opções <span className="text-white/30 normal-case">(mín. 2, máx. 6)</span>
+              OpÃ§Ãµes <span className="text-white/30 normal-case">(mÃ­n. 2, mÃ¡x. 6)</span>
             </label>
             <div className="flex flex-col gap-2">
               {options.map((opt, i) => (
@@ -1292,7 +1299,7 @@ function CreatePollModal({
                     type="text"
                     value={opt}
                     onChange={e => updateOption(i, e.target.value)}
-                    placeholder={`Opção ${String.fromCharCode(65 + i)}`}
+                    placeholder={`OpÃ§Ã£o ${String.fromCharCode(65 + i)}`}
                     className="flex-1 rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-2.5 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
                   />
                   {options.length > 2 && (
@@ -1306,7 +1313,7 @@ function CreatePollModal({
               {options.length < 6 && (
                 <button type="button" onClick={addOption}
                   className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-2.5 text-[13px] text-white/40 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition">
-                  <PlusIcon s={14} /> Adicionar opção
+                  <PlusIcon s={14} /> Adicionar opÃ§Ã£o
                 </button>
               )}
             </div>
@@ -1323,7 +1330,7 @@ function CreatePollModal({
 
           {/* Duration */}
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Duração</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">DuraÃ§Ã£o</label>
             <div className="flex gap-2 flex-wrap">
               {DURATIONS.map(d => (
                 <button key={d} type="button" onClick={() => setDuration(d)}
@@ -1346,7 +1353,7 @@ function CreatePollModal({
   );
 }
 
-// ─── Other Modals ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Other Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function SearchModal({ onClose }: { onClose: () => void }) {
   return (
@@ -1371,13 +1378,13 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/30" />
       <div className="absolute right-4 top-[96px] w-[340px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
-          <span className="text-[15px] font-bold text-white">Notificações</span>
+          <span className="text-[15px] font-bold text-white">NotificaÃ§Ãµes</span>
           <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
         </div>
         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <BellIcon s={32} />
-          <p className="mt-3 text-[14px] font-semibold text-white">Nenhuma notificação</p>
-          <p className="mt-1 text-[12px] text-white/40">Você está em dia com tudo.</p>
+          <p className="mt-3 text-[14px] font-semibold text-white">Nenhuma notificaÃ§Ã£o</p>
+          <p className="mt-1 text-[12px] text-white/40">VocÃª estÃ¡ em dia com tudo.</p>
         </div>
       </div>
     </div>
@@ -1385,6 +1392,9 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
 }
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
+  const { user } = useSessionUser();
+  const displayName = getSessionUserDisplayName(user);
+  const handle = getSessionUserHandle(user);
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -1414,18 +1424,17 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
       <div className="absolute right-4 top-[96px] w-[220px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-4 border-b border-white/[0.07]">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-[14px] font-bold text-white">F</div>
+            <SessionUserAvatar user={user} size={40} />
             <div>
-              <p className="text-[14px] font-semibold text-white">Fabrício</p>
-              <p className="text-[12px] text-white/40">Ver perfil</p>
+              <p className="text-[14px] font-semibold text-white">{displayName}</p>
+              <p className="text-[12px] text-white/40">{handle}</p>
             </div>
           </div>
-        </div>
-        <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
+        </div>        <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
           <span className="text-white/50"><UserIcon s={16} /></span> Meu Perfil
         </button>
         <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
-          <span className="text-white/50"><GearIcon s={16} /></span> Configurações
+          <span className="text-white/50"><GearIcon s={16} /></span> ConfiguraÃ§Ãµes
         </button>
         <div className="border-t border-white/[0.07]">
           <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition">
@@ -1465,7 +1474,7 @@ function TopicFeedStage({
           type="button"
           className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
         >
-          Todos os tópicos
+          Todos os tÃ³picos
           <ChevronRightIcon />
         </button>
       </div>
@@ -1479,9 +1488,9 @@ function TopicFeedStage({
             </svg>
           </div>
           <div>
-            <p className="text-[18px] font-semibold text-white">Nenhum tópico disponível</p>
+            <p className="text-[18px] font-semibold text-white">Nenhum tÃ³pico disponÃ­vel</p>
             <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
-              Ainda não há tópicos ativos. Quando alguém publicar, eles aparecem aqui primeiro.
+              Ainda nÃ£o hÃ¡ tÃ³picos ativos. Quando alguÃ©m publicar, eles aparecem aqui primeiro.
             </p>
           </div>
           <button
@@ -1511,7 +1520,7 @@ function TopicFeedStage({
               const hours = Math.floor(remaining / 3600);
               const minutes = Math.floor((remaining % 3600) / 60);
               const seconds = remaining % 60;
-              const createdLabel = "há pouco";
+              const createdLabel = "hÃ¡ pouco";
               const participantAvatars = [
                 profile.avatar,
                 `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
@@ -1542,8 +1551,8 @@ function TopicFeedStage({
                         <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
                       </div>
                     </div>
-                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
-                      ⋮
+                    <button type="button" aria-label="Mais opÃ§Ãµes" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
+                      â‹®
                     </button>
                   </div>
 
@@ -1631,7 +1640,7 @@ function TopicFeedStage({
   );
 }
 
-// ─── Live Card Action Buttons ────────────────────────────────────────────────
+// â”€â”€â”€ Live Card Action Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; initialHypes: number }) {
   const [liked, setLiked] = useState(false);
@@ -1694,9 +1703,10 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Page() {
+  const { user } = useSessionUser();
   // Menu de categorias removido: feed sem filtro.
 
   const [clouds, setClouds] = useState<Cloud[]>([]);
@@ -1796,7 +1806,7 @@ export default function Page() {
     setParticipants(base);
   }, [currentCloudIndex, clouds]);
 
-  // Simulate users joining/leaving every 3–7 seconds
+  // Simulate users joining/leaving every 3â€“7 seconds
   useEffect(() => {
     if (clouds.length === 0) return;
     const iv = setInterval(() => {
@@ -1852,7 +1862,7 @@ export default function Page() {
   // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
   const visibleItems = allItems;
 
-  // Aguarda hidratação para evitar flash do feed antes de um possível redirect.
+  // Aguarda hidrataÃ§Ã£o para evitar flash do feed antes de um possÃ­vel redirect.
   if (!hydrated) return null;
 
   return (
@@ -1873,7 +1883,7 @@ export default function Page() {
             <HeaderBrand />
           </a>
 
-          <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
+          <nav aria-label="NavegaÃ§Ã£o principal" className="hidden items-center gap-8 md:flex">
             <Link href="/" className="relative inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white transition-colors hover:text-white/80">
               For You
               <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#A855F7]"></span>
@@ -1889,22 +1899,22 @@ export default function Page() {
               className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <SearchIcon s={23} />
             </button>
-            <button type="button" aria-label="Notificações" onClick={() => setModal("notifications")}
+            <button type="button" aria-label="NotificaÃ§Ãµes" onClick={() => setModal("notifications")}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <BellIcon s={23} />
             </button>
-            <Link href="/settings" aria-label="Configurações"
+            <Link href="/settings" aria-label="ConfiguraÃ§Ãµes"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <GearIcon s={23} />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
-              F
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+              <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Main — ocupa o restante da viewport abaixo do header fixo (88px) e acima da nav (72px) */}
+      {/* Main â€” ocupa o restante da viewport abaixo do header fixo (88px) e acima da nav (72px) */}
       <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-hidden">
         <div className="relative mx-auto h-full max-w-[1280px] px-5 lg:px-8">
           {homeStage === "topics" && (
@@ -1930,14 +1940,14 @@ export default function Page() {
                 <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
-                Voltar aos tópicos
+                Voltar aos tÃ³picos
               </button>
               <span className="hidden text-[12px] font-semibold uppercase tracking-[0.18em] text-white/35 md:inline">
                 Conversa ao vivo
               </span>
             </div>
 
-          {/* ── Cloud ativa ── */}
+          {/* â”€â”€ Cloud ativa â”€â”€ */}
           {clouds.length > 0 && (() => {
             const cloud = clouds[currentCloudIndex];
             const durationSecs = parseDurationSeconds(cloud.duration);
@@ -1957,7 +1967,7 @@ export default function Page() {
                   <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                 </button>
 
-                {/* Card — slide animation */}
+                {/* Card â€” slide animation */}
                 <div
                   className="mx-12 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111116]"
                   style={{
@@ -1971,7 +1981,7 @@ export default function Page() {
                   }}
                 >
 
-                  {/* ── Cabeçalho fixo dentro do card ── */}
+                  {/* â”€â”€ CabeÃ§alho fixo dentro do card â”€â”€ */}
                   <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] px-6 py-4">
                     <div className="min-w-0 flex-1">
                       <h2 className="text-[20px] font-semibold text-white truncate">{cloud.title}</h2>
@@ -1983,7 +1993,7 @@ export default function Page() {
                               <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
                               <span className={`relative inline-flex h-2 w-2 rounded-full ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
                             </span>
-                            AO VIVO · {formatCountdown(remaining)}
+                            AO VIVO Â· {formatCountdown(remaining)}
                           </span>
                         ) : (
                           <span className="rounded-full bg-white/10 px-3 py-0.5 text-[11px] font-semibold text-white/40">ENCERRADA</span>
@@ -2000,7 +2010,7 @@ export default function Page() {
                     </div>
                   </div>
 
-                  {/* ── Chat (ocupa o restante) ── */}
+                  {/* â”€â”€ Chat (ocupa o restante) â”€â”€ */}
                   <div className="flex-1 overflow-hidden">
                     <CloudChat cloudId={cloud.id} />
                   </div>
@@ -2009,7 +2019,7 @@ export default function Page() {
                 {/* Arrow right */}
                 <button
                   onClick={() => navigateCloud(1)}
-                  aria-label="Próxima Cloud"
+                  aria-label="PrÃ³xima Cloud"
                   className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
                 >
                   <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
@@ -2039,7 +2049,7 @@ export default function Page() {
             );
           })()}
 
-          {/* ── Estado vazio ── */}
+          {/* â”€â”€ Estado vazio â”€â”€ */}
           {clouds.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/[0.08]">
@@ -2051,7 +2061,7 @@ export default function Page() {
               <div>
                 <p className="text-[18px] font-semibold text-white">Nenhuma Cloud ativa</p>
                 <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
-                  Está muito quieto por aqui. Seja o primeiro a iniciar uma conversa!
+                  EstÃ¡ muito quieto por aqui. Seja o primeiro a iniciar uma conversa!
                 </p>
               </div>
               <button
@@ -2090,7 +2100,7 @@ export default function Page() {
         </div>
       </nav>
 
-      {/* FAB — criar nova Cloud */}
+      {/* FAB â€” criar nova Cloud */}
       <button
         type="button"
         aria-label="Criar nova Cloud"
@@ -2109,3 +2119,5 @@ export default function Page() {
     </div>
   );
 }
+
+

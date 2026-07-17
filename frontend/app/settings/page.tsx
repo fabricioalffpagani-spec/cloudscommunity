@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import {
+  SessionUserAvatar,
+  SessionUserLink,
+  getSessionUserDisplayName,
+  useSessionUser,
+} from "../components/session-user";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aparencia" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -64,8 +70,21 @@ function TRow({ label, desc, checked, onChange }: { label:string; desc?:string; 
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 function PanelConta() {
-  const [nome, setNome] = useState("Fabrício"); const [email, setEmail] = useState("fabricio@example.com");
-  const [telefone, setTelefone] = useState("+55 11 99999-0000"); const [saved, setSaved] = useState(false); const [loggingOut, setLoggingOut] = useState(false);
+  const { user, status } = useSessionUser();
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [saved, setSaved] = useState(false); const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setNome(user.displayName || user.name || "");
+    setEmail(user.email || "");
+  }, [user]);
+
   const save = () => { setSaved(true); setTimeout(()=>setSaved(false),2000); };
   const handleLogout = async () => {
     if (loggingOut) {
@@ -102,7 +121,12 @@ function PanelConta() {
       </Card>
       <Card><Sub>Detalhes</Sub>
         <div className="divide-y divide-white/[0.06]">
-          {[["ID da conta","usr_c87c53a9d0b5",true],["Membro desde","Junho 2026",false],["Clouds criadas","12",false],["Status","Ativo",false]].map(([k,v,mono])=>(
+          {[
+            ["ID da conta", user?.id ?? "—", true],
+            ["Membro desde", user?.createdAt ? new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(new Date(user.createdAt)) : "—", false],
+            ["Clouds criadas", String(user?.cloudsCount ?? 0), false],
+            ["Status", user ? "Ativo" : status === "loading" ? "Carregando..." : "Desconectado", false],
+          ].map(([k,v,mono])=>(
             <div key={k as string} className="flex items-center justify-between py-2.5">
               <span className="text-[13px] text-[#9CA3AF]">{k}</span>
               <span className={`text-[13px] ${mono?"font-mono bg-[#1C1F2E] px-2.5 py-1 rounded-lg text-[#6B7280]":"text-[#F9FAFB]"}`}>{v}</span>
@@ -123,21 +147,36 @@ function PanelConta() {
 const BR_STATES = ["Acre","Alagoas","Amapá","Amazonas","Bahia","Ceará","Distrito Federal","Espírito Santo","Goiás","Maranhão","Mato Grosso","Mato Grosso do Sul","Minas Gerais","Pará","Paraíba","Paraná","Pernambuco","Piauí","Rio de Janeiro","Rio Grande do Norte","Rio Grande do Sul","Rondônia","Roraima","Santa Catarina","São Paulo","Sergipe","Tocantins"];
 
 function PanelPerfil() {
-  const [name, setName] = useState("Fabrício"); const [bio, setBio] = useState("Apaixonado por tecnologia e comunidades. ☁️");
-  const [regiao, setRegiao] = useState("São Paulo"); const [saved, setSaved] = useState(false);
+  const { user } = useSessionUser();
+  const [name, setName] = useState(user?.displayName || user?.name || "");
+  const [bio, setBio] = useState(user?.bio || "");
+  const [regiao, setRegiao] = useState(user?.location || "");
+  const [saved, setSaved] = useState(false);
+  const displayName = getSessionUserDisplayName(user);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setName(user.displayName || user.name || "");
+    setBio(user.bio || "");
+    setRegiao(user.location || "");
+  }, [user]);
+
   const save = () => { setSaved(true); setTimeout(()=>setSaved(false),2000); };
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-[20px] font-bold text-white">Perfil</h2>
       <Card>
         <div className="flex flex-col items-center gap-3 mb-6 pb-6 border-b border-white/[0.06]">
-          <div className="relative"><div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[32px] font-bold text-white">F</div>
+          <div className="relative"><SessionUserAvatar user={user} size={80} className="ring-4 ring-[#7C3AED]/40" />
             <button aria-label="Alterar foto" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] border-2 border-[#111116] text-white hover:bg-[#7C3AED]"><CameraIcon s={13}/></button>
           </div>
           <button className="text-[13px] text-[#9333EA] hover:text-[#a855f7]">Alterar foto</button>
         </div>
         <div className="flex flex-col gap-4">
-          <Field label="Nome de exibição" value={name} onChange={setName} />
+          <Field label="Nome de exibição" value={name || displayName} onChange={setName} />
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Bio</label>
             <textarea value={bio} onChange={e=>setBio(e.target.value)} rows={3} className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none focus:border-[#9333EA] resize-none transition" />
@@ -282,6 +321,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 ];
 
 function Header() {
+  const { user } = useSessionUser();
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
       <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
@@ -298,7 +338,9 @@ function Header() {
           <button type="button" aria-label="Publicar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#5B21B6] text-white hover:bg-[#4C1D95]"><UploadIcon/></button>
           <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]"><BellIcon/></button>
           <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9]"><GearIcon s={22}/></Link>
-          <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-[17px] font-bold text-white hover:bg-[#6D28D9]">F</Link>
+          <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white hover:bg-[#6D28D9]">
+            <SessionUserAvatar user={user} size={48} />
+          </Link>
         </div>
       </div>
     </header>

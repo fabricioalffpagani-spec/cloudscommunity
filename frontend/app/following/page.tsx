@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,7 @@ function FollowingCloudCard({ user, cloud }: { user: UserEntry; cloud: ActiveClo
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FollowingPage() {
+  const { user } = useSessionUser();
   const [followedIds, setFollowedIds] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
@@ -275,8 +277,8 @@ export default function FollowingPage() {
               <GearIcon s={23} />
             </Link>
             <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
-              F
+              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+              <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>

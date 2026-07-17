@@ -5,6 +5,7 @@ import {
   useState, useRef, useEffect, useCallback,
 } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -362,6 +363,7 @@ function Waveform({ active, paused }: { active?: boolean; paused?: boolean }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MessagesPage() {
+  const { user } = useSessionUser();
   const [convs, setConvs] = useState<Conversation[]>(INIT_CONVS);
   const [activeId, setActiveId] = useState("joao");
   const [contactSearch, setContactSearch] = useState("");
@@ -506,7 +508,9 @@ export default function MessagesPage() {
             <Link href="/settings" aria-label="Configurações"
               className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">{icons.gear()}</Link>
             <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">F</Link>
+              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+              <SessionUserAvatar user={user} size={48} />
+            </Link>
           </div>
         </div>
       </header>
@@ -569,7 +573,7 @@ export default function MessagesPage() {
 
           <div className="border-t border-white/[0.07] px-5 py-4">
             <Link href="/profile" className="flex items-center gap-3">
-              <Avatar initials="F" size={38} color="#8B5CF6" />
+              <SessionUserAvatar user={user} size={38} />
               <span className="text-[14px] font-medium text-white/70">Você</span>
             </Link>
           </div>

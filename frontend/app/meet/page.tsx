@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -174,6 +175,7 @@ function RankRow({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MeetPage() {
+  const { user } = useSessionUser();
   const [searchQuery, setSearchQuery] = useState("");
   const [followedIds, setFollowedIds] = useState<string[]>([]);
 
@@ -217,8 +219,8 @@ export default function MeetPage() {
               <GearIcon s={23} />
             </Link>
             <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
-              F
+              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+              <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>

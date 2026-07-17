@@ -1,0 +1,175 @@
+"use client";
+
+import Link from "next/link";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+
+export type SessionUser = {
+  id: string;
+  email: string;
+  username: string;
+  name: string;
+  displayName: string;
+  birthDate: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  location: string | null;
+  website: string | null;
+  isPrivate: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  followersCount?: number;
+  followingCount?: number;
+  cloudsCount?: number;
+  hypesCount?: number;
+};
+
+type SessionContextValue = {
+  user: SessionUser | null;
+  status: "loading" | "authenticated" | "anonymous" | "error";
+  refresh: () => Promise<void>;
+};
+
+const SessionUserContext = createContext<SessionContextValue | null>(null);
+
+type SessionPayload = {
+  ok?: boolean;
+  user?: SessionUser;
+};
+
+export function SessionUserProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
+  const pathname = usePathname();
+
+  const refresh = useMemo(
+    () => async () => {
+      setStatus("loading");
+
+      try {
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        });
+
+        const payload = (await response.json().catch(() => null)) as SessionPayload | null;
+
+        if (!response.ok || !payload?.user) {
+          setUser(null);
+          setStatus(response.status === 401 ? "anonymous" : "error");
+          return;
+        }
+
+        setUser(payload.user);
+        setStatus("authenticated");
+      } catch {
+        setUser(null);
+        setStatus("error");
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    void refresh();
+  }, [pathname, refresh]);
+
+  return (
+    <SessionUserContext.Provider value={{ user, status, refresh }}>
+      {children}
+    </SessionUserContext.Provider>
+  );
+}
+
+export function useSessionUser() {
+  const context = useContext(SessionUserContext);
+
+  if (!context) {
+    throw new Error("useSessionUser must be used within SessionUserProvider");
+  }
+
+  return context;
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+export function getSessionUserDisplayName(user: SessionUser | null | undefined) {
+  return user?.displayName?.trim() || user?.name?.trim() || "Você";
+}
+
+export function getSessionUserHandle(user: SessionUser | null | undefined) {
+  return user?.username ? `@${user.username}` : "@voce";
+}
+
+export function getSessionUserInitial(user: SessionUser | null | undefined) {
+  const value = getSessionUserDisplayName(user);
+  return value.trim().charAt(0).toUpperCase() || "C";
+}
+
+export function getSessionUserColor(user: SessionUser | null | undefined) {
+  const palette = ["#7C3AED", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
+  const source = user?.id ?? user?.username ?? "clouds";
+  return palette[hashString(source) % palette.length];
+}
+
+export function SessionUserAvatar({
+  user,
+  size = 48,
+  className = "",
+}: {
+  user: SessionUser | null | undefined;
+  size?: number;
+  className?: string;
+}) {
+  const initial = getSessionUserInitial(user);
+  const backgroundColor = getSessionUserColor(user);
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
+      style={{ width: size, height: size, backgroundColor, fontSize: Math.max(14, size * 0.4) }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+export function SessionUserLink({
+  className = "",
+  showLabel = true,
+}: {
+  className?: string;
+  showLabel?: boolean;
+}) {
+  const { user } = useSessionUser();
+  const displayName = getSessionUserDisplayName(user);
+  const handle = getSessionUserHandle(user);
+
+  return (
+    <Link
+      href="/profile"
+      aria-label={user ? `Meu perfil de ${displayName}` : "Meu perfil"}
+      className={`inline-flex items-center gap-3 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-1.5 text-white transition hover:bg-white/[0.08] ${className}`}
+    >
+      <SessionUserAvatar user={user} size={40} />
+      {showLabel && (
+        <span className="hidden min-w-0 flex-col text-left leading-tight sm:flex">
+          <span className="truncate text-[13px] font-semibold text-white">{displayName}</span>
+          <span className="truncate text-[11px] text-white/55">{handle}</span>
+        </span>
+      )}
+    </Link>
+  );
+}
