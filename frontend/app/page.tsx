@@ -50,6 +50,58 @@ type Poll = {
 
 type FeedItem = ({ kind: "cloud" } & Cloud) | ({ kind: "poll" } & Poll);
 
+type CloudApiAuthor = {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
+type CloudApiPayload = {
+  id: string;
+  title: string;
+  description: string | null;
+  duration: string;
+  visibility: "public" | "private";
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  authorId: string;
+  author: CloudApiAuthor;
+  hypesCount: number;
+  membersCount: number;
+  href: string;
+};
+
+function mergeClouds(base: Cloud[], incoming: Cloud[]) {
+  const byId = new Map<string, Cloud>();
+
+  [...incoming, ...base].forEach((cloud) => {
+    byId.set(cloud.id, cloud);
+  });
+
+  return Array.from(byId.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
+  return {
+    id: cloud.id,
+    title: cloud.title,
+    category: "Geral",
+    duration: cloud.duration,
+    createdAt: new Date(cloud.createdAt),
+    mode: "text",
+    visibility: cloud.visibility,
+    href: cloud.href,
+    hypes: cloud.hypesCount,
+    authorName: cloud.author.name,
+    authorHandle: cloud.author.username,
+    authorPhoto: cloud.author.avatarUrl ?? undefined,
+    description: cloud.description ?? undefined,
+    liveParticipants: Math.max(1, cloud.membersCount),
+  };
+}
+
 // â”€â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const SEED_CLOUDS: Cloud[] = [
@@ -772,6 +824,12 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
       {/* Title */}
       <h2 className="mt-4 text-[20px] font-semibold text-white leading-snug">{cloud.title}</h2>
 
+      {cloud.description && (
+        <p className="mt-2 text-[14px] leading-relaxed text-white/60 line-clamp-3">
+          {cloud.description}
+        </p>
+      )}
+
       {/* Audio player */}
       {cloud.mode === "audio" && cloud.audioUrl && (
         <div className="mt-4 rounded-xl bg-[#1C1730] px-4 py-3">
@@ -872,14 +930,38 @@ function CreateCloudModal({
   onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode">) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(CATEGORIES[1].name);
+  const [description, setDescription] = useState("");
   const [duration, setDuration] = useState(DURATIONS[0]);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePublish = () => {
-    if (!title.trim()) return;
-    onPublish({ title: title.trim(), category, duration, visibility });
-    onClose();
+  const handlePublish = async () => {
+    const normalizedTitle = title.trim();
+    const normalizedDescription = description.trim();
+
+    if (!normalizedTitle) {
+      setError("Informe um título para a cloud.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await onPublish({
+        title: normalizedTitle,
+        category: "general",
+        description: normalizedDescription || undefined,
+        duration,
+        visibility,
+      });
+      onClose();
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Nao foi possivel criar a cloud.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -904,14 +986,18 @@ function CreateCloudModal({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Categoria</label>
-            <select
-              value={category}
-              onChange={e => setCategory(e.target.value)}
-              className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#9333EA] transition"
-            >
-              {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Descrição (opcional)</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value.slice(0, 2000))}
+              placeholder="Conte sobre o assunto, contexto ou objetivo da Cloud..."
+              rows={7}
+              className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition resize-none"
+            />
+            <div className="mt-2 flex items-center justify-between text-[11px] text-white/35">
+              <span>Até 2000 caracteres.</span>
+              <span>{description.length}/2000</span>
+            </div>
           </div>
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">DuraÃ§Ã£o</label>
@@ -953,11 +1039,12 @@ function CreateCloudModal({
           </div>
           <button
             onClick={handlePublish}
-            disabled={!title.trim()}
+            disabled={!title.trim() || submitting}
             className="w-full rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Publicar Cloud
+            {submitting ? "Publicando..." : "Publicar Cloud"}
           </button>
+          {error && <p className="text-[12px] text-red-300">{error}</p>}
         </div>
       </div>
     </div>
@@ -1537,15 +1624,19 @@ function TopicFeedStage({
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <img
-                        src={profile.avatar}
-                        alt={profile.name}
-                        className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-white/15 md:h-14 md:w-14"
-                        referrerPolicy="no-referrer"
-                      />
+                      <Link href={`/users/${profile.handle.replace(/^@/, "")}`} className="shrink-0">
+                        <img
+                          src={profile.avatar}
+                          alt={profile.name}
+                          className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-white/15 md:h-14 md:w-14"
+                          referrerPolicy="no-referrer"
+                        />
+                      </Link>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-[15px] font-semibold text-white md:text-[17px]">@{profile.handle}</p>
+                          <Link href={`/users/${profile.handle.replace(/^@/, "")}`} className="truncate text-[15px] font-semibold text-white hover:underline md:text-[17px]">
+                            @{profile.handle.replace(/^@/, "")}
+                          </Link>
                           <span className="rounded-full border border-[#A855F7]/70 px-2.5 py-0.5 text-[12px] font-medium text-[#C084FC]">Criador</span>
                         </div>
                         <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
@@ -1561,11 +1652,15 @@ function TopicFeedStage({
                       <h3 className="text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[31px]">
                         {cloud.title}
                       </h3>
-                      <div className={`mt-2 overflow-hidden transition-all duration-300 ${expanded ? "max-h-32" : "max-h-[26px]"}`}>
-                        <p className="text-[15px] leading-6 text-white/65 md:text-[16px]">
+                      {expanded ? (
+                        <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-white/65 md:text-[16px]">
                           {profile.description}
                         </p>
-                      </div>
+                      ) : (
+                        <p className="mt-2 line-clamp-2 text-[15px] leading-6 text-white/65 md:text-[16px]">
+                          {profile.description}
+                        </p>
+                      )}
                       <button
                         type="button"
                         onClick={() => onToggleExpand(cloud.id)}
@@ -1706,10 +1801,10 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
 // â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Page() {
-  const { user } = useSessionUser();
+  const { user, refresh } = useSessionUser();
   // Menu de categorias removido: feed sem filtro.
 
-  const [clouds, setClouds] = useState<Cloud[]>([]);
+  const [clouds, setClouds] = useState<Cloud[]>(SEED_CLOUDS);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
@@ -1747,47 +1842,54 @@ export default function Page() {
 
 
   useEffect(() => {
-    try {
-      const storedClouds = localStorage.getItem("cloudscommunity:clouds");
-      if (storedClouds) {
-        const parsed = JSON.parse(storedClouds) as Array<Omit<Cloud, "createdAt"> & { createdAt: string }>;
-        const loaded = parsed.map((cloud) => ({
-          ...cloud,
-          createdAt: new Date(cloud.createdAt),
-        }));
-        // Merge seed clouds that are not already stored
-        const existingIds = new Set(loaded.map(c => c.id));
-        const missing = SEED_CLOUDS.filter(c => !existingIds.has(c.id));
-        setClouds([...loaded, ...missing]);
-      } else {
-        setClouds(SEED_CLOUDS);
-      }
-    } catch {
-      setClouds(SEED_CLOUDS);
-    }
+    let cancelled = false;
 
-    try {
-      const storedPolls = localStorage.getItem("cloudscommunity:polls");
-      if (storedPolls) {
-        const parsed = JSON.parse(storedPolls) as Array<Omit<Poll, "createdAt"> & { createdAt: string }>;
-        setPolls(parsed.map((poll) => ({
-          ...poll,
-          createdAt: new Date(poll.createdAt),
-        })));
+    const loadInitialData = async () => {
+      try {
+        const storedPolls = localStorage.getItem("cloudscommunity:polls");
+        if (storedPolls) {
+          const parsed = JSON.parse(storedPolls) as Array<Omit<Poll, "createdAt"> & { createdAt: string }>;
+          if (!cancelled) {
+            setPolls(parsed.map((poll) => ({
+              ...poll,
+              createdAt: new Date(poll.createdAt),
+            })));
+          }
+        }
+      } catch {
+        // ignore invalid stored polls
       }
-    } catch {
-      // ignore invalid stored polls
-    }
 
-    setHydrated(true);
-    // router from next/navigation is stable; keeping deps empty is intentional.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      try {
+        const response = await fetch("/api/clouds", {
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: CloudApiPayload[] } | null;
+        const serverClouds = response.ok && Array.isArray(payload?.clouds)
+          ? payload.clouds.map(mapApiCloudToCloud)
+          : [];
+
+        if (!cancelled) {
+          setClouds((current) => mergeClouds(current, serverClouds));
+        }
+      } catch {
+        if (!cancelled) {
+          setClouds(SEED_CLOUDS);
+        }
+      } finally {
+        if (!cancelled) {
+          setHydrated(true);
+        }
+      }
+    };
+
+    void loadInitialData();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    localStorage.setItem("cloudscommunity:clouds", JSON.stringify(clouds));
-  }, [clouds, hydrated]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -1820,16 +1922,45 @@ export default function Page() {
 
   const closeModal = () => setModal(null);
 
-  const publishCloud = (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string }) => {
-    const id = crypto.randomUUID();
-    setClouds(prev => [{
-      ...data,
-      id,
-      createdAt: new Date(),
-      mode: data.audioUrl ? "audio" : "text",
-      href: `/cloud/${id}`,
-      hypes: 0,
-    }, ...prev]);
+  const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string }) => {
+    if (data.audioUrl) {
+      const id = crypto.randomUUID();
+      setClouds((prev) => mergeClouds([
+        {
+          ...data,
+          id,
+          createdAt: new Date(),
+          mode: "audio",
+          href: `/cloud/${id}`,
+          hypes: 0,
+        },
+      ], prev));
+      return;
+    }
+
+    const response = await fetch("/api/clouds", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: data.title,
+        description: data.description ?? "",
+        duration: data.duration,
+        visibility: data.visibility,
+      }),
+    });
+
+    const payload = (await response.json().catch(() => null)) as { ok?: boolean; cloud?: CloudApiPayload; message?: string } | null;
+
+    const cloudPayload = payload?.cloud;
+
+    if (!response.ok || !cloudPayload) {
+      throw new Error(payload?.message ?? "Nao foi possivel criar a cloud.");
+    }
+
+    setClouds((prev) => mergeClouds([mapApiCloudToCloud(cloudPayload)], prev));
+    await refresh();
   };
 
   const hyparCloud = (cloudId: string) => {
@@ -2024,27 +2155,6 @@ export default function Page() {
                 >
                   <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
                 </button>
-
-                {/* Dot indicator */}
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-1.5 pb-1">
-                  {clouds.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        const dir = i > currentCloudIndex ? "left" : "right";
-                        setSlideAnim(dir);
-                        setTimeout(() => { setCurrentCloudIndex(i); setSlideAnim(null); }, 260);
-                      }}
-                      aria-label={`Ir para Cloud ${i + 1}`}
-                      className="rounded-full transition-all"
-                      style={{
-                        width: i === currentCloudIndex ? 20 : 6,
-                        height: 6,
-                        background: i === currentCloudIndex ? "#A855F7" : "rgba(255,255,255,0.2)",
-                      }}
-                    />
-                  ))}
-                </div>
               </div>
             );
           })()}

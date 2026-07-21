@@ -86,6 +86,30 @@ function Field({
   );
 }
 
+const DURATION_SECONDS: Record<string, number> = {
+  "5 min": 5 * 60,
+  "10 min": 10 * 60,
+  "30 min": 30 * 60,
+  "1h": 60 * 60,
+  "24h": 24 * 60 * 60,
+};
+
+function parseDurationSeconds(duration: string) {
+  return DURATION_SECONDS[duration] ?? 5 * 60;
+}
+
+function formatCountdown(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function formatMemberSince(value?: string | null) {
   if (!value) {
     return "agora";
@@ -115,9 +139,58 @@ function ProfileEmptyState() {
   );
 }
 
+type ProfileCloud = {
+  id: string;
+  title: string;
+  description: string | null;
+  duration: string;
+  visibility: "public" | "private";
+  createdAt: string;
+  href: string;
+};
+
+function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) {
+  const createdAt = new Date(cloud.createdAt);
+  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
+  const isLive = remainingSeconds > 0;
+
+  return (
+    <Link
+      href={cloud.href}
+      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#111116] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          {cloud.duration}
+        </span>
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${isLive ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+          {isLive ? "Ao vivo" : "Encerrada"}
+        </span>
+      </div>
+
+      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white">{cloud.title}</h3>
+      {cloud.description && (
+        <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
+          {cloud.description}
+        </p>
+      )}
+
+      <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
+        <span>{isLive ? "Encerra em" : "Encerrada"}</span>
+        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+          {formatCountdown(remainingSeconds)}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
 export default function ProfilePage() {
   const { user, status } = useSessionUser();
   const [editing, setEditing] = useState(false);
+  const [clouds, setClouds] = useState<ProfileCloud[]>([]);
+  const [cloudsLoading, setCloudsLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
   const [draft, setDraft] = useState({
     name: "",
     bio: "",
@@ -135,6 +208,51 @@ export default function ProfilePage() {
       location: user.location ?? "",
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadClouds = async () => {
+      setCloudsLoading(true);
+
+      try {
+        const response = await fetch("/api/clouds/mine", {
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => null) as { ok?: boolean; clouds?: ProfileCloud[] } | null;
+
+        if (!cancelled) {
+          setClouds(response.ok && Array.isArray(payload?.clouds) ? payload.clouds : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setClouds([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setCloudsLoading(false);
+        }
+      }
+    };
+
+    void loadClouds();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const displayName = getSessionUserDisplayName(user);
   const handle = getSessionUserHandle(user);
@@ -235,8 +353,20 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-10">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Transmitindo agora</p>
-          <ProfileEmptyState />
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds Ativas</p>
+          {cloudsLoading ? (
+            <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-6 text-center text-[13px] text-white/45">
+              Carregando suas clouds...
+            </div>
+          ) : clouds.length > 0 ? (
+            <div className="grid gap-3">
+              {clouds.map((cloud) => (
+                <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} />
+              ))}
+            </div>
+          ) : (
+            <ProfileEmptyState />
+          )}
         </div>
 
         <div className="mt-8 grid grid-cols-3 gap-3">

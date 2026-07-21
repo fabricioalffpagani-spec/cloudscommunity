@@ -1,55 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type RankUser = {
+type PublicUserProfile = {
   id: string;
+  username: string;
   name: string;
-  description: string;
-  hypes: string;
-  initial: string;
-  highlight?: boolean;
-  topCategories?: string[];
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  location: string | null;
+  website: string | null;
+  isPrivate: boolean;
+  createdAt: string;
+  updatedAt: string;
+  followersCount: number;
+  followingCount: number;
+  cloudsCount: number;
+  hypesCount: number;
+  isFollowing: boolean;
+  isSelf: boolean;
+  profileUrl: string;
 };
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const ranking: RankUser[] = [
-  { id: "luna",  name: "Luna",  description: "Criadora de threads",         hypes: "12.4k", initial: "L", highlight: true, topCategories: ["Drama", "Pop"] },
-  { id: "kai",   name: "Kai",   description: "Comentador em alta",          hypes: "10.8k", initial: "K", topCategories: ["Tech", "Gaming"] },
-  { id: "maya",  name: "Maya",  description: "Perfil emergente",            hypes: "10.1k", initial: "M", topCategories: ["Music", "Movies"] },
-  { id: "theo",  name: "Theo",  description: "Moderador da conversa",       hypes: "8.7k",  initial: "T", topCategories: ["Pop", "Politics"] },
-  { id: "nina",  name: "Nina",  description: "Curadora de tópicos",         hypes: "8.2k",  initial: "N", topCategories: ["Funny", "Memes"] },
-  { id: "joao",  name: "João",  description: "Dev & debatedor",             hypes: "6.1k",  initial: "J", topCategories: ["Tech", "Real Life"] },
-  { id: "ana",   name: "Ana",   description: "Criadora de conteúdo áudio",  hypes: "5.4k",  initial: "A", topCategories: ["Music", "Drama"] },
-  { id: "pedro", name: "Pedro", description: "Designer & curioso",          hypes: "3.2k",  initial: "P", topCategories: ["Tech", "Movies"] },
-];
-
-const AVATAR_COLORS: Record<string, string> = {
-  luna: "#EC4899", kai: "#06B6D4", maya: "#F59E0B", theo: "#3B82F6",
-  nina: "#22C55E", joao: "#8B5CF6", ana: "#3B82F6", pedro: "#22C55E",
-};
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
-function FireIcon({ s = 13 }: { s?: number }) {
+function SearchIcon({ s = 23 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className="text-[#F97316]">
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-white/30">
-      <circle cx="11" cy="11" r="7.5" /><path d="M20 20l-3.5-3.5" />
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7.5" />
+      <path d="M20 20l-3.5-3.5" />
     </svg>
   );
 }
@@ -75,7 +57,8 @@ function GearIcon({ s = 23 }: { s?: number }) {
 function HomeIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" /><path d="M9 21V12h6v9" />
+      <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+      <path d="M9 21V12h6v9" />
     </svg>
   );
 }
@@ -91,158 +74,192 @@ function MessageIcon({ s = 24, className = "" }: { s?: number; className?: strin
 function MeetIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
 
-// ─── localStorage helpers ─────────────────────────────────────────────────────
-
-const FOLLOWING_KEY = "cloudscommunity:following";
-
-function loadFollowing(): string[] {
-  try { return JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]"); } catch { return []; }
+function normalize(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-function saveFollowing(ids: string[]) {
-  try { localStorage.setItem(FOLLOWING_KEY, JSON.stringify(ids)); } catch {}
-}
-
-// ─── Ranking row ─────────────────────────────────────────────────────────────
-
-function RankRow({
-  user, rank, followed, onToggle,
+function ProfileRow({
+  user,
+  onToggleFollow,
+  pending,
 }: {
-  user: RankUser; rank: number; followed: boolean; onToggle: (id: string) => void;
+  user: PublicUserProfile;
+  onToggleFollow: (user: PublicUserProfile) => void;
+  pending: boolean;
 }) {
-  const color = AVATAR_COLORS[user.id] ?? "#8B5CF6";
+  const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
+  const avatarColor = user.avatarUrl ? undefined : "#7C3AED";
+  const followLabel = user.isFollowing ? "Seguindo" : "Seguir";
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#111116] px-4 py-3.5 transition hover:border-white/[0.12]">
-      {/* Rank number */}
-      <span className="w-5 shrink-0 text-center text-[13px] font-bold text-white/25">
-        {rank}
-      </span>
-
-      {/* Avatar */}
-      <Link href={`/users/${user.id}`} className="shrink-0">
-        <div
-          className="flex h-10 w-10 items-center justify-center rounded-full text-[14px] font-bold text-white"
-          style={{ backgroundColor: color }}
-        >
-          {user.initial}
-        </div>
+      <Link href={user.profileUrl} className="shrink-0">
+        {user.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={user.avatarUrl} alt={user.displayName} className="h-10 w-10 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full text-[14px] font-bold text-white" style={{ backgroundColor: avatarColor }}>
+            {initials}
+          </div>
+        )}
       </Link>
 
-      {/* Name + description */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Link href={`/users/${user.id}`} className="text-[14px] font-semibold text-white hover:underline truncate">
-            {user.name}
+          <Link href={user.profileUrl} className="truncate text-[14px] font-semibold text-white hover:underline">
+            {user.displayName}
           </Link>
-          {user.highlight && (
+          {user.isSelf && (
             <span className="shrink-0 rounded-full bg-[#7C3AED]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#C084FC]">
-              Top
+              Você
             </span>
           )}
         </div>
-        <p className="truncate text-[12px] text-white/40">{user.description}</p>
+        <p className="truncate text-[12px] text-white/40">@{user.username}</p>
       </div>
 
-      {/* Hypes */}
       <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[#F97316]">
-        <FireIcon s={13} />
-        {user.hypes}
+        <svg viewBox="0 0 24 24" width={13} height={13} fill="currentColor" aria-hidden="true">
+          <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
+        </svg>
+        {user.hypesCount}
       </span>
 
-      {/* Follow button */}
-      <button
-        type="button"
-        onClick={() => onToggle(user.id)}
-        className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
-          followed
-            ? "border border-white/10 bg-transparent text-white/40"
-            : "bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
-        }`}
-      >
-        {followed ? "Seguindo" : "Seguir"}
-      </button>
+      {!user.isSelf && (
+        <button
+          type="button"
+          onClick={() => onToggleFollow(user)}
+          disabled={pending}
+          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
+            user.isFollowing
+              ? "border border-white/10 bg-transparent text-white/40"
+              : "bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+          } ${pending ? "opacity-60" : ""}`}
+        >
+          {pending ? "..." : followLabel}
+        </button>
+      )}
     </div>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function MeetPage() {
   const { user } = useSessionUser();
   const [searchQuery, setSearchQuery] = useState("");
-  const [followedIds, setFollowedIds] = useState<string[]>([]);
+  const [results, setResults] = useState<PublicUserProfile[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mutating, setMutating] = useState<string | null>(null);
+
+  const normalizedQuery = useMemo(() => normalize(searchQuery), [searchQuery]);
 
   useEffect(() => {
-    setFollowedIds(loadFollowing());
-  }, []);
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true);
 
-  function toggleFollow(id: string) {
-    setFollowedIds(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-      saveFollowing(next);
-      return next;
-    });
-  }
+      try {
+        const response = await fetch(`/api/users/search?q=${encodeURIComponent(normalizedQuery)}&limit=10`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => null) as { ok?: boolean; users?: PublicUserProfile[] } | null;
 
-  const filteredRanking = ranking.filter(u =>
-    !searchQuery ||
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+        if (!cancelled) {
+          setResults(response.ok && Array.isArray(payload?.users) ? payload.users : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [normalizedQuery]);
+
+  const toggleFollow = async (target: PublicUserProfile) => {
+    if (target.isSelf) {
+      return;
+    }
+
+    setMutating(target.id);
+
+    try {
+      const method = target.isFollowing ? "DELETE" : "POST";
+      const response = await fetch(`/api/users/${encodeURIComponent(target.username)}/follow`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; user?: PublicUserProfile; message?: string } | null;
+
+      if (!response.ok || !payload?.user) {
+        throw new Error(payload?.message ?? "Não foi possível atualizar o follow.");
+      }
+
+      setResults((current) => current.map((item) => (item.id === payload.user!.id ? payload.user! : item)));
+    } catch {
+      // mantém silencioso para não interromper a navegação
+    } finally {
+      setMutating(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
-
-      {/* ── Header ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-
-          {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
           </Link>
 
           <div className="flex items-center gap-3">
-            <button type="button" aria-label="Notificações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <BellIcon s={23} />
+            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+              <BellIcon />
             </button>
-            <Link href="/settings" aria-label="Configurações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <GearIcon s={23} />
+            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+              <GearIcon />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* ── Main ── */}
       <main className="mx-auto max-w-[640px] px-5 pb-28 pt-[108px]">
-
-        {/* Page title */}
         <div className="mb-6">
           <h1 className="text-[28px] font-bold tracking-tight text-white">Meet</h1>
-          <p className="mt-1 text-[14px] text-white/40">Perfis com mais hypes na plataforma</p>
+          <p className="mt-1 text-[14px] text-white/40">Busque por arroba ou nome de perfil.</p>
         </div>
 
-        {/* Search */}
         <div className="mb-5 flex h-11 items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#111116] px-4">
           <SearchIcon />
           <input
             type="text"
             placeholder="Buscar perfil..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
           />
           {searchQuery && (
@@ -250,7 +267,7 @@ export default function MeetPage() {
               type="button"
               aria-label="Limpar busca"
               onClick={() => setSearchQuery("")}
-              className="shrink-0 text-white/30 hover:text-white/60 transition"
+              className="shrink-0 text-white/30 transition hover:text-white/60"
             >
               <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M6 6l12 12M18 6 6 18" />
@@ -259,25 +276,25 @@ export default function MeetPage() {
           )}
         </div>
 
-        {/* Ranking list */}
+        <div className="mb-3 text-[12px] text-white/35">
+          {loading ? "Buscando perfis..." : `${results.length} resultado${results.length === 1 ? "" : "s"} encontrados`}
+        </div>
+
         <div className="flex flex-col gap-2">
-          {filteredRanking.map((user, index) => (
-            <RankRow
-              key={user.id}
-              user={user}
-              rank={index + 1}
-              followed={followedIds.includes(user.id)}
-              onToggle={toggleFollow}
+          {results.map((item) => (
+            <ProfileRow
+              key={item.id}
+              user={item}
+              onToggleFollow={toggleFollow}
+              pending={mutating === item.id}
             />
           ))}
-          {filteredRanking.length === 0 && (
+          {!loading && results.length === 0 && (
             <p className="py-12 text-center text-[14px] text-white/30">Nenhum perfil encontrado.</p>
           )}
         </div>
-
       </main>
 
-      {/* ── Bottom nav ── */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
@@ -294,7 +311,6 @@ export default function MeetPage() {
           </Link>
         </div>
       </nav>
-
     </div>
   );
 }

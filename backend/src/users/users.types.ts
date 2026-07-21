@@ -1,0 +1,38 @@
+export type PublicUserProfilePayload = {
+  id: string;
+  username: string;
+  name: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  coverUrl: string | null;
+  location: string | null;
+  website: string | null;
+  isPrivate: boolean;
+  createdAt: string;
+  updatedAt: string;
+  followersCount: number;
+  followingCount: number;
+  cloudsCount: number;
+  hypesCount: number;
+  isFollowing: boolean;
+  isSelf: boolean;
+  profileUrl: string;
+  activeCloud?: {
+    id: string;
+    title: string;
+    duration: string;
+    createdAt: string;
+    visibility: "public" | "private";
+  } | null;
+};
+
+export type UsersSearchResponse = {
+  ok: true;
+  users: PublicUserProfilePayload[];
+};
+
+export type UserProfileResponse = {
+  ok: true;
+  user: PublicUserProfilePayload;
+};

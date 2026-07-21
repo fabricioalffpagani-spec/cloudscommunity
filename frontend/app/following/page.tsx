@@ -1,16 +1,40 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+type ActiveCloud = {
+  id: string;
+  title: string;
+  duration: string;
+  createdAt: string;
+  visibility: "public" | "private";
+};
+
+type FollowingProfile = {
+  id: string;
+  username: string;
+  name: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  followersCount: number;
+  followingCount: number;
+  cloudsCount: number;
+  hypesCount: number;
+  isFollowing: boolean;
+  isSelf: boolean;
+  profileUrl: string;
+  activeCloud?: ActiveCloud | null;
+};
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="7.5" /><path d="M20 20l-3.5-3.5" />
+      <circle cx="11" cy="11" r="7.5" />
+      <path d="M20 20l-3.5-3.5" />
     </svg>
   );
 }
@@ -33,27 +57,11 @@ function GearIcon({ s = 23 }: { s?: number }) {
   );
 }
 
-function FireIcon({ s = 14, className = "" }: { s?: number; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-    </svg>
-  );
-}
-
-function UserIcon({ s = 12 }: { s?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
 function HomeIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" /><path d="M9 21V12h6v9" />
+      <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
+      <path d="M9 21V12h6v9" />
     </svg>
   );
 }
@@ -69,126 +77,63 @@ function MessageIcon({ s = 24, className = "" }: { s?: number; className?: strin
 function MeetIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
 }
 
-// ─── Seed data (mirrors users/[id]/page.tsx SEEDED) ──────────────────────────
+function parseDurationSeconds(duration: string) {
+  const map: Record<string, number> = {
+    "5 min": 5 * 60,
+    "10 min": 10 * 60,
+    "30 min": 30 * 60,
+    "1h": 60 * 60,
+    "24h": 24 * 60 * 60,
+  };
 
-type ActiveCloud = {
-  id: string;
-  title: string;
-  category: string;
-  categoryColor: string;
-  participants: number;
-  timeLeft: string;
-};
-
-type UserEntry = {
-  id: string;
-  name: string;
-  handle: string;
-  color: string;
-  activeCloud?: ActiveCloud;
-};
-
-const SEEDED: Record<string, UserEntry> = {
-  joao: {
-    id: "joao", name: "João Silva", handle: "@joaosilva", color: "#8B5CF6",
-    activeCloud: { id: "ia-e-programadores", title: "IA vai substituir programadores?", category: "Tech", categoryColor: "#06B6D4", participants: 47, timeLeft: "12:08" },
-  },
-  ana: {
-    id: "ana", name: "Ana Costa", handle: "@anacosta", color: "#3B82F6",
-  },
-  pedro: {
-    id: "pedro", name: "Pedro Lima", handle: "@pedrolima", color: "#22C55E",
-  },
-};
-
-const FOLLOWING_KEY = "cloudscommunity:following";
-
-function loadFollowing(): string[] {
-  try { return JSON.parse(localStorage.getItem(FOLLOWING_KEY) ?? "[]"); } catch { return []; }
+  return map[duration] ?? 5 * 60;
 }
 
-// ─── Empty state illustration ─────────────────────────────────────────────────
+function formatCountdown(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
 
-function EmptyFollowing() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
-      {/* SVG illustration */}
-      <svg width="160" height="140" viewBox="0 0 160 140" fill="none" aria-hidden="true">
-        {/* Background circle */}
-        <circle cx="80" cy="72" r="56" fill="#1C1F2E" />
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
 
-        {/* Cloud shape */}
-        <path
-          d="M55 80 C55 69 63 62 72 62 C73 55 79 50 87 50 C97 50 105 58 105 68 C111 68 116 73 116 79 C116 86 111 91 104 91 H60 C57 91 55 88 55 85 Z"
-          fill="#2D2F45" stroke="#4C4F70" strokeWidth="1.5"
-        />
-
-        {/* Rain / drops */}
-        <rect x="68" y="97" width="3" height="8" rx="1.5" fill="#7C3AED" opacity="0.5" />
-        <rect x="79" y="100" width="3" height="8" rx="1.5" fill="#7C3AED" opacity="0.35" />
-        <rect x="90" y="97" width="3" height="8" rx="1.5" fill="#7C3AED" opacity="0.5" />
-
-        {/* Person silhouette left */}
-        <circle cx="38" cy="62" r="9" fill="#2D2F45" />
-        <path d="M24 88 C24 78 30 74 38 74 C46 74 52 78 52 88" fill="#2D2F45" />
-
-        {/* Person silhouette right */}
-        <circle cx="122" cy="62" r="9" fill="#2D2F45" />
-        <path d="M108 88 C108 78 114 74 122 74 C130 74 136 78 136 88" fill="#2D2F45" />
-
-        {/* Plus icon on cloud — suggesting no follow */}
-        <circle cx="80" cy="116" r="12" fill="#1C1F2E" stroke="#4C4F70" strokeWidth="1.2" />
-        <path d="M80 111 v10 M75 116 h10" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-
-      <div>
-        <p className="text-[19px] font-bold text-white">Nenhuma Cloud ativa</p>
-        <p className="mt-2 max-w-[320px] text-[14px] leading-relaxed text-white/50">
-          As pessoas que você segue não têm Clouds ativas no momento. Que tal descobrir novos perfis?
-        </p>
-      </div>
-
-      <Link
-        href="/meet"
-        className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
-      >
-        <MeetIcon s={18} className="text-white" />
-        Descobrir pessoas
-      </Link>
-    </div>
-  );
+  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-// ─── Cloud card ───────────────────────────────────────────────────────────────
+function FollowingCloudCard({ profile, now }: { profile: FollowingProfile; now: number }) {
+  const cloud = profile.activeCloud;
 
-function FollowingCloudCard({ user, cloud }: { user: UserEntry; cloud: ActiveCloud }) {
-  const initials = user.name.slice(0, 2).toUpperCase();
+  if (!cloud) {
+    return null;
+  }
+
+  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000), 0);
+  const live = remainingSeconds > 0;
 
   return (
-    <Link
-      href={`/cloud/${cloud.id}`}
-      className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-[#111116] p-5 transition hover:border-white/[0.16] hover:bg-[#16161c]"
-    >
-      {/* Author */}
+    <Link href={profile.profileUrl} className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-[#111116] p-5 transition hover:border-white/[0.16] hover:bg-[#16161c]">
       <div className="flex items-center gap-3">
-        <div
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white"
-          style={{ backgroundColor: user.color }}
-        >
-          {initials}
-        </div>
+        {profile.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={profile.avatarUrl} alt={profile.displayName} className="h-10 w-10 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-[14px] font-bold text-white">
+            {profile.displayName.trim().charAt(0).toUpperCase()}
+          </div>
+        )}
         <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold text-white">{user.name}</p>
-          <p className="text-[12px] text-white/40">{user.handle}</p>
+          <p className="truncate text-[14px] font-semibold text-white">{profile.displayName}</p>
+          <p className="text-[12px] text-white/40">@{profile.username}</p>
         </div>
-
-        {/* Live badge */}
         <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[#22C55E]/15 px-2.5 py-0.5 text-[11px] font-semibold text-[#22C55E] shrink-0">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-75" />
@@ -198,60 +143,90 @@ function FollowingCloudCard({ user, cloud }: { user: UserEntry; cloud: ActiveClo
         </span>
       </div>
 
-      {/* Cloud title */}
       <p className="text-[16px] font-semibold leading-snug text-white">{cloud.title}</p>
 
-      {/* Meta row */}
-      <div className="flex items-center gap-3">
-        <span
-          className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-          style={{ backgroundColor: `${cloud.categoryColor}22`, color: cloud.categoryColor }}
-        >
-          {cloud.category}
+      <div className="flex items-center justify-between gap-3 text-[12px] text-white/45">
+        <span>{live ? "Encerra em" : "Encerrada"}</span>
+        <span className="rounded-full bg-white/[0.05] px-2.5 py-1 font-semibold text-white/70">
+          {formatCountdown(remainingSeconds)}
         </span>
-        <span className="flex items-center gap-1 text-[12px] text-white/50">
-          <UserIcon s={12} />
-          {cloud.participants} online
-        </span>
-        <span className="ml-auto text-[12px] text-white/40">{cloud.timeLeft} restante</span>
       </div>
     </Link>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function EmptyFollowing() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
+      <div className="rounded-[28px] border border-white/[0.06] bg-[#111116] p-8">
+        <p className="text-[19px] font-bold text-white">Nenhuma Cloud ativa</p>
+        <p className="mt-2 max-w-[320px] text-[14px] leading-relaxed text-white/50">
+          As pessoas que você segue não têm Clouds ativas no momento. Que tal descobrir novos perfis?
+        </p>
+        <Link
+          href="/meet"
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+        >
+          <MeetIcon s={18} className="text-white" />
+          Descobrir pessoas
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function FollowingPage() {
   const { user } = useSessionUser();
-  const [followedIds, setFollowedIds] = useState<string[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [profiles, setProfiles] = useState<FollowingProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setFollowedIds(loadFollowing());
-    setHydrated(true);
+    let cancelled = false;
+
+    const loadFollowing = async () => {
+      setLoading(true);
+
+      try {
+        const response = await fetch("/api/users/following", { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as { ok?: boolean; users?: FollowingProfile[] } | null;
+
+        if (!cancelled) {
+          setProfiles(response.ok && Array.isArray(payload?.users) ? payload.users : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfiles([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadFollowing();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const followedUsers = followedIds
-    .map(id => SEEDED[id])
-    .filter((u): u is UserEntry => u != null);
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-  const activeClouds = followedUsers.filter(u => u.activeCloud != null);
-
-  if (!hydrated) return null;
+  const activeProfiles = profiles.filter((profile) => profile.activeCloud);
 
   return (
     <div className="min-h-screen bg-[#09090B] text-white">
-
-      {/* ── Header ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-
-          {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
           </Link>
 
-          {/* Nav — Seguindo highlighted */}
           <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
             <Link href="/" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
               For You
@@ -262,51 +237,46 @@ export default function FollowingPage() {
             </Link>
           </nav>
 
-          {/* Action icons */}
           <div className="flex items-center gap-3">
-            <button type="button" aria-label="Buscar"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <SearchIcon s={23} />
             </button>
-            <button type="button" aria-label="Notificações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <BellIcon s={23} />
             </button>
-            <Link href="/settings" aria-label="Configurações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <GearIcon s={23} />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* ── Content ── */}
       <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-y-auto">
-        <div className="mx-auto flex h-full max-w-[680px] flex-col px-5 lg:px-8 py-6">
-
-          {activeClouds.length > 0 ? (
+        <div className="mx-auto flex h-full max-w-[680px] flex-col px-5 py-6 lg:px-8">
+          {loading ? (
+            <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-6 text-center text-[13px] text-white/45">
+              Carregando seguidos...
+            </div>
+          ) : activeProfiles.length > 0 ? (
             <>
               <p className="mb-4 text-[13px] text-white/40">
-                {activeClouds.length} Cloud{activeClouds.length > 1 ? "s" : ""} ativa{activeClouds.length > 1 ? "s" : ""} de pessoas que você segue
+                {activeProfiles.length} perfil{activeProfiles.length > 1 ? "s" : ""} seguido{activeProfiles.length > 1 ? "s" : ""} com cloud ativa
               </p>
               <div className="flex flex-col gap-4">
-                {activeClouds.map(user => (
-                  <FollowingCloudCard key={user.id} user={user} cloud={user.activeCloud!} />
+                {activeProfiles.map((profile) => (
+                  <FollowingCloudCard key={profile.id} profile={profile} now={now} />
                 ))}
               </div>
             </>
           ) : (
             <EmptyFollowing />
           )}
-
         </div>
       </main>
 
-      {/* ── Bottom Navigation Bar ── */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
@@ -323,7 +293,6 @@ export default function FollowingPage() {
           </Link>
         </div>
       </nav>
-
     </div>
   );
 }

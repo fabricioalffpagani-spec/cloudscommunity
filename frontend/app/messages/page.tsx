@@ -240,10 +240,22 @@ function MsgBubble({
     <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
       <div className="w-9 shrink-0"><Avatar initials={initials} size={34} color={color} /></div>
       <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
-        <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
+        {msg.sender === "Você" ? (
+          <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
+        ) : (
+          <Link href={`/users/${encodeURIComponent(msg.sender.replace(/^@/, "").trim())}`} className="px-1 text-[12px] font-semibold text-white/40 transition hover:text-white hover:underline">
+            {msg.sender}
+          </Link>
+        )}
         {msg.replyTo && (
           <div className="rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2.5 text-[13px] text-white/70">
-            <p className="font-semibold text-white">{msg.replyTo.sender}</p>
+            {msg.replyTo.sender === "Você" ? (
+              <p className="font-semibold text-white">{msg.replyTo.sender}</p>
+            ) : (
+              <Link href={`/users/${encodeURIComponent(msg.replyTo.sender.replace(/^@/, "").trim())}`} className="font-semibold text-white transition hover:underline">
+                {msg.replyTo.sender}
+              </Link>
+            )}
             <p className="mt-1 leading-snug line-clamp-2">{msg.replyTo.content}</p>
           </div>
         )}
@@ -553,7 +565,9 @@ export default function MessagesPage() {
                 </Link>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[14px] font-semibold text-white">{conv.name}</span>
+                    <Link href={`/users/${conv.id}`} className="truncate text-[14px] font-semibold text-white hover:underline">
+                      {conv.name}
+                    </Link>
                     <span className="shrink-0 text-[12px] text-white/40">{conv.time}</span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
@@ -590,7 +604,9 @@ export default function MessagesPage() {
                 <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConv.status]}`} />
               </Link>
               <div>
-                <p className="text-[16px] font-semibold text-white">{activeConv.name}</p>
+                <Link href={`/users/${activeConv.id}`} className="text-[16px] font-semibold text-white hover:underline">
+                  {activeConv.name}
+                </Link>
                 <p className={`text-[13px] ${activeConv.status === "online" ? "text-[#22C55E]" : activeConv.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
                   {activeConv.status === "online" ? "online" : activeConv.status === "busy" ? "ocupado" : "offline"}
                 </p>

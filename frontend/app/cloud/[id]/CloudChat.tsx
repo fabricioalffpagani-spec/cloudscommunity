@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -14,6 +15,10 @@ function now() {
 
 function uid() {
   return Math.random().toString(36).slice(2);
+}
+
+function profileHrefFromName(name: string) {
+  return `/users/${encodeURIComponent(name.replace(/^@/, "").trim())}`;
 }
 
 function fmt(s: number) {
@@ -359,7 +364,13 @@ function MsgBubble({
       <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
         {/* sender + host badge */}
         <div className={`flex flex-wrap items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
-          <span className="text-[12px] font-semibold text-white/50">{msg.sender}</span>
+          {msg.sender === "Você" ? (
+            <span className="text-[12px] font-semibold text-white/50">{msg.sender}</span>
+          ) : (
+            <Link href={profileHrefFromName(msg.sender)} className="text-[12px] font-semibold text-white/50 transition hover:text-white hover:underline">
+              {msg.sender}
+            </Link>
+          )}
           {msg.host && (
             <span className="rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[#C4B5FD]">
               Host
@@ -371,7 +382,13 @@ function MsgBubble({
         {/* reply preview */}
         {msg.replyTo && (
           <div className="rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2 text-[12px] text-white/70">
-            <p className="font-semibold text-white">{msg.replyTo.sender}</p>
+            {msg.replyTo.sender === "Você" ? (
+              <p className="font-semibold text-white">{msg.replyTo.sender}</p>
+            ) : (
+              <Link href={profileHrefFromName(msg.replyTo.sender)} className="font-semibold text-white transition hover:underline">
+                {msg.replyTo.sender}
+              </Link>
+            )}
             <p className="mt-1 leading-snug line-clamp-2">{msg.replyTo.content}</p>
           </div>
         )}
