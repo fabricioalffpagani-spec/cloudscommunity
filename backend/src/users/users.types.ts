@@ -25,6 +25,15 @@ export type PublicUserProfilePayload = {
     createdAt: string;
     visibility: "public" | "private";
   } | null;
+  activeClouds: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    duration: string;
+    createdAt: string;
+    visibility: "public" | "private";
+    href: string;
+  }>;
 };
 
 export type UsersSearchResponse = {

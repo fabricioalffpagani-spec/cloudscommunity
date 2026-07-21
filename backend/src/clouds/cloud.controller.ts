@@ -43,6 +43,11 @@ export class CloudController {
     return this.cloudService.listMine(extractSessionToken(req));
   }
 
+  @Get('following')
+  async following(@Req() req: Request) {
+    return this.cloudService.listFollowing(extractSessionToken(req));
+  }
+
   @Post()
   async create(@Body() body: Record<string, unknown>, @Req() req: Request) {
     return this.cloudService.create(extractSessionToken(req), {

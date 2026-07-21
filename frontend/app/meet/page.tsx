@@ -207,7 +207,7 @@ export default function MeetPage() {
 
     try {
       const method = target.isFollowing ? "DELETE" : "POST";
-      const response = await fetch(`/api/users/${encodeURIComponent(target.username)}/follow`, {
+      const response = await fetch(`/api/follow/${encodeURIComponent(target.username)}`, {
         method,
         headers: { "Content-Type": "application/json" },
       });

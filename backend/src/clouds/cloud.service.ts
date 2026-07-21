@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { CloudMode, CloudStatus, CloudVisibility, Prisma } from '@prisma/client';
-import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { CloudPayload, CreateCloudInput } from './cloud.types';
 
 const ALLOWED_DURATIONS = ['5 min', '10 min', '30 min', '1h', '24h'] as const;
@@ -51,19 +51,41 @@ export class CloudService {
         deletedAt: null,
         status: CloudStatus.active,
       },
-      include: {
-        author: {
-          include: {
-            profile: true,
-          },
-        },
-        _count: {
-          select: {
-            hypes: true,
-            members: true,
-          },
-        },
+      include: this.cloudInclude(),
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      ok: true,
+      clouds: clouds.map((cloud) => this.mapCloud(cloud)),
+    };
+  }
+
+  async listFollowing(token: string | null): Promise<{ ok: true; clouds: CloudPayload[] }> {
+    const current = await this.requireSession(token);
+    await this.expireDueClouds();
+
+    const following = await this.prisma.follow.findMany({
+      where: { followerId: current.user.id },
+      select: { followingId: true },
+    });
+
+    const followingIds = following.map((entry) => entry.followingId);
+
+    if (followingIds.length === 0) {
+      return {
+        ok: true,
+        clouds: [],
+      };
+    }
+
+    const clouds = await this.prisma.cloud.findMany({
+      where: {
+        deletedAt: null,
+        status: CloudStatus.active,
+        authorId: { in: followingIds },
       },
+      include: this.cloudInclude(),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -83,19 +105,7 @@ export class CloudService {
         authorId: current.user.id,
         status: CloudStatus.active,
       },
-      include: {
-        author: {
-          include: {
-            profile: true,
-          },
-        },
-        _count: {
-          select: {
-            hypes: true,
-            members: true,
-          },
-        },
-      },
+      include: this.cloudInclude(),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -153,19 +163,7 @@ export class CloudService {
           duration,
           startedAt: new Date(),
         },
-        include: {
-          author: {
-            include: {
-              profile: true,
-            },
-          },
-          _count: {
-            select: {
-              hypes: true,
-              members: true,
-            },
-          },
-        },
+        include: this.cloudInclude(),
       });
 
       await tx.cloudMember.create({
@@ -183,6 +181,22 @@ export class CloudService {
       ok: true,
       cloud: this.mapCloud(created),
     };
+  }
+
+  private cloudInclude() {
+    return {
+      author: {
+        include: {
+          profile: true,
+        },
+      },
+      _count: {
+        select: {
+          hypes: true,
+          members: true,
+        },
+      },
+    } as const;
   }
 
   private async expireDueClouds() {
@@ -243,12 +257,12 @@ export class CloudService {
       throw new Error('Author profile is required.');
     }
 
-      return {
-        id: cloud.id,
-        title: cloud.title,
-        description: cloud.content,
-        duration: cloud.duration,
-        visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
+    return {
+      id: cloud.id,
+      title: cloud.title,
+      description: cloud.content,
+      duration: cloud.duration,
+      visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
       createdAt: cloud.createdAt.toISOString(),
       updatedAt: cloud.updatedAt.toISOString(),
       authorId: cloud.authorId,

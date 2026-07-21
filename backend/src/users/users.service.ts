@@ -308,7 +308,7 @@ export class UsersService {
         : Promise.resolve(false),
     ]);
 
-    const activeCloud = await this.prisma.cloud.findFirst({
+    const activeClouds = await this.prisma.cloud.findMany({
       where: {
         authorId: user.id,
         deletedAt: null,
@@ -318,11 +318,22 @@ export class UsersService {
       select: {
         id: true,
         title: true,
+        content: true,
         duration: true,
         createdAt: true,
         visibility: true,
       },
     });
+
+    const serializedActiveClouds = activeClouds.map((cloud) => ({
+      id: cloud.id,
+      title: cloud.title,
+      description: cloud.content,
+      duration: cloud.duration,
+      createdAt: cloud.createdAt.toISOString(),
+      visibility: (cloud.visibility === 'private' ? 'private' : 'public') as 'private' | 'public',
+      href: `/cloud/${cloud.id}?source=for-you`,
+    }));
 
     return {
       id: user.id,
@@ -344,15 +355,8 @@ export class UsersService {
       isFollowing,
       isSelf: currentUserId === user.id,
       profileUrl: `/users/${profile.username}`,
-      activeCloud: activeCloud
-        ? {
-          id: activeCloud.id,
-          title: activeCloud.title,
-          duration: activeCloud.duration,
-          createdAt: activeCloud.createdAt.toISOString(),
-          visibility: activeCloud.visibility === 'private' ? 'private' : 'public',
-        }
-        : null,
+      activeCloud: serializedActiveClouds[0] ?? null,
+      activeClouds: serializedActiveClouds,
     };
   }
 }

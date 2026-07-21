@@ -25,6 +25,15 @@ type PublicUserProfile = {
   isFollowing: boolean;
   isSelf: boolean;
   profileUrl: string;
+  activeClouds: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    duration: string;
+    createdAt: string;
+    visibility: "public" | "private";
+    href: string;
+  }>;
 };
 
 function BackIcon() {
@@ -98,6 +107,65 @@ function FieldStat({ value, label }: { value: string | number; label: string }) 
       <p className="text-[20px] font-bold text-white">{value}</p>
       <p className="text-[11px] uppercase tracking-widest text-white/40">{label}</p>
     </div>
+  );
+}
+
+function formatCountdown(seconds: number) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function parseDurationSeconds(duration: string) {
+  const map: Record<string, number> = {
+    "5 min": 5 * 60,
+    "10 min": 10 * 60,
+    "30 min": 30 * 60,
+    "1h": 60 * 60,
+    "24h": 24 * 60 * 60,
+  };
+
+  return map[duration] ?? 5 * 60;
+}
+
+function ActiveCloudCard({ cloud }: { cloud: PublicUserProfile["activeClouds"][number] }) {
+  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((Date.now() - new Date(cloud.createdAt).getTime()) / 1000), 0);
+  const live = remainingSeconds > 0;
+
+  return (
+    <Link
+      href={cloud.href}
+      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#111116] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+          {cloud.duration}
+        </span>
+        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${live ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+          {live ? "Ao vivo" : "Encerrada"}
+        </span>
+      </div>
+
+      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white">{cloud.title}</h3>
+      {cloud.description && (
+        <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
+          {cloud.description}
+        </p>
+      )}
+
+      <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
+        <span>{live ? "Encerra em" : "Encerrada"}</span>
+        <span className={`rounded-full px-2.5 py-1 font-semibold ${live ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+          {formatCountdown(remainingSeconds)}
+        </span>
+      </div>
+    </Link>
   );
 }
 
@@ -176,7 +244,7 @@ export default function UserProfilePage() {
     setMutating(true);
 
     try {
-      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/follow`, {
+      const response = await fetch(`/api/follow/${encodeURIComponent(profile.username)}`, {
         method: profile.isFollowing ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -204,6 +272,7 @@ export default function UserProfilePage() {
   const memberSince = formatMemberSince(profile?.createdAt);
   const bio = profile?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
   const isOwnProfile = Boolean(profile?.isSelf || sessionUser?.id === profile?.id);
+  const activeClouds = profile?.activeClouds ?? [];
 
   const waText = profile
     ? encodeURIComponent(`Veja o perfil de ${displayName} no Clouds Community: ${profileUrl}`)
@@ -334,6 +403,17 @@ export default function UserProfilePage() {
             <span>Desde {memberSince}</span>
           </div>
 
+          {activeClouds.length > 0 && (
+            <div className="mt-10 w-full text-left">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds Ativas</p>
+              <div className="grid gap-3">
+                {activeClouds.map((cloud) => (
+                  <ActiveCloudCard key={cloud.id} cloud={cloud} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {isOwnProfile ? (
               <Link
@@ -358,15 +438,6 @@ export default function UserProfilePage() {
                 {mutating ? "..." : profile.isFollowing ? "Seguindo" : "Seguir"}
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => setShareOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 py-2.5 text-[14px] font-semibold text-white/70 transition hover:bg-white/10"
-            >
-              <ShareIcon />
-              Compartilhar
-            </button>
           </div>
         </div>
       </div>
