@@ -1,20 +1,17 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { createClient, type RedisClientType } from 'redis';
-import type { Server } from 'socket.io';
+
+export type RedisAdapter = ReturnType<typeof createAdapter>;
 
 @Injectable()
-export class SocketIoRedisService implements OnModuleDestroy {
+export class SocketIoRedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SocketIoRedisService.name);
   private pubClient: RedisClientType | null = null;
   private subClient: RedisClientType | null = null;
-  private bound = false;
+  private adapter: RedisAdapter | null = null;
 
-  async bind(server: Server) {
-    if (this.bound) {
-      return;
-    }
-
+  async onModuleInit() {
     const endpoint = process.env.CACHE_NODE_ENDPOINT?.trim();
     if (!endpoint) {
       this.logger.warn('CACHE_NODE_ENDPOINT is missing. Socket.IO will run without Redis adapter.');
@@ -28,9 +25,12 @@ export class SocketIoRedisService implements OnModuleDestroy {
     this.subClient.on('error', (error) => this.logger.error(`Redis sub client error: ${this.describeError(error)}`));
 
     await Promise.all([this.pubClient.connect(), this.subClient.connect()]);
-    server.adapter(createAdapter(this.pubClient, this.subClient));
-    this.bound = true;
-    this.logger.log('Socket.IO Redis adapter enabled.');
+    this.adapter = createAdapter(this.pubClient, this.subClient);
+    this.logger.log('Socket.IO Redis adapter created.');
+  }
+
+  getAdapter(): RedisAdapter | null {
+    return this.adapter;
   }
 
   async onModuleDestroy() {

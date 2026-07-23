@@ -12,7 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
-import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
+import { SocketIoRedisService, type RedisAdapter } from '../infrastructure/socket-io-redis/socket-io-redis.service';
 import { DirectMessagesService } from './direct-messages.service';
 import type {
   ConversationPresencePayload,
@@ -73,7 +73,10 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
   ) {}
 
   async afterInit(server: Server) {
-    await this.socketIoRedisService.bind(server);
+    const adapter = this.socketIoRedisService.getAdapter();
+    if (adapter) {
+      server.adapter(adapter);
+    }
   }
 
   async handleConnection(socket: Socket) {
