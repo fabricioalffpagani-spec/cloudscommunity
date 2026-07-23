@@ -53,14 +53,14 @@ services:
       - clouds_backend_node_modules:/app/node_modules
     ports:
       - "${APP_HTTP_PORT}:${APP_HTTP_PORT}"
-    command: ["sh", "-c", "npx prisma generate && npm run start:dev"]
+    command: ["sh", "-c", "npm install && npx prisma generate && npm run start:dev"]
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3001/health').then(async (r) => { const body = await r.json().catch(() => null); process.exit(body?.healthy ? 0 : 1); }).catch(() => process.exit(1));",
+          "fetch('http://127.0.0.1:' + (process.env.APP_HTTP_PORT || '3001') + '/health').then(async (r) => { const body = await r.json().catch(() => null); process.exit(body?.healthy ? 0 : 1); }).catch(() => process.exit(1));",
         ]
       interval: 10s
       timeout: 5s
@@ -82,15 +82,15 @@ services:
       - ./frontend:/app
       - clouds_frontend_node_modules:/app/node_modules
     ports:
-      - "${UI_HTTP_PORT}:3000"
-    command: ["sh", "-c", "npm run dev -- --webpack --hostname 0.0.0.0 --port ${UI_HTTP_PORT}"]
+      - "${UI_HTTP_PORT}:${UI_HTTP_PORT}"
+    command: ["sh", "-c", "npm install && npm run dev -- --webpack --hostname 0.0.0.0 --port ${UI_HTTP_PORT}"]
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:3000').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));",
+          "fetch('http://127.0.0.1:' + (process.env.UI_HTTP_PORT || '3000')).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));",
         ]
       interval: 10s
       timeout: 5s

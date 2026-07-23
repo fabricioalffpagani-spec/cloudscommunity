@@ -1,587 +1,1334 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
-import {
-  useState, useRef, useEffect, useCallback,
-} from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type Status = "online" | "offline" | "busy";
+type MessageKind = "text" | "audio" | "image" | "link";
+
+type BackendConversation = {
+  id: string;
+  participantOneId: string;
+  participantTwoId: string;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+  participant: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    status: string;
+  };
+};
+
+type BackendMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  type: MessageKind;
+  content: string | null;
+  clientMessageId: string | null;
+  createdAt: string;
+  readAt: string | null;
+  mediaAsset: {
+    id: string;
+    url: string;
+    mimeType: string;
+    sizeBytes: string;
+    originalFileName: string | null;
+    width: number | null;
+    height: number | null;
+    durationMs: number | null;
+  } | null;
+  sender: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+};
 
 type Conversation = {
   id: string;
+  peerId: string;
+  peerUsername: string;
   name: string;
-  lastMessage: string;
-  lastMsgType?: "audio" | "text";
-  time: string;
   status: Status;
-  unread?: number;
   avatar: string;
   color: string;
+  lastMessage: string;
+  time: string;
+  unread: number;
+  lastMessageAt: string | null;
 };
 
-type ReplyMeta = { id: string; sender: string; content: string };
-
-type Msg =
-  | { id: string; type: "date"; label: string }
-  | { id: string; side: "left" | "right"; type: "text"; sender: string; content: string; time: string; replyTo?: ReplyMeta; reaction?: string }
-  | { id: string; side: "left" | "right"; type: "audio"; sender: string; time: string; duration: string; audioUrl?: string; waveform?: number[]; replyTo?: ReplyMeta; reaction?: string }
-  | { id: string; side: "left" | "right"; type: "link"; sender: string; content: string; url: string; time: string; replyTo?: ReplyMeta; reaction?: string };
-
-// ─── Static seed data ─────────────────────────────────────────────────────────
-
-const INIT_CONVS: Conversation[] = [
-  { id: "joao",  name: "João Silva", lastMessage: "Acompanhe a esta Cloud comigo!", time: "13:23", status: "online", unread: 15, avatar: "JS", color: "#8B5CF6" },
-  { id: "ana",   name: "Ana Costa",  lastMessage: "Áudio gravado", lastMsgType: "audio", time: "11:18", status: "busy", avatar: "AC", color: "#3B82F6" },
-  { id: "pedro", name: "Pedro Lima", lastMessage: "Oi! Tudo bem?", time: "09:05", status: "offline", avatar: "PL", color: "#22C55E" },
-];
-
-const INIT_MSGS: Record<string, Msg[]> = {
-  joao: [
-    { id: "d1", type: "date", label: "02 de junho de 2026" },
-    { id: "m1", side: "left",  type: "text", sender: "João",  content: "oi", time: "11:22" },
-    { id: "d2", type: "date", label: "Hoje" },
-    { id: "m2", side: "right", type: "text", sender: "Você",  content: "oi", time: "13:20" },
-    { id: "m3", side: "right", type: "audio", sender: "Você", time: "13:22", duration: "0:04" },
-    { id: "m4", side: "right", type: "link", sender: "Você",  content: "Acompanhe a esta Cloud comigo! testeee", url: "http://localhost:3000/cloud/c87c53a9-d0b5-4461-a5ef-cb88d8e0c30d", time: "13:23" },
-  ],
-  ana:   [{ id: "d1", type: "date", label: "Hoje" }, { id: "m1", side: "left", type: "audio", sender: "Ana", time: "11:18", duration: "0:12" }],
-  pedro: [{ id: "d1", type: "date", label: "Hoje" }, { id: "m1", side: "left", type: "text", sender: "Pedro", content: "Oi! Tudo bem?", time: "09:05" }],
+type Msg = {
+  id: string;
+  conversationId: string;
+  side: "left" | "right";
+  sender: string;
+  kind: MessageKind;
+  content: string;
+  time: string;
+  isoTime: string;
+  readAt: string | null;
+  mediaUrl: string | null;
+  durationMs: number | null;
+  linkUrl: string | null;
+  linkLabel: string | null;
+  pending?: boolean;
+  clientMessageId?: string | null;
 };
 
-const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
+type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
+const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
+const MESSAGE_LIMIT = 50;
+const EMOJI_BANK = ["😀", "🔥", "❤️", "😂", "🙌", "🎉", "💬", "👍", "👀", "✨"];
 
-function I({ d, size = 20, fill }: { d: string | string[]; size?: number; fill?: boolean }) {
-  const paths = Array.isArray(d) ? d : [d];
-  return (
-    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths.map((p, i) => <path key={i} d={p} fill={fill ? "currentColor" : "none"} stroke={fill ? "none" : "currentColor"} />)}
-    </svg>
-  );
+const statusDot: Record<Status, string> = {
+  online: "bg-[#22C55E]",
+  busy: "bg-[#F59E0B]",
+  offline: "bg-[#6B7280]",
+};
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "C";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-const EMOJI_BANK = ["😀","🔥","❤️","😂","🙌","🎉","💬","👍","👀","✨"];
-
-const icons = {
-  search:       () => <svg viewBox="0 0 24 24" width={23} height={23} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><path d="M20 20l-3.5-3.5"/></svg>,
-  upload:       () => <svg viewBox="0 0 24 24" width={23} height={23} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>,
-  bell:         (s=23) => <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 17H5.5a1 1 0 0 1-.92-1.38l1.42-3.42A5 5 0 0 0 6.4 10V9a5.6 5.6 0 0 1 11.2 0v1c0 .69.14 1.38.4 2l1.42 3.42A1 1 0 0 1 18.5 17H15"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>,
-  gear:         (s=23) => <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>,
-  send:         () => <I d={["M22 2 11 13","m22 2-7 20-4-9-9-4 20-7Z"]} size={18}/>,
-  mic:          (s=18) => <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M19 12a7 7 0 0 1-14 0"/><path d="M12 19v3"/></svg>,
-  stop:         () => <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>,
-  play:         () => <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true"><path d="M8 5.14v14l11-7-11-7Z"/></svg>,
-  plus:         (s=18) => <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>,
-  emoji:        () => <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14s1 2 3.5 2 3.5-2 3.5-2"/><circle cx="9" cy="10" r=".8" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r=".8" fill="currentColor" stroke="none"/></svg>,
-  phone:        () => <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.78a16 16 0 0 0 6 6l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16a2 2 0 0 0 .27.92Z"/></svg>,
-  search_sm:    () => <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><path d="M20 20l-3.5-3.5"/></svg>,
-  dots:         () => <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>,
-  check2:       () => <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m2 12 5 5L17 7"/><path d="m9 12 5 5L22 7"/></svg>,
-  x:            (s=18) => <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>,
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function now() {
-  return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+function hashString(value: string) {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  return hash;
 }
-function uid() { return Math.random().toString(36).slice(2); }
 
-function Avatar({ initials, size = 36, color = "#8B5CF6" }: { initials: string; size?: number; color?: string }) {
+function avatarColor(source: string) {
+  const palette = ["#7C3AED", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
+  return palette[hashString(source) % palette.length];
+}
+
+function mapStatus(status: string): Status {
+  if (status === "active") return "online";
+  if (status === "pending") return "busy";
+  return "offline";
+}
+
+function timeLabel(iso: string | null) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDuration(durationMs: number | null) {
+  if (!durationMs || durationMs <= 0) {
+    return "";
+  }
+
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function previewForMessage(message: BackendMessage) {
+  if (message.type === "audio") {
+    const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
+    return duration ? `Áudio · ${duration}` : "Áudio";
+  }
+
+  if (message.type === "image") {
+    return "Imagem";
+  }
+
+  if (message.type === "link") {
+    try {
+      const parsed = JSON.parse(message.content || "{}") as { url?: string; label?: string | null };
+      if (parsed.label?.trim()) {
+        return parsed.label.trim();
+      }
+      if (parsed.url) {
+        return new URL(parsed.url).hostname.replace(/^www\./, "");
+      }
+    } catch {
+      if (message.content) {
+        try {
+          return new URL(message.content).hostname.replace(/^www\./, "");
+        } catch {
+          // fall through
+        }
+      }
+    }
+    return "Link compartilhado";
+  }
+
+  return message.content || "";
+}
+
+function dateLabel(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  if (sameDay) return "Hoje";
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function buildConversation(payload: BackendConversation): Conversation {
+  const name = payload.participant.displayName || payload.participant.username;
+  return {
+    id: payload.id,
+    peerId: payload.participant.id,
+    peerUsername: payload.participant.username,
+    name,
+    status: mapStatus(payload.participant.status),
+    avatar: initials(name),
+    color: avatarColor(payload.participant.id),
+    lastMessage: payload.lastMessagePreview || "",
+    time: timeLabel(payload.lastMessageAt),
+    unread: payload.unreadCount,
+    lastMessageAt: payload.lastMessageAt,
+  };
+}
+
+function buildMessage(payload: BackendMessage, currentUserId: string): Msg {
+  let linkUrl: string | null = null;
+  let linkLabel: string | null = null;
+
+  if (payload.type === "link") {
+    try {
+      const parsed = JSON.parse(payload.content || "{}") as { url?: string; label?: string | null };
+      linkUrl = parsed.url ?? null;
+      linkLabel = parsed.label?.trim() || null;
+    } catch {
+      linkUrl = payload.content || null;
+    }
+  }
+
+  return {
+    id: payload.id,
+    conversationId: payload.conversationId,
+    side: payload.senderId === currentUserId ? "right" : "left",
+    sender: payload.senderId === currentUserId ? "Você" : payload.sender.displayName || payload.sender.username,
+    kind: payload.type,
+    content: payload.content || "",
+    time: timeLabel(payload.createdAt),
+    isoTime: payload.createdAt,
+    readAt: payload.readAt,
+    mediaUrl: payload.mediaAsset?.url ?? null,
+    durationMs: payload.mediaAsset?.durationMs ?? null,
+    linkUrl,
+    linkLabel,
+    clientMessageId: payload.clientMessageId,
+  };
+}
+
+function mergeMessage(list: Msg[], next: Msg) {
+  const index = next.clientMessageId ? list.findIndex((item) => item.clientMessageId === next.clientMessageId) : -1;
+  if (index >= 0) return list.map((item, i) => (i === index ? { ...next, pending: false } : item));
+  if (list.some((item) => item.id === next.id)) return list;
+  return [...list, next];
+}
+
+function sortConversations(list: Conversation[]) {
+  return [...list].sort((a, b) => (new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()));
+}
+
+function resolveSocketUrl() {
+  if (SOCKET_URL) return SOCKET_URL.replace(/\/+$/, "");
+  if (typeof window !== "undefined") return window.location.origin.replace(/\/+$/, "");
+  return "";
+}
+
+async function readJson<T>(response: Response) {
+  const payload = (await response.json().catch(() => null)) as T | null;
+  if (!response.ok || !payload) throw new Error("Falha ao carregar dados.");
+  return payload;
+}
+
+function Avatar({ name, size = 36, color }: { name: string; size?: number; color: string }) {
   return (
-    <div className="flex shrink-0 items-center justify-center rounded-full font-bold text-white"
-      style={{ width: size, height: size, backgroundColor: color, fontSize: size * 0.38 }}>
-      {initials}
+    <div className="flex shrink-0 items-center justify-center rounded-full font-bold text-white" style={{ width: size, height: size, backgroundColor: color, fontSize: size * 0.38 }}>
+      {name}
     </div>
   );
 }
 
-const statusDot: Record<Status, string> = {
-  online: "bg-[#22C55E]", busy: "bg-[#F59E0B]", offline: "bg-[#6B7280]",
+type RecordedAudio = {
+  blob: Blob;
+  durationMs: number;
+  mimeType: string;
 };
 
-// ─── Audio recorder hook ──────────────────────────────────────────────────────
+type AudioRecorderState = "idle" | "recording";
 
-type RecState = "idle" | "recording" | "paused";
-
-function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => void) {
-  const [state, setState] = useState<RecState>("idle");
+function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
+  const [state, setState] = useState<AudioRecorderState>("idle");
   const [seconds, setSeconds] = useState(0);
-  const mediaRef = useRef<MediaRecorder | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const canceledRef = useRef(false);
-  const waveformRef = useRef<number[]>([]);
+  const secondsRef = useRef(0);
 
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const stopTimers = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const cleanupStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  }, []);
 
   const start = useCallback(async () => {
+    if (state !== "idle") {
+      return;
+    }
+
     try {
-      canceledRef.current = false;
-      waveformRef.current = Array.from({ length: 28 }, (_, i) => 4 + ((i * 7) % 18));
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const rec = new MediaRecorder(stream);
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
+        typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
+      );
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
       chunksRef.current = [];
-      rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      rec.onstop = () => {
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        if (!canceledRef.current) {
-          const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (typeof reader.result === "string") {
-              onDone(reader.result, fmt(seconds), waveformRef.current.slice());
-            }
-          };
-          reader.readAsDataURL(blob);
-        }
-        stream.getTracks().forEach(t => t.stop());
-        setSeconds(0);
-        setState("idle");
-      };
-      rec.start();
-      mediaRef.current = rec;
-      setState("recording");
+      streamRef.current = stream;
+      recorderRef.current = recorder;
+      secondsRef.current = 0;
       setSeconds(0);
-      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+      setState("recording");
 
-      // update waveform snapshot periodically while recording
-      const wfIv = setInterval(() => {
-        waveformRef.current = waveformRef.current.map(() => 4 + Math.floor(Math.random() * 18));
-      }, 240);
-      // store ref to clear when stopped
-      (timerRef as any).wfIv = wfIv;
-    } catch { alert("Permissão de microfone negada."); }
-  }, [onDone]);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunksRef.current.push(event.data);
+        }
+      };
 
-  const pause = useCallback(() => {
-    if (!mediaRef.current || mediaRef.current.state !== "recording") return;
-    try { mediaRef.current.pause(); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } setState("paused"); } catch {}
-  }, []);
+      recorder.onstop = () => {
+        stopTimers();
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        onStop({
+          blob,
+          durationMs: secondsRef.current * 1000,
+          mimeType: recorder.mimeType || "audio/webm",
+        });
+        chunksRef.current = [];
+        cleanupStream();
+        recorderRef.current = null;
+        setState("idle");
+        setSeconds(0);
+        secondsRef.current = 0;
+      };
 
-  const resume = useCallback(() => {
-    if (!mediaRef.current || mediaRef.current.state !== "paused") return;
-    try { mediaRef.current.resume(); if (!timerRef.current) timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000); setState("recording"); } catch {}
-  }, []);
+      recorder.start();
+      timerRef.current = setInterval(() => {
+        secondsRef.current += 1;
+        setSeconds(secondsRef.current);
+      }, 1000);
+    } catch {
+      stopTimers();
+      cleanupStream();
+      setState("idle");
+      setSeconds(0);
+      secondsRef.current = 0;
+      throw new Error("Permissão de microfone negada.");
+    }
+  }, [cleanupStream, onStop, state, stopTimers]);
 
   const stop = useCallback(() => {
-    if (!mediaRef.current) return;
-    try { mediaRef.current.stop(); } catch { }
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      return;
+    }
+
+    recorder.stop();
   }, []);
 
   const cancel = useCallback(() => {
-    canceledRef.current = true;
-    if (mediaRef.current && (mediaRef.current.state === "recording" || mediaRef.current.state === "paused")) {
-      try { mediaRef.current.stop(); } catch {}
-    }
+    const recorder = recorderRef.current;
+    stopTimers();
     chunksRef.current = [];
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if ((timerRef as any).wfIv) { clearInterval((timerRef as any).wfIv); (timerRef as any).wfIv = null; }
-    setSeconds(0);
+
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      try {
+        recorder.stop();
+      } catch {
+        // Ignore stop races.
+      }
+    }
+
+    cleanupStream();
+    recorderRef.current = null;
     setState("idle");
-  }, []);
+    setSeconds(0);
+    secondsRef.current = 0;
+  }, [cleanupStream, stopTimers]);
 
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); if ((timerRef as any).wfIv) clearInterval((timerRef as any).wfIv); if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop()); }, []);
+  useEffect(() => () => {
+    stopTimers();
+    cleanupStream();
+  }, [cleanupStream, stopTimers]);
 
-  return { state, seconds, fmt, start, pause, resume, stop, cancel };
+  return { state, seconds, start, stop, cancel };
 }
 
-// ─── Message bubble ───────────────────────────────────────────────────────────
-
-function MsgBubble({
-  msg,
-  startReply,
-  reactionPickerFor,
-  setReactionPickerFor,
-  addReaction,
-}: {
-  msg: Exclude<Msg, { type: "date" }>;
-  startReply: (message: Exclude<Msg, { type: "date" }>) => void;
-  reactionPickerFor: string | null;
-  setReactionPickerFor: (id: string | null) => void;
-  addReaction: (messageId: string, emoji: string) => void;
-}) {
+function AudioMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
-  const initials = isRight ? "F" : msg.sender.slice(0, 2).toUpperCase();
-  const color = isRight ? "#8B5CF6" : "#3B82F6";
-
-  const bubble = () => {
-    if (msg.type === "text") return (
-      <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`}>
-        {msg.content}
-      </div>
-    );
-    if (msg.type === "audio") return (
-      <AudioMessageBubble isRight={isRight} msg={msg} />
-    );
-    if (msg.type === "link") return (
-      <div className={`flex flex-col gap-2 rounded-2xl px-4 py-3.5 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ maxWidth: 340 }}>
-        <p className="text-[15px] leading-relaxed text-white">{msg.content}</p>
-        <div className="rounded-xl bg-black/25 px-3 py-2">
-          <p className="text-[11px] text-white/50 mb-0.5">Link:</p>
-          <a href={msg.url} target="_blank" rel="noopener noreferrer"
-            className="break-all text-[12px] text-[#C084FC] underline hover:text-white/80">{msg.url}</a>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="w-9 shrink-0"><Avatar initials={initials} size={34} color={color} /></div>
-      <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
-        {msg.sender === "Você" ? (
-          <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
-        ) : (
-          <Link href={`/users/${encodeURIComponent(msg.sender.replace(/^@/, "").trim())}`} className="px-1 text-[12px] font-semibold text-white/40 transition hover:text-white hover:underline">
-            {msg.sender}
-          </Link>
-        )}
-        {msg.replyTo && (
-          <div className="rounded-2xl border border-white/[0.08] bg-white/5 px-3 py-2.5 text-[13px] text-white/70">
-            {msg.replyTo.sender === "Você" ? (
-              <p className="font-semibold text-white">{msg.replyTo.sender}</p>
-            ) : (
-              <Link href={`/users/${encodeURIComponent(msg.replyTo.sender.replace(/^@/, "").trim())}`} className="font-semibold text-white transition hover:underline">
-                {msg.replyTo.sender}
-              </Link>
-            )}
-            <p className="mt-1 leading-snug line-clamp-2">{msg.replyTo.content}</p>
-          </div>
-        )}
-        {bubble()}
-        <div className={`flex flex-wrap items-center gap-2 px-1 text-[12px] text-white/40 ${isRight ? "flex-row-reverse" : ""}`}>
-          <button type="button" onClick={() => startReply(msg)}
-            className="rounded-full px-2.5 py-1 transition hover:bg-white/10">
-            Responder
-          </button>
-          <button type="button" onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
-            className="rounded-full px-2.5 py-1 transition hover:bg-white/10">
-            Reagir
-          </button>
-          {msg.reaction && (
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[14px]">
-              {msg.reaction}
-            </span>
-          )}
-        </div>
-        {reactionPickerFor === msg.id && (
-          <div className="mt-2 flex flex-wrap gap-2 px-1">
-            {EMOJI_BANK.map(emoji => (
-              <button key={emoji} type="button" onClick={() => addReaction(msg.id, emoji)}
-                className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2.5 text-[20px] transition hover:border-white/20 hover:bg-white/10">
-                {emoji}
-              </button>
-            ))}
-            <button type="button" onClick={() => setReactionPickerFor(null)}
-              className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2.5 text-[15px] text-white/80 transition hover:border-white/20 hover:bg-white/10">
-              Fechar
-            </button>
-          </div>
-        )}
-        <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
-          <span>{msg.time}</span>
-          {isRight && <span className="text-[#C084FC]">{icons.check2()}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AudioMessageBubble({ isRight, msg }: { isRight: boolean; msg: Extract<Msg, { type: "audio" }> }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    const onEnded = () => setPlaying(false);
-    a.addEventListener("ended", onEnded);
-    return () => a.removeEventListener("ended", onEnded);
+    const audio = audioRef.current;
+    if (!audio) {
+      return undefined;
+    }
+
+    const stopPlaying = () => setPlaying(false);
+    audio.addEventListener("ended", stopPlaying);
+    audio.addEventListener("pause", stopPlaying);
+
+    return () => {
+      audio.removeEventListener("ended", stopPlaying);
+      audio.removeEventListener("pause", stopPlaying);
+    };
   }, []);
 
-  const toggle = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (playing) { a.pause(); setPlaying(false); } else { a.play(); setPlaying(true); }
-  };
+  const togglePlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    if (audio.paused) {
+      void audio.play();
+      setPlaying(true);
+      return;
+    }
+
+    audio.pause();
+    setPlaying(false);
+  }, []);
 
   return (
-    <div className={`flex items-center gap-3 rounded-2xl px-4 py-3.5 ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`} style={{ minWidth: 250 }}>
-      <button type="button" aria-label={playing ? "Pause" : "Play"}
-        onClick={toggle}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}>
-        {playing ? icons.x(14) : icons.play()}
-      </button>
-
-      <div className="flex flex-1 flex-col gap-2">
-        <div className="flex items-end">
-          <div className="flex items-end gap-[4px]" style={{ height: 30 }}>
-            {(msg.waveform ?? Array.from({ length: 28 }, () => 6)).map((h, i) => (
-              <span key={i} className="block w-[3px] rounded-full bg-white/80" style={{ height: `${h}px` }} />
-            ))}
+    <div className={`rounded-2xl border px-4 py-3 ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`} style={{ minWidth: "220px", maxWidth: "320px" }}>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label="Reproduzir áudio"
+          onClick={togglePlayback}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}
+        >
+          {playing ? "⏸" : "▶"}
+        </button>
+        <div className="flex-1">
+          <div className="h-2 rounded-full bg-white/10">
+            <div className="h-2 rounded-full bg-white/50" style={{ width: "42%" }} />
+          </div>
+          <div className="mt-1 flex items-center justify-between text-[11px] text-white/65">
+            <span>Áudio</span>
+            <span>{formatDuration(msg.durationMs) || "0:00"}</span>
           </div>
         </div>
+      </div>
+      {msg.mediaUrl && <audio ref={audioRef} src={msg.mediaUrl} className="hidden" controls={false} preload="metadata" />}
+      {msg.pending && <div className="mt-2 text-[11px] text-white/70">enviando...</div>}
+    </div>
+  );
+}
 
-        <div className="flex justify-between text-[11px] text-white/50"><span>{msg.audioUrl ? "" : "0:00"}</span><span>{msg.duration}</span></div>
-        {msg.audioUrl && <audio ref={audioRef} src={msg.audioUrl} className="hidden" />}
+function ImageMessageBubble({ msg }: { msg: Msg }) {
+  const isRight = msg.side === "right";
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={() => setExpanded((value) => !value)}
+      className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`}
+      style={{ maxWidth: "320px" }}
+    >
+      {msg.mediaUrl ? (
+        <img
+          src={msg.mediaUrl}
+          alt="Imagem enviada"
+          className={`block w-full object-cover transition ${expanded ? "max-h-[420px]" : "max-h-[240px]"}`}
+        />
+      ) : (
+        <div className="flex h-[180px] items-center justify-center text-[13px] text-white/50">
+          Imagem indisponível
+        </div>
+      )}
+      <div className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-white/75">
+        <span>Imagem</span>
+        <span>{expanded ? "reduzir" : "ampliar"}</span>
+      </div>
+      {msg.pending && <div className="px-3 pb-3 text-[11px] text-white/70">enviando...</div>}
+    </button>
+  );
+}
+
+function LinkMessageBubble({ msg }: { msg: Msg }) {
+  const isRight = msg.side === "right";
+  const host = msg.linkUrl ? new URL(msg.linkUrl).hostname.replace(/^www\./, "") : "Link";
+  const label = msg.linkLabel || host;
+
+  return (
+    <a
+      href={msg.linkUrl || "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`block overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`}
+      style={{ maxWidth: "320px" }}
+      onClick={(event) => {
+        if (!msg.linkUrl) {
+          event.preventDefault();
+        }
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
+          ↗
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-semibold text-white">{label}</p>
+          <p className="mt-1 truncate text-[12px] text-white/65">{msg.linkUrl || "Link compartilhado"}</p>
+        </div>
+      </div>
+      {msg.pending && <div className="mt-2 text-[11px] text-white/70">enviando...</div>}
+    </a>
+  );
+}
+
+function MessageBubble({ msg }: { msg: Msg }) {
+  const isRight = msg.side === "right";
+  return (
+    <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
+      <div className="w-9 shrink-0">
+        <Avatar name={initials(msg.sender)} size={34} color={isRight ? "#8B5CF6" : "#3B82F6"} />
+      </div>
+      <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
+        <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
+        {msg.kind === "audio" ? (
+          <AudioMessageBubble msg={msg} />
+        ) : msg.kind === "image" ? (
+          <ImageMessageBubble msg={msg} />
+        ) : msg.kind === "link" ? (
+          <LinkMessageBubble msg={msg} />
+        ) : (
+          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`}>
+            {msg.content}
+            {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
+          </div>
+        )}
+        <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
+          <span>{msg.time}</span>
+          {isRight && (
+            <span className="text-[#C084FC]">
+              {msg.readAt ? "✓✓ visto" : "✓✓"}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Waveform visual ────────────────────────────────────────────────────────
-
-function Waveform({ active, paused }: { active?: boolean; paused?: boolean }) {
-  const BAR_COUNT = 28;
-  const [heights, setHeights] = useState<number[]>(() => Array.from({ length: BAR_COUNT }, (_, i) => 4 + ((i * 7) % 18)));
-
-  useEffect(() => {
-    let iv: ReturnType<typeof setInterval> | null = null;
-    if (active && !paused) {
-      iv = setInterval(() => {
-        setHeights(h => h.map(() => 4 + Math.floor(Math.random() * 18)));
-      }, 240);
-    } else if (active && paused) {
-      // lighter subtle movement when paused
-      iv = setInterval(() => {
-        setHeights(h => h.map(() => 6 + Math.floor(Math.random() * 6)));
-      }, 800);
-    } else {
-      setHeights(Array.from({ length: BAR_COUNT }, (_, i) => 4 + ((i * 7) % 18)));
-    }
-    return () => { if (iv) clearInterval(iv); };
-  }, [active, paused]);
-
-  return (
-    <div className="flex items-end gap-[4px]" style={{ height: 26 }}>
-      {heights.map((h, i) => (
-        <span key={i} className="block w-[3px] rounded-full bg-white/80 transition-all" style={{ height: `${h}px` }} />
-      ))}
-    </div>
-  );
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function MessagesPage() {
-  const { user } = useSessionUser();
-  const [convs, setConvs] = useState<Conversation[]>(INIT_CONVS);
-  const [activeId, setActiveId] = useState("joao");
-  const [contactSearch, setContactSearch] = useState("");
-  const [messages, setMessages] = useState<Record<string, Msg[]>>(INIT_MSGS);
-  const [text, setText] = useState("");
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
-  const [typing, setTyping] = useState(false);
-  const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
-  const [calling, setCalling] = useState(false);
-  const [messagesHydrated, setMessagesHydrated] = useState(false);
+function MessagesPageContent() {
+  const { user, status } = useSessionUser();
+  const searchParams = useSearchParams();
+  const socketRef = useRef<Socket | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
+  const typingConversationIdRef = useRef<string | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presenceByUserIdRef = useRef<Record<string, Status>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
+  const openedPeerRef = useRef<string | null>(null);
+  const sidebarSearchRef = useRef<HTMLInputElement | null>(null);
 
-  const activeConv = convs.find(c => c.id === activeId)!;
-  const msgs = messages[activeId] ?? [];
-  const normalizedSearch = contactSearch
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase("pt-BR")
-    .trim();
-  const filteredConvs = convs.filter(conv =>
-    conv.name
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLocaleLowerCase("pt-BR")
-      .includes(normalizedSearch)
-  );
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Msg[]>>({});
+  const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [loadingConversations, setLoadingConversations] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [audioUploading, setAudioUploading] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [linkUploading, setLinkUploading] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [sharedLink, setSharedLink] = useState<{ url: string; label: string } | null>(null);
+  const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
+  const handleAudioRecordingStop = useCallback(async (recording: RecordedAudio) => {
+    if (!activeConversationIdRef.current || !user?.id) {
+      return;
+    }
+
+    const conversationId = activeConversationIdRef.current;
+    const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempUrl = URL.createObjectURL(recording.blob);
+    const optimistic: Msg = {
+      id: clientMessageId,
+      conversationId,
+      side: "right",
+      sender: "Você",
+      kind: "audio",
+      content: "",
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      isoTime: new Date().toISOString(),
+      readAt: null,
+      mediaUrl: tempUrl,
+      durationMs: recording.durationMs,
+      linkUrl: null,
+      linkLabel: null,
+      pending: true,
+      clientMessageId,
+    };
+
+    setAudioUploading(true);
+    setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
+    setConversations((prev) =>
+      sortConversations(
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, lastMessage: "Áudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            : conversation,
+        ),
+      ),
+    );
+
+    try {
+      const formData = new FormData();
+      formData.set("file", recording.blob, `audio-${Date.now()}.webm`);
+      formData.set("clientMessageId", clientMessageId);
+      formData.set("durationMs", String(recording.durationMs));
+
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/audio`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
+      const confirmed = buildMessage(payload.message, user.id);
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      URL.revokeObjectURL(tempUrl);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar o áudio.");
+      URL.revokeObjectURL(tempUrl);
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
+      }));
+    } finally {
+      setAudioUploading(false);
+    }
+  }, [user?.id]);
+  const audioRecorder = useAudioRecorder((recording) => {
+    void handleAudioRecordingStop(recording);
+  });
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(DIRECT_MESSAGES_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Record<string, Msg[]>;
-        setMessages(prev => ({ ...prev, ...parsed }));
+    const shareType = searchParams.get("share")?.trim().toLowerCase() || "";
+    const rawUrl = searchParams.get("url")?.trim() || "";
+    const rawId = searchParams.get("id")?.trim() || "";
+    const rawLabel = searchParams.get("title")?.trim() || searchParams.get("name")?.trim() || "";
+
+    if (!shareType) {
+      return;
+    }
+
+    if (shareType === "cloud" && rawId) {
+      const url = rawUrl || (typeof window !== "undefined" ? `${window.location.origin}/cloud/${rawId}` : `/cloud/${rawId}`);
+      setSharedLink({ url, label: rawLabel || "Cloud compartilhada" });
+      return;
+    }
+
+    if (shareType === "profile" && rawId) {
+      const url = rawUrl || (typeof window !== "undefined" ? `${window.location.origin}/users/${rawId}` : `/users/${rawId}`);
+      setSharedLink({ url, label: rawLabel || "Perfil compartilhado" });
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    setConversationSearch(searchParams.get("q")?.trim() || "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!emojiOpen) {
+        return;
       }
-    } catch {
-      // Ignore malformed local data and continue with the seed conversations.
+
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      const picker = document.querySelector('[data-emoji-picker="true"]');
+      const button = document.querySelector('[data-emoji-toggle="true"]');
+      if (picker?.contains(target) || button?.contains(target)) {
+        return;
+      }
+
+      setEmojiOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setEmojiOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [emojiOpen]);
+
+  const handleImageFile = useCallback(async (file: File | null) => {
+    if (!file || !activeConversationIdRef.current || !user?.id) {
+      return;
+    }
+
+    const conversationId = activeConversationIdRef.current;
+    const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tempUrl = URL.createObjectURL(file);
+    const optimistic: Msg = {
+      id: clientMessageId,
+      conversationId,
+      side: "right",
+      sender: "VocÃª",
+      kind: "image",
+      content: "",
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      isoTime: new Date().toISOString(),
+      readAt: null,
+      mediaUrl: tempUrl,
+      durationMs: null,
+      linkUrl: null,
+      linkLabel: null,
+      pending: true,
+      clientMessageId,
+    };
+
+    setImageUploading(true);
+    setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
+    setConversations((prev) =>
+      sortConversations(
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, lastMessage: "Imagem", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            : conversation,
+        ),
+      ),
+    );
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file, file.name || `image-${Date.now()}.jpg`);
+      formData.set("clientMessageId", clientMessageId);
+
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/image`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
+      const confirmed = buildMessage(payload.message, user.id);
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      URL.revokeObjectURL(tempUrl);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
+      URL.revokeObjectURL(tempUrl);
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
+      }));
     } finally {
-      setMessagesHydrated(true);
+      setImageUploading(false);
+    }
+  }, [user?.id]);
+
+  const triggerImagePicker = useCallback(() => {
+    if (activeConversationId && !imageUploading && audioRecorder.state === "idle") {
+      imageInputRef.current?.click();
+    }
+  }, [activeConversationId, audioRecorder.state, imageUploading]);
+
+  const sendSharedLink = useCallback(async () => {
+    if (!sharedLink || !activeConversationIdRef.current || !user?.id) {
+      return;
+    }
+
+    const conversationId = activeConversationIdRef.current;
+    const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Msg = {
+      id: clientMessageId,
+      conversationId,
+      side: "right",
+      sender: "Você",
+      kind: "link",
+      content: sharedLink.url,
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      isoTime: new Date().toISOString(),
+      readAt: null,
+      mediaUrl: null,
+      durationMs: null,
+      linkUrl: sharedLink.url,
+      linkLabel: sharedLink.label,
+      pending: true,
+      clientMessageId,
+    };
+
+    setLinkUploading(true);
+    setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
+    setConversations((prev) =>
+      sortConversations(
+        prev.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, lastMessage: sharedLink.label, time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            : conversation,
+        ),
+      ),
+    );
+
+    try {
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: sharedLink.url,
+          label: sharedLink.label,
+          clientMessageId,
+        }),
+      });
+
+      const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
+      const confirmed = buildMessage(payload.message, user.id);
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      setSharedLink(null);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível compartilhar o link.");
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
+      }));
+    } finally {
+      setLinkUploading(false);
+    }
+  }, [sharedLink, user?.id]);
+
+  const insertEmoji = useCallback((emoji: string) => {
+    setDraft((current) => `${current}${emoji}`);
+    setEmojiOpen(false);
+  }, []);
+
+  const filteredConversations = useMemo(() => {
+    const query = conversationSearch.trim().toLowerCase();
+    const base = query
+      ? conversations.filter((conversation) =>
+          [conversation.name, conversation.peerUsername].some((value) => value.toLowerCase().includes(query)),
+        )
+      : conversations;
+    return sortConversations(base);
+  }, [conversationSearch, conversations]);
+
+  const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
+  const activeMessages = activeConversationId ? messagesByConversation[activeConversationId] || [] : [];
+  const isActiveConversationTyping = Boolean(activeConversationId && typingByConversation[activeConversationId]);
+  const isAudioBusy = audioUploading || imageUploading || linkUploading || audioRecorder.state !== "idle";
+
+  const loadConversations = useCallback(async () => {
+    setLoadingConversations(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/direct-messages/conversations", { cache: "no-store" });
+      const payload = await readJson<{ ok: true; conversations: BackendConversation[] }>(response);
+      const mapped = payload.conversations.map((conversation) => {
+        const built = buildConversation(conversation);
+        return {
+          ...built,
+          status: presenceByUserIdRef.current[built.peerId] ?? built.status,
+        };
+      });
+      setConversations(mapped);
+      if (!activeConversationIdRef.current && mapped.length > 0) {
+        setActiveConversationId(mapped[0].id);
+      }
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
+    } finally {
+      setLoadingConversations(false);
+    }
+  }, []);
+
+  const loadMessages = useCallback(async (conversationId: string) => {
+    setLoadingMessages(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
+      const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user?.id || "")) }));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as mensagens.");
+    } finally {
+      setLoadingMessages(false);
+    }
+  }, [user?.id]);
+
+  const ensureConversation = useCallback(async (peerUserId: string) => {
+    if (!peerUserId || openedPeerRef.current === peerUserId) return;
+    openedPeerRef.current = peerUserId;
+    try {
+      const response = await fetch("/api/direct-messages/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ peerUserId }),
+      });
+      const payload = await readJson<{ ok: true; conversation: BackendConversation }>(response);
+      const built = buildConversation(payload.conversation);
+      const conversation = {
+        ...built,
+        status: presenceByUserIdRef.current[built.peerId] ?? built.status,
+      };
+      setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
+      setActiveConversationId(conversation.id);
+    } catch (conversationError) {
+      setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
     }
   }, []);
 
   useEffect(() => {
-    if (!messagesHydrated) return;
-    localStorage.setItem(DIRECT_MESSAGES_STORAGE_KEY, JSON.stringify(messages));
-  }, [messages, messagesHydrated]);
-
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs]);
+    if (status !== "authenticated" || !user) return;
+    void loadConversations();
+  }, [loadConversations, status, user]);
 
   useEffect(() => {
-    if (!text.trim()) {
-      setTyping(false);
+    if (status !== "authenticated" || !user) return;
+    const peerUserId = searchParams.get("id")?.trim();
+    if (!peerUserId) return;
+    void ensureConversation(peerUserId);
+  }, [ensureConversation, searchParams, status, user]);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    activeConversationIdRef.current = activeConversationId;
+    void loadMessages(activeConversationId);
+
+    const socket = socketRef.current;
+    if (socket?.connected) {
+      socket.emit("conversation:join", { conversationId: activeConversationId });
+      socket.emit("conversation:read", { conversationId: activeConversationId });
+    }
+  }, [activeConversationId, loadMessages]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !user) return;
+    const socketUrl = resolveSocketUrl();
+    if (!socketUrl) {
+      setConnectionState("disconnected");
       return;
     }
-    setTyping(true);
-    const timer = setTimeout(() => setTyping(false), 1200);
-    return () => clearTimeout(timer);
-  }, [text]);
 
-  const handleSelectEmoji = (emoji: string) => {
-    setText(prev => prev + emoji);
-    setEmojiOpen(false);
-  };
+    const socket = io(`${socketUrl}/direct-messages`, {
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
 
-  const startReply = (message: Exclude<Msg, { type: "date" }>) => {
-    setReplyTo({ id: message.id, sender: message.sender, content: message.type === "audio" ? "Áudio" : message.content });
-    setEmojiOpen(false);
-    setReactionPickerFor(null);
-  };
+    socketRef.current = socket;
+    setConnectionState("connecting");
 
-  const addReaction = (messageId: string, emoji: string) => {
-    setMessages(prev => ({
-      ...prev,
-      [activeId]: prev[activeId].map(msg => msg.id === messageId ? { ...msg, reaction: emoji } : msg),
-    }));
-    setReactionPickerFor(null);
-  };
+    socket.on("connect", () => {
+      setConnectionState("connected");
+      const conversationId = activeConversationIdRef.current;
+      if (conversationId) {
+        socket.emit("conversation:join", { conversationId });
+        socket.emit("conversation:read", { conversationId });
+      }
+    });
 
-  // Send text message
-  const sendText = () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const msg: Msg = {
-      id: uid(),
-      side: "right",
-      type: "text",
-      sender: "Você",
-      content: trimmed,
-      time: now(),
-      replyTo: replyTo ? { id: replyTo.id, sender: replyTo.sender, content: replyTo.content } : undefined,
+    socket.on("disconnect", () => setConnectionState("disconnected"));
+    socket.on("connect_error", () => setConnectionState("disconnected"));
+
+    socket.on("presence:update", (payload: { userId: string; status: "online" | "offline" }) => {
+      presenceByUserIdRef.current = {
+        ...presenceByUserIdRef.current,
+        [payload.userId]: payload.status === "online" ? "online" : "offline",
+      };
+
+      setConversations((prev) =>
+        sortConversations(
+          prev.map((conversation) =>
+            conversation.peerId === payload.userId
+              ? { ...conversation, status: payload.status === "online" ? "online" : "offline" }
+              : conversation,
+          ),
+        ),
+      );
+    });
+
+    socket.on("conversation:typing", (payload: { conversationId: string; userId: string; isTyping: boolean }) => {
+      if (payload.userId === user.id) {
+        return;
+      }
+
+      setTypingByConversation((prev) => ({
+        ...prev,
+        [payload.conversationId]: payload.isTyping,
+      }));
+    });
+
+    socket.on("message:new", (message: BackendMessage) => {
+      const mapped = buildMessage(message, user.id);
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [message.conversationId]: mergeMessage(prev[message.conversationId] || [], mapped),
+      }));
+
+      setConversations((prev) =>
+        sortConversations(
+          prev.map((conversation) =>
+            conversation.id === message.conversationId
+              ? {
+                  ...conversation,
+                  lastMessage: previewForMessage(message) || conversation.lastMessage,
+                  time: timeLabel(message.createdAt),
+                  lastMessageAt: message.createdAt,
+                  unread: message.senderId === user.id ? conversation.unread : conversation.unread + 1,
+                }
+              : conversation,
+          ),
+        ),
+      );
+
+      if (message.conversationId === activeConversationIdRef.current && message.senderId !== user.id) {
+        socket.emit("conversation:read", { conversationId: message.conversationId });
+      }
+    });
+
+    socket.on("conversation:updated", (conversation: BackendConversation) => {
+      const built = buildConversation(conversation);
+      const mapped = {
+        ...built,
+        status: presenceByUserIdRef.current[built.peerId] ?? built.status,
+      };
+      setConversations((prev) =>
+        sortConversations(prev.some((item) => item.id === mapped.id) ? prev.map((item) => (item.id === mapped.id ? mapped : item)) : [mapped, ...prev]),
+      );
+    });
+
+    socket.on("conversation:read", (payload: { conversationId: string; readerId: string; readAt: string }) => {
+      if (payload.readerId === user.id) {
+        return;
+      }
+
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [payload.conversationId]: (prev[payload.conversationId] || []).map((message) =>
+          message.side === "right" && message.isoTime <= payload.readAt
+            ? { ...message, readAt: payload.readAt, pending: false }
+            : message,
+        ),
+      }));
+    });
+
+    return () => {
+      socket.removeAllListeners();
+      socket.disconnect();
+      socketRef.current = null;
     };
-    setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), msg] }));
-    setConvs(prev => prev.map(c => c.id === activeId ? { ...c, lastMessage: trimmed, lastMsgType: "text", time: now() } : c));
-    setText("");
-    setReplyTo(null);
-    setEmojiOpen(false);
-  };
+  }, [status, user]);
 
-  // Send audio message (called by recorder)
-  const sendAudio = useCallback((audioUrl: string, duration: string, waveform?: number[]) => {
-    const msg: Msg = {
-      id: uid(),
-      side: "right",
-      type: "audio",
-      sender: "Você",
-      time: now(),
-      duration,
-      audioUrl,
-      waveform,
-      replyTo: replyTo ? { id: replyTo.id, sender: replyTo.sender, content: replyTo.content } : undefined,
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [activeMessages, activeConversationId]);
+
+  const selectConversation = useCallback((conversationId: string) => {
+    const socket = socketRef.current;
+    const currentConversationId = typingConversationIdRef.current;
+
+    if (socket?.connected && currentConversationId) {
+      socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: false });
+    }
+
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+
+    if (currentConversationId) {
+      setTypingByConversation((prev) => ({
+        ...prev,
+        [currentConversationId]: false,
+      }));
+    }
+
+    typingConversationIdRef.current = null;
+    setDraft("");
+    setEmojiOpen(false);
+    setActiveConversationId(conversationId);
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    const currentConversationId = activeConversationId;
+    const text = draft.trim();
+
+    if (!socket?.connected || !currentConversationId) {
+      return undefined;
+    }
+
+    if (!text) {
+      if (typingConversationIdRef.current === currentConversationId) {
+        socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: false });
+        typingConversationIdRef.current = null;
+      }
+
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+
+      setTypingByConversation((prev) => ({
+        ...prev,
+        [currentConversationId]: false,
+      }));
+
+      return undefined;
+    }
+
+    if (typingConversationIdRef.current !== currentConversationId) {
+      socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: true });
+      typingConversationIdRef.current = currentConversationId;
+      setTypingByConversation((prev) => ({
+        ...prev,
+        [currentConversationId]: true,
+      }));
+    }
+
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+    }
+
+    typingTimerRef.current = setTimeout(() => {
+      const activeSocket = socketRef.current;
+      if (activeSocket?.connected && typingConversationIdRef.current === currentConversationId) {
+        activeSocket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: false });
+        typingConversationIdRef.current = null;
+        setTypingByConversation((prev) => ({
+          ...prev,
+          [currentConversationId]: false,
+        }));
+      }
+    }, 1800);
+
+    return () => {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
     };
-    setMessages(prev => ({ ...prev, [activeId]: [...(prev[activeId] ?? []), msg] }));
-    setConvs(prev => prev.map(c => c.id === activeId ? { ...c, lastMessage: "Áudio gravado", lastMsgType: "audio", time: now() } : c));
-    setReplyTo(null);
-    setEmojiOpen(false);
-  }, [activeId, replyTo]);
+  }, [activeConversationId, draft, connectionState]);
 
-  const recorder = useRecorder(sendAudio);
+  const sendText = useCallback(() => {
+    const socket = socketRef.current;
+    const content = draft.trim();
+    if (!socket || !socket.connected || !activeConversationId || !content) return;
+
+    if (typingTimerRef.current) {
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = null;
+    }
+
+    if (typingConversationIdRef.current === activeConversationId) {
+      socket.emit("conversation:typing", { conversationId: activeConversationId, isTyping: false });
+      typingConversationIdRef.current = null;
+      setTypingByConversation((prev) => ({
+        ...prev,
+        [activeConversationId]: false,
+      }));
+    }
+
+    const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: Msg = {
+      id: clientMessageId,
+      conversationId: activeConversationId,
+      side: "right",
+      sender: "Você",
+      kind: "text",
+      content,
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      isoTime: new Date().toISOString(),
+      readAt: null,
+      mediaUrl: null,
+      durationMs: null,
+      linkUrl: null,
+      linkLabel: null,
+      pending: true,
+      clientMessageId,
+    };
+
+    setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], optimistic) }));
+    setConversations((prev) =>
+      sortConversations(
+        prev.map((conversation) =>
+          conversation.id === activeConversationId
+            ? { ...conversation, lastMessage: content, time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            : conversation,
+        ),
+      ),
+    );
+    setDraft("");
+
+    socket.emit(
+      "message:send",
+      { conversationId: activeConversationId, content, clientMessageId },
+      (ack: SocketAck<BackendMessage>) => {
+        if (!ack.ok) {
+          setError(ack.message);
+          setMessagesByConversation((prev) => ({
+            ...prev,
+            [activeConversationId]: (prev[activeConversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
+          }));
+          return;
+        }
+
+        const confirmed = buildMessage(ack.data, user?.id || "");
+        setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], confirmed) }));
+      },
+    );
+  }, [activeConversationId, draft, user?.id]);
+
+  const startAudioRecording = useCallback(() => {
+    if (!activeConversationId || isAudioBusy) {
+      return;
+    }
+
+    setError(null);
+    void audioRecorder.start().catch((recordingError) => {
+      setError(recordingError instanceof Error ? recordingError.message : "Não foi possível iniciar a gravação.");
+    });
+  }, [activeConversationId, audioRecorder, isAudioBusy]);
+
+  const stopAudioRecording = useCallback(() => {
+    audioRecorder.stop();
+  }, [audioRecorder]);
+
+  const cancelAudioRecording = useCallback(() => {
+    audioRecorder.cancel();
+  }, [audioRecorder]);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendText();
+    }
+  }, [sendText]);
+
+  if (status === "loading") {
+    return <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">Carregando sua sessão...</div>;
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-[#09090B] text-white">
-
-
-      {/* ── HEADER — identical to Home ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-
-          {/* Logo */}
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
           </Link>
-
-          {/* Action icons */}
           <div className="flex items-center gap-3">
-            <button type="button" aria-label="Buscar"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">{icons.search()}</button>
-            <button type="button" aria-label="Notificações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">{icons.bell()}</button>
-            <Link href="/settings" aria-label="Configurações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">{icons.gear()}</Link>
-            <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">⌕</button>
+            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">◌</button>
+            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">⚙</Link>
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* ── Layout below header ── */}
       <div className="flex flex-1 overflow-hidden pt-[88px]">
-
-        {/* Sidebar */}
         <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
           <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
             <span className="text-[17px] font-bold text-white">Mensagens</span>
-            <Link href="/meet" aria-label="Nova conversa"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">
-              {icons.plus(18)}
-            </Link>
+            <Link href="/meet" aria-label="Nova conversa" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">+</Link>
           </div>
 
-          <div className="px-4 py-3">
-            <div className="flex items-center gap-2 rounded-lg bg-white/[0.05] px-3 py-2.5">
-              {icons.search_sm()}
+          <div className="border-b border-white/[0.07] px-5 py-4">
+            <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-4 py-2">
+              <span className="text-[14px] text-white/30">âŒ•</span>
               <input
+                ref={sidebarSearchRef}
                 type="search"
-                value={contactSearch}
-                onChange={e => setContactSearch(e.target.value)}
-                placeholder="Buscar contatos..."
-                aria-label="Buscar contatos"
-                className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                value={conversationSearch}
+                onChange={(event) => setConversationSearch(event.target.value)}
+                placeholder="Buscar..."
+                aria-label="Buscar conversas"
+                className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
               />
+              {conversationSearch.trim() && (
+                <button
+                  type="button"
+                  aria-label="Limpar busca"
+                  onClick={() => {
+                    setConversationSearch("");
+                    sidebarSearchRef.current?.focus();
+                  }}
+                  className="text-[13px] text-white/35 transition hover:text-white/60"
+                >
+                  Ã—
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5">
-            {filteredConvs.map(conv => (
-              <div key={conv.id} role="button" tabIndex={0} onClick={() => setActiveId(conv.id)}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveId(conv.id); } }}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition cursor-pointer ${activeId === conv.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}>
-                <Link href={`/users/${conv.id}`} className="relative shrink-0">
-                  <Avatar initials={conv.avatar} size={44} color={conv.color} />
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conv.status]}`} />
-                </Link>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <Link href={`/users/${conv.id}`} className="truncate text-[14px] font-semibold text-white hover:underline">
-                      {conv.name}
-                    </Link>
-                    <span className="shrink-0 text-[12px] text-white/40">{conv.time}</span>
+          <div className="flex-1 overflow-y-auto px-2 py-1">
+            {loadingConversations && conversations.length === 0 ? (
+              <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando conversas...</div>
+            ) : (
+              filteredConversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  onClick={() => selectConversation(conversation.id)}
+                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                >
+                  <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
+                    <Avatar name={conversation.avatar} size={44} color={conversation.color} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conversation.status]}`} />
+                  </Link>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link href={`/users/${conversation.peerId}`} className="truncate text-[14px] font-semibold text-white hover:underline">{conversation.name}</Link>
+                      <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "Sem mensagens ainda"}</span>
+                      {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
+                    </div>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1.5">
-                    {conv.lastMsgType === "audio" && <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden="true"><path d="M8 10a2 2 0 0 0 2-2V5a2 2 0 1 0-4 0v3a2 2 0 0 0 2 2ZM13 8a5 5 0 0 1-10 0" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-                    <span className="truncate text-[13px] text-white/50">{conv.lastMessage}</span>
-                    {(conv.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conv.unread}</span>}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {filteredConvs.length === 0 && (
-              <p className="px-3 py-6 text-center text-[14px] text-white/40">
-                Nenhum contato encontrado.
-              </p>
+                </button>
+              ))
+            )}
+            {!loadingConversations && filteredConversations.length === 0 && (
+              <p className="px-3 py-6 text-center text-[14px] text-white/40">Nenhum contato encontrado.</p>
             )}
           </div>
 
@@ -593,164 +1340,219 @@ export default function MessagesPage() {
           </div>
         </aside>
 
-        {/* Chat area */}
         <main className="flex flex-1 flex-col overflow-hidden">
-
-          {/* Chat header */}
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#0D0D10] px-6 py-4">
-            <div className="flex items-center gap-3">
-              <Link href={`/users/${activeConv.id}`} className="relative">
-                <Avatar initials={activeConv.avatar} size={44} color={activeConv.color} />
-                <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConv.status]}`} />
-              </Link>
-              <div>
-                <Link href={`/users/${activeConv.id}`} className="text-[16px] font-semibold text-white hover:underline">
-                  {activeConv.name}
+            {activeConversation ? (
+              <div className="flex items-center gap-3">
+                <Link href={`/users/${activeConversation.peerId}`} className="relative">
+                  <Avatar name={activeConversation.avatar} size={44} color={activeConversation.color} />
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConversation.status]}`} />
                 </Link>
-                <p className={`text-[13px] ${activeConv.status === "online" ? "text-[#22C55E]" : activeConv.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
-                  {activeConv.status === "online" ? "online" : activeConv.status === "busy" ? "ocupado" : "offline"}
-                </p>
+                <div>
+                  <Link href={`/users/${activeConversation.peerId}`} className="text-[16px] font-semibold text-white hover:underline">{activeConversation.name}</Link>
+                  <p className={`text-[13px] ${activeConversation.status === "online" ? "text-[#22C55E]" : activeConversation.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
+                    {isActiveConversationTyping
+                      ? "digitando..."
+                      : activeConversation.status === "online"
+                        ? "online"
+                        : activeConversation.status === "busy"
+                          ? "ocupado"
+                          : "offline"}
+                  </p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <p className="text-[16px] font-semibold text-white">Nenhuma conversa selecionada</p>
+                <p className="text-[13px] text-white/40">Abra uma conversa para começar.</p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
-              {/* Call button */}
-              <button type="button" aria-label="Ligar"
-                onClick={() => setCalling(true)}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
-                {icons.phone()}
-              </button>
-              <button type="button" aria-label="Buscar na conversa"
-                className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">
-                {icons.search_sm()}
-              </button>
+              <span className={`rounded-full px-3 py-1 text-[12px] ${connectionState === "connected" ? "bg-[#22C55E]/15 text-[#22C55E]" : connectionState === "connecting" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "bg-white/10 text-white/50"}`}>
+                {connectionState === "connected" ? "tempo real ativo" : connectionState === "connecting" ? "conectando..." : "offline"}
+              </span>
+              <button type="button" aria-label="Buscar na conversa" className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">⌕</button>
             </div>
           </div>
-          {typing && (
-            <div className="border-b border-white/[0.07] bg-[#0D0D10] px-5 py-2 text-[12px] text-[#A78BFA]">
-              Digitando...
-            </div>
-          )}
 
-          {/* Messages list */}
+          {error && <div className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
+
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
-            {msgs.map(msg =>
-              msg.type === "date" ? (
-                <div key={msg.id} className="flex justify-center py-1">
-                  <span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] text-white/40">{msg.label}</span>
+            {!activeConversationId ? (
+              <div className="flex h-full items-center justify-center text-center text-white/40">
+                <div>
+                  <p className="text-[16px] font-semibold text-white/70">Selecione uma conversa</p>
+                  <p className="mt-1 text-[14px]">As mensagens aparecerão aqui.</p>
                 </div>
-              ) : (
-                <MsgBubble
-                  key={msg.id}
-                  msg={msg}
-                  startReply={startReply}
-                  reactionPickerFor={reactionPickerFor}
-                  setReactionPickerFor={setReactionPickerFor}
-                  addReaction={addReaction}
-                />
-              )
+              </div>
+            ) : loadingMessages && activeMessages.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
+            ) : (
+              (() => {
+                const rows: Array<Msg | { id: string; type: "date"; label: string }> = [];
+                let previous = "";
+                for (const message of activeMessages) {
+                  const current = new Date(message.isoTime).toDateString();
+                  if (current !== previous) {
+                    rows.push({ id: `date-${current}`, type: "date", label: dateLabel(message.isoTime) });
+                    previous = current;
+                  }
+                  rows.push(message);
+                }
+                return rows.map((entry) => {
+                  if ("type" in entry && entry.type === "date") {
+                    return (
+                      <div key={entry.id} className="flex justify-center py-1">
+                        <span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] text-white/40">{entry.label}</span>
+                      </div>
+                    );
+                  }
+
+                  return <MessageBubble key={entry.id} msg={entry as Msg} />;
+                });
+              })()
             )}
             <div ref={bottomRef} />
           </div>
 
-          {/* Input bar */}
           <div className="border-t border-white/[0.07] bg-[#0D0D10] px-5 py-4">
-            {emojiOpen && (
-              <div className="mb-3 grid grid-cols-5 gap-2 rounded-3xl bg-[#15161C] p-4">
-                {EMOJI_BANK.map(emoji => (
-                  <button key={emoji} type="button" onClick={() => handleSelectEmoji(emoji)}
-                    className="rounded-2xl border border-white/[0.08] bg-[#0E0F15] px-3 py-2.5 text-[20px] transition hover:border-white/20 hover:bg-white/10">
-                    {emoji}
+            <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-5 py-3">
+              {audioRecorder.state === "recording" ? (
+                <div className="flex items-center gap-3">
+                  <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
+                    ×
                   </button>
-                ))}
-              </div>
-            )}
-            {recorder.state === "recording" || recorder.state === "paused" ? (
-              /* Recording UI with waveform, pause/resume, send, cancel */
-              <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-[#12070f] px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center">
-                    <Waveform active={recorder.state === "recording"} paused={recorder.state === "paused"} />
+                  <div className="flex-1">
+                    <p className="text-[12px] font-semibold text-white">Gravando áudio</p>
+                    <p className="text-[12px] text-white/45">{formatDuration(audioRecorder.seconds * 1000) || "0:00"}</p>
                   </div>
+                  <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
+                    ➤
+                  </button>
                 </div>
-                <div className="flex-1">
-                  <div className="text-[15px] font-mono text-white">{recorder.state === "paused" ? "Pausado" : "Gravando…"} {recorder.fmt(recorder.seconds)}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {recorder.state === "recording" ? (
-                    <button type="button" aria-label="Pausar" onClick={recorder.pause}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">
-                      <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-                    </button>
-                  ) : (
-                    <button type="button" aria-label="Retomar" onClick={recorder.resume}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.play()}</button>
-                  )}
-
-                  <button type="button" aria-label="Enviar" onClick={recorder.stop}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">{icons.send()}</button>
-
-                  <button type="button" aria-label="Cancelar" onClick={recorder.cancel}
-                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white/6 text-white hover:bg-white/10 transition">{icons.x(18)}</button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-5 py-3">
-                {replyTo && (
-                  <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/5 px-4 py-2.5 text-[13px] text-white/80">
-                    <div>
-                      <p className="font-semibold">Respondendo a {replyTo.sender}</p>
-                      <p className="text-white/50 line-clamp-1">{replyTo.content}</p>
+              ) : (
+                <>
+                  {sharedLink && (
+                    <div className="flex items-center justify-between gap-3 rounded-[28px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-[0.22em] text-cyan-200/80">Link pronto para enviar</p>
+                        <p className="truncate text-[14px] font-semibold text-white">{sharedLink.label}</p>
+                        <p className="truncate text-[12px] text-white/45">{sharedLink.url}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSharedLink(null)}
+                          className="rounded-full border border-white/10 px-3 py-2 text-[12px] text-white/70 transition hover:bg-white/[0.05] hover:text-white"
+                        >
+                          Remover
+                        </button>
+                        <button
+                          type="button"
+                          onClick={sendSharedLink}
+                          disabled={!activeConversationId || linkUploading || isAudioBusy}
+                          className="rounded-full bg-cyan-500 px-4 py-2 text-[12px] font-semibold text-[#04111F] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {linkUploading ? "Enviando..." : "Enviar link"}
+                        </button>
+                      </div>
                     </div>
-                    <button type="button" onClick={() => setReplyTo(null)} className="text-white/40 hover:text-white">✕</button>
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <button type="button" aria-label="Emoji" onClick={() => { setEmojiOpen(o => !o); setReactionPickerFor(null); }}
-                    className="text-white/40 hover:text-white/70 transition">{icons.emoji()}</button>
-                  <input
-                    type="text"
-                    value={text}
-                    onChange={e => setText(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendText())}
-                    placeholder="Mensagem..."
-                    className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none"
-                  />
-                  {text.trim() ? (
-                    <button type="button" aria-label="Enviar" onClick={sendText}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">
-                      {icons.send()}
-                    </button>
-                  ) : (
-                    <button type="button" aria-label="Gravar áudio" onClick={recorder.start}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/10 text-white/60 hover:text-white hover:border-[#7C3AED] transition">
-                      {icons.mic()}
-                    </button>
                   )}
-                </div>
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-
-      {/* ── Call overlay ── */}
-      {calling && (
-
-
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-md">
-          <div className="flex flex-col items-center gap-6 rounded-3xl border border-white/10 bg-[#1C1F2E] px-12 py-10">
-            <Avatar initials={activeConv.avatar} size={80} color={activeConv.color} />
-            <div className="text-center">
-              <p className="text-[22px] font-bold text-white">{activeConv.name}</p>
-              <p className="mt-1 text-[14px] text-white/50 animate-pulse">Chamando…</p>
+                  <div className="relative flex items-center gap-3">
+                    {emojiOpen && (
+                      <div data-emoji-picker="true" className="absolute bottom-[calc(100%+12px)] left-0 z-20 grid w-[260px] grid-cols-5 gap-2 rounded-[24px] border border-white/10 bg-[#11141F] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                        {EMOJI_BANK.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => insertEmoji(emoji)}
+                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-[20px] transition hover:bg-white/[0.07]"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      aria-label="Abrir emojis"
+                      data-emoji-toggle="true"
+                      onClick={() => setEmojiOpen((current) => !current)}
+                      disabled={!activeConversationId || isAudioBusy}
+                      className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      😀
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Adicionar imagem"
+                      onClick={triggerImagePicker}
+                      disabled={!activeConversationId || isAudioBusy}
+                      className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                    <input
+                      type="text"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={activeConversationId ? "Mensagem..." : "Selecione uma conversa para começar"}
+                      disabled={!activeConversationId || isAudioBusy}
+                      className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                    {draft.trim() ? (
+                      <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
+                        ➤
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="Gravar áudio"
+                        onClick={startAudioRecording}
+                        disabled={!activeConversationId || isAudioBusy}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1C1F2E] text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        ◉
+                      </button>
+                    )}
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        event.currentTarget.value = "";
+                        void handleImageFile(file);
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-white/35">
+                    {audioUploading || imageUploading
+                      ? "Enviando mídia..."
+                      : "Texto em tempo real via NestJS + Socket.IO. Áudio e imagens já funcionam em tempo real também."}
+                  </p>
+                </>
+              )}
             </div>
-            <button type="button" aria-label="Encerrar chamada" onClick={() => setCalling(false)}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700 transition">
-              {icons.phone()}
-            </button>
-          </div>
+          </div>        </main>
+      </div>
+    </div>
+  );
+}
+
+export default function MessagesPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">
+          Carregando mensagens...
         </div>
       )}
-    </div>
+    >
+      <MessagesPageContent />
+    </Suspense>
   );
 }

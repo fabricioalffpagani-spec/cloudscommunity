@@ -6,10 +6,13 @@ import { HealthController } from './health/health.controller';
 import { HealthService } from './health/health.service';
 import { AuthModule } from './auth/auth.module';
 import { CloudModule } from './clouds/cloud.module';
+import { DirectMessagesModule } from './direct-messages/direct-messages.module';
+import { ChatPresenceModule } from './infrastructure/chat-presence/chat-presence.module';
+import { SocketIoRedisModule } from './infrastructure/socket-io-redis/socket-io-redis.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, CloudModule, UsersModule],
+  imports: [PrismaModule, AuthModule, CloudModule, UsersModule, SocketIoRedisModule, ChatPresenceModule, DirectMessagesModule],
   controllers: [AppController, HealthController],
   providers: [AppService, HealthService],
 })

@@ -4,9 +4,9 @@ import CloudChat from "./CloudChat";
 import CloudActions from "./CloudActions";
 
 type CloudPageProps = {
-  params?: {
+  params?: Promise<{
     id?: string;
-  };
+  }>;
 };
 
 function formatCloudTitle(id?: string) {
@@ -58,9 +58,10 @@ async function getSiteOrigin() {
 }
 
 export default async function CloudPage({ params }: CloudPageProps) {
-  const title = formatCloudTitle(params?.id);
+  const resolvedParams = (await params) ?? {};
+  const title = formatCloudTitle(resolvedParams.id);
   const siteOrigin = await getSiteOrigin();
-  const shareTarget = `${siteOrigin}/cloud/${params?.id ?? ""}`;
+  const shareTarget = `${siteOrigin}/cloud/${resolvedParams.id ?? ""}`;
 
   return (
     <main className="min-h-screen bg-[#040510] text-white">
@@ -85,6 +86,20 @@ export default async function CloudPage({ params }: CloudPageProps) {
               <PaperPlaneIcon />
               Compartilhar
             </a>
+            <Link
+              href={{
+                pathname: "/messages",
+                query: {
+                  share: "cloud",
+                  id: resolvedParams.id ?? "",
+                  title,
+                  url: shareTarget,
+                },
+              }}
+              className="inline-flex items-center gap-2 rounded-3xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Mensagens
+            </Link>
           </div>
         </div>
 
@@ -103,7 +118,7 @@ export default async function CloudPage({ params }: CloudPageProps) {
               <CloudActions />
             </div>
             <div className="flex-1 overflow-hidden">
-              <CloudChat cloudId={params?.id ?? "unknown"} />
+              <CloudChat cloudId={resolvedParams.id ?? "unknown"} />
             </div>
           </div>
         </div>

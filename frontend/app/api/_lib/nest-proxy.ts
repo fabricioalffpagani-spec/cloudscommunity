@@ -78,14 +78,18 @@ async function responseToNextResponse(response: Response) {
   return nextResponse;
 }
 
-export async function proxyJsonRequest(req: Request, pathname: string) {
+export async function proxyRequest(req: Request, pathname: string) {
   const method = req.method.toUpperCase();
   const backendResponse = await fetch(buildBackendUrl(pathname), {
     method,
     headers: copyRequestHeaders(req.headers),
-    body: method === "GET" || method === "HEAD" ? undefined : await req.text(),
+    body: method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer(),
     cache: "no-store",
   });
 
   return responseToNextResponse(backendResponse);
+}
+
+export async function proxyJsonRequest(req: Request, pathname: string) {
+  return proxyRequest(req, pathname);
 }

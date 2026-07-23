@@ -189,20 +189,27 @@ model CloudMessage {
 
 model Conversation {
   id                      String   @id @default(uuid()) @db.Uuid
+  conversationKey         String   @unique @db.VarChar(100)
   participantOneId        String   @db.Uuid
   participantTwoId        String   @db.Uuid
+  lastMessageId           String?  @unique @db.Uuid
+  lastMessageType         MessageType?
   lastMessageAt           DateTime?
   lastMessagePreview      String?  @db.VarChar(255)
+  participantOneLastReadAt DateTime?
+  participantTwoLastReadAt DateTime?
+  participantOneUnreadCount Int     @default(0)
+  participantTwoUnreadCount Int     @default(0)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   deletedAt               DateTime?
 
   participantOne          User          @relation("ConversationParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
   participantTwo          User          @relation("ConversationParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
+  lastMessage             DirectMessage? @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
   messages                DirectMessage[]
   members                 ConversationMember[]
 
-  @@unique([participantOneId, participantTwoId])
   @@index([participantOneId])
   @@index([participantTwoId])
   @@index([lastMessageAt])
@@ -258,41 +265,51 @@ model Notification {
 }
 
 model MediaAsset {
-  id          String   @id @default(uuid()) @db.Uuid
-  ownerId     String   @db.Uuid
-  url         String   @db.Text
-  mimeType    String   @db.VarChar(120)
-  sizeBytes   BigInt   @db.BigInt
-  storageKey  String   @unique @db.VarChar(255)
-  createdAt   DateTime @default(now())
+  id              String   @id @default(uuid()) @db.Uuid
+  ownerId         String   @db.Uuid
+  url             String   @db.Text
+  mimeType        String   @db.VarChar(120)
+  sizeBytes       BigInt   @db.BigInt
+  storageKey      String   @unique @db.VarChar(255)
+  originalFileName String?  @db.VarChar(255)
+  width           Int?
+  height          Int?
+  durationMs      Int?
+  createdAt       DateTime @default(now())
 
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  directMessages  DirectMessage[]
 
   @@index([ownerId, createdAt])
   @@index([mimeType])
 }
 
 model DirectMessage {
-  id               String        @id @default(uuid()) @db.Uuid
-  conversationId   String        @db.Uuid
-  senderId         String        @db.Uuid
-  type             MessageType   @default(text)
-  content          String?       @db.Text
-  mediaUrl         String?       @db.Text
-  replyToMessageId String?       @db.Uuid
+  id               String         @id @default(uuid()) @db.Uuid
+  conversationId   String         @db.Uuid
+  senderId         String         @db.Uuid
+  type             MessageType    @default(text)
+  content          String?        @db.Text
+  mediaAssetId     String?        @db.Uuid
+  clientMessageId  String?        @db.VarChar(80)
+  replyToMessageId String?        @db.Uuid
   readAt           DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   deletedAt        DateTime?
 
-  conversation     Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender           User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  replyToMessage   DirectMessage?  @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  conversation     Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender           User           @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  mediaAsset       MediaAsset?    @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  replyToMessage   DirectMessage? @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
   replies          DirectMessage[] @relation("DirectMessageReplies")
+  lastMessageOfConversation Conversation? @relation("ConversationLastMessage")
 
   @@index([conversationId, createdAt])
   @@index([senderId])
   @@index([replyToMessageId])
+  @@index([mediaAssetId])
+  @@unique([conversationId, clientMessageId])
 }
 
 model Session {
