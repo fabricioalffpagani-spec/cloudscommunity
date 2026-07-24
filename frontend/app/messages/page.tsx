@@ -65,6 +65,15 @@ type Conversation = {
   time: string;
   unread: number;
   lastMessageAt: string | null;
+  isPending?: boolean;
+};
+
+type PublicUserProfile = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isPrivate: boolean;
 };
 
 type Msg = {
@@ -573,6 +582,8 @@ function MessagesPageContent() {
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
+  const [followedUsers, setFollowedUsers] = useState<PublicUserProfile[]>([]);
+  const [loadingFollowed, setLoadingFollowed] = useState(false);
   const handleAudioRecordingStop = useCallback(async (recording: RecordedAudio) => {
     if (!activeConversationIdRef.current || !user?.id) {
       return;
@@ -842,13 +853,22 @@ function MessagesPageContent() {
 
   const filteredConversations = useMemo(() => {
     const query = conversationSearch.trim().toLowerCase();
-    const base = query
+    
+    const matchedConversations = query
       ? conversations.filter((conversation) =>
           [conversation.name, conversation.peerUsername].some((value) => value.toLowerCase().includes(query)),
         )
       : conversations;
-    return sortConversations(base);
-  }, [conversationSearch, conversations]);
+    
+    const matchedFollowedUsers = query
+      ? followedUsers.filter((user) =>
+          [user.displayName, user.username].some((value) => value.toLowerCase().includes(query)) &&
+          !conversations.some((c) => c.peerId === user.id)
+        )
+      : [];
+    
+    return [...sortConversations(matchedConversations), ...matchedFollowedUsers];
+  }, [conversationSearch, conversations, followedUsers]);
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
   const activeMessages = activeConversationId ? messagesByConversation[activeConversationId] || [] : [];
@@ -878,6 +898,20 @@ function MessagesPageContent() {
       setLoadingConversations(false);
     }
   }, []);
+
+  const loadFollowedUsers = useCallback(async () => {
+    setLoadingFollowed(true);
+    try {
+      const response = await fetch("/api/users/following", { cache: "no-store" });
+      const payload = await readJson<{ ok: true; users: PublicUserProfile[] }>(response);
+      // Exclude current user
+      setFollowedUsers(payload.users.filter(u => u.id !== user?.id));
+    } catch {
+      setFollowedUsers([]);
+    } finally {
+      setLoadingFollowed(false);
+    }
+  }, [user?.id]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoadingMessages(true);
@@ -1268,7 +1302,17 @@ function MessagesPageContent() {
         <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
           <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
             <span className="text-[17px] font-bold text-white">Mensagens</span>
-            <Link href="/meet" aria-label="Nova conversa" className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10">+</Link>
+            <button
+              type="button"
+              aria-label="Nova conversa"
+              onClick={() => {
+                sidebarSearchRef.current?.focus();
+                setConversationSearch("");
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition"
+            >
+              +
+            </button>
           </div>
 
           <div className="border-b border-white/[0.07] px-5 py-4">
@@ -1303,29 +1347,62 @@ function MessagesPageContent() {
             {loadingConversations && conversations.length === 0 ? (
               <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando conversas...</div>
             ) : (
-              filteredConversations.map((conversation) => (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  onClick={() => selectConversation(conversation.id)}
-                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
-                >
-                  <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
-                    <Avatar name={conversation.avatar} size={44} color={conversation.color} />
-                    <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conversation.status]}`} />
-                  </Link>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <Link href={`/users/${conversation.peerId}`} className="truncate text-[14px] font-semibold text-white hover:underline">{conversation.name}</Link>
-                      <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
-                    </div>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "Sem mensagens ainda"}</span>
-                      {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
-                    </div>
-                  </div>
-                </button>
-              ))
+              filteredConversations.map((item) => {
+                const isConversation = "lastMessageAt" in item;
+                
+                if (isConversation) {
+                  const conversation = item as Conversation;
+                  return (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => selectConversation(conversation.id)}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                    >
+                      <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
+                        <Avatar name={conversation.avatar} size={44} color={conversation.color} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conversation.status]}`} />
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <Link href={`/users/${conversation.peerId}`} className="truncate text-[14px] font-semibold text-white hover:underline">{conversation.name}</Link>
+                          <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "Sem mensagens ainda"}</span>
+                          {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                } else {
+                  const followedUser = item as PublicUserProfile;
+                  return (
+                    <button
+                      key={followedUser.id}
+                      type="button"
+                      onClick={() => {
+                        ensureConversation(followedUser.id);
+                      }}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === followedUser.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                    >
+                      <Link href={`/users/${followedUser.id}`} className="relative shrink-0">
+                        <Avatar name={initials(followedUser.displayName || followedUser.username)} size={44} color={avatarColor(followedUser.id)} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <Link href={`/users/${followedUser.id}`} className="truncate text-[14px] font-semibold text-white hover:underline">{followedUser.displayName || followedUser.username}</Link>
+                          <span className="shrink-0 text-[11px] font-medium text-[#7C3AED]">Nova conversa</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <span className="truncate text-[13px] text-white/50">Nenhuma mensagem ainda</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                }
+              })
             )}
             {!loadingConversations && filteredConversations.length === 0 && (
               <p className="px-3 py-6 text-center text-[14px] text-white/40">Nenhum contato encontrado.</p>

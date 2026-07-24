@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -9,7 +9,6 @@ COPY prisma.config.ts ./
 COPY prisma ./prisma
 
 RUN npm install
-RUN npx prisma generate
 
 COPY . .
 
