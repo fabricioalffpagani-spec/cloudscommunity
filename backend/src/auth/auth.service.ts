@@ -83,14 +83,19 @@ export class AuthService {
 
     validatePassword(password);
 
-    const [existingEmail, existingUsername] = await Promise.all([
-      this.prisma.user.findUnique({ where: { email }, select: { id: true } }),
-      this.prisma.profile.findUnique({ where: { username }, select: { userId: true } }),
-    ]);
+    const existingEmail = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
 
     if (existingEmail) {
       makeAuthConflict({ email: 'Este email já está em uso.' }, 'Email já cadastrado.');
     }
+
+    const existingUsername = await this.prisma.profile.findUnique({
+      where: { username },
+      select: { userId: true },
+    });
 
     if (existingUsername) {
       makeAuthConflict({ username: 'Este nome de usuário já está em uso.' }, 'Username já cadastrado.');
@@ -169,22 +174,23 @@ export class AuthService {
 
     const normalizedEmail = normalizeEmail(identifier);
     const normalizedUsername = normalizeUsername(identifier);
-    const [userByEmail, profileByUsername] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        include: { profile: true },
-      }),
-      this.prisma.profile.findUnique({
-        where: { username: normalizedUsername },
-        include: {
-          user: {
-            include: {
-              profile: true,
+    const userByEmail = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: { profile: true },
+    });
+
+    const profileByUsername = userByEmail
+      ? null
+      : await this.prisma.profile.findUnique({
+          where: { username: normalizedUsername },
+          include: {
+            user: {
+              include: {
+                profile: true,
+              },
             },
           },
-        },
-      }),
-    ]);
+        });
 
     const user = userByEmail ?? profileByUsername?.user ?? null;
 

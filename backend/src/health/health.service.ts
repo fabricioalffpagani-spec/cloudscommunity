@@ -19,10 +19,8 @@ export class HealthService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getReport(): Promise<HealthReport> {
-    const [postgres, redis] = await Promise.all([
-      this.checkPostgres(),
-      this.checkRedis(),
-    ]);
+    const postgres = await this.checkPostgres();
+    const redis = await this.checkRedis();
 
     return {
       healthy: postgres.healthy && redis.healthy,

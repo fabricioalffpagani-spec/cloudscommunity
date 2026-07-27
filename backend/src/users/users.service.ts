@@ -188,12 +188,17 @@ export class UsersService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const users = await Promise.all(
-      following
-        .map((entry) => entry.following)
-        .filter((user) => Boolean(user.profile) && user.status === UserStatus.active && user.deletedAt === null)
-        .map((user) => this.mapPublicProfile(user, current.user.id)),
-    );
+    const users: PublicUserProfilePayload[] = [];
+
+    for (const entry of following) {
+      const user = entry.following;
+
+      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+        continue;
+      }
+
+      users.push(await this.mapPublicProfile(user, current.user.id));
+    }
 
     return {
       ok: true,
@@ -292,21 +297,21 @@ export class UsersService {
       throw new Error('User profile is required.');
     }
 
-    const [followersCount, followingCount, cloudsCount, hypesCount, isFollowing] = await Promise.all([
-      this.prisma.follow.count({ where: { followingId: user.id } }),
-      this.prisma.follow.count({ where: { followerId: user.id } }),
-      this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } }),
-      this.prisma.cloudHype.count({ where: { userId: user.id } }),
-      currentUserId
-        ? this.prisma.follow.findFirst({
-          where: {
-            followerId: currentUserId,
-            followingId: user.id,
-          },
-          select: { followerId: true },
-        }).then(Boolean)
-        : Promise.resolve(false),
-    ]);
+    const followersCount = await this.prisma.follow.count({ where: { followingId: user.id } });
+    const followingCount = await this.prisma.follow.count({ where: { followerId: user.id } });
+    const cloudsCount = await this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } });
+    const hypesCount = await this.prisma.cloudHype.count({ where: { userId: user.id } });
+    const isFollowing = currentUserId
+      ? Boolean(
+          await this.prisma.follow.findFirst({
+            where: {
+              followerId: currentUserId,
+              followingId: user.id,
+            },
+            select: { followerId: true },
+          }),
+        )
+      : false;
 
     const activeClouds = await this.prisma.cloud.findMany({
       where: {

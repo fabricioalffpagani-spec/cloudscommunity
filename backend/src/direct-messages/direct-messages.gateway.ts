@@ -122,7 +122,12 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     @MessageBody() body: { conversationId?: string },
     @ConnectedSocket() socket: Socket,
   ) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      return { ok: false as const, message: 'Socket não autenticado.' };
+    }
+
     const conversationId = body?.conversationId?.trim();
 
     if (!conversationId) {
@@ -158,7 +163,12 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     @MessageBody() body: { conversationId?: string; isTyping?: boolean },
     @ConnectedSocket() socket: Socket,
   ) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      return { ok: false as const, message: 'Socket não autenticado.' };
+    }
+
     const conversationId = body?.conversationId?.trim();
     const isTyping = Boolean(body?.isTyping);
 
@@ -190,7 +200,13 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     @ConnectedSocket() socket: Socket,
     ack?: (payload: AckResult<unknown>) => void,
   ) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      const payload = { ok: false as const, message: 'Socket não autenticado.' };
+      ack?.(payload);
+      return payload;
+    }
 
     try {
       const message = await this.directMessagesService.sendTextMessage(userId, body);
@@ -213,7 +229,12 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     @MessageBody() body: { conversationId?: string },
     @ConnectedSocket() socket: Socket,
   ) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      return { ok: false as const, message: 'Socket não autenticado.' };
+    }
+
     const conversationId = body?.conversationId?.trim();
 
     if (!conversationId) {
@@ -279,7 +300,12 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
   }
 
   private registerTypingTimer(socket: Socket, conversationId: string) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      return;
+    }
+
     const key = this.typingKey(conversationId, userId);
     const existing = this.typingTimers.get(key);
 
@@ -299,7 +325,12 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
   }
 
   private async stopTyping(socket: Socket, conversationId: string) {
-    const userId = this.requireUserId(socket);
+    const userId = this.getUserId(socket);
+
+    if (!userId) {
+      return;
+    }
+
     const key = this.typingKey(conversationId, userId);
     const existing = this.typingTimers.get(key);
 
@@ -336,14 +367,8 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     this.server.to(this.userRoom(peerId)).emit('conversation:typing', payload);
   }
 
-  private requireUserId(socket: Socket): string {
-    const userId = (socket.data as ChatSocketData).userId;
-
-    if (!userId) {
-      throw new Error('Socket não autenticado.');
-    }
-
-    return userId;
+  private getUserId(socket: Socket): string | null {
+    return (socket.data as ChatSocketData).userId ?? null;
   }
 
   private conversationRoom(conversationId: string): string {

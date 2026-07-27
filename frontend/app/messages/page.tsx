@@ -113,6 +113,29 @@ function initials(name: string) {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
+function normalizeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesContactQuery(user: PublicUserProfile, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const normalizedQuery = normalizeText(query.replace(/^@+/, ""));
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const displayName = normalizeText(user.displayName);
+  const username = normalizeText(user.username);
+  return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
+}
+
 function hashString(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
@@ -852,22 +875,12 @@ function MessagesPageContent() {
   }, []);
 
   const filteredConversations = useMemo(() => {
-    const query = conversationSearch.trim().toLowerCase();
-    
-    const matchedConversations = query
-      ? conversations.filter((conversation) =>
-          [conversation.name, conversation.peerUsername].some((value) => value.toLowerCase().includes(query)),
-        )
-      : conversations;
-    
-    const matchedFollowedUsers = query
-      ? followedUsers.filter((user) =>
-          [user.displayName, user.username].some((value) => value.toLowerCase().includes(query)) &&
-          !conversations.some((c) => c.peerId === user.id)
-        )
-      : [];
-    
-    return [...sortConversations(matchedConversations), ...matchedFollowedUsers];
+    const query = normalizeText(conversationSearch);
+    const conversationByPeerId = new Map(conversations.map((conversation) => [conversation.peerId, conversation]));
+
+    return followedUsers
+      .filter((followedUser) => matchesContactQuery(followedUser, query))
+      .map((followedUser) => conversationByPeerId.get(followedUser.id) ?? followedUser);
   }, [conversationSearch, conversations, followedUsers]);
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
@@ -901,12 +914,14 @@ function MessagesPageContent() {
 
   const loadFollowedUsers = useCallback(async () => {
     setLoadingFollowed(true);
+    setError(null);
     try {
       const response = await fetch("/api/users/following", { cache: "no-store" });
       const payload = await readJson<{ ok: true; users: PublicUserProfile[] }>(response);
       // Exclude current user
       setFollowedUsers(payload.users.filter(u => u.id !== user?.id));
-    } catch {
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar os contatos seguidos.");
       setFollowedUsers([]);
     } finally {
       setLoadingFollowed(false);
@@ -953,6 +968,11 @@ function MessagesPageContent() {
     if (status !== "authenticated" || !user) return;
     void loadConversations();
   }, [loadConversations, status, user]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !user) return;
+    void loadFollowedUsers();
+  }, [loadFollowedUsers, status, user]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
@@ -1344,8 +1364,8 @@ function MessagesPageContent() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-2 py-1">
-            {loadingConversations && conversations.length === 0 ? (
-              <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando conversas...</div>
+            {loadingFollowed && followedUsers.length === 0 ? (
+              <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando contatos seguidos...</div>
             ) : (
               filteredConversations.map((item) => {
                 const isConversation = "lastMessageAt" in item;
@@ -1384,7 +1404,7 @@ function MessagesPageContent() {
                       onClick={() => {
                         ensureConversation(followedUser.id);
                       }}
-                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === followedUser.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversation?.peerId === followedUser.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
                     >
                       <Link href={`/users/${followedUser.id}`} className="relative shrink-0">
                         <Avatar name={initials(followedUser.displayName || followedUser.username)} size={44} color={avatarColor(followedUser.id)} />
@@ -1404,8 +1424,12 @@ function MessagesPageContent() {
                 }
               })
             )}
-            {!loadingConversations && filteredConversations.length === 0 && (
-              <p className="px-3 py-6 text-center text-[14px] text-white/40">Nenhum contato encontrado.</p>
+            {!loadingFollowed && filteredConversations.length === 0 && (
+              <p className="px-3 py-6 text-center text-[14px] text-white/40">
+                {conversationSearch.trim()
+                  ? "Nenhum resultado entre quem você segue."
+                  : "Você ainda não segue ninguém."}
+              </p>
             )}
           </div>
 
