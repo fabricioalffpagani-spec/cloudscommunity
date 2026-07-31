@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -105,23 +105,70 @@ function hashString(value: string) {
   return hash;
 }
 
-export function getSessionUserDisplayName(user: SessionUser | null | undefined) {
-  return user?.displayName?.trim() || user?.name?.trim() || "Você";
+export function getSessionUserDisplayName(user: AvatarUser) {
+  return user?.displayName?.trim() || user?.username?.trim() || "Você";
 }
 
-export function getSessionUserHandle(user: SessionUser | null | undefined) {
+export function getSessionUserHandle(user: AvatarUser) {
   return user?.username ? `@${user.username}` : "@voce";
 }
 
-export function getSessionUserInitial(user: SessionUser | null | undefined) {
+export function getSessionUserInitial(user: AvatarUser) {
   const value = getSessionUserDisplayName(user);
   return value.trim().charAt(0).toUpperCase() || "C";
 }
 
-export function getSessionUserColor(user: SessionUser | null | undefined) {
+export function getSessionUserColor(user: AvatarUser) {
   const palette = ["#7C3AED", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
   const source = user?.id ?? user?.username ?? "clouds";
   return palette[hashString(source) % palette.length];
+}
+
+type AvatarUser = Pick<SessionUser, "id" | "username" | "displayName" | "avatarUrl"> | null | undefined;
+
+export function UserAvatar({
+  user,
+  size = 48,
+  className = "",
+}: {
+  user: AvatarUser;
+  size?: number;
+  className?: string;
+}) {
+  const initial = getSessionUserInitial(user);
+  const backgroundColor = getSessionUserColor(user);
+  const [imageError, setImageError] = useState(false);
+  const hasAvatar = Boolean(user?.avatarUrl) && !imageError;
+
+  useEffect(() => {
+    setImageError(false);
+  }, [user?.avatarUrl]);
+
+  if (hasAvatar) {
+    return (
+      <div
+        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={user?.avatarUrl || ""}
+          alt={getSessionUserDisplayName(user)}
+          referrerPolicy="no-referrer"
+          className="h-full w-full rounded-full object-cover"
+          onError={() => setImageError(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
+      style={{ width: size, height: size, backgroundColor, fontSize: Math.max(14, size * 0.4) }}
+    >
+      {initial}
+    </div>
+  );
 }
 
 export function SessionUserAvatar({
@@ -133,17 +180,7 @@ export function SessionUserAvatar({
   size?: number;
   className?: string;
 }) {
-  const initial = getSessionUserInitial(user);
-  const backgroundColor = getSessionUserColor(user);
-
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
-      style={{ width: size, height: size, backgroundColor, fontSize: Math.max(14, size * 0.4) }}
-    >
-      {initial}
-    </div>
-  );
+  return <UserAvatar user={user} size={size} className={className} />;
 }
 
 export function SessionUserLink({
@@ -173,3 +210,4 @@ export function SessionUserLink({
     </Link>
   );
 }
+

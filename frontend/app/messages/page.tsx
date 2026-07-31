@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { HeaderBrand } from "../components/HeaderBrand";
-import { SessionUserAvatar, useSessionUser } from "../components/session-user";
+import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
+import { BellIcon, CheckIcon, GearIcon, MicIcon, PlusIcon, SearchIcon, SendIcon } from "../components/ui-icons";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -59,8 +60,7 @@ type Conversation = {
   peerUsername: string;
   name: string;
   status: Status;
-  avatar: string;
-  color: string;
+  avatarUrl: string | null;
   lastMessage: string;
   time: string;
   unread: number;
@@ -79,8 +79,11 @@ type PublicUserProfile = {
 type Msg = {
   id: string;
   conversationId: string;
+  senderId: string;
   side: "left" | "right";
   sender: string;
+  senderDisplayName: string;
+  senderAvatarUrl: string | null;
   kind: MessageKind;
   content: string;
   time: string;
@@ -98,7 +101,7 @@ type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
 const MESSAGE_LIMIT = 50;
-const EMOJI_BANK = ["😀", "🔥", "❤️", "😂", "🙌", "🎉", "💬", "👍", "👀", "✨"];
+const EMOJI_BANK = ["ðŸ˜€", "ðŸ”¥", "â¤ï¸", "ðŸ˜‚", "ðŸ™Œ", "ðŸŽ‰", "ðŸ’¬", "ðŸ‘", "ðŸ‘€", "âœ¨"];
 
 const statusDot: Record<Status, string> = {
   online: "bg-[#22C55E]",
@@ -172,7 +175,7 @@ function formatDuration(durationMs: number | null) {
 function previewForMessage(message: BackendMessage) {
   if (message.type === "audio") {
     const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
-    return duration ? `Áudio · ${duration}` : "Áudio";
+    return duration ? `Ãudio Â· ${duration}` : "Ãudio";
   }
 
   if (message.type === "image") {
@@ -219,8 +222,7 @@ function buildConversation(payload: BackendConversation): Conversation {
     peerUsername: payload.participant.username,
     name,
     status: mapStatus(payload.participant.status),
-    avatar: initials(name),
-    color: avatarColor(payload.participant.id),
+    avatarUrl: payload.participant.avatarUrl,
     lastMessage: payload.lastMessagePreview || "",
     time: timeLabel(payload.lastMessageAt),
     unread: payload.unreadCount,
@@ -228,9 +230,14 @@ function buildConversation(payload: BackendConversation): Conversation {
   };
 }
 
-function buildMessage(payload: BackendMessage, currentUserId: string): Msg {
+function buildMessage(
+  payload: BackendMessage,
+  currentUser: { id?: string | null; displayName?: string | null; avatarUrl?: string | null; username?: string | null } | null | undefined,
+): Msg {
   let linkUrl: string | null = null;
   let linkLabel: string | null = null;
+  const isSelf = Boolean(currentUser?.id && payload.senderId === currentUser.id);
+  const senderDisplayName = isSelf ? currentUser?.displayName || currentUser?.username || "Você" : payload.sender.displayName || payload.sender.username;
 
   if (payload.type === "link") {
     try {
@@ -245,8 +252,11 @@ function buildMessage(payload: BackendMessage, currentUserId: string): Msg {
   return {
     id: payload.id,
     conversationId: payload.conversationId,
-    side: payload.senderId === currentUserId ? "right" : "left",
-    sender: payload.senderId === currentUserId ? "Você" : payload.sender.displayName || payload.sender.username,
+    senderId: payload.senderId,
+    side: isSelf ? "right" : "left",
+    sender: isSelf ? "Você" : senderDisplayName,
+    senderDisplayName,
+    senderAvatarUrl: isSelf ? currentUser?.avatarUrl ?? null : payload.sender.avatarUrl ?? null,
     kind: payload.type,
     content: payload.content || "",
     time: timeLabel(payload.createdAt),
@@ -281,14 +291,6 @@ async function readJson<T>(response: Response) {
   const payload = (await response.json().catch(() => null)) as T | null;
   if (!response.ok || !payload) throw new Error("Falha ao carregar dados.");
   return payload;
-}
-
-function Avatar({ name, size = 36, color }: { name: string; size?: number; color: string }) {
-  return (
-    <div className="flex shrink-0 items-center justify-center rounded-full font-bold text-white" style={{ width: size, height: size, backgroundColor: color, fontSize: size * 0.38 }}>
-      {name}
-    </div>
-  );
 }
 
 type RecordedAudio = {
@@ -374,7 +376,7 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       setState("idle");
       setSeconds(0);
       secondsRef.current = 0;
-      throw new Error("Permissão de microfone negada.");
+      throw new Error("PermissÃ£o de microfone negada.");
     }
   }, [cleanupStream, onStop, state, stopTimers]);
 
@@ -462,14 +464,14 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
           onClick={togglePlayback}
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}
         >
-          {playing ? "⏸" : "▶"}
+          {playing ? "â¸" : "â–¶"}
         </button>
         <div className="flex-1">
           <div className="h-2 rounded-full bg-white/10">
             <div className="h-2 rounded-full bg-white/50" style={{ width: "42%" }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-[11px] text-white/65">
-            <span>Áudio</span>
+            <span>Ãudio</span>
             <span>{formatDuration(msg.durationMs) || "0:00"}</span>
           </div>
         </div>
@@ -499,7 +501,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
         />
       ) : (
         <div className="flex h-[180px] items-center justify-center text-[13px] text-white/50">
-          Imagem indisponível
+          Imagem indisponÃ­vel
         </div>
       )}
       <div className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-white/75">
@@ -531,7 +533,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
     >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
-          ↗
+          â†—
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-semibold text-white">{label}</p>
@@ -543,12 +545,36 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   );
 }
 
+function MessageReceipt({ msg }: { msg: Msg }) {
+  const isRead = Boolean(msg.readAt);
+  const isDelivered = !msg.pending;
+  const iconClass = isRead ? "text-[#60A5FA]" : "text-white/45";
+
+  if (!isDelivered) {
+    return (
+      <span className={`inline-flex items-center ${iconClass}`}>
+        <CheckIcon s={12} />
+      </span>
+    );
+  }
+
+  return (
+    <span className={`inline-flex items-center ${iconClass}`}>
+      <CheckIcon s={12} />
+      <CheckIcon s={12} className="-ml-1" />
+    </span>
+  );
+}
+
 function MessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
   return (
     <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
       <div className="w-9 shrink-0">
-        <Avatar name={initials(msg.sender)} size={34} color={isRight ? "#8B5CF6" : "#3B82F6"} />
+        <UserAvatar
+          user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderDisplayName, avatarUrl: msg.senderAvatarUrl }}
+          size={34}
+        />
       </div>
       <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
         <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
@@ -566,11 +592,7 @@ function MessageBubble({ msg }: { msg: Msg }) {
         )}
         <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
           <span>{msg.time}</span>
-          {isRight && (
-            <span className="text-[#C084FC]">
-              {msg.readAt ? "✓✓ visto" : "✓✓"}
-            </span>
-          )}
+          {isRight && <MessageReceipt msg={msg} />}
         </div>
       </div>
     </div>
@@ -619,7 +641,10 @@ function MessagesPageContent() {
       id: clientMessageId,
       conversationId,
       side: "right",
+      senderId: user.id,
       sender: "Você",
+      senderDisplayName: getSessionUserDisplayName(user),
+      senderAvatarUrl: user.avatarUrl ?? null,
       kind: "audio",
       content: "",
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -639,7 +664,7 @@ function MessagesPageContent() {
       sortConversations(
         prev.map((conversation) =>
           conversation.id === conversationId
-            ? { ...conversation, lastMessage: "Áudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            ? { ...conversation, lastMessage: "Ãudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
             : conversation,
         ),
       ),
@@ -657,11 +682,11 @@ function MessagesPageContent() {
       });
 
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
-      const confirmed = buildMessage(payload.message, user.id);
+      const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar o áudio.");
+      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel enviar o áudio.");
       URL.revokeObjectURL(tempUrl);
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -748,7 +773,10 @@ function MessagesPageContent() {
       id: clientMessageId,
       conversationId,
       side: "right",
-      sender: "VocÃª",
+      senderId: user.id,
+      sender: "Você",
+      senderDisplayName: getSessionUserDisplayName(user),
+      senderAvatarUrl: user.avatarUrl ?? null,
       kind: "image",
       content: "",
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -785,11 +813,11 @@ function MessagesPageContent() {
       });
 
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
-      const confirmed = buildMessage(payload.message, user.id);
+      const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
+      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel enviar a imagem.");
       URL.revokeObjectURL(tempUrl);
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -817,7 +845,10 @@ function MessagesPageContent() {
       id: clientMessageId,
       conversationId,
       side: "right",
+      senderId: user.id,
       sender: "Você",
+      senderDisplayName: getSessionUserDisplayName(user),
+      senderAvatarUrl: user.avatarUrl ?? null,
       kind: "link",
       content: sharedLink.url,
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -855,11 +886,11 @@ function MessagesPageContent() {
       });
 
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
-      const confirmed = buildMessage(payload.message, user.id);
+      const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       setSharedLink(null);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "Não foi possível compartilhar o link.");
+      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel compartilhar o link.");
       setMessagesByConversation((prev) => ({
         ...prev,
         [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
@@ -906,7 +937,7 @@ function MessagesPageContent() {
         setActiveConversationId(mapped[0].id);
       }
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
+      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar as conversas.");
     } finally {
       setLoadingConversations(false);
     }
@@ -921,7 +952,7 @@ function MessagesPageContent() {
       // Exclude current user
       setFollowedUsers(payload.users.filter(u => u.id !== user?.id));
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar os contatos seguidos.");
+      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar os contatos seguidos.");
       setFollowedUsers([]);
     } finally {
       setLoadingFollowed(false);
@@ -934,9 +965,9 @@ function MessagesPageContent() {
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
       const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
-      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user?.id || "")) }));
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user)) }));
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as mensagens.");
+      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar as mensagens.");
     } finally {
       setLoadingMessages(false);
     }
@@ -960,7 +991,7 @@ function MessagesPageContent() {
       setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
       setActiveConversationId(conversation.id);
     } catch (conversationError) {
-      setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
+      setError(conversationError instanceof Error ? conversationError.message : "NÃ£o foi possÃ­vel abrir a conversa.");
     }
   }, []);
 
@@ -1050,7 +1081,7 @@ function MessagesPageContent() {
     });
 
     socket.on("message:new", (message: BackendMessage) => {
-      const mapped = buildMessage(message, user.id);
+      const mapped = buildMessage(message, user);
       setMessagesByConversation((prev) => ({
         ...prev,
         [message.conversationId]: mergeMessage(prev[message.conversationId] || [], mapped),
@@ -1127,13 +1158,6 @@ function MessagesPageContent() {
       typingTimerRef.current = null;
     }
 
-    if (currentConversationId) {
-      setTypingByConversation((prev) => ({
-        ...prev,
-        [currentConversationId]: false,
-      }));
-    }
-
     typingConversationIdRef.current = null;
     setDraft("");
     setEmojiOpen(false);
@@ -1160,21 +1184,12 @@ function MessagesPageContent() {
         typingTimerRef.current = null;
       }
 
-      setTypingByConversation((prev) => ({
-        ...prev,
-        [currentConversationId]: false,
-      }));
-
       return undefined;
     }
 
     if (typingConversationIdRef.current !== currentConversationId) {
       socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: true });
       typingConversationIdRef.current = currentConversationId;
-      setTypingByConversation((prev) => ({
-        ...prev,
-        [currentConversationId]: true,
-      }));
     }
 
     if (typingTimerRef.current) {
@@ -1186,10 +1201,6 @@ function MessagesPageContent() {
       if (activeSocket?.connected && typingConversationIdRef.current === currentConversationId) {
         activeSocket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: false });
         typingConversationIdRef.current = null;
-        setTypingByConversation((prev) => ({
-          ...prev,
-          [currentConversationId]: false,
-        }));
       }
     }, 1800);
 
@@ -1214,10 +1225,6 @@ function MessagesPageContent() {
     if (typingConversationIdRef.current === activeConversationId) {
       socket.emit("conversation:typing", { conversationId: activeConversationId, isTyping: false });
       typingConversationIdRef.current = null;
-      setTypingByConversation((prev) => ({
-        ...prev,
-        [activeConversationId]: false,
-      }));
     }
 
     const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -1225,7 +1232,10 @@ function MessagesPageContent() {
       id: clientMessageId,
       conversationId: activeConversationId,
       side: "right",
+      senderId: user?.id || "",
       sender: "Você",
+      senderDisplayName: getSessionUserDisplayName(user),
+      senderAvatarUrl: user?.avatarUrl ?? null,
       kind: "text",
       content,
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -1264,11 +1274,11 @@ function MessagesPageContent() {
           return;
         }
 
-        const confirmed = buildMessage(ack.data, user?.id || "");
+        const confirmed = buildMessage(ack.data, user);
         setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], confirmed) }));
       },
     );
-  }, [activeConversationId, draft, user?.id]);
+  }, [activeConversationId, draft, user]);
 
   const startAudioRecording = useCallback(() => {
     if (!activeConversationId || isAudioBusy) {
@@ -1277,7 +1287,7 @@ function MessagesPageContent() {
 
     setError(null);
     void audioRecorder.start().catch((recordingError) => {
-      setError(recordingError instanceof Error ? recordingError.message : "Não foi possível iniciar a gravação.");
+      setError(recordingError instanceof Error ? recordingError.message : "NÃ£o foi possÃ­vel iniciar a gravaÃ§Ã£o.");
     });
   }, [activeConversationId, audioRecorder, isAudioBusy]);
 
@@ -1297,7 +1307,7 @@ function MessagesPageContent() {
   }, [sendText]);
 
   if (status === "loading") {
-    return <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">Carregando sua sessão...</div>;
+    return <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">Carregando sua sessÃ£o...</div>;
   }
 
   return (
@@ -1308,9 +1318,9 @@ function MessagesPageContent() {
             <HeaderBrand />
           </Link>
           <div className="flex items-center gap-3">
-            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">⌕</button>
-            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">◌</button>
-            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">⚙</Link>
+            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><SearchIcon s={20} /></button>
+            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><BellIcon s={20} /></button>
+            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><GearIcon s={20} /></Link>
             <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
@@ -1331,13 +1341,13 @@ function MessagesPageContent() {
               }}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition"
             >
-              +
+              <PlusIcon s={16} />
             </button>
           </div>
 
           <div className="border-b border-white/[0.07] px-5 py-4">
             <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-4 py-2">
-              <span className="text-[14px] text-white/30">âŒ•</span>
+              <SearchIcon s={16} className="text-white/30" />
               <input
                 ref={sidebarSearchRef}
                 type="search"
@@ -1357,7 +1367,7 @@ function MessagesPageContent() {
                   }}
                   className="text-[13px] text-white/35 transition hover:text-white/60"
                 >
-                  Ã—
+                  ×
                 </button>
               )}
             </div>
@@ -1380,7 +1390,7 @@ function MessagesPageContent() {
                       className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
                     >
                       <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
-                        <Avatar name={conversation.avatar} size={44} color={conversation.color} />
+                        <UserAvatar user={{ id: conversation.peerId, username: conversation.peerUsername, displayName: conversation.name, avatarUrl: conversation.avatarUrl }} size={44} />
                         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conversation.status]}`} />
                       </Link>
                       <div className="min-w-0 flex-1">
@@ -1407,7 +1417,7 @@ function MessagesPageContent() {
                       className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversation?.peerId === followedUser.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
                     >
                       <Link href={`/users/${followedUser.id}`} className="relative shrink-0">
-                        <Avatar name={initials(followedUser.displayName || followedUser.username)} size={44} color={avatarColor(followedUser.id)} />
+                        <UserAvatar user={{ id: followedUser.id, username: followedUser.username, displayName: followedUser.displayName, avatarUrl: followedUser.avatarUrl }} size={44} />
                         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
                       </Link>
                       <div className="min-w-0 flex-1">
@@ -1445,8 +1455,8 @@ function MessagesPageContent() {
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#0D0D10] px-6 py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
-                <Link href={`/users/${activeConversation.peerId}`} className="relative">
-                  <Avatar name={activeConversation.avatar} size={44} color={activeConversation.color} />
+                  <Link href={`/users/${activeConversation.peerId}`} className="relative">
+                  <UserAvatar user={{ id: activeConversation.peerId, username: activeConversation.peerUsername, displayName: activeConversation.name, avatarUrl: activeConversation.avatarUrl }} size={44} />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConversation.status]}`} />
                 </Link>
                 <div>
@@ -1473,7 +1483,7 @@ function MessagesPageContent() {
               <span className={`rounded-full px-3 py-1 text-[12px] ${connectionState === "connected" ? "bg-[#22C55E]/15 text-[#22C55E]" : connectionState === "connecting" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "bg-white/10 text-white/50"}`}>
                 {connectionState === "connected" ? "tempo real ativo" : connectionState === "connecting" ? "conectando..." : "offline"}
               </span>
-              <button type="button" aria-label="Buscar na conversa" className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition">⌕</button>
+              <button type="button" aria-label="Buscar na conversa" className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition"><SearchIcon s={18} /></button>
             </div>
           </div>
 
@@ -1484,7 +1494,7 @@ function MessagesPageContent() {
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
                   <p className="text-[16px] font-semibold text-white/70">Selecione uma conversa</p>
-                  <p className="mt-1 text-[14px]">As mensagens aparecerão aqui.</p>
+                  <p className="mt-1 text-[14px]">As mensagens aparecerÃ£o aqui.</p>
                 </div>
               </div>
             ) : loadingMessages && activeMessages.length === 0 ? (
@@ -1521,15 +1531,15 @@ function MessagesPageContent() {
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-5 py-3">
               {audioRecorder.state === "recording" ? (
                 <div className="flex items-center gap-3">
-                  <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
-                    ×
+                  <button type="button" aria-label="Cancelar gravaÃ§Ã£o" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
+                    Ã—
                   </button>
                   <div className="flex-1">
                     <p className="text-[12px] font-semibold text-white">Gravando áudio</p>
                     <p className="text-[12px] text-white/45">{formatDuration(audioRecorder.seconds * 1000) || "0:00"}</p>
                   </div>
                   <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
-                    ➤
+                    <PlusIcon s={18} />
                   </button>
                 </div>
               ) : (
@@ -1583,7 +1593,7 @@ function MessagesPageContent() {
                       disabled={!activeConversationId || isAudioBusy}
                       className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      😀
+                      ðŸ˜€
                     </button>
                     <button
                       type="button"
@@ -1592,7 +1602,7 @@ function MessagesPageContent() {
                       disabled={!activeConversationId || isAudioBusy}
                       className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      +
+                      <PlusIcon s={18} />
                     </button>
                     <input
                       type="text"
@@ -1605,7 +1615,7 @@ function MessagesPageContent() {
                     />
                     {draft.trim() ? (
                       <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
-                        ➤
+                        <SendIcon s={18} />
                       </button>
                     ) : (
                       <button
@@ -1615,7 +1625,7 @@ function MessagesPageContent() {
                         disabled={!activeConversationId || isAudioBusy}
                         className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1C1F2E] text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        ◉
+                        <MicIcon s={18} />
                       </button>
                     )}
                     <input
@@ -1630,11 +1640,7 @@ function MessagesPageContent() {
                       }}
                     />
                   </div>
-                  <p className="text-[11px] text-white/35">
-                    {audioUploading || imageUploading
-                      ? "Enviando mídia..."
-                      : "Texto em tempo real via NestJS + Socket.IO. Áudio e imagens já funcionam em tempo real também."}
-                  </p>
+                  {audioUploading || imageUploading ? <p className="text-[11px] text-white/35">Enviando mídia...</p> : null}
                 </>
               )}
             </div>
@@ -1657,3 +1663,7 @@ export default function MessagesPage() {
     </Suspense>
   );
 }
+
+
+
+
