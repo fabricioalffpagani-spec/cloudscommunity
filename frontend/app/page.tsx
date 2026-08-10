@@ -2039,7 +2039,7 @@ export default function Page() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
 
       {/* ── Modals ── */}
       {modal === "search"        && <SearchModal onClose={closeModal} />}
@@ -2049,8 +2049,8 @@ export default function Page() {
       {modal === "profile"       && <ProfileMenu onClose={closeModal} />}
       {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
 
-      {/* ── Header — fundo preto sólido ── */}
-      <header className="flex-none border-b border-white/[0.07] bg-transparent">
+      {/* ── Header — fundo gradiente escuro ── */}
+      <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <div className="mx-auto flex h-[80px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-3">
 
           {/* Logo */}
@@ -2100,7 +2100,7 @@ export default function Page() {
             <button
               onClick={() => navigateCloud(-1)}
               aria-label="Cloud anterior"
-              className="absolute left-[calc(50%-650px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+              className="absolute left-[calc(50%-630px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
             >
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
             </button>
@@ -2211,7 +2211,7 @@ export default function Page() {
         <button
           onClick={() => navigateCloud(1)}
           aria-label="Próxima Cloud"
-          className="absolute left-[calc(50%+650px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+          className="absolute left-[calc(50%+580px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
         >
           <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
         </button>
@@ -2279,8 +2279,10 @@ export default function Page() {
 
           {/* Trending */}
           <Link href="/trending" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
-            <svg viewBox="0 0 384 512" width={30} height={30} fill="currentColor" aria-hidden="true">
-              <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z"/>
+            <svg viewBox="0 0 24 24" width={30} height={30} fill="currentColor" aria-hidden="true">
+              <path d="M12 2C9 2 7 4 7 7c0 1.5.5 3 1.5 4 .5.5 1 1 1 1h-1c0 0-1-1-1-2s1-1.5 1-1.5h1c.5 0 1-.3 1-.8V6c0-1.1.9-2 2-2zm0 3c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
+              <path d="M15 2c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V3.5c0-1.1.9-2 2-2z"/>
+              <path d="M17 3c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.3c0-1 .8-1.8 1.8-1.8z"/>
             </svg>
             <span className="text-[13px] font-semibold">Trending</span>
           </Link>

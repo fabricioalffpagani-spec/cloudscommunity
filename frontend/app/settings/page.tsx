@@ -323,7 +323,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header() {
   const { user } = useSessionUser();
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
       <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-3">
           <HeaderBrand />
@@ -350,12 +350,12 @@ export default function SettingsPage() {
   };
   return (
     <div className="min-h-screen text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <Header/>
       <div className="mx-auto flex max-w-[1280px] gap-8 px-5 pb-24 pt-[108px] lg:px-8">
         {/* Sidebar */}
         <aside className="hidden w-[220px] shrink-0 md:flex flex-col gap-1 pt-8">
-          <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Configurações</p>
+          <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Settings</p>
           {NAV_ITEMS.map(({key,label,icon})=>(
             <button key={key} onClick={()=>setActive(key)}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition border ${active===key?"bg-[#A855F7]/15 text-[#A855F7] border-[#A855F7]/25":"text-[#9CA3AF] hover:bg-white/[0.04] hover:text-white border-transparent"}`}>

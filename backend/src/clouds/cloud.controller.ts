@@ -105,4 +105,14 @@ export class CloudController {
   async getMessages(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.getMessages(extractSessionToken(req), id);
   }
+
+  @Post(':id/messages/:messageId/reactions')
+  async addReaction(@Param('id') id: string, @Param('messageId') messageId: string, @Body() body: { emoji: string }, @Req() req: Request) {
+    return this.cloudService.addReaction(extractSessionToken(req), id, messageId, body.emoji);
+  }
+
+  @Get(':id/messages/:messageId/reactions')
+  async getMessageReactions(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.cloudService.getMessageReactions(extractSessionToken(req), id, messageId);
+  }
 }

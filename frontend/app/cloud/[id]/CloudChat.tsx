@@ -52,9 +52,11 @@ function SmileIcon() {
 
 function FireIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d="M12 2C10.5 5.5 8 8.5 8 12.5c0 2.5 1.5 4.5 2.5 5.5-.3-1.2-.3-2.5.5-3.5 1 2 2 3.5 2 5.5 1.5-1 3-3.5 3-5.5 0-1.5-.5-3-1.5-4.5.3 1 .2 2-.4 2.8C13.5 10 13 6.5 12 2Z" />
-      <path d="M12 17c0 1.5-.5 2.5-1 3 1.5-.5 3-2 3-4.5 0-1-.3-2-1-3 .1.8 0 1.5-.5 2C13 13 13 11 12 8.5c-.5 1.5-1 3.5-1 5 0 1.2.4 2.5 1 3.5Z" />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" className={className} aria-hidden="true">
+      <path d="M12 2C8 2 5 5 5 9c0 2.2 1 4.2 2.5 5.7C7.7 15.2 8.5 16 8.5 16H7c0 0-1.5-1.5-1.5-3S7 10.5 7 10.5h1c.8 0 1.5-.7 1.5-1.5V8c0-1.7 1.3-3 3-3s3 1.3 3 3v1c0 .8.7 1.5 1.5 1.5h1c0 0 1.5 1.5 1.5 3S16 16 16 16h-2c0 0 .8-.8 1.5-1.5C17 13.2 18 11.2 18 9c0-4-3-7-7-7zm0 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3zm0 5c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
+      <path d="M15 2.5c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V4c0-1.1.9-2 2-2z"/>
+      <path d="M17 3.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.8c0-1 .8-1.8 1.8-1.8z"/>
+      <path d="M18 4.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V5.8c0-1 .8-1.8 1.8-1.8z"/>
     </svg>
   );
 }
@@ -104,15 +106,6 @@ function XIcon({ s = 16 }: { s?: number }) {
   );
 }
 
-function Check2Icon() {
-  return (
-    <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m2 12 5 5L17 7" />
-      <path d="m9 12 5 5L22 7" />
-    </svg>
-  );
-}
-
 function TrashIcon({ s = 18 }: { s?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -123,9 +116,53 @@ function TrashIcon({ s = 18 }: { s?: number }) {
   );
 }
 
+function ReplyIcon({ s = 16 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 10h10a5 5 0 0 1 5 5v2" />
+      <path d="M3 10l4-4" />
+      <path d="M3 10l4 4" />
+    </svg>
+  );
+}
+
+function ReactionIcon({ s = 16 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <circle cx="9" cy="9" r="1" fill="white" stroke="none" />
+      <circle cx="15" cy="9" r="1" fill="white" stroke="none" />
+    </svg>
+  );
+}
+
+function PinIcon({ s = 16, filled = false }: { s?: number; filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill={filled ? "white" : "none"} stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: "rotate(-45deg)" }}>
+      <path d="M12 17v-4" />
+      <path d="M12 3v4" />
+      <path d="M6 10c0-2 2-3 6-3s6 1 6 3c0 3-3 5-3 5v4c0 1-1 2-3 2s-3-1-3-2v-4s-3-2-3-5Z" />
+    </svg>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ReplyMeta = { id: string; sender: string; content: string };
+
+type Reaction = {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  createdAt: string;
+};
 
 type CloudMsgBase = {
   id: string;
@@ -137,6 +174,7 @@ type CloudMsgBase = {
   replyTo?: ReplyMeta;
   flames: number;
   reaction?: string;
+  reactions?: Reaction[];
   /** true = sent by the current user */
   own?: boolean;
   /** true = pinned by cloud author */
@@ -168,9 +206,18 @@ type CloudChatProps = {
 // ─── Seed messages ────────────────────────────────────────────────────────────
 
 const BASE_MESSAGES: TextMsg[] = [
-  { id: "c1", sender: "Beatriz", initials: "B",  color: "#A855F7", type: "text", content: "Sejam bem-vindos! Vamos discutir: IA vai substituir programadores?", time: "12:30", host: true, flames: 24 },
-  { id: "c2", sender: "devmarcos", initials: "DM", color: "#22C55E", type: "text", content: "Acho que não. A IA é uma ferramenta, não um substituto.", time: "12:31", flames: 24 },
-  { id: "c3", sender: "anavieira", initials: "AV", color: "#3B82F6", type: "text", content: "Depende do tipo de programação. Tarefas repetitivas sim, mas criatividade e lógica complexa não.", time: "12:31", flames: 17 },
+  { id: "c1", sender: "Beatriz", initials: "B",  color: "#A855F7", type: "text", content: "Sejam bem-vindos! Vamos discutir: IA vai substituir programadores?", time: "12:30", host: true, flames: 24, reactions: [
+    { id: "r1", emoji: "🔥", userId: "u1", user: { id: "u1", username: "devmarcos", displayName: "devmarcos", avatarUrl: null }, createdAt: "2024-01-01T12:31:00Z" },
+    { id: "r2", emoji: "🔥", userId: "u2", user: { id: "u2", username: "anavieira", displayName: "anavieira", avatarUrl: null }, createdAt: "2024-01-01T12:31:30Z" },
+    { id: "r3", emoji: "👍", userId: "u3", user: { id: "u3", username: "lucasdev", displayName: "lucasdev", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
+  ]},
+  { id: "c2", sender: "devmarcos", initials: "DM", color: "#22C55E", type: "text", content: "Acho que não. A IA é uma ferramenta, não um substituto.", time: "12:31", flames: 24, reactions: [
+    { id: "r4", emoji: "❤️", userId: "u4", user: { id: "u4", username: "carolcode", displayName: "carolcode", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
+  ]},
+  { id: "c3", sender: "anavieira", initials: "AV", color: "#3B82F6", type: "text", content: "Depende do tipo de programação. Tarefas repetitivas sim, mas criatividade e lógica complexa não.", time: "12:31", flames: 17, reactions: [
+    { id: "r5", emoji: "👍", userId: "u1", user: { id: "u1", username: "devmarcos", displayName: "devmarcos", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
+    { id: "r6", emoji: "👍", userId: "u5", user: { id: "u5", username: "pedroa.dev", displayName: "pedroa.dev", avatarUrl: null }, createdAt: "2024-01-01T12:33:00Z" },
+  ]},
   { id: "c4", sender: "lucasdev", initials: "LD", color: "#F59E0B", type: "text", content: "Ferramentas como Copilot já aumentam muito nossa produtividade.", time: "12:32", flames: 12, replyTo: { id: "c3", sender: "anavieira", content: "Depende do tipo de programação..." } },
   { id: "c5", sender: "carolcode", initials: "CC", color: "#EC4899", type: "text", content: "Concordo! E acho que o real diferencial será saber usar a IA a nosso favor.", time: "12:32", flames: 9 },
   { id: "c6", sender: "pedroa.dev", initials: "PD", color: "#8B5CF6", type: "text", content: "Concordo! A IA cuida do básico e a gente foca no que realmente importa.", time: "12:33", flames: 7 },
@@ -422,6 +469,7 @@ function MsgBubble({
   onAddReaction,
   onPinToggle,
   isCloudAuthor,
+  onShowReactionUsers,
 }: {
   msg: Message;
   onReply: (m: Message) => void;
@@ -430,6 +478,7 @@ function MsgBubble({
   onAddReaction: (id: string, emoji: string) => void;
   onPinToggle: (msgId: string) => void;
   isCloudAuthor: boolean;
+  onShowReactionUsers: (msgId: string, emoji: string, reactions: Reaction[]) => void;
 }) {
   const own = !!msg.own;
 
@@ -445,9 +494,9 @@ function MsgBubble({
         {/* sender + host badge + time + pinned badge */}
         <div className={`flex flex-wrap items-center gap-2 ${own ? "flex-row-reverse" : ""}`}>
           {msg.sender === "Você" ? (
-            <span className="text-[12px] font-semibold text-white/50">{msg.sender}</span>
+            <span className="text-[12px] font-semibold text-white">{msg.sender}</span>
           ) : (
-            <Link href={profileHrefFromName(msg.sender)} className="text-[12px] font-semibold text-white/50 transition hover:text-white hover:underline">
+            <Link href={profileHrefFromName(msg.sender)} className="text-[12px] font-semibold text-white transition hover:text-white hover:underline">
               {msg.sender}
             </Link>
           )}
@@ -461,7 +510,6 @@ function MsgBubble({
               Fixado
             </span>
           )}
-          <span className="text-[11px] text-white/30">{msg.time}</span>
         </div>
 
         {/* reply preview */}
@@ -493,28 +541,52 @@ function MsgBubble({
 
         {/* actions row — hype/fire removed */}
         <div className={`flex flex-wrap items-center gap-2 text-[11px] text-white/40 ${own ? "flex-row-reverse" : ""}`}>
-          <button type="button" onClick={() => onReply(msg)} className="rounded-full px-2 py-1 transition hover:bg-white/10">
-            Responder
+          <button type="button" onClick={() => onReply(msg)} className="rounded-full p-1 transition hover:bg-white/10" title="Responder">
+            <ReplyIcon s={18} />
           </button>
           <button
             type="button"
             onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
-            className="rounded-full px-2 py-1 transition hover:bg-white/10"
+            className="rounded-full p-1 transition hover:bg-white/10"
+            title="Reagir"
           >
-            Reagir
+            <ReactionIcon s={18} />
           </button>
           {isCloudAuthor && (
             <button
               type="button"
               onClick={() => onPinToggle(msg.id)}
-              className="rounded-full px-2 py-1 transition hover:bg-white/10"
+              className="rounded-full p-1 transition hover:bg-white/10"
               title={msg.isPinned ? "Desfixar" : "Fixar"}
             >
-              {msg.isPinned ? "Desfixar" : "Fixar"}
+              <PinIcon s={18} filled={msg.isPinned} />
             </button>
           )}
-          {msg.reaction && (
-            <span className="rounded-full bg-white/10 px-2 py-1 text-[12px]">{msg.reaction}</span>
+          
+          {/* Reaction counters */}
+          {msg.reactions && msg.reactions.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {Object.entries(
+                msg.reactions.reduce((acc, reaction) => {
+                  if (!acc[reaction.emoji]) {
+                    acc[reaction.emoji] = [];
+                  }
+                  acc[reaction.emoji].push(reaction);
+                  return acc;
+                }, {} as Record<string, Reaction[]>)
+              ).map(([emoji, reactions]) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onShowReactionUsers(msg.id, emoji, reactions)}
+                  className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20 flex items-center gap-1"
+                  title={`${reactions.length} usuário(s) reagiram com ${emoji}`}
+                >
+                  <span>{emoji}</span>
+                  <span className="text-white/70">{reactions.length}</span>
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -541,11 +613,7 @@ function MsgBubble({
           </div>
         )}
 
-        {/* time + read receipt */}
-        <div className={`flex items-center gap-1 text-[10px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
-          <span>{msg.time}</span>
-          {own && <span className="text-[#C084FC]"><Check2Icon /></span>}
-        </div>
+
       </div>
     </div>
   );
@@ -844,6 +912,8 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const [reactionUsersOpen, setReactionUsersOpen] = useState(false);
+  const [selectedReaction, setSelectedReaction] = useState<{ emoji: string; reactions: Reaction[] } | null>(null);
 
   // Redirect to feed when cloud expires
   useEffect(() => {
@@ -935,6 +1005,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           replyTo: msg.replyTo,
           audioUrl: msg.mediaUrl,
           duration: msg.type === "audio" ? "0:00" : undefined,
+          reactions: msg.reactions || [],
         }));
         setMessages(mappedMessages);
       })
@@ -1079,20 +1150,141 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
       console.error("Failed to send audio message:", error);
     }
-  }, [replyTo, cloudId]);
+  }, [replyTo, cloudId, currentUserId]);
 
   const recorder = useRecorder(sendAudio);
 
-  const addReaction = (id: string, emoji: string) => {
-    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, reaction: emoji } : m)));
+  const addReaction = useCallback(async (id: string, emoji: string) => {
     setReactionPickerFor(null);
-  };
+    
+    // Check if user already reacted with this emoji
+    const message = messages.find((m) => m.id === id);
+    if (!message || !currentUserId) return;
+
+    const existingReaction = message.reactions?.find(
+      (r) => r.emoji === emoji && r.userId === currentUserId
+    );
+
+    if (existingReaction) {
+      // Remove the reaction locally (toggle)
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                reactions: m.reactions?.filter((r) => r.id !== existingReaction.id) || [],
+              }
+            : m
+        )
+      );
+    } else {
+      // Add reaction locally
+      const newReaction: Reaction = {
+        id: `temp-${Date.now()}`,
+        emoji,
+        userId: currentUserId,
+        user: {
+          id: currentUserId,
+          username: "Você",
+          displayName: "Você",
+          avatarUrl: null,
+        },
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                reactions: [...(m.reactions || []), newReaction],
+              }
+            : m
+        )
+      );
+    }
+
+    // Sync with backend
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(id)}/reactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ emoji }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Reload all messages to get the accurate reaction state from server
+        const messagesResponse = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (messagesResponse.ok) {
+          const messagesData = await messagesResponse.json();
+          const mappedMessages = messagesData.messages.map((msg: any) => ({
+            id: msg.id,
+            sender: msg.sender,
+            initials: msg.initials,
+            color: msg.color,
+            type: msg.type,
+            content: msg.content,
+            time: new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+            flames: 0,
+            own: msg.own,
+            isPinned: msg.isPinned,
+            replyTo: msg.replyTo,
+            audioUrl: msg.mediaUrl,
+            duration: msg.type === "audio" ? "0:00" : undefined,
+            reactions: msg.reactions || [],
+          }));
+          setMessages(mappedMessages);
+        }
+      } else {
+        // Revert on error
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === id
+              ? {
+                  ...m,
+                  reactions: existingReaction
+                    ? [...(m.reactions || []), existingReaction]
+                    : m.reactions?.filter((r) => r.userId !== currentUserId) || [],
+                }
+              : m
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Failed to add reaction:', error);
+      // Revert on error
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                reactions: existingReaction
+                  ? [...(m.reactions || []), existingReaction]
+                  : m.reactions?.filter((r) => r.userId !== currentUserId) || [],
+              }
+            : m
+        )
+      );
+    }
+  }, [cloudId, currentUserId, messages]);
 
   const startReply = (msg: Message) => {
     const content = msg.type === "audio" ? "Áudio" : msg.content;
     setReplyTo({ id: msg.id, sender: msg.sender, content });
     setEmojiOpen(false);
     setReactionPickerFor(null);
+  };
+
+  const showReactionUsers = (msgId: string, emoji: string, reactions: Reaction[]) => {
+    setSelectedReaction({ emoji, reactions });
+    setReactionUsersOpen(true);
   };
 
   const togglePin = async (msgId: string) => {
@@ -1271,7 +1463,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
     <div className="flex h-full flex-col bg-black text-white">
 
       {/* ── Header ── */}
-      <div className="flex shrink-0 items-start gap-3 px-4 pb-3 pt-4">
+      <div className="flex shrink-0 items-start gap-3 px-4 pb-3 pt-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         {/* Back */}
         {onBack ? (
           <button
@@ -1363,7 +1555,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       {/* ── Messages list ── */}
       <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
         <div className="space-y-4">
-          {/* Mensagens fixadas - sticky no topo */}
+          {/* Pinned messages - sticky at top */}
           {messages.filter(msg => msg.isPinned).map((msg) => (
             <div key={msg.id} className="sticky top-0 z-10">
               <MsgBubble
@@ -1374,10 +1566,11 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                 onAddReaction={addReaction}
                 onPinToggle={togglePin}
                 isCloudAuthor={currentUserId === cloudMeta?.authorId}
+                onShowReactionUsers={showReactionUsers}
               />
             </div>
           ))}
-          {/* Mensagens não fixadas */}
+          {/* Unpinned messages */}
           {messages.filter(msg => !msg.isPinned).map((msg) => (
             <MsgBubble
               key={msg.id}
@@ -1388,6 +1581,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
               onAddReaction={addReaction}
               onPinToggle={togglePin}
               isCloudAuthor={currentUserId === cloudMeta?.authorId}
+              onShowReactionUsers={showReactionUsers}
             />
           ))}
         </div>
@@ -1531,6 +1725,49 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
               >
                 {isDeleting ? "Excluindo..." : "Excluir"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reaction users modal ── */}
+      {reactionUsersOpen && selectedReaction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[18px] font-bold text-white flex items-center gap-2">
+                <span className="text-2xl">{selectedReaction.emoji}</span>
+                <span>Reações ({selectedReaction.reactions.length})</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReactionUsersOpen(false)}
+                className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <XIcon s={16} />
+              </button>
+            </div>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {selectedReaction.reactions.map((reaction) => (
+                <div key={reaction.id} className="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02]">
+                  {reaction.user.avatarUrl ? (
+                    <img
+                      src={reaction.user.avatarUrl}
+                      alt={reaction.user.displayName}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
+                      {reaction.user.displayName.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-[14px] font-semibold text-white">{reaction.user.displayName}</p>
+                    <p className="text-[12px] text-white/50">@{reaction.user.username}</p>
+                  </div>
+                  <span className="text-2xl">{selectedReaction.emoji}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>

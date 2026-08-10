@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { CloudMode, CloudStatus, CloudVisibility, Prisma } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { CloudPayload, CreateCloudInput } from './cloud.types';
+import { CloudMessageReactionPayload, CloudPayload, CreateCloudInput } from './cloud.types';
 
 const ALLOWED_DURATIONS = ['5 min', '10 min', '30 min', '1h', '24h'] as const;
 
@@ -487,6 +487,15 @@ export class CloudService {
             },
           },
         },
+        reactions: {
+          include: {
+            user: {
+              include: {
+                profile: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: 'asc',
@@ -512,6 +521,187 @@ export class CloudService {
           sender: message.replyToMessage.user.profile?.displayName || 'Usuário',
           content: message.replyToMessage.content,
         } : undefined,
+        reactions: message.reactions.map((reaction) => ({
+          id: reaction.id,
+          emoji: reaction.emoji,
+          userId: reaction.userId,
+          user: {
+            id: reaction.user.id,
+            username: reaction.user.profile?.username || '',
+            displayName: reaction.user.profile?.displayName || '',
+            avatarUrl: reaction.user.profile?.avatarUrl,
+          },
+          createdAt: reaction.createdAt,
+        })),
+      })),
+    };
+  }
+
+  async addReaction(token: string | null, cloudId: string, messageId: string, emoji: string): Promise<{ ok: true; reaction: CloudMessageReactionPayload }> {
+    const current = await this.requireSession(token);
+
+    const cloud = await this.prisma.cloud.findFirst({
+      where: {
+        id: cloudId,
+        deletedAt: null,
+      },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    const message = await this.prisma.cloudMessage.findFirst({
+      where: {
+        id: messageId,
+        cloudId,
+        deletedAt: null,
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    }
+
+    // Check if user is a member of the cloud
+    const member = await this.prisma.cloudMember.findFirst({
+      where: {
+        cloudId,
+        userId: current.user.id,
+        leftAt: null,
+      },
+    });
+
+    if (!member) {
+      throw new UnauthorizedException({
+        message: 'Você não é membro desta cloud.',
+      });
+    }
+
+    // Check if user already reacted with this emoji
+    const existingReaction = await this.prisma.cloudMessageReaction.findUnique({
+      where: {
+        messageId_userId_emoji: {
+          messageId,
+          userId: current.user.id,
+          emoji,
+        },
+      },
+    });
+
+    if (existingReaction) {
+      // Remove the reaction (toggle behavior)
+      await this.prisma.cloudMessageReaction.delete({
+        where: {
+          id: existingReaction.id,
+        },
+      });
+
+      return {
+        ok: true,
+        reaction: {
+          id: existingReaction.id,
+          emoji: existingReaction.emoji,
+          userId: existingReaction.userId,
+          user: {
+            id: current.user.id,
+            username: current.user.profile?.username || '',
+            displayName: current.user.profile?.displayName || '',
+            avatarUrl: current.user.profile?.avatarUrl ?? null,
+          },
+          createdAt: existingReaction.createdAt.toISOString(),
+        },
+      };
+    }
+
+    // Add new reaction
+    const reaction = await this.prisma.cloudMessageReaction.create({
+      data: {
+        messageId,
+        userId: current.user.id,
+        emoji,
+      },
+      include: {
+        user: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+    });
+
+    return {
+      ok: true,
+      reaction: {
+        id: reaction.id,
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        user: {
+          id: reaction.user.id,
+          username: reaction.user.profile?.username || '',
+          displayName: reaction.user.profile?.displayName || '',
+          avatarUrl: reaction.user.profile?.avatarUrl ?? null,
+        },
+        createdAt: reaction.createdAt.toISOString(),
+      },
+    };
+  }
+
+  async getMessageReactions(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true; reactions: CloudMessageReactionPayload[] }> {
+    await this.requireSession(token);
+
+    const cloud = await this.prisma.cloud.findFirst({
+      where: {
+        id: cloudId,
+        deletedAt: null,
+      },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    const message = await this.prisma.cloudMessage.findFirst({
+      where: {
+        id: messageId,
+        cloudId,
+        deletedAt: null,
+      },
+    });
+
+    if (!message) {
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    }
+
+    const reactions = await this.prisma.cloudMessageReaction.findMany({
+      where: {
+        messageId,
+      },
+      include: {
+        user: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    return {
+      ok: true,
+      reactions: reactions.map((reaction) => ({
+        id: reaction.id,
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        user: {
+          id: reaction.user.id,
+          username: reaction.user.profile?.username || '',
+          displayName: reaction.user.profile?.displayName || '',
+          avatarUrl: reaction.user.profile?.avatarUrl ?? null,
+        },
+        createdAt: reaction.createdAt.toISOString(),
       })),
     };
   }

@@ -471,9 +471,8 @@ export default function FollowingPage() {
   const isEndingSoon = remaining > 0 && remaining < 5 * 60;
 
   return (
-    <div className="min-h-screen text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
+    <div className="min-h-screen text-white bg-[#030208]">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
@@ -609,7 +608,7 @@ export default function FollowingPage() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#060410]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#030208]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
             <HomeIcon s={24} className="text-white/40" />

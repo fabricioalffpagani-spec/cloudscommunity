@@ -16,8 +16,7 @@ export default async function CloudPage({ params, searchParams }: CloudPageProps
   const participants = sp.participants ? Number(sp.participants) : undefined;
 
   return (
-    <div className="fixed inset-0 flex flex-col text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+    <div className="fixed inset-0 flex flex-col text-white bg-[#030208]">
       <CloudChat
         cloudId={cloudId}
         title={title}

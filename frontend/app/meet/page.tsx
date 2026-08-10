@@ -101,7 +101,7 @@ function ProfileRow({
 }) {
   const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
   const avatarColor = user.avatarUrl ? undefined : "#9333EA";
-  const followLabel = user.isFollowing ? "Seguindo" : "Seguir";
+  const followLabel = user.isFollowing ? "Following" : "Follow";
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#120a2e] px-4 py-3.5 transition hover:border-white/[0.12]">
@@ -227,8 +227,8 @@ export default function MeetPage() {
 
   return (
     <div className="min-h-screen text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
@@ -251,14 +251,14 @@ export default function MeetPage() {
       <main className="mx-auto max-w-[640px] px-5 pb-28 pt-[108px]">
         <div className="mb-6">
           <h1 className="text-[28px] font-bold tracking-tight text-white">Meet</h1>
-          <p className="mt-1 text-[14px] text-white/40">Busque por arroba ou nome de perfil.</p>
+          <p className="mt-1 text-[14px] text-white/40">Search by username or profile name.</p>
         </div>
 
         <div className="mb-5 flex h-11 items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#120a2e] px-4">
           <SearchIcon />
           <input
             type="text"
-            placeholder="Buscar perfil..."
+            placeholder="Search profile..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
@@ -291,12 +291,12 @@ export default function MeetPage() {
             />
           ))}
           {!loading && results.length === 0 && (
-            <p className="py-12 text-center text-[14px] text-white/30">Nenhum perfil encontrado.</p>
+            <p className="py-12 text-center text-[14px] text-white/30">No profile found.</p>
           )}
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#060410]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#030208]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
             <HomeIcon s={24} className="text-white/40" />

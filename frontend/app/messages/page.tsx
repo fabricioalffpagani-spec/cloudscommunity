@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
-import { HeaderBrand } from "../components/HeaderBrand";
+
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
-import { BellIcon, CheckIcon, GearIcon, MicIcon, PlusIcon, SearchIcon, SendIcon } from "../components/ui-icons";
+import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PlusIcon, SearchIcon, SendIcon } from "../components/ui-icons";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -1310,7 +1310,7 @@ function MessagesPageContent() {
     return (
       <div
         className="flex h-screen items-center justify-center text-white"
-        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
       >
         Carregando sua sessão...
       </div>
@@ -1320,39 +1320,17 @@ function MessagesPageContent() {
   return (
     <div
       className="flex h-screen flex-col overflow-hidden text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
-        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-          <Link href="/" className="flex shrink-0 items-center gap-3">
-            <HeaderBrand />
-          </Link>
-          <div className="flex items-center gap-3">
-            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><SearchIcon s={20} /></button>
-            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><BellIcon s={20} /></button>
-            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><GearIcon s={20} /></Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
-              <SessionUserAvatar user={user} size={48} />
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden pt-[88px]">
+      <div className="flex flex-1 overflow-hidden">
         <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#000000]">
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
-            <span className="text-[17px] font-bold text-white">Mensagens</span>
-            <button
-              type="button"
-              aria-label="Nova conversa"
-              onClick={() => {
-                sidebarSearchRef.current?.focus();
-                setConversationSearch("");
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition"
-            >
-              <PlusIcon s={16} />
-            </button>
+          <div className="flex items-center border-b border-white/[0.07] px-5 py-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+            <div className="flex items-center gap-3">
+              <Link href="/" aria-label="Voltar para home" className="flex h-7 w-7 items-center justify-center rounded-full text-white hover:text-white/80 transition">
+                <ArrowLeftIcon s={16} />
+              </Link>
+              <span className="text-[17px] font-bold text-white">Messages</span>
+            </div>
           </div>
 
           <div className="border-b border-white/[0.07] px-5 py-4">
@@ -1409,7 +1387,7 @@ function MessagesPageContent() {
                           <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "Sem mensagens ainda"}</span>
+                          <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "No messages yet"}</span>
                           {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#9333EA] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
                         </div>
                       </div>
@@ -1503,12 +1481,12 @@ function MessagesPageContent() {
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
-                  <p className="text-[16px] font-semibold text-white/70">Selecione uma conversa</p>
-                  <p className="mt-1 text-[14px]">As mensagens aparecerão aqui.</p>
+                  <p className="text-[16px] font-semibold text-white/70">Select a conversation</p>
+                  <p className="mt-1 text-[14px]">Messages will appear here.</p>
                 </div>
               </div>
             ) : loadingMessages && activeMessages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
+              <div className="flex h-full items-center justify-center text-white/40">Loading messages...</div>
             ) : (
               (() => {
                 const rows: Array<Msg | { id: string; type: "date"; label: string }> = [];
@@ -1667,9 +1645,9 @@ export default function MessagesPage() {
       fallback={(
         <div
           className="flex h-screen items-center justify-center text-white"
-          style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+          style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
         >
-          Carregando mensagens...
+          Loading messages...
         </div>
       )}
     >

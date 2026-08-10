@@ -87,6 +87,7 @@ model User {
   notifications             Notification[]
   mediaAssets               MediaAsset[]
   sessions                  Session[]
+  cloudMessageReactions     CloudMessageReaction[]
 
   @@index([status])
   @@index([createdAt])
@@ -182,6 +183,7 @@ model CloudMessage {
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   replyToMessage   CloudMessage?  @relation("CloudMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
   replies          CloudMessage[] @relation("CloudMessageReplies")
+  reactions        CloudMessageReaction[]
 
   @@index([cloudId, createdAt])
   @@index([userId])
@@ -232,6 +234,21 @@ model CloudMember {
   @@index([userId])
   @@index([cloudId, role])
   @@index([leftAt])
+}
+
+model CloudMessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String   @db.VarChar(50)
+  createdAt DateTime @default(now())
+
+  message   CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
 }
 
 model ConversationMember {

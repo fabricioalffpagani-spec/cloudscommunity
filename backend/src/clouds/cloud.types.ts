@@ -7,6 +7,19 @@ export type CloudAuthorPayload = {
   avatarUrl: string | null;
 };
 
+export type CloudMessageReactionPayload = {
+  id: string;
+  emoji: string;
+  userId: string;
+  user: {
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+  };
+  createdAt: string;
+};
+
 export type CloudPayload = {
   id: string;
   title: string;

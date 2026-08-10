@@ -109,10 +109,10 @@ export default function TrendingPage() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
 
       {/* ── Header ── */}
-      <header className="flex-none border-b border-white/[0.07] bg-transparent">
+      <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <div className="mx-auto flex h-[80px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-3">
 
           {/* Logo */}
@@ -128,10 +128,6 @@ export default function TrendingPage() {
             <a href="/following" className="inline-flex h-10 items-center text-[18px] font-semibold text-white/50 transition hover:text-white">
               Seguindo
             </a>
-            <a href="/trending" className="relative inline-flex h-10 items-center text-[18px] font-semibold text-white">
-              Trending
-              <span className="absolute -bottom-0.5 left-0 right-0 h-[2.5px] rounded-full bg-[#A855F7]" />
-            </a>
           </nav>
 
           {/* Right icons */}
@@ -139,9 +135,8 @@ export default function TrendingPage() {
             <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
               <SearchIcon s={24} />
             </button>
-            <button type="button" aria-label="Notificações" className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
               <BellIcon s={24} />
-              <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
             </button>
             <a href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
               <GearIcon s={24} />
@@ -245,8 +240,11 @@ export default function TrendingPage() {
 
           {/* Trending */}
           <a href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <svg viewBox="0 0 384 512" width={30} height={30} fill="currentColor" aria-hidden="true">
-              <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z"/>
+            <svg viewBox="0 0 24 24" width={30} height={30} fill="currentColor" aria-hidden="true">
+              <path d="M12 2C8 2 5 5 5 9c0 2.2 1 4.2 2.5 5.7C7.7 15.2 8.5 16 8.5 16H7c0 0-1.5-1.5-1.5-3S7 10.5 7 10.5h1c.8 0 1.5-.7 1.5-1.5V8c0-1.7 1.3-3 3-3s3 1.3 3 3v1c0 .8.7 1.5 1.5 1.5h1c0 0 1.5 1.5 1.5 3S16 16 16 16h-2c0 0 .8-.8 1.5-1.5C17 13.2 18 11.2 18 9c0-4-3-7-7-7zm0 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3zm0 5c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
+              <path d="M15 2.5c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V4c0-1.1.9-2 2-2z"/>
+              <path d="M17 3.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.8c0-1 .8-1.8 1.8-1.8z"/>
+              <path d="M18 4.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V5.8c0-1 .8-1.8 1.8-1.8z"/>
             </svg>
             <span className="text-[13px] font-semibold">Trending</span>
           </a>

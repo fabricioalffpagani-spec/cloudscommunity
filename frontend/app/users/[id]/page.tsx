@@ -282,12 +282,12 @@ export default function UserProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen text-white"
-        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
           <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
           </Link>
-          <span className="text-[14px] font-semibold text-white">Perfil</span>
+          <span className="text-[14px] font-semibold text-white">Profile</span>
           <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
@@ -296,7 +296,7 @@ export default function UserProfilePage() {
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center text-white/55">
-            Carregando perfil...
+            Loading profile...
           </div>
         </div>
       </div>
@@ -306,13 +306,19 @@ export default function UserProfilePage() {
   if (error || !profile) {
     return (
       <div className="min-h-screen text-white"
-        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+          <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+            <BackIcon />
+          </Link>
+          <span className="text-[14px] font-semibold text-white">Profile</span>
+        </div>
         <div className="mx-auto max-w-[680px] px-5 py-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center">
-            <p className="text-[18px] font-semibold text-white">Perfil indisponível</p>
-            <p className="mt-2 text-[13px] text-white/45">{error ?? "Não foi possível carregar o perfil."}</p>
+            <p className="text-[18px] font-semibold text-white">Profile unavailable</p>
+            <p className="mt-2 text-[13px] text-white/45">{error ?? "Could not load profile."}</p>
             <Link href="/meet" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#7C3AED] px-4 py-2 text-[13px] font-semibold text-white">
-              Voltar ao Meet
+              Back to Meet
             </Link>
           </div>
         </div>
@@ -322,8 +328,8 @@ export default function UserProfilePage() {
 
   return (
     <div className="min-h-screen text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />
         </Link>
@@ -385,9 +391,9 @@ export default function UserProfilePage() {
           {bio && <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>}
 
           <div className="mt-5 flex items-center gap-6">
-            <FieldStat value={followers} label="Seguidores" />
+            <FieldStat value={followers} label="Followers" />
             <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={following} label="Seguindo" />
+            <FieldStat value={following} label="Following" />
             <div className="h-8 w-px bg-white/10" />
             <div className="flex flex-col items-center">
               <p className="flex items-center gap-1 text-[20px] font-bold text-[#F97316]">
@@ -424,7 +430,7 @@ export default function UserProfilePage() {
                 className="inline-flex items-center gap-2 rounded-full bg-[#7C3AED] px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
               >
                 <EditIcon />
-                Editar perfil
+                Edit profile
               </Link>
             ) : (
               <button
@@ -438,7 +444,7 @@ export default function UserProfilePage() {
                 } ${mutating ? "opacity-60" : ""}`}
               >
                 {profile.isFollowing && <CheckIcon />}
-                {mutating ? "..." : profile.isFollowing ? "Seguindo" : "Seguir"}
+                {mutating ? "..." : profile.isFollowing ? "Following" : "Follow"}
               </button>
             )}
           </div>

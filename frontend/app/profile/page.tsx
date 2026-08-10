@@ -274,19 +274,19 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen text-white"
-        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#060410]/90 px-5 py-3 backdrop-blur-md">
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
           <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
           </Link>
-          <span className="text-[14px] font-semibold text-white">Meu Perfil</span>
+          <span className="text-[14px] font-semibold text-white">My Profile</span>
           <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <GearIcon />
           </Link>
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-8 text-center text-white/55">
-            Carregando seu perfil...
+            Loading your profile...
           </div>
         </div>
       </div>
@@ -295,12 +295,12 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] bg-[#060410]/90 px-5 py-3 backdrop-blur-md">
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />
         </Link>
-        <span className="text-[14px] font-semibold text-white">Meu Perfil</span>
+        <span className="text-[14px] font-semibold text-white">My Profile</span>
         <div className="flex items-center gap-3">
           {/* <SessionUserLink showLabel className="hidden sm:inline-flex" /> */}
           <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
@@ -335,7 +335,7 @@ export default function ProfilePage() {
             <div className="h-8 w-px bg-white/10" />
             <div>
               <p className="text-[20px] font-bold text-white">{following}</p>
-              <p className="text-[11px] uppercase tracking-widest text-white/40">Seguindo</p>
+              <p className="text-[11px] uppercase tracking-widest text-white/40">Following</p>
             </div>
             <div className="h-8 w-px bg-white/10" />
             <div>
@@ -413,14 +413,14 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
           <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.06] bg-[#1a0e3d] p-6 sm:rounded-2xl">
             <div className="mb-5 flex items-center justify-between">
-              <h3 className="text-[17px] font-bold">Editar perfil</h3>
+              <h3 className="text-[17px] font-bold">Edit profile</h3>
               <button onClick={() => setEditing(false)} className="text-white/40 transition hover:text-white">
                 <XIcon />
               </button>
             </div>
 
             <div className="flex flex-col gap-4">
-              <Field label="Nome" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} placeholder="Seu nome" />
+              <Field label="Name" value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} placeholder="Your name" />
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Bio</label>
                 <textarea
@@ -437,7 +437,7 @@ export default function ProfilePage() {
                 placeholder="Sua região"
               />
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[13px] text-white/55">
-                Foto de perfil em breve. Por enquanto, o avatar usa a primeira letra do seu nome.
+                Profile photo coming soon. For now, the avatar uses the first letter of your name.
               </div>
             </div>
 
@@ -446,13 +446,13 @@ export default function ProfilePage() {
                 onClick={() => setEditing(false)}
                 className="flex-1 rounded-full border border-white/10 py-3 text-[14px] font-semibold text-white/70 transition hover:bg-white/5"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 onClick={() => setEditing(false)}
                 className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
               >
-                Salvar
+                Save
               </button>
             </div>
           </div>
