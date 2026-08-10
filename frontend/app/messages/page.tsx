@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -101,7 +101,7 @@ type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
 const MESSAGE_LIMIT = 50;
-const EMOJI_BANK = ["ðŸ˜€", "ðŸ”¥", "â¤ï¸", "ðŸ˜‚", "ðŸ™Œ", "ðŸŽ‰", "ðŸ’¬", "ðŸ‘", "ðŸ‘€", "âœ¨"];
+const EMOJI_BANK = ["😀", "🔥", "❤️", "😂", "🙌", "🎉", "💬", "👍", "👀", "✨"];
 
 const statusDot: Record<Status, string> = {
   online: "bg-[#22C55E]",
@@ -146,7 +146,7 @@ function hashString(value: string) {
 }
 
 function avatarColor(source: string) {
-  const palette = ["#7C3AED", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
+  const palette = ["#9333EA", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
   return palette[hashString(source) % palette.length];
 }
 
@@ -175,7 +175,7 @@ function formatDuration(durationMs: number | null) {
 function previewForMessage(message: BackendMessage) {
   if (message.type === "audio") {
     const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
-    return duration ? `Ãudio Â· ${duration}` : "Ãudio";
+    return duration ? `Áudio · ${duration}` : "Áudio";
   }
 
   if (message.type === "image") {
@@ -376,7 +376,7 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       setState("idle");
       setSeconds(0);
       secondsRef.current = 0;
-      throw new Error("PermissÃ£o de microfone negada.");
+      throw new Error("Permissão de microfone negada.");
     }
   }, [cleanupStream, onStop, state, stopTimers]);
 
@@ -456,22 +456,22 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
   }, []);
 
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`} style={{ minWidth: "220px", maxWidth: "320px" }}>
+    <div className={`rounded-2xl border px-4 py-3 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`} style={{ minWidth: "220px", maxWidth: "320px" }}>
       <div className="flex items-center gap-3">
         <button
           type="button"
           aria-label="Reproduzir áudio"
           onClick={togglePlayback}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#9333EA] hover:bg-[#6D28D9]"}`}
         >
-          {playing ? "â¸" : "â–¶"}
+          {playing ? "⏸" : "▶"}
         </button>
         <div className="flex-1">
           <div className="h-2 rounded-full bg-white/10">
             <div className="h-2 rounded-full bg-white/50" style={{ width: "42%" }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-[11px] text-white/65">
-            <span>Ãudio</span>
+            <span>Áudio</span>
             <span>{formatDuration(msg.durationMs) || "0:00"}</span>
           </div>
         </div>
@@ -490,7 +490,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
     <button
       type="button"
       onClick={() => setExpanded((value) => !value)}
-      className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`}
+      className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
       style={{ maxWidth: "320px" }}
     >
       {msg.mediaUrl ? (
@@ -501,7 +501,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
         />
       ) : (
         <div className="flex h-[180px] items-center justify-center text-[13px] text-white/50">
-          Imagem indisponÃ­vel
+          Imagem indisponível
         </div>
       )}
       <div className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-white/75">
@@ -523,7 +523,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
       href={msg.linkUrl || "#"}
       target="_blank"
       rel="noopener noreferrer"
-      className={`block overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#7C3AED]/30 bg-[#7C3AED]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1C1F2E]"}`}
+      className={`block overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
       style={{ maxWidth: "320px" }}
       onClick={(event) => {
         if (!msg.linkUrl) {
@@ -533,7 +533,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
     >
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
-          â†—
+          ↗
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-semibold text-white">{label}</p>
@@ -585,7 +585,7 @@ function MessageBubble({ msg }: { msg: Msg }) {
         ) : msg.kind === "link" ? (
           <LinkMessageBubble msg={msg} />
         ) : (
-          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1C1F2E]"}`}>
+          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
             {msg.content}
             {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
@@ -664,7 +664,7 @@ function MessagesPageContent() {
       sortConversations(
         prev.map((conversation) =>
           conversation.id === conversationId
-            ? { ...conversation, lastMessage: "Ãudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            ? { ...conversation, lastMessage: "Áudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
             : conversation,
         ),
       ),
@@ -686,7 +686,7 @@ function MessagesPageContent() {
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel enviar o áudio.");
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar o áudio.");
       URL.revokeObjectURL(tempUrl);
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -817,7 +817,7 @@ function MessagesPageContent() {
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel enviar a imagem.");
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
       URL.revokeObjectURL(tempUrl);
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -890,7 +890,7 @@ function MessagesPageContent() {
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       setSharedLink(null);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : "NÃ£o foi possÃ­vel compartilhar o link.");
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível compartilhar o link.");
       setMessagesByConversation((prev) => ({
         ...prev,
         [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
@@ -937,7 +937,7 @@ function MessagesPageContent() {
         setActiveConversationId(mapped[0].id);
       }
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar as conversas.");
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
     } finally {
       setLoadingConversations(false);
     }
@@ -952,7 +952,7 @@ function MessagesPageContent() {
       // Exclude current user
       setFollowedUsers(payload.users.filter(u => u.id !== user?.id));
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar os contatos seguidos.");
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar os contatos seguidos.");
       setFollowedUsers([]);
     } finally {
       setLoadingFollowed(false);
@@ -967,7 +967,7 @@ function MessagesPageContent() {
       const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user)) }));
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : "NÃ£o foi possÃ­vel carregar as mensagens.");
+      setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as mensagens.");
     } finally {
       setLoadingMessages(false);
     }
@@ -991,7 +991,7 @@ function MessagesPageContent() {
       setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
       setActiveConversationId(conversation.id);
     } catch (conversationError) {
-      setError(conversationError instanceof Error ? conversationError.message : "NÃ£o foi possÃ­vel abrir a conversa.");
+      setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
     }
   }, []);
 
@@ -1287,7 +1287,7 @@ function MessagesPageContent() {
 
     setError(null);
     void audioRecorder.start().catch((recordingError) => {
-      setError(recordingError instanceof Error ? recordingError.message : "NÃ£o foi possÃ­vel iniciar a gravaÃ§Ã£o.");
+      setError(recordingError instanceof Error ? recordingError.message : "Não foi possível iniciar a gravação.");
     });
   }, [activeConversationId, audioRecorder, isAudioBusy]);
 
@@ -1307,12 +1307,22 @@ function MessagesPageContent() {
   }, [sendText]);
 
   if (status === "loading") {
-    return <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">Carregando sua sessÃ£o...</div>;
+    return (
+      <div
+        className="flex h-screen items-center justify-center text-white"
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+      >
+        Carregando sua sessão...
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#09090B] text-white">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
+    <div
+      className="flex h-screen flex-col overflow-hidden text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+    >
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
@@ -1321,7 +1331,7 @@ function MessagesPageContent() {
             <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><SearchIcon s={20} /></button>
             <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><BellIcon s={20} /></button>
             <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]"><GearIcon s={20} /></Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
@@ -1329,7 +1339,7 @@ function MessagesPageContent() {
       </header>
 
       <div className="flex flex-1 overflow-hidden pt-[88px]">
-        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#0D0D10]">
+        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#000000]">
           <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
             <span className="text-[17px] font-bold text-white">Mensagens</span>
             <button
@@ -1346,7 +1356,7 @@ function MessagesPageContent() {
           </div>
 
           <div className="border-b border-white/[0.07] px-5 py-4">
-            <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-4 py-2">
+            <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2">
               <SearchIcon s={16} className="text-white/30" />
               <input
                 ref={sidebarSearchRef}
@@ -1367,7 +1377,7 @@ function MessagesPageContent() {
                   }}
                   className="text-[13px] text-white/35 transition hover:text-white/60"
                 >
-                  ×
+                  +
                 </button>
               )}
             </div>
@@ -1387,11 +1397,11 @@ function MessagesPageContent() {
                       key={conversation.id}
                       type="button"
                       onClick={() => selectConversation(conversation.id)}
-                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1a0e3d]" : "hover:bg-white/[0.04]"}`}
                     >
                       <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
                         <UserAvatar user={{ id: conversation.peerId, username: conversation.peerUsername, displayName: conversation.name, avatarUrl: conversation.avatarUrl }} size={44} />
-                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[conversation.status]}`} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[conversation.status]}`} />
                       </Link>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
@@ -1400,7 +1410,7 @@ function MessagesPageContent() {
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
                           <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "Sem mensagens ainda"}</span>
-                          {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#7C3AED] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
+                          {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#9333EA] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
                         </div>
                       </div>
                     </button>
@@ -1414,16 +1424,16 @@ function MessagesPageContent() {
                       onClick={() => {
                         ensureConversation(followedUser.id);
                       }}
-                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversation?.peerId === followedUser.id ? "bg-[#1C1F2E]" : "hover:bg-white/[0.04]"}`}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversation?.peerId === followedUser.id ? "bg-[#1a0e3d]" : "hover:bg-white/[0.04]"}`}
                     >
                       <Link href={`/users/${followedUser.id}`} className="relative shrink-0">
                         <UserAvatar user={{ id: followedUser.id, username: followedUser.username, displayName: followedUser.displayName, avatarUrl: followedUser.avatarUrl }} size={44} />
-                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
                       </Link>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <Link href={`/users/${followedUser.id}`} className="truncate text-[14px] font-semibold text-white hover:underline">{followedUser.displayName || followedUser.username}</Link>
-                          <span className="shrink-0 text-[11px] font-medium text-[#7C3AED]">Nova conversa</span>
+                          <span className="shrink-0 text-[11px] font-medium text-[#9333EA]">Nova conversa</span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
                           <span className="truncate text-[13px] text-white/50">Nenhuma mensagem ainda</span>
@@ -1452,12 +1462,12 @@ function MessagesPageContent() {
         </aside>
 
         <main className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#0D0D10] px-6 py-4">
+          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-6 py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
                   <Link href={`/users/${activeConversation.peerId}`} className="relative">
                   <UserAvatar user={{ id: activeConversation.peerId, username: activeConversation.peerUsername, displayName: activeConversation.name, avatarUrl: activeConversation.avatarUrl }} size={44} />
-                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#0D0D10] ${statusDot[activeConversation.status]}`} />
+                  <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[activeConversation.status]}`} />
                 </Link>
                 <div>
                   <Link href={`/users/${activeConversation.peerId}`} className="text-[16px] font-semibold text-white hover:underline">{activeConversation.name}</Link>
@@ -1494,7 +1504,7 @@ function MessagesPageContent() {
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
                   <p className="text-[16px] font-semibold text-white/70">Selecione uma conversa</p>
-                  <p className="mt-1 text-[14px]">As mensagens aparecerÃ£o aqui.</p>
+                  <p className="mt-1 text-[14px]">As mensagens aparecerão aqui.</p>
                 </div>
               </div>
             ) : loadingMessages && activeMessages.length === 0 ? (
@@ -1527,18 +1537,18 @@ function MessagesPageContent() {
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-white/[0.07] bg-[#0D0D10] px-5 py-4">
-            <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1C1F2E] px-5 py-3">
+          <div className="border-t border-white/[0.07] bg-[#000000] px-5 py-4">
+            <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {audioRecorder.state === "recording" ? (
                 <div className="flex items-center gap-3">
-                  <button type="button" aria-label="Cancelar gravaÃ§Ã£o" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
-                    Ã—
+                  <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
+                    ×
                   </button>
                   <div className="flex-1">
                     <p className="text-[12px] font-semibold text-white">Gravando áudio</p>
                     <p className="text-[12px] text-white/45">{formatDuration(audioRecorder.seconds * 1000) || "0:00"}</p>
                   </div>
-                  <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
+                  <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
                     <PlusIcon s={18} />
                   </button>
                 </div>
@@ -1593,7 +1603,7 @@ function MessagesPageContent() {
                       disabled={!activeConversationId || isAudioBusy}
                       className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      ðŸ˜€
+                      😀
                     </button>
                     <button
                       type="button"
@@ -1614,7 +1624,7 @@ function MessagesPageContent() {
                       className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     {draft.trim() ? (
-                      <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
+                      <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
                         <SendIcon s={18} />
                       </button>
                     ) : (
@@ -1623,7 +1633,7 @@ function MessagesPageContent() {
                         aria-label="Gravar áudio"
                         onClick={startAudioRecording}
                         disabled={!activeConversationId || isAudioBusy}
-                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1C1F2E] text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a0e3d] text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <MicIcon s={18} />
                       </button>
@@ -1644,7 +1654,8 @@ function MessagesPageContent() {
                 </>
               )}
             </div>
-          </div>        </main>
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -1654,7 +1665,10 @@ export default function MessagesPage() {
   return (
     <Suspense
       fallback={(
-        <div className="flex h-screen items-center justify-center bg-[#09090B] text-white">
+        <div
+          className="flex h-screen items-center justify-center text-white"
+          style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}
+        >
           Carregando mensagens...
         </div>
       )}

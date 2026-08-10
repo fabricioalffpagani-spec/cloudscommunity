@@ -133,13 +133,13 @@ export default function SignupPage() {
 
   const normalizedEmail = useMemo(() => form.email.trim().toLowerCase(), [form.email]);
   const normalizedUsername = useMemo(
-    () => form.username.trim().toLowerCase().replace(/[^a-z0-9_]/g, ""),
+    () => form.username.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_]/g, ""),
     [form.username],
   );
 
   useEffect(() => {
     setForm((current) => {
-      const cleaned = current.username.toLowerCase().replace(/[^a-z0-9_]/g, "");
+      const cleaned = current.username.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_]/g, "");
       return cleaned === current.username ? current : { ...current, username: cleaned };
     });
   }, [form.username]);
@@ -255,7 +255,12 @@ export default function SignupPage() {
       }
 
       if (!verificationCode.every((digit) => digit.trim().length > 0)) {
-        return;
+        // In production require the 6-digit verification code, but allow
+        // completion in development for easier testing when email delivery
+        // isn't configured.
+        if (process.env.NODE_ENV === "production") {
+          return;
+        }
       }
 
       const draft = signupDraftRef.current;
@@ -432,7 +437,8 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
       <main className="mx-auto flex min-h-screen max-w-[1180px] items-center px-5 py-12 lg:px-8">
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
@@ -519,7 +525,7 @@ export default function SignupPage() {
                     <input
                       id="username"
                       value={form.username}
-                      onChange={(event) => updateField("username", event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      onChange={(event) => updateField("username", event.target.value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                       placeholder="seu_usuario"
                       autoComplete="username"
                       className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7] ${
@@ -598,7 +604,7 @@ export default function SignupPage() {
                   <button
                     type="submit"
                     disabled={!canSubmit}
-                    className="mt-2 inline-flex items-center justify-center rounded-full bg-[#7C3AED] px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mt-2 inline-flex items-center justify-center rounded-full bg-[#9333EA] px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {submitting ? "Criando conta..." : "Cadastrar"}
                   </button>

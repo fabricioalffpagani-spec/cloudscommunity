@@ -55,6 +55,14 @@ function clearSessionCookie(response: NextResponse) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Development convenience: allow accessing root without auth checks.
+  // This makes it easy to preview the frontend during development when
+  // session handling may redirect to /login. It is intentionally limited
+  // to non-production environments and only for the root path.
+  if (process.env.NODE_ENV !== "production" && pathname === "/") {
+    return NextResponse.next();
+  }
+
   if (isStaticAsset(pathname)) {
     return NextResponse.next();
   }

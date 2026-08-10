@@ -19,11 +19,11 @@ export function normalizeEmail(value: string): string {
 }
 
 export function normalizeUsername(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 export function normalizeName(value: string): string {
-  return value.trim().replace(/\s+/g, ' ');
+  return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
 }
 
 export function normalizeOptionalText(value?: string | null): string | null {

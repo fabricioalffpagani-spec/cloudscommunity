@@ -5,6 +5,7 @@ import { SessionUserProvider } from "./components/session-user";
 export const metadata: Metadata = {
   title: "Clouds Community",
   description: "Interface front-end da rede social Clouds Community.",
+  charset: "utf-8",
   icons: {
     icon: "/clouds_icon.png",
   },
@@ -21,6 +22,7 @@ export default function RootLayout({
       className="h-full scroll-smooth antialiased"
     >
       <head>
+        <meta charSet="utf-8" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link

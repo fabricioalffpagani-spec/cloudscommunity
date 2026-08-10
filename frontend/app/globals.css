@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #9333EA;
-  --color-primary-hover: #7C3AED;
-  --color-primary-press: #6D28D9;
+  /* Nova paleta — roxo escuro */
+  --color-primary: #A855F7;
+  --color-primary-hover: #9333EA;
+  --color-primary-press: #7C3AED;
   --color-primary-light: #C084FC;
   --color-primary-faint: #E9D5FF;
-  --bg-root: #09090B;
-  --bg-nav: #111827;
-  --surface-1: #1C1F2E;
-  --surface-2: #252840;
-  --surface-3: #2E3157;
-  --surface-4: #3B3E6B;
+  --bg-root: #060410;
+  --bg-nav: #060410;
+  --surface-1: #100828;
+  --surface-2: #180d38;
+  --surface-3: #1e1248;
+  --surface-4: #2a1860;
   --text-primary: #F9FAFB;
   --text-secondary: #9CA3AF;
   --text-tertiary: #6B7280;

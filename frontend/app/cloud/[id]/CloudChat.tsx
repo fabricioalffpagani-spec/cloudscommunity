@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -51,10 +52,9 @@ function SmileIcon() {
 
 function FireIcon({ className = "" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-      <path opacity="0.4" d="M12 7.5c.5 1.5 1 3 1 4.5 0 2.5-1 4.5-1 5-.5-1-1-2.5-1-5 0-1.5.5-3 1-4.5Z" />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M12 2C10.5 5.5 8 8.5 8 12.5c0 2.5 1.5 4.5 2.5 5.5-.3-1.2-.3-2.5.5-3.5 1 2 2 3.5 2 5.5 1.5-1 3-3.5 3-5.5 0-1.5-.5-3-1.5-4.5.3 1 .2 2-.4 2.8C13.5 10 13 6.5 12 2Z" />
+      <path d="M12 17c0 1.5-.5 2.5-1 3 1.5-.5 3-2 3-4.5 0-1-.3-2-1-3 .1.8 0 1.5-.5 2C13 13 13 11 12 8.5c-.5 1.5-1 3.5-1 5 0 1.2.4 2.5 1 3.5Z" />
     </svg>
   );
 }
@@ -113,6 +113,16 @@ function Check2Icon() {
   );
 }
 
+function TrashIcon({ s = 18 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ReplyMeta = { id: string; sender: string; content: string };
@@ -129,13 +139,31 @@ type CloudMsgBase = {
   reaction?: string;
   /** true = sent by the current user */
   own?: boolean;
+  /** true = pinned by cloud author */
+  isPinned?: boolean;
 };
 
 type TextMsg = CloudMsgBase & { type: "text"; content: string };
 type AudioMsg = CloudMsgBase & { type: "audio"; duration: string; audioUrl?: string; waveform?: number[] };
 type Message = TextMsg | AudioMsg;
 
-type CloudChatProps = { cloudId: string };
+type CloudMeta = {
+  title: string;
+  duration: string;
+  createdAt: string;
+  membersCount: number;
+  authorId?: string;
+  members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }>;
+};
+
+type CloudChatProps = {
+  cloudId: string;
+  title?: string;
+  duration?: string;
+  createdAt?: string;
+  participants?: number;
+  onBack?: () => void;
+};
 
 // ─── Seed messages ────────────────────────────────────────────────────────────
 
@@ -257,6 +285,52 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
   return { state, seconds, start, pause, resume, stop, cancel };
 }
 
+// ─── Header icons ─────────────────────────────────────────────────────────────
+
+function HeartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
+    </svg>
+  );
+}
+
+function ForwardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 10 20 15 15 20" />
+      <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+    </svg>
+  );
+}
+
+function DotsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.5" />
+      <circle cx="12" cy="12" r="1.5" />
+      <circle cx="12" cy="19" r="1.5" />
+    </svg>
+  );
+}
+
+function BackArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M15 18 8 12l7-6" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 15" />
+    </svg>
+  );
+}
+
 // ─── Waveform (animated bars) ─────────────────────────────────────────────────
 
 const BAR_COUNT = 28;
@@ -346,24 +420,30 @@ function MsgBubble({
   reactionPickerFor,
   setReactionPickerFor,
   onAddReaction,
+  onPinToggle,
+  isCloudAuthor,
 }: {
   msg: Message;
   onReply: (m: Message) => void;
   reactionPickerFor: string | null;
   setReactionPickerFor: (id: string | null) => void;
   onAddReaction: (id: string, emoji: string) => void;
+  onPinToggle: (msgId: string) => void;
+  isCloudAuthor: boolean;
 }) {
   const own = !!msg.own;
 
   return (
-    <div className={`flex items-end gap-3 ${own ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="w-10 shrink-0">
-        <Avatar initials={msg.initials} color={msg.color} size={36} />
+    <div className={`flex items-start gap-2 ${own ? "flex-row-reverse" : "flex-row"} ${msg.isPinned ? "rounded-lg bg-[#1a1a2e] p-2 border border-[#7C3AED]/30" : ""}`}>
+      {/* Avatar fixed column */}
+      <div className="shrink-0 pt-0.5">
+        <Avatar initials={msg.initials} color={msg.color} size={28} />
       </div>
 
-      <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
-        {/* sender + host badge */}
-        <div className={`flex flex-wrap items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
+      {/* Content column aligned with avatar */}
+      <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`} style={{ maxWidth: "74%" }}>
+        {/* sender + host badge + time + pinned badge */}
+        <div className={`flex flex-wrap items-center gap-2 ${own ? "flex-row-reverse" : ""}`}>
           {msg.sender === "Você" ? (
             <span className="text-[12px] font-semibold text-white/50">{msg.sender}</span>
           ) : (
@@ -374,6 +454,11 @@ function MsgBubble({
           {msg.host && (
             <span className="rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[#C4B5FD]">
               Host
+            </span>
+          )}
+          {msg.isPinned && (
+            <span className="rounded-full border border-[#F97316]/40 bg-[#F97316]/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-[#FDBA74]">
+              Fixado
             </span>
           )}
           <span className="text-[11px] text-white/30">{msg.time}</span>
@@ -406,17 +491,10 @@ function MsgBubble({
           <AudioBubble msg={msg} own={own} />
         )}
 
-        {/* actions row */}
-        <div className={`flex flex-wrap items-center gap-2 px-1 text-[11px] text-white/40 ${own ? "flex-row-reverse" : ""}`}>
+        {/* actions row — hype/fire removed */}
+        <div className={`flex flex-wrap items-center gap-2 text-[11px] text-white/40 ${own ? "flex-row-reverse" : ""}`}>
           <button type="button" onClick={() => onReply(msg)} className="rounded-full px-2 py-1 transition hover:bg-white/10">
             Responder
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[#F97316] transition hover:bg-white/10"
-          >
-            <FireIcon />
-            {msg.flames}
           </button>
           <button
             type="button"
@@ -425,6 +503,16 @@ function MsgBubble({
           >
             Reagir
           </button>
+          {isCloudAuthor && (
+            <button
+              type="button"
+              onClick={() => onPinToggle(msg.id)}
+              className="rounded-full px-2 py-1 transition hover:bg-white/10"
+              title={msg.isPinned ? "Desfixar" : "Fixar"}
+            >
+              {msg.isPinned ? "Desfixar" : "Fixar"}
+            </button>
+          )}
           {msg.reaction && (
             <span className="rounded-full bg-white/10 px-2 py-1 text-[12px]">{msg.reaction}</span>
           )}
@@ -432,7 +520,7 @@ function MsgBubble({
 
         {/* reaction picker */}
         {reactionPickerFor === msg.id && (
-          <div className="mt-1 flex flex-wrap gap-2 px-1">
+          <div className="mt-1 flex flex-wrap gap-2">
             {EMOJI_BANK.map((emoji) => (
               <button
                 key={emoji}
@@ -454,7 +542,7 @@ function MsgBubble({
         )}
 
         {/* time + read receipt */}
-        <div className={`flex items-center gap-1 px-1 text-[10px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
+        <div className={`flex items-center gap-1 text-[10px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
           <span>{msg.time}</span>
           {own && <span className="text-[#C084FC]"><Check2Icon /></span>}
         </div>
@@ -465,25 +553,412 @@ function MsgBubble({
 
 // ─── CloudChat ────────────────────────────────────────────────────────────────
 
-export default function CloudChat({ cloudId }: CloudChatProps) {
-  // cloudId would be used to fetch real messages from a backend
-  void cloudId;
-  const [messages, setMessages] = useState<Message[]>(BASE_MESSAGES);
+// ─── Live timer hook ──────────────────────────────────────────────────────────
+
+const DURATION_SECONDS: Record<string, number> = {
+  "5 min":  5 * 60,
+  "10 min": 10 * 60,
+  "30 min": 30 * 60,
+  "1h":     60 * 60,
+  "24h":    24 * 60 * 60,
+};
+
+function parseDurationSeconds(duration: string) {
+  return DURATION_SECONDS[duration] ?? 5 * 60;
+}
+
+function useCountdown(meta: CloudMeta | null) {
+  const [remaining, setRemaining] = useState<number>(0);
+  const [isExpired, setIsExpired] = useState<boolean>(false);
+
+  const duration = meta?.duration ?? null;
+  const createdAt = meta?.createdAt ?? null;
+
+  useEffect(() => {
+    if (!duration || !createdAt) {
+      setRemaining(0);
+      setIsExpired(false);
+      return;
+    }
+    const update = () => {
+      const total = parseDurationSeconds(duration);
+      const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+      const newRemaining = Math.max(total - elapsed, 0);
+      setRemaining(newRemaining);
+      setIsExpired(newRemaining === 0);
+    };
+    update();
+    const iv = setInterval(update, 1000);
+    return () => clearInterval(iv);
+  }, [duration, createdAt]);
+
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
+  return {
+    formatted: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+    remaining,
+    isExpired
+  };
+}
+
+// ─── Cloud Share Modal ────────────────────────────────────────────────────────
+
+type ShareContact = {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl: string | null;
+  initials: string;
+  color: string;
+};
+
+const CONTACT_COLORS = ["#A855F7","#3B82F6","#22C55E","#F59E0B","#EC4899","#8B5CF6","#14B8A6","#F97316"];
+
+function getInitials(name: string) {
+  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function hashColor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return CONTACT_COLORS[h % CONTACT_COLORS.length];
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="currentColor" aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
+    </svg>
+  );
+}
+
+function TelegramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="currentColor" aria-hidden="true">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  );
+}
+
+function CopyLinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function CloudShareModal({
+  cloudId,
+  cloudTitle,
+  onClose,
+}: {
+  cloudId: string;
+  cloudTitle: string;
+  onClose: () => void;
+}) {
+  const [contacts, setContacts] = useState<ShareContact[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  const cloudUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/cloud/${cloudId}`
+    : `/cloud/${cloudId}`;
+
+  // load messenger contacts
+  useEffect(() => {
+    fetch("/api/direct-messages/conversations", { credentials: "include", cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { conversations?: Array<{ id: string; participant: { id: string; username: string; displayName: string; avatarUrl: string | null } }> } | null) => {
+        if (!data?.conversations) return;
+        setContacts(
+          data.conversations.map(c => ({
+            id: c.participant.id,
+            name: c.participant.displayName,
+            username: c.participant.username,
+            avatarUrl: c.participant.avatarUrl,
+            initials: getInitials(c.participant.displayName),
+            color: hashColor(c.participant.id),
+          }))
+        );
+      })
+      .catch(() => {});
+  }, []);
+
+  const sendToContact = (contact: ShareContact) => {
+    // Navigate to the messages page with the conversation pre-opened and the
+    // cloud link pre-loaded as a shared link — the messages page handles the rest.
+    const params = new URLSearchParams({
+      id: contact.id,
+      share: "cloud",
+      url: cloudUrl,
+      title: cloudTitle,
+    });
+    window.location.href = `/messages?${params.toString()}`;
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(cloudUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-[420px] rounded-t-3xl sm:rounded-3xl bg-[#111116] border border-white/[0.08] pb-safe overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-white/20" />
+        </div>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-white/[0.06]">
+          <h2 className="text-[16px] font-bold text-white">Encaminhar Cloud</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition"
+          >
+            <XIcon s={16} />
+          </button>
+        </div>
+
+        {/* Cloud preview */}
+        <div className="mx-5 mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
+          <p className="text-[14px] font-semibold text-white line-clamp-1">{cloudTitle}</p>
+          <p className="text-[12px] text-white/40 mt-0.5 truncate">{cloudUrl}</p>
+        </div>
+
+        {/* Messenger contacts */}
+        <div className="px-5 mt-4">
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-3">Enviar no mensageiro</p>
+          {contacts.length === 0 ? (
+            <p className="text-[13px] text-white/30 py-2">Nenhuma conversa encontrada.</p>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
+              {contacts.map(contact => {
+                const done = sent.has(contact.id);
+                return (
+                  <button
+                    key={contact.id}
+                    type="button"
+                    onClick={() => sendToContact(contact)}
+                    className="flex flex-col items-center gap-1.5 min-w-[60px] group"
+                  >
+                    <div className="relative">
+                      {contact.avatarUrl ? (
+                        <img
+                          src={contact.avatarUrl}
+                          alt={contact.name}
+                          className="h-12 w-12 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#A855F7] transition"
+                        />
+                      ) : (
+                        <div
+                          className="h-12 w-12 rounded-full flex items-center justify-center text-[15px] font-bold text-white ring-2 ring-transparent group-hover:ring-[#A855F7] transition"
+                          style={{ background: contact.color }}
+                        >
+                          {contact.initials}
+                        </div>
+                      )}
+                      {done && (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-[#22C55E] flex items-center justify-center">
+                          <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-white/60 max-w-[56px] truncate group-hover:text-white transition">
+                      {contact.name.split(" ")[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* External share */}
+        <div className="px-5 mt-4 mb-5">
+          <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-3">Compartilhar fora</p>
+          <div className="flex flex-col gap-2">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(`${cloudTitle}\n${cloudUrl}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[14px] font-medium text-white hover:border-[#25D366]/40 hover:bg-[#25D366]/10 transition"
+            >
+              <span className="text-[#25D366]"><WhatsAppIcon /></span>
+              WhatsApp
+            </a>
+            <a
+              href={`https://t.me/share/url?url=${encodeURIComponent(cloudUrl)}&text=${encodeURIComponent(cloudTitle)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[14px] font-medium text-white hover:border-[#2AABEE]/40 hover:bg-[#2AABEE]/10 transition"
+            >
+              <span className="text-[#2AABEE]"><TelegramIcon /></span>
+              Telegram
+            </a>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[14px] font-medium text-white hover:border-[#A855F7]/40 hover:bg-[#A855F7]/10 transition"
+            >
+              <span className="text-[#A855F7]"><CopyLinkIcon /></span>
+              {copied ? "Link copiado!" : "Copiar link"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CloudChat({ cloudId, title, duration: durationProp, createdAt: createdAtProp, participants, onBack }: CloudChatProps) {
+  const [messages, setMessages] = useState<Message[]>(cloudId === "unknown" ? BASE_MESSAGES : []);
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Seed cloudMeta imediatamente com as props vindas da URL (fallback rápido),
+  // sobrescrito quando o fetch retornar os dados reais do banco.
+  const [cloudMeta, setCloudMeta] = useState<CloudMeta | null>(() => {
+    if (title && durationProp && createdAtProp) {
+      return { title, duration: durationProp, createdAt: createdAtProp, membersCount: participants ?? 1 };
+    }
+    return null;
+  });
+  const { formatted: liveTimer, remaining, isExpired } = useCountdown(cloudMeta);
+  const router = useRouter();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [manageMembersOpen, setManageMembersOpen] = useState(false);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
+
+  // Redirect to feed when cloud expires
+  useEffect(() => {
+    if (isExpired && cloudId !== "unknown") {
+      router.replace("/");
+    }
+  }, [isExpired, cloudId, router]);
+
+  // fetch current user
+  useEffect(() => {
+    fetch('/api/auth/me', {
+      credentials: 'include',
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data: { user?: { id: string } }) => {
+        if (data?.user?.id) {
+          setCurrentUserId(data.user.id);
+        }
+      })
+      .catch(() => {
+        // User not logged in
+      });
+  }, []);
+
+  // fetch cloud metadata (title, duration, membersCount, authorId)
+  useEffect(() => {
+    if (!cloudId || cloudId === "unknown") return;
+    let cancelled = false;
+    fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data: { cloud?: { title: string; duration: string; createdAt: string; membersCount: number; authorId: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
+        if (cancelled || !data?.cloud) return;
+        const c = data.cloud;
+        setCloudMeta({
+          title: c.title,
+          duration: c.duration,
+          createdAt: c.createdAt,
+          membersCount: c.membersCount,
+          authorId: c.authorId,
+          members: c.members,
+        });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          // If API fails, use props as fallback (for seed data)
+          if (title && durationProp) {
+            setCloudMeta({
+              title,
+              duration: durationProp,
+              createdAt: createdAtProp || new Date().toISOString(),
+              membersCount: participants || 1,
+            });
+          } else {
+            console.warn("[CloudChat] failed to load cloud meta:", err);
+          }
+        }
+      });
+    return () => { cancelled = true; };
+  }, [cloudId, title, durationProp, createdAtProp, participants]);
+
+  // load existing messages from database
+  useEffect(() => {
+    if (!cloudId || cloudId === "unknown") {
+      setMessages(BASE_MESSAGES);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages`, {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data: { messages?: any[] }) => {
+        if (cancelled || !data?.messages) return;
+        const mappedMessages = data.messages.map((msg: any) => ({
+          id: msg.id,
+          sender: msg.sender,
+          initials: msg.initials,
+          color: msg.color,
+          type: msg.type,
+          content: msg.content,
+          time: new Date(msg.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          flames: 0,
+          own: msg.own,
+          isPinned: msg.isPinned,
+          replyTo: msg.replyTo,
+          audioUrl: msg.mediaUrl,
+          duration: msg.type === "audio" ? "0:00" : undefined,
+        }));
+        setMessages(mappedMessages);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          console.warn("[CloudChat] failed to load messages:", err);
+          // Keep seed messages if API fails
+          setMessages(BASE_MESSAGES);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [cloudId]);
+
   // auto-scroll when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendText = useCallback(() => {
+  const sendText = useCallback(async () => {
     const trimmed = draft.trim();
     if (!trimmed) return;
-    const msg: TextMsg = {
+
+    // Create optimistic message
+    const optimisticMsg: TextMsg = {
       id: uid(),
       sender: "Você",
       initials: "VC",
@@ -495,14 +970,57 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
       own: true,
       replyTo: replyTo ?? undefined,
     };
-    setMessages((prev) => [...prev, msg]);
+
+    setMessages((prev) => [...prev, optimisticMsg]);
     setDraft("");
     setReplyTo(null);
     setEmojiOpen(false);
-  }, [draft, replyTo]);
 
-  const sendAudio = useCallback((audioUrl: string, duration: string, waveform?: number[]) => {
-    const msg: AudioMsg = {
+    // Send to backend
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          type: "text",
+          content: trimmed,
+          replyToMessageId: replyTo?.id,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Replace optimistic message with server message
+        setMessages((prev) => prev.map((m) => 
+          m.id === optimisticMsg.id 
+            ? {
+                ...m,
+                id: data.message.id,
+                sender: data.message.sender,
+                initials: data.message.initials,
+                time: new Date(data.message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+                isPinned: data.message.isPinned,
+              }
+            : m
+        ));
+      } else {
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        console.error("Failed to send message");
+      }
+    } catch (error) {
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      console.error("Failed to send message:", error);
+    }
+  }, [draft, replyTo, cloudId]);
+
+  const sendAudio = useCallback(async (audioUrl: string, duration: string, waveform?: number[]) => {
+    // Create optimistic message
+    const optimisticMsg: AudioMsg = {
       id: uid(),
       sender: "Você",
       initials: "VC",
@@ -516,10 +1034,52 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
       waveform,
       replyTo: replyTo ?? undefined,
     };
-    setMessages((prev) => [...prev, msg]);
+
+    setMessages((prev) => [...prev, optimisticMsg]);
     setReplyTo(null);
     setEmojiOpen(false);
-  }, [replyTo]);
+
+    // Send to backend
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages`, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          type: "audio",
+          mediaUrl: audioUrl,
+          replyToMessageId: replyTo?.id,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Replace optimistic message with server message
+        setMessages((prev) => prev.map((m) => 
+          m.id === optimisticMsg.id 
+            ? {
+                ...m,
+                id: data.message.id,
+                sender: data.message.sender,
+                initials: data.message.initials,
+                time: new Date(data.message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+                isPinned: data.message.isPinned,
+              }
+            : m
+        ));
+      } else {
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+        console.error("Failed to send audio message");
+      }
+    } catch (error) {
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      console.error("Failed to send audio message:", error);
+    }
+  }, [replyTo, cloudId]);
 
   const recorder = useRecorder(sendAudio);
 
@@ -535,15 +1095,290 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
     setReactionPickerFor(null);
   };
 
+  const togglePin = async (msgId: string) => {
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg) return;
+
+    const currentPinnedState = msg.isPinned;
+    const newPinnedState = !currentPinnedState;
+
+    // Verificar se o ID é um UUID válido (formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUuid = uuidRegex.test(msgId);
+
+    // Se for pinar uma nova mensagem, primeiro desfixar qualquer mensagem já fixada
+    const currentlyPinnedMessage = messages.find((m) => m.isPinned && m.id !== msgId);
+
+    // Se não for um UUID válido (ex: mensagens de exemplo), apenas atualizar estado local
+    if (!isValidUuid) {
+      console.log("Skipping API call for non-UUID message ID:", msgId);
+      setMessages((prev) => {
+        const updated = prev.map((m) => {
+          if (m.id === msgId) {
+            return { ...m, isPinned: newPinnedState };
+          }
+          // Se estiver pinando uma nova mensagem, desfixar a anterior
+          if (newPinnedState && m.isPinned && m.id !== msgId) {
+            return { ...m, isPinned: false };
+          }
+          return m;
+        });
+        // Reordenar: fixadas primeiro
+        return [...updated].sort((a, b) => {
+          const aPriority = a.isPinned ? 0 : 1;
+          const bPriority = b.isPinned ? 0 : 1;
+          if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+          }
+          return 0;
+        });
+      });
+      return;
+    }
+
+    // Se houver uma mensagem fixada anterior e estamos pinando uma nova, desfixar a anterior primeiro
+    if (newPinnedState && currentlyPinnedMessage && currentlyPinnedMessage.id !== msgId) {
+      const unpinEndpoint = `/api/clouds/${cloudId}/unpin-message`;
+      try {
+        await fetch(unpinEndpoint, {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messageId: currentlyPinnedMessage.id }),
+        });
+      } catch (error) {
+        console.error("Failed to unpin previous message:", error);
+      }
+    }
+
+    const endpoint = newPinnedState ? `/api/clouds/${cloudId}/pin-message` : `/api/clouds/${cloudId}/unpin-message`;
+
+    console.log("Toggle pin:", { msgId, currentPinnedState, newPinnedState, endpoint, cloudId });
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId: msgId }),
+      });
+
+      console.log("Response status:", response.status, "Response ok:", response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Response data:", data);
+
+        // Atualizar estado localmente imediatamente
+        setMessages((prev) => {
+          const updated = prev.map((m) => {
+            if (m.id === msgId) {
+              return { ...m, isPinned: newPinnedState };
+            }
+            // Se estiver pinando uma nova mensagem, desfixar a anterior
+            if (newPinnedState && m.isPinned && m.id !== msgId) {
+              return { ...m, isPinned: false };
+            }
+            return m;
+          });
+          console.log("Updated messages:", updated);
+          // Reordenar: fixadas primeiro
+          return [...updated].sort((a, b) => {
+            const aPriority = a.isPinned ? 0 : 1;
+            const bPriority = b.isPinned ? 0 : 1;
+            if (aPriority !== bPriority) {
+              return aPriority - bPriority;
+            }
+            return 0;
+          });
+        });
+      } else {
+        const errorText = await response.text();
+        console.error("Failed to toggle pin:", response.status, errorText);
+      }
+    } catch (error) {
+      console.error("Failed to toggle pin:", error);
+    }
+  };
+
+  const handleDeleteCloud = async () => {
+    if (!cloudId || cloudId === "unknown") return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        window.location.href = '/';
+      } else {
+        console.error('Failed to delete cloud');
+      }
+    } catch (error) {
+      console.error('Error deleting cloud:', error);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmOpen(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!cloudId || cloudId === "unknown") return;
+    setIsRemovingMember(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/members/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        // Refresh cloud metadata to update members list
+        fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+          cache: "no-store",
+          credentials: "include",
+        })
+          .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+          .then((data: { cloud?: { title: string; duration: string; createdAt: string; membersCount: number; authorId: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
+            if (data?.cloud) {
+              const c = data.cloud;
+              setCloudMeta({
+                title: c.title,
+                duration: c.duration,
+                createdAt: c.createdAt,
+                membersCount: c.membersCount,
+                authorId: c.authorId,
+                members: c.members,
+              });
+            }
+          });
+      } else {
+        console.error('Failed to remove member');
+      }
+    } catch (error) {
+      console.error('Error removing member:', error);
+    } finally {
+      setIsRemovingMember(false);
+    }
+  };
+
   const isRecording = recorder.state === "recording" || recorder.state === "paused";
 
+  const cloudTitle = cloudMeta?.title ?? title ?? "…";
+  const participantCount = cloudMeta?.membersCount ?? participants ?? 0;
+
   return (
-    <div className="flex h-full flex-col bg-[#070b17] text-white">
+    <div className="flex h-full flex-col bg-black text-white">
+
+      {/* ── Header ── */}
+      <div className="flex shrink-0 items-start gap-3 px-4 pb-3 pt-4">
+        {/* Back */}
+        {onBack ? (
+          <button
+            type="button"
+            aria-label="Voltar"
+            onClick={onBack}
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
+          >
+            <BackArrowIcon />
+          </button>
+        ) : (
+          <Link
+            href="/"
+            aria-label="Voltar"
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
+          >
+            <BackArrowIcon />
+          </Link>
+        )}
+
+        {/* Title + meta */}
+        <div className="flex flex-1 flex-col gap-1 overflow-hidden">
+          <h1 className="truncate text-[24px] font-bold leading-tight text-white">
+            {cloudTitle}
+          </h1>
+          <div className="flex items-center gap-3 text-[14px] text-white/50">
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
+              {participantCount} {participantCount === 1 ? "pessoa" : "pessoas"} na conversa
+            </span>
+            <span className="text-white/20">|</span>
+            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] bg-[#A855F7]/10 px-4 py-2 rounded-md text-[18px]" style={{ fontFamily: 'Arial, sans-serif' }}>
+              <ClockIcon />
+              {liveTimer}
+            </span>
+          </div>
+        </div>
+
+        {/* Action icons */}
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" aria-label="Curtir" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white">
+            <HeartIcon />
+          </button>
+          <button type="button" aria-label="Hype" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-[#F97316]">
+            <FireIcon />
+          </button>
+          <button
+            type="button"
+            aria-label="Encaminhar"
+            onClick={() => setShareOpen(true)}
+            className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white"
+          >
+            <ForwardIcon />
+          </button>
+          {currentUserId === cloudMeta?.authorId && (
+            <>
+              <button
+                type="button"
+                aria-label="Gerenciar membros"
+                onClick={() => setManageMembersOpen(true)}
+                className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                aria-label="Excluir Cloud"
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-red-500"
+              >
+                <TrashIcon />
+              </button>
+            </>
+          )}
+          <button type="button" aria-label="Mais opções" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white">
+            <DotsIcon />
+          </button>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mx-4 shrink-0 border-t border-white/[0.06]" />
 
       {/* ── Messages list ── */}
-      <div className="flex-1 overflow-y-auto px-5 py-5">
+      <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
         <div className="space-y-4">
-          {messages.map((msg) => (
+          {/* Mensagens fixadas - sticky no topo */}
+          {messages.filter(msg => msg.isPinned).map((msg) => (
+            <div key={msg.id} className="sticky top-0 z-10">
+              <MsgBubble
+                msg={msg}
+                onReply={startReply}
+                reactionPickerFor={reactionPickerFor}
+                setReactionPickerFor={setReactionPickerFor}
+                onAddReaction={addReaction}
+                onPinToggle={togglePin}
+                isCloudAuthor={currentUserId === cloudMeta?.authorId}
+              />
+            </div>
+          ))}
+          {/* Mensagens não fixadas */}
+          {messages.filter(msg => !msg.isPinned).map((msg) => (
             <MsgBubble
               key={msg.id}
               msg={msg}
@@ -551,6 +1386,8 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
               reactionPickerFor={reactionPickerFor}
               setReactionPickerFor={setReactionPickerFor}
               onAddReaction={addReaction}
+              onPinToggle={togglePin}
+              isCloudAuthor={currentUserId === cloudMeta?.authorId}
             />
           ))}
         </div>
@@ -558,7 +1395,7 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
       </div>
 
       {/* ── Input bar ── */}
-      <div className="border-t border-white/10 bg-[#060a16] px-4 py-3">
+      <div className="border-t border-white/[0.08] bg-black px-4 py-3">
 
         {/* Emoji picker */}
         {emojiOpen && (
@@ -659,6 +1496,98 @@ export default function CloudChat({ cloudId }: CloudChatProps) {
           </div>
         )}
       </div>
+
+      {/* ── Share modal ── */}
+      {shareOpen && (
+        <CloudShareModal
+          cloudId={cloudId}
+          cloudTitle={cloudTitle}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {/* ── Delete confirmation modal ── */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <h3 className="text-[18px] font-bold text-white mb-2">Excluir Cloud</h3>
+            <p className="text-[14px] text-white/60 mb-6">
+              Tem certeza que deseja excluir esta cloud? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={isDeleting}
+                className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-white/10 transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCloud}
+                disabled={isDeleting}
+                className="flex-1 rounded-full bg-red-600 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {isDeleting ? "Excluindo..." : "Excluir"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manage members modal ── */}
+      {manageMembersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[18px] font-bold text-white">Gerenciar Membros</h3>
+              <button
+                type="button"
+                onClick={() => setManageMembersOpen(false)}
+                className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <XIcon s={16} />
+              </button>
+            </div>
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {cloudMeta?.members?.filter(m => m.role !== 'host').map((member) => (
+                <div key={member.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02]">
+                  <div className="flex items-center gap-3">
+                    {member.user.profile.avatarUrl ? (
+                      <img
+                        src={member.user.profile.avatarUrl}
+                        alt={member.user.profile.displayName}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
+                        {member.user.profile.displayName.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[14px] font-semibold text-white">{member.user.profile.displayName}</p>
+                      <p className="text-[12px] text-white/50">@{member.user.profile.username}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMember(member.userId)}
+                    disabled={isRemovingMember}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition hover:bg-red-500/20 hover:text-red-500 disabled:opacity-50"
+                  >
+                    <XIcon s={14} />
+                  </button>
+                </div>
+              ))}
+              {(!cloudMeta?.members || cloudMeta.members.filter(m => m.role !== 'host').length === 0) && (
+                <p className="text-[14px] text-white/50 text-center py-8">Nenhum membro para gerenciar</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+ 

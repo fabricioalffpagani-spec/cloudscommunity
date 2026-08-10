@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
+  Patch,
   Post,
   Req,
 } from '@nestjs/common';
@@ -48,6 +51,11 @@ export class CloudController {
     return this.cloudService.listFollowing(extractSessionToken(req));
   }
 
+  @Get(':id')
+  async findById(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.findById(extractSessionToken(req), id);
+  }
+
   @Post()
   async create(@Body() body: Record<string, unknown>, @Req() req: Request) {
     return this.cloudService.create(extractSessionToken(req), {
@@ -56,5 +64,45 @@ export class CloudController {
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
     } satisfies CreateCloudInput);
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.delete(extractSessionToken(req), id);
+  }
+
+  @Delete(':id/members/:userId')
+  async removeMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
+    return this.cloudService.removeMember(extractSessionToken(req), id, userId);
+  }
+
+  @Patch(':id/messages/:messageId/pin')
+  async pinMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.cloudService.pinMessage(extractSessionToken(req), id, messageId);
+  }
+
+  @Patch(':id/messages/:messageId/unpin')
+  async unpinMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.cloudService.unpinMessage(extractSessionToken(req), id, messageId);
+  }
+
+  @Post(':id/pin-message')
+  async pinMessagePost(@Param('id') id: string, @Body() body: { messageId: string }, @Req() req: Request) {
+    return this.cloudService.pinMessage(extractSessionToken(req), id, body.messageId);
+  }
+
+  @Post(':id/unpin-message')
+  async unpinMessagePost(@Param('id') id: string, @Body() body: { messageId: string }, @Req() req: Request) {
+    return this.cloudService.unpinMessage(extractSessionToken(req), id, body.messageId);
+  }
+
+  @Post(':id/messages')
+  async createMessage(@Param('id') id: string, @Body() body: { type: string; content?: string; mediaUrl?: string; replyToMessageId?: string }, @Req() req: Request) {
+    return this.cloudService.createMessage(extractSessionToken(req), id, body);
+  }
+
+  @Get(':id/messages')
+  async getMessages(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.getMessages(extractSessionToken(req), id);
   }
 }

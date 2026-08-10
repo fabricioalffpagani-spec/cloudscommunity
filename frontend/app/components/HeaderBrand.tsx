@@ -12,7 +12,7 @@ export function HeaderBrand() {
         priority
       />
       <span className="leading-none">
-        <span className="block text-[32px] font-black tracking-[-0.06em] text-white md:text-[40px]">
+        <span className="block text-[32px] font-black tracking-[0.04em] text-white md:text-[40px]">
           Clouds
         </span>
         <span className="mt-1 block pl-1.5 text-[9px] font-semibold uppercase tracking-[0.42em] bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-[#C084FC] bg-clip-text text-transparent md:text-[11px]">
@@ -22,3 +22,4 @@ export function HeaderBrand() {
     </span>
   );
 }
+

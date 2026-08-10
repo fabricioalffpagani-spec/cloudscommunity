@@ -154,10 +154,10 @@ function ChevronRightIcon() {
 function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.08] bg-[#1C1F2E] p-5 pb-8" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.08] bg-[#1a0e3d] p-5 pb-8" onClick={(event) => event.stopPropagation()}>
         <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
         <p className="mb-4 text-[13px] font-semibold text-white/50">Compartilhar {cloudTitle}</p>
-        <div className="rounded-2xl border border-white/[0.08] bg-[#111116] px-4 py-3 text-[13px] text-white/60">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#120a2e] px-4 py-3 text-[13px] text-white/60">
           {cloudUrl}
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -167,7 +167,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
               await navigator.clipboard.writeText(cloudUrl);
               onClose();
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#7C3AED] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#9333EA] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
           >
             Copiar link
           </button>
@@ -195,7 +195,7 @@ function FollowingCloudStage({
   clouds: FollowingCloud[];
   expandedCloudId: string | null;
   onToggleExpand: (cloudId: string) => void;
-  onEnterConversation: (cloudId: string) => void;
+  onEnterConversation: (cloudId: string) => void; // keeps cloudId: just sets stage index
 }) {
   const [shareTarget, setShareTarget] = useState<FollowingCloud | null>(null);
   const siteOrigin = useSiteOrigin();
@@ -205,12 +205,12 @@ function FollowingCloudStage({
       <div className="topic-scroll flex h-full flex-col gap-4 overflow-y-auto py-4 pr-2">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/80">
-            <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
+            <span className="h-2 w-2 rounded-full bg-[#9333EA]" />
             Ao vivo agora
           </div>
           <button
             type="button"
-            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#120a2e] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
           >
             Todos os tópicos
             <ChevronRightIcon />
@@ -219,7 +219,7 @@ function FollowingCloudStage({
 
         {clouds.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.08] bg-[#1C1F2E]">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.08] bg-[#1a0e3d]">
               <svg viewBox="0 0 24 24" width={36} height={36} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
                 <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
                 <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
@@ -233,7 +233,7 @@ function FollowingCloudStage({
             </div>
             <Link
               href="/meet"
-              className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
             >
               <MeetIcon s={18} className="text-white" />
               Descobrir pessoas
@@ -275,7 +275,7 @@ function FollowingCloudStage({
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-[14px] font-bold text-white ring-1 ring-white/15 md:h-14 md:w-14">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-[14px] font-bold text-white ring-1 ring-white/15 md:h-14 md:w-14">
                             {creatorName.trim().charAt(0).toUpperCase()}
                           </div>
                         )}
@@ -471,8 +471,9 @@ export default function FollowingPage() {
   const isEndingSoon = remaining > 0 && remaining < 5 * 60;
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
@@ -498,7 +499,7 @@ export default function FollowingPage() {
             <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <GearIcon s={23} />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
@@ -508,7 +509,7 @@ export default function FollowingPage() {
       <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-y-auto">
         <div className="mx-auto flex h-full max-w-[1280px] px-3 py-4 lg:px-6">
           {loading ? (
-            <div className="flex flex-1 items-center justify-center rounded-[28px] border border-white/[0.06] bg-[#111116] p-6 text-center text-[13px] text-white/45">
+            <div className="flex flex-1 items-center justify-center rounded-[28px] border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando clouds de quem você segue...
             </div>
           ) : homeStage === "topics" ? (
@@ -526,7 +527,7 @@ export default function FollowingPage() {
                 <button
                   type="button"
                   onClick={() => setHomeStage("topics")}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#120a2e] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
                 >
                   <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="m15 18-6-6 6-6" />
@@ -543,7 +544,7 @@ export default function FollowingPage() {
                   <button
                     onClick={() => navigateCloud(-1)}
                     aria-label="Cloud anterior"
-                    className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] transition hover:bg-[#7C3AED]/40"
+                    className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA]/20 text-[#A855F7] transition hover:bg-[#9333EA]/40"
                   >
                     <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m15 18-6-6 6-6" />
@@ -551,7 +552,7 @@ export default function FollowingPage() {
                   </button>
 
                   <div
-                    className="mx-12 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111116]"
+                    className="mx-12 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#120a2e]"
                     style={{
                       transition: "transform 0.26s cubic-bezier(0.4,0,0.2,1), opacity 0.26s ease",
                       transform: slideAnim === "left"
@@ -582,14 +583,20 @@ export default function FollowingPage() {
                     </div>
 
                     <div className="flex-1 overflow-hidden">
-                      <CloudChat cloudId={currentCloud.id} />
+                      <CloudChat
+                        cloudId={currentCloud.id}
+                        title={currentCloud.title}
+                        duration={currentCloud.duration}
+                        createdAt={currentCloud.createdAt}
+                        participants={currentCloud.membersCount}
+                      />
                     </div>
                   </div>
 
                   <button
                     onClick={() => navigateCloud(1)}
                     aria-label="Próxima Cloud"
-                    className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] transition hover:bg-[#7C3AED]/40"
+                    className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA]/20 text-[#A855F7] transition hover:bg-[#9333EA]/40"
                   >
                     <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m9 18 6-6-6-6" />
@@ -602,7 +609,7 @@ export default function FollowingPage() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#060410]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
             <HomeIcon s={24} className="text-white/40" />

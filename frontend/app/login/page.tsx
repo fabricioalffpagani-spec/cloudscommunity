@@ -76,7 +76,8 @@ export default function LoginPage() {
   const canSubmit = identifier.trim().length > 0 && password.length > 0 && !submitting;
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
       <main className="mx-auto flex min-h-screen max-w-[1180px] items-center px-5 py-12 lg:px-8">
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
@@ -152,7 +153,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="mt-2 inline-flex items-center justify-center rounded-full bg-[#7C3AED] px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40"
+                className="mt-2 inline-flex items-center justify-center rounded-full bg-[#9333EA] px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? "Entrando..." : "Entrar"}
               </button>

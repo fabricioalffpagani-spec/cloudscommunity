@@ -38,7 +38,7 @@ function ChevronRightIcon() { return <svg viewBox="0 0 24 24" width={16} height=
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? "bg-[#9333EA]" : "bg-white/10"}`}>
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? "bg-[#A855F7]" : "bg-white/10"}`}>
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
     </button>
   );
@@ -48,12 +48,12 @@ function Field({ label, type="text", value, onChange, placeholder="" }: { label:
     <div className="flex flex-col gap-1.5">
       <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">{label}</label>
       <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-        className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-[#F9FAFB] placeholder:text-[#6B7280] outline-none focus:border-[#9333EA] transition" />
+        className="w-full rounded-xl bg-[#1a0e3d] border border-white/[0.08] px-4 py-3 text-[14px] text-[#F9FAFB] placeholder:text-[#6B7280] outline-none focus:border-[#A855F7] transition" />
     </div>
   );
 }
 function Card({ children, className="" }: { children: React.ReactNode; className?:string }) {
-  return <div className={`rounded-2xl border border-white/[0.08] bg-[#111116] p-6 ${className}`}>{children}</div>;
+  return <div className={`rounded-2xl border border-white/[0.08] bg-[#120a2e] p-6 ${className}`}>{children}</div>;
 }
 function Sub({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">{children}</h3>;
@@ -116,7 +116,7 @@ function PanelConta() {
           <Field label="Nome" value={nome} onChange={setNome} placeholder="Seu nome" />
           <Field label="Email" type="email" value={email} onChange={setEmail} />
           <Field label="Telefone" type="tel" value={telefone} onChange={setTelefone} />
-          <div className="flex justify-end"><button onClick={save} className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#7C3AED] transition">{saved?<><CheckIcon/>Salvo!</>:"Salvar"}</button></div>
+          <div className="flex justify-end"><button onClick={save} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition">{saved?<><CheckIcon/>Salvo!</>:"Salvar"}</button></div>
         </div>
       </Card>
       <Card><Sub>Detalhes</Sub>
@@ -129,7 +129,7 @@ function PanelConta() {
           ].map(([k,v,mono])=>(
             <div key={k as string} className="flex items-center justify-between py-2.5">
               <span className="text-[13px] text-[#9CA3AF]">{k}</span>
-              <span className={`text-[13px] ${mono?"font-mono bg-[#1C1F2E] px-2.5 py-1 rounded-lg text-[#6B7280]":"text-[#F9FAFB]"}`}>{v}</span>
+              <span className={`text-[13px] ${mono?"font-mono bg-[#1a0e3d] px-2.5 py-1 rounded-lg text-[#6B7280]":"text-[#F9FAFB]"}`}>{v}</span>
             </div>
           ))}
         </div>
@@ -170,25 +170,25 @@ function PanelPerfil() {
       <h2 className="text-[20px] font-bold text-white">Perfil</h2>
       <Card>
         <div className="flex flex-col items-center gap-3 mb-6 pb-6 border-b border-white/[0.06]">
-          <div className="relative"><SessionUserAvatar user={user} size={80} className="ring-4 ring-[#7C3AED]/40" />
-            <button aria-label="Alterar foto" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] border-2 border-[#111116] text-white hover:bg-[#7C3AED]"><CameraIcon s={13}/></button>
+          <div className="relative"><SessionUserAvatar user={user} size={80} className="ring-4 ring-[#9333EA]/40" />
+            <button aria-label="Alterar foto" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#A855F7] border-2 border-[#120a2e] text-white hover:bg-[#9333EA]"><CameraIcon s={13}/></button>
           </div>
-          <button className="text-[13px] text-[#9333EA] hover:text-[#a855f7]">Alterar foto</button>
+          <button className="text-[13px] text-[#A855F7] hover:text-[#a855f7]">Alterar foto</button>
         </div>
         <div className="flex flex-col gap-4">
           <Field label="Nome de exibição" value={name || displayName} onChange={setName} />
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Bio</label>
-            <textarea value={bio} onChange={e=>setBio(e.target.value)} rows={3} className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none focus:border-[#9333EA] resize-none transition" />
+            <textarea value={bio} onChange={e=>setBio(e.target.value)} rows={3} className="w-full rounded-xl bg-[#1a0e3d] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none focus:border-[#A855F7] resize-none transition" />
             <span className="text-right text-[11px] text-[#6B7280]">{bio.length}/160</span>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Região</label>
-            <select value={regiao} onChange={e=>setRegiao(e.target.value)} className="w-full rounded-xl bg-[#1C1F2E] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#9333EA]">
+            <select value={regiao} onChange={e=>setRegiao(e.target.value)} className="w-full rounded-xl bg-[#1a0e3d] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]">
               {BR_STATES.map(s=><option key={s}>{s}</option>)}
             </select>
           </div>
-          <div className="flex justify-end"><button onClick={save} className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#7C3AED] transition">{saved?<><CheckIcon/>Salvo!</>:"Salvar perfil"}</button></div>
+          <div className="flex justify-end"><button onClick={save} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition">{saved?<><CheckIcon/>Salvo!</>:"Salvar perfil"}</button></div>
         </div>
       </Card>
     </div>
@@ -200,7 +200,7 @@ function PanelPrivacidade() {
   const [pub, setPub] = useState(true); const [status, setStatus] = useState(true); const [dm, setDm] = useState(true);
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Privacidade</h2>
     <Card><Sub>Visibilidade</Sub><TRow label="Perfil público" desc="Qualquer pessoa pode ver seu perfil." checked={pub} onChange={setPub}/><TRow label="Mostrar status online" checked={status} onChange={setStatus}/><TRow label="Permitir mensagens diretas" checked={dm} onChange={setDm}/></Card>
-    <Card><Sub>Usuários bloqueados</Sub><div className="flex flex-col items-center py-10 gap-3 text-center"><div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1F2E] text-[#6B7280]"><ShieldIcon s={22}/></div><p className="text-[14px] font-medium text-[#9CA3AF]">Nenhum usuário bloqueado</p></div></Card>
+    <Card><Sub>Usuários bloqueados</Sub><div className="flex flex-col items-center py-10 gap-3 text-center"><div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1a0e3d] text-[#6B7280]"><ShieldIcon s={22}/></div><p className="text-[14px] font-medium text-[#9CA3AF]">Nenhum usuário bloqueado</p></div></Card>
   </div>);
 }
 
@@ -213,14 +213,14 @@ function PanelNotificacoes() {
 }
 
 function PanelAparencia() {
-  const [theme,setTheme]=useState<"dark"|"light"|"system">("dark");const [accent,setAccent]=useState("#9333EA");
+  const [theme,setTheme]=useState<"dark"|"light"|"system">("dark");const [accent,setAccent]=useState("#A855F7");
   const themes=[{k:"dark",l:"Escuro"},{k:"light",l:"Claro"},{k:"system",l:"Sistema"}] as const;
-  const accents=[{n:"Roxo",v:"#9333EA"},{n:"Azul",v:"#3B82F6"},{n:"Verde",v:"#22C55E"},{n:"Rosa",v:"#EC4899"}];
+  const accents=[{n:"Roxo",v:"#A855F7"},{n:"Azul",v:"#3B82F6"},{n:"Verde",v:"#22C55E"},{n:"Rosa",v:"#EC4899"}];
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Aparência</h2>
     <Card><Sub>Tema</Sub><div className="flex gap-3">{themes.map(({k,l})=>(
-      <button key={k} onClick={()=>setTheme(k)} className={`flex flex-1 flex-col items-center gap-3 rounded-xl border p-4 transition ${theme===k?"border-[#9333EA] bg-[#9333EA]/10":"border-white/[0.08] bg-[#1C1F2E] hover:border-white/20"}`}>
-        <div className={`h-10 w-full rounded-lg ${k==="dark"?"bg-[#09090B]":k==="light"?"bg-white":"bg-gradient-to-br from-[#09090B] to-white"}`}/>
-        <span className={`text-[13px] font-medium ${theme===k?"text-[#9333EA]":"text-[#9CA3AF]"}`}>{l}</span>
+      <button key={k} onClick={()=>setTheme(k)} className={`flex flex-1 flex-col items-center gap-3 rounded-xl border p-4 transition ${theme===k?"border-[#A855F7] bg-[#A855F7]/10":"border-white/[0.08] bg-[#1a0e3d] hover:border-white/20"}`}>
+        <div className={`h-10 w-full rounded-lg ${k==="dark"?"bg-[#060410]":k==="light"?"bg-white":"bg-gradient-to-br from-[#060410] to-white"}`}/>
+        <span className={`text-[13px] font-medium ${theme===k?"text-[#A855F7]":"text-[#9CA3AF]"}`}>{l}</span>
       </button>
     ))}</div></Card>
     <Card><Sub>Cor de destaque</Sub><div className="flex gap-4">{accents.map(c=>(
@@ -237,7 +237,7 @@ function PanelAcessibilidade() {
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Acessibilidade</h2>
     <Card><Sub>Exibição</Sub><TRow label="Alto contraste" checked={hc} onChange={setHc}/><TRow label="Reduzir animações" checked={ra} onChange={setRa}/></Card>
     <Card><Sub>Tamanho de fonte</Sub><div className="flex gap-3">{(["S","M","L"] as const).map(s=>(
-      <button key={s} onClick={()=>setFs(s)} className={`flex h-10 w-14 items-center justify-center rounded-full text-[13px] font-semibold transition ${fs===s?"bg-[#9333EA] text-white":"bg-[#1C1F2E] border border-white/[0.08] text-[#9CA3AF] hover:text-white"}`}>{s}</button>
+      <button key={s} onClick={()=>setFs(s)} className={`flex h-10 w-14 items-center justify-center rounded-full text-[13px] font-semibold transition ${fs===s?"bg-[#A855F7] text-white":"bg-[#1a0e3d] border border-white/[0.08] text-[#9CA3AF] hover:text-white"}`}>{s}</button>
     ))}</div></Card>
   </div>);
 }
@@ -254,10 +254,10 @@ function PanelSeguranca() {
         <div className="flex flex-col gap-1.5">
           <label className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Confirmar nova senha</label>
           <input type="password" value={cf} onChange={e=>setCf(e.target.value)} placeholder="••••••••"
-            className={`w-full rounded-xl bg-[#1C1F2E] border px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none transition ${cf&&nw!==cf?"border-red-500/60":"border-white/[0.08] focus:border-[#9333EA]"}`}/>
+            className={`w-full rounded-xl bg-[#1a0e3d] border px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none transition ${cf&&nw!==cf?"border-red-500/60":"border-white/[0.08] focus:border-[#A855F7]"}`}/>
           {cf&&nw!==cf&&<span className="text-[12px] text-red-400">As senhas não coincidem.</span>}
         </div>
-        <div className="flex justify-end"><button onClick={save} disabled={!ok} className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed">{saved?<><CheckIcon/>Atualizada!</>:"Atualizar senha"}</button></div>
+        <div className="flex justify-end"><button onClick={save} disabled={!ok} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition disabled:opacity-40 disabled:cursor-not-allowed">{saved?<><CheckIcon/>Atualizada!</>:"Atualizar senha"}</button></div>
       </div>
     </Card>
     <Card><Sub>Autenticação</Sub><TRow label="Autenticação de dois fatores" desc="Adiciona uma camada extra de segurança." checked={tf} onChange={setTf}/></Card>
@@ -280,10 +280,10 @@ function PanelDados() {
       </div>):(<div className="flex flex-col gap-4">
         <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-[13px] text-red-300">⚠️ Ação <strong>permanente</strong>. Todos seus dados serão deletados.</div>
         <div><label className="text-[12px] text-[#9CA3AF]">Digite <span className="font-mono text-red-400">excluir minha conta</span> para confirmar:</label>
-          <input value={inp} onChange={e=>setInp(e.target.value)} className="mt-2 w-full rounded-xl bg-[#1C1F2E] border border-red-500/30 px-4 py-3 text-[14px] text-white outline-none focus:border-red-500"/>
+          <input value={inp} onChange={e=>setInp(e.target.value)} className="mt-2 w-full rounded-xl bg-[#1a0e3d] border border-red-500/30 px-4 py-3 text-[14px] text-white outline-none focus:border-red-500"/>
         </div>
         <div className="flex gap-3 justify-end">
-          <button onClick={()=>{setConfirm(false);setInp("");}} className="rounded-full bg-[#1C1F2E] border border-white/[0.08] px-5 py-2.5 text-[13px] text-[#9CA3AF] hover:text-white transition">Cancelar</button>
+          <button onClick={()=>{setConfirm(false);setInp("");}} className="rounded-full bg-[#1a0e3d] border border-white/[0.08] px-5 py-2.5 text-[13px] text-[#9CA3AF] hover:text-white transition">Cancelar</button>
           <button disabled={inp!=="excluir minha conta"} className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition"><TrashIcon s={15}/>Confirmar</button>
         </div>
       </div>)}
@@ -323,22 +323,16 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header() {
   const { user } = useSessionUser();
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
       <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-3">
           <HeaderBrand />
         </Link>
-        <nav className="hidden items-center gap-3 md:flex">
-          <Link href="/" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white hover:bg-[#28282C]">Home</Link>
-          <Link href="/messages" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white hover:bg-[#28282C]">Messages</Link>
-          <Link href="/meet" className="inline-flex h-12 items-center rounded-full bg-[#1C1C1F] px-7 text-[17px] font-semibold text-white hover:bg-[#28282C]">Meet</Link>
-        </nav>
         <div className="flex items-center gap-3">
           <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]"><SearchIcon/></button>
-          <button type="button" aria-label="Publicar" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#5B21B6] text-white hover:bg-[#4C1D95]"><UploadIcon/></button>
           <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]"><BellIcon/></button>
-          <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9]"><GearIcon s={22}/></Link>
-          <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white hover:bg-[#6D28D9]">
+          <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#9333EA] text-white hover:bg-[#6D28D9]"><GearIcon s={22}/></Link>
+          <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white hover:bg-[#6D28D9]">
             <SessionUserAvatar user={user} size={48} />
           </Link>
         </div>
@@ -355,7 +349,8 @@ export default function SettingsPage() {
     seguranca:<PanelSeguranca/>, dados:<PanelDados/>, sobre:<PanelSobre/>
   };
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
       <Header/>
       <div className="mx-auto flex max-w-[1280px] gap-8 px-5 pb-24 pt-[108px] lg:px-8">
         {/* Sidebar */}
@@ -363,8 +358,8 @@ export default function SettingsPage() {
           <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Configurações</p>
           {NAV_ITEMS.map(({key,label,icon})=>(
             <button key={key} onClick={()=>setActive(key)}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition border ${active===key?"bg-[#9333EA]/15 text-[#9333EA] border-[#9333EA]/25":"text-[#9CA3AF] hover:bg-white/[0.04] hover:text-white border-transparent"}`}>
-              <span className={active===key?"text-[#9333EA]":"text-[#6B7280]"}>{icon}</span>{label}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition border ${active===key?"bg-[#A855F7]/15 text-[#A855F7] border-[#A855F7]/25":"text-[#9CA3AF] hover:bg-white/[0.04] hover:text-white border-transparent"}`}>
+              <span className={active===key?"text-[#A855F7]":"text-[#6B7280]"}>{icon}</span>{label}
             </button>
           ))}
         </aside>
@@ -372,7 +367,7 @@ export default function SettingsPage() {
         <div className="md:hidden w-full -mt-4 mb-6 col-span-full">
           <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
             {NAV_ITEMS.map(({key,label})=>(
-              <button key={key} onClick={()=>setActive(key)} className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-semibold transition ${active===key?"bg-[#9333EA] text-white":"bg-[#1C1F2E] border border-white/[0.08] text-[#9CA3AF]"}`}>{label}</button>
+              <button key={key} onClick={()=>setActive(key)} className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-semibold transition ${active===key?"bg-[#A855F7] text-white":"bg-[#1a0e3d] border border-white/[0.08] text-[#9CA3AF]"}`}>{label}</button>
             ))}
           </div>
         </div>
@@ -381,6 +376,7 @@ export default function SettingsPage() {
     </div>
   );
 }
+
 
 
 

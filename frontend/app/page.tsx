@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -13,7 +13,7 @@ import {
   useSessionUser,
 } from "./components/session-user";
 
-// â”€â”€â”€ Types
+// ─── Types
 
 type Category = { name: string; bg: string; color?: string };
 
@@ -34,6 +34,7 @@ type Cloud = {
   authorPhoto?: string;
   description?: string;
   liveParticipants?: number;
+  authorId?: string;
 };
 
 type PollOption = { id: string; text: string; votes: number };
@@ -99,54 +100,55 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     description: cloud.description ?? undefined,
     liveParticipants: Math.max(1, cloud.membersCount),
+    authorId: cloud.authorId,
   };
 }
 
-// â”€â”€â”€ Data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const SEED_CLOUDS: Cloud[] = [
   {
     id: "seed-1",
-    title: "TendÃªncias da semana em Tech",
+    title: "Tendências da semana em Tech",
     category: "Tech",
     duration: "1h",
     createdAt: new Date(Date.now() - 8 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-1",
+    href: "/cloud/seed-1?title=Tendências%20da%20semana%20em%20Tech&duration=1h&createdAt=" + new Date(Date.now() - 8 * 60 * 1000).toISOString() + "&participants=42",
     hypes: 42,
   },
   {
     id: "seed-2",
-    title: "Qual album do ano vai dominar?",
+    title: "Qual álbum do ano vai dominar?",
     category: "Music",
     duration: "30 min",
     createdAt: new Date(Date.now() - 14 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-2",
+    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30%20min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString() + "&participants=87",
     hypes: 87,
   },
   {
     id: "seed-3",
-    title: "Gaming: o melhor lanÃ§amento de 2025",
+    title: "Gaming: o melhor lançamento de 2025",
     category: "Gaming",
     duration: "1h",
     createdAt: new Date(Date.now() - 3 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-3",
+    href: "/cloud/seed-3?title=Gaming%3A%20o%20melhor%20lançamento%20de%202025&duration=1h&createdAt=" + new Date(Date.now() - 3 * 60 * 1000).toISOString() + "&participants=31",
     hypes: 31,
   },
   {
     id: "seed-4",
-    title: "Drama das redes: o que vocÃª acha?",
+    title: "Drama das redes: o que você acha?",
     category: "Drama",
     duration: "24h",
     createdAt: new Date(Date.now() - 30 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-4",
+    href: "/cloud/seed-4?title=Drama%20das%20redes%3A%20o%20que%20você%20acha%3F&duration=24h&createdAt=" + new Date(Date.now() - 30 * 60 * 1000).toISOString() + "&participants=113",
     hypes: 113,
   },
   {
@@ -157,18 +159,18 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 2 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-5",
+    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30%20min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString() + "&participants=58",
     hypes: 58,
   },
   {
     id: "seed-6",
-    title: "Memes do momento â€” compartilhe o seu",
+    title: "Memes do momento - compartilhe o seu",
     category: "Memes",
     duration: "10 min",
     createdAt: new Date(Date.now() - 1 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-6",
+    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=10%20min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString() + "&participants=204",
     hypes: 204,
   },
 ];
@@ -209,6 +211,13 @@ function formatCountdown(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+function formatParticipantCount(value: number) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(".0", "")}K`;
+  }
+  return `${value}`;
+}
+
 function hashString(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
@@ -217,10 +226,17 @@ function hashString(value: string) {
   return hash;
 }
 
-function getTopicCountdown(cloud: Cloud) {
+function getCloudRemainingSeconds(cloud: Cloud) {
   const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
-  const remaining = Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0);
-  return remaining;
+  return Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0);
+}
+
+function isCloudActive(cloud: Cloud) {
+  return getCloudRemainingSeconds(cloud) > 0;
+}
+
+function getTopicCountdown(cloud: Cloud) {
+  return getCloudRemainingSeconds(cloud);
 }
 
 function getTopicProfile(cloud: Cloud, index: number) {
@@ -234,35 +250,35 @@ function getTopicProfile(cloud: Cloud, index: number) {
     Tech: {
       name: "pedro.dev",
       handle: "pedro.dev",
-      description: "IA vai substituir programadores? Debate com exemplos, dÃºvidas prÃ¡ticas e opiniÃµes sem filtro.",
+      description: "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
       avatar: "https://i.pravatar.cc/120?img=12",
       participants: 54,
     },
     Music: {
       name: "lais_moraes",
       handle: "lais_moraes",
-      description: "Qual Ã¡lbum do ano merece o topo? VocÃª entra, comenta e acompanha a conversa ao vivo.",
+      description: "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
       avatar: "https://i.pravatar.cc/120?img=32",
       participants: 112,
     },
     Gaming: {
       name: "lucasx7",
       handle: "lucasx7",
-      description: "Jogos, lanÃ§amentos e tretas da semana em um papo rÃ¡pido que muda a cada minuto.",
+      description: "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
       avatar: "https://i.pravatar.cc/120?img=8",
       participants: 91,
     },
     Drama: {
       name: "mariana_rib",
       handle: "mariana_rib",
-      description: "Os tÃ³picos mais comentados do momento, com espaÃ§o para leitura rÃ¡pida e discussÃ£o ao vivo.",
+      description: "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
       avatar: "https://i.pravatar.cc/120?img=47",
       participants: 417,
     },
     Sports: {
       name: "gabriel_souza",
       handle: "gabriel_souza",
-      description: "BrasileirÃ£o, seleÃ§Ã£o, bastidores e tudo que estÃ¡ puxando a conversa esportiva agora.",
+      description: "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
       avatar: "https://i.pravatar.cc/120?img=14",
       participants: 326,
     },
@@ -279,7 +295,7 @@ function getTopicProfile(cloud: Cloud, index: number) {
   return {
     name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
     handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
-    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `TÃ³pico em alta sobre ${cloud.category.toLowerCase()}.`,
+    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
     avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
     participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
   };
@@ -293,7 +309,7 @@ function useSiteOrigin() {
   );
 }
 
-// â”€â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Icons ───────────────────────────────────────────────────────────────────
 
 function SearchIcon({ s = 20 }: { s?: number }) {
   return (
@@ -495,10 +511,10 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
   );
 }
 
-// â”€â”€â”€ Contacts (shared with share modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Contacts (shared with share modal) ──────────────────────────────────────
 
 const PLATFORM_CONTACTS = [
-  { id: "joao",  name: "JoÃ£o Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
+  { id: "joao",  name: "João Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
   { id: "ana",   name: "Ana Costa",  avatar: "AC", color: "#3B82F6", status: "busy"    as const },
   { id: "pedro", name: "Pedro Lima", avatar: "PL", color: "#22C55E", status: "offline" as const },
 ];
@@ -506,7 +522,7 @@ const PLATFORM_CONTACTS = [
 const statusDotColor = { online: "#22C55E", busy: "#F59E0B", offline: "#6B7280" };
 const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
 
-// â”€â”€â”€ Share Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Share Modal ──────────────────────────────────────────────────────────────
 
 function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
   const [view, setView] = useState<"main" | "contacts" | "external">("main");
@@ -520,7 +536,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
       id: `cloud-invite-${Date.now()}`,
       side: "right" as const,
       type: "link" as const,
-      sender: "VocÃª",
+      sender: "Você",
       content: `Participe da Cloud "${cloudTitle}" comigo!`,
       url: cloudUrl,
       time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
@@ -604,7 +620,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
         className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-[#111116] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* â”€â”€ Header â”€â”€ */}
+        {/* ── Header ── */}
         <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
           {view !== "main" && (
             <button type="button" onClick={() => setView("main")} className="mr-3 text-white/40 hover:text-white transition">
@@ -623,7 +639,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </button>
         </div>
 
-        {/* â”€â”€ Cloud title preview â”€â”€ */}
+        {/* ── Cloud title preview ── */}
         {view === "main" && (
           <div className="mx-5 mt-4 rounded-xl border border-white/[0.07] bg-[#1C1F2E] px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
@@ -631,7 +647,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </div>
         )}
 
-        {/* â”€â”€ Main view: two options â”€â”€ */}
+        {/* ── Main view: two options ── */}
         {view === "main" && (
           <div className="flex flex-col gap-3 p-5">
             {/* Mensageiro */}
@@ -684,12 +700,12 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
               <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              {copied ? "âœ“ Link copiado!" : "Copiar link"}
+              {copied ? "? Link copiado!" : "Copiar link"}
             </button>
           </div>
         )}
 
-        {/* â”€â”€ Contacts view â”€â”€ */}
+        {/* ── Contacts view ── */}
         {view === "contacts" && (
           <div className="p-4">
             <p className="mb-3 px-1 text-[12px] text-white/40">Selecione quem deve receber o link desta Cloud:</p>
@@ -728,7 +744,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
           </div>
         )}
 
-        {/* â”€â”€ External view â”€â”€ */}
+        {/* ── External view ── */}
         {view === "external" && (
           <div className="p-5">
             <p className="mb-4 text-[12px] text-white/40">Compartilhe o convite desta Cloud nas redes sociais:</p>
@@ -756,7 +772,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
               <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
               </svg>
-              {copied ? "âœ“ Link copiado!" : "Copiar link"}
+              {copied ? "? Link copiado!" : "Copiar link"}
             </button>
           </div>
         )}
@@ -765,7 +781,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
   );
 }
 
-// â”€â”€â”€ Cloud Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Cloud Card ───────────────────────────────────────────────────────────────
 
 function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   const [liked, setLiked] = useState(false);
@@ -784,8 +800,8 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
-    if (diff < 3600) return `${Math.floor(diff / 60)} min atrÃ¡s`;
-    return `${Math.floor(diff / 3600)}h atrÃ¡s`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
+    return `${Math.floor(diff / 3600)}h atrás`;
   })();
 
   const handleLike = () => {
@@ -810,14 +826,14 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
             <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: isLive ? "#22C55E" : "#F87171" }} />
           </span>
           <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
-            {isLive ? "AO VIVO" : "ENCERRADA"} Â· {cloud.duration}
+            {isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
           </span>
           <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">
             {isLive ? countdownLabel : "00:00"}
           </span>
         </div>
         <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
-          {cloud.visibility === "public" ? "PÃºblico" : "Privado"}
+          {cloud.visibility === "public" ? "Público" : "Privado"}
         </span>
       </div>
 
@@ -840,7 +856,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
       {/* Footer: action buttons */}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
 
-        {/* Left â€” reaction buttons */}
+        {/* Left - reaction buttons */}
         <div className="flex items-center gap-2">
 
           {/* Curtir */}
@@ -898,9 +914,9 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
           </button>
         </div>
 
-        {/* Right â€” enter */}
+        {/* Right — enter */}
         <Link
-          href={cloud.href ?? "/"}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa
@@ -910,7 +926,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
   );
 }
 
-// â”€â”€â”€ Create Cloud Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Create Cloud Modal ───────────────────────────────────────────────────────
 
 function ShareIcon() {
   return (
@@ -974,14 +990,14 @@ function CreateCloudModal({
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">TÃ­tulo</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Título</label>
             <input
               autoFocus
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handlePublish()}
-              placeholder="TÃ­tulo da sua Cloud..."
+              placeholder="Título da sua Cloud..."
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
           </div>
@@ -1000,7 +1016,7 @@ function CreateCloudModal({
             </div>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">DuraÃ§Ã£o</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Duração</label>
             <div className="flex gap-2 flex-wrap">
               {DURATIONS.map(d => (
                 <button
@@ -1032,7 +1048,7 @@ function CreateCloudModal({
                       : "bg-[#252840] border border-white/[0.08] text-white/60 hover:border-[#9333EA] hover:text-white"
                   }`}
                 >
-                  {option === "public" ? "PÃºblico" : "Privado"}
+                  {option === "public" ? "Público" : "Privado"}
                 </button>
               ))}
             </div>
@@ -1051,7 +1067,7 @@ function CreateCloudModal({
   );
 }
 
-// â”€â”€â”€ Record Audio Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Record Audio Modal ───────────────────────────────────────────────────────
 
 function RecordAudioModal({
   onClose,
@@ -1091,7 +1107,7 @@ function RecordAudioModal({
       setStatus("recording");
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
     } catch {
-      setError("PermissÃ£o de microfone negada. Verifique as configuraÃ§Ãµes do navegador.");
+      setError("Permissão de microfone negada. Verifique as configurações do navegador.");
     }
   }, []);
 
@@ -1107,7 +1123,7 @@ function RecordAudioModal({
 
   const handlePublish = () => {
     if (!audioUrl) return;
-    onPublish({ title: `Ãudio Â· ${fmt(seconds)}`, category, duration, visibility, audioUrl });
+    onPublish({ title: `Áudio - ${fmt(seconds)}`, category, duration, visibility, audioUrl });
     onClose();
   };
 
@@ -1116,7 +1132,7 @@ function RecordAudioModal({
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-[18px] font-bold text-white">Gravar Ãudio</h2>
+          <h2 className="text-[18px] font-bold text-white">Gravar Áudio</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white p-1"><XIcon s={18} /></button>
         </div>
 
@@ -1161,7 +1177,7 @@ function RecordAudioModal({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">DuraÃ§Ã£o no feed</label>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">Duração no feed</label>
                 <div className="flex gap-2 flex-wrap">
                   {DURATIONS.map(d => (
                     <button key={d} type="button" onClick={() => setDuration(d)}
@@ -1185,7 +1201,7 @@ function RecordAudioModal({
                         visibility === option ? "bg-[#9333EA] text-white" : "bg-[#252840] border border-white/[0.08] text-white/60 hover:text-white"
                       }`}
                     >
-                      {option === "public" ? "PÃºblico" : "Privado"}
+                      {option === "public" ? "Público" : "Privado"}
                     </button>
                   ))}
                 </div>
@@ -1198,7 +1214,7 @@ function RecordAudioModal({
             {status === "idle" && (
               <button onClick={startRecording}
                 className="flex-1 rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition flex items-center justify-center gap-2">
-                <MicIcon s={18} /> Iniciar gravaÃ§Ã£o
+                <MicIcon s={18} /> Iniciar gravação
               </button>
             )}
             {status === "recording" && (
@@ -1226,7 +1242,7 @@ function RecordAudioModal({
   );
 }
 
-// â”€â”€â”€ Poll Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Poll Card ────────────────────────────────────────────────────────────────
 
 function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optionId: string) => void }) {
   const cat = CATEGORIES.find(c => c.name === poll.category) ?? CATEGORIES[1];
@@ -1234,8 +1250,8 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - poll.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
-    if (diff < 3600) return `${Math.floor(diff / 60)} min atrÃ¡s`;
-    return `${Math.floor(diff / 3600)}h atrÃ¡s`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
+    return `${Math.floor(diff / 3600)}h atrás`;
   })();
 
   return (
@@ -1255,7 +1271,7 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#22C55E] opacity-70" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-[#22C55E]" />
           </span>
-          AO VIVO Â· {poll.duration}
+          AO VIVO - {poll.duration}
         </div>
       </div>
 
@@ -1300,17 +1316,17 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
 
       <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-4">
         <span className="text-[12px] text-white/40">
-          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} Â· publicado {timeAgo}
+          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} - publicado {timeAgo}
         </span>
         {poll.votedOptionId && (
-          <span className="text-[12px] text-[#22C55E]">âœ“ VocÃª votou</span>
+          <span className="text-[12px] text-[#22C55E]">? Você votou</span>
         )}
       </div>
     </article>
   );
 }
 
-// â”€â”€â”€ Create Poll Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Create Poll Modal ────────────────────────────────────────────────────────
 
 function CreatePollModal({
   onClose,
@@ -1366,7 +1382,7 @@ function CreatePollModal({
               type="text"
               value={question}
               onChange={e => setQuestion(e.target.value.slice(0, 120))}
-              placeholder="O que vocÃª quer perguntar?"
+              placeholder="O que você quer perguntar?"
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
           </div>
@@ -1374,7 +1390,7 @@ function CreatePollModal({
           {/* Options */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
-              OpÃ§Ãµes <span className="text-white/30 normal-case">(mÃ­n. 2, mÃ¡x. 6)</span>
+              Opções <span className="text-white/30 normal-case">(mín. 2, máx. 6)</span>
             </label>
             <div className="flex flex-col gap-2">
               {options.map((opt, i) => (
@@ -1386,7 +1402,7 @@ function CreatePollModal({
                     type="text"
                     value={opt}
                     onChange={e => updateOption(i, e.target.value)}
-                    placeholder={`OpÃ§Ã£o ${String.fromCharCode(65 + i)}`}
+                    placeholder={`Opção ${String.fromCharCode(65 + i)}`}
                     className="flex-1 rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-2.5 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
                   />
                   {options.length > 2 && (
@@ -1400,7 +1416,7 @@ function CreatePollModal({
               {options.length < 6 && (
                 <button type="button" onClick={addOption}
                   className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-2.5 text-[13px] text-white/40 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition">
-                  <PlusIcon s={14} /> Adicionar opÃ§Ã£o
+                  <PlusIcon s={14} /> Adicionar opção
                 </button>
               )}
             </div>
@@ -1417,7 +1433,7 @@ function CreatePollModal({
 
           {/* Duration */}
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">DuraÃ§Ã£o</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Duração</label>
             <div className="flex gap-2 flex-wrap">
               {DURATIONS.map(d => (
                 <button key={d} type="button" onClick={() => setDuration(d)}
@@ -1440,7 +1456,7 @@ function CreatePollModal({
   );
 }
 
-// â”€â”€â”€ Other Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Other Modals ─────────────────────────────────────────────────────────────
 
 function SearchModal({ onClose }: { onClose: () => void }) {
   return (
@@ -1465,13 +1481,13 @@ function NotificationsPanel({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/30" />
       <div className="absolute right-4 top-[96px] w-[340px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
-          <span className="text-[15px] font-bold text-white">NotificaÃ§Ãµes</span>
+          <span className="text-[15px] font-bold text-white">Notificações</span>
           <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
         </div>
         <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
           <BellIcon s={32} />
-          <p className="mt-3 text-[14px] font-semibold text-white">Nenhuma notificaÃ§Ã£o</p>
-          <p className="mt-1 text-[12px] text-white/40">VocÃª estÃ¡ em dia com tudo.</p>
+          <p className="mt-3 text-[14px] font-semibold text-white">Nenhuma notificação</p>
+          <p className="mt-1 text-[12px] text-white/40">Você está em dia com tudo.</p>
         </div>
       </div>
     </div>
@@ -1521,7 +1537,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
           <span className="text-white/50"><UserIcon s={16} /></span> Meu Perfil
         </button>
         <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
-          <span className="text-white/50"><GearIcon s={16} /></span> ConfiguraÃ§Ãµes
+          <span className="text-white/50"><GearIcon s={16} /></span> Configurações
         </button>
         <div className="border-t border-white/[0.07]">
           <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition">
@@ -1543,7 +1559,7 @@ function TopicFeedStage({
   clouds: Cloud[];
   expandedTopicId: string | null;
   onToggleExpand: (cloudId: string) => void;
-  onEnterConversation: (cloudId: string) => void;
+  onEnterConversation: (cloud: Cloud) => void;
   onCreateCloud: () => void;
 }) {
   const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
@@ -1561,7 +1577,7 @@ function TopicFeedStage({
           type="button"
           className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
         >
-          Todos os tÃ³picos
+          Todos os tópicos
           <ChevronRightIcon />
         </button>
       </div>
@@ -1575,9 +1591,9 @@ function TopicFeedStage({
             </svg>
           </div>
           <div>
-            <p className="text-[18px] font-semibold text-white">Nenhum tÃ³pico disponÃ­vel</p>
+            <p className="text-[18px] font-semibold text-white">Nenhum tópico disponível</p>
             <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
-              Ainda nÃ£o hÃ¡ tÃ³picos ativos. Quando alguÃ©m publicar, eles aparecem aqui primeiro.
+              Ainda não há tópicos ativos. Quando alguém publicar, eles aparecem aqui primeiro.
             </p>
           </div>
           <button
@@ -1607,7 +1623,7 @@ function TopicFeedStage({
               const hours = Math.floor(remaining / 3600);
               const minutes = Math.floor((remaining % 3600) / 60);
               const seconds = remaining % 60;
-              const createdLabel = "hÃ¡ pouco";
+              const createdLabel = "há pouco";
               const participantAvatars = [
                 profile.avatar,
                 `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
@@ -1620,7 +1636,7 @@ function TopicFeedStage({
               return (
                 <article
                   key={cloud.id}
-                  className="rounded-[22px] border border-white/[0.10] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition hover:border-white/[0.18] md:px-7 md:py-5"
+                  className="rounded-[22px] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition md:px-7 md:py-5"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
@@ -1642,8 +1658,8 @@ function TopicFeedStage({
                         <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
                       </div>
                     </div>
-                    <button type="button" aria-label="Mais opÃ§Ãµes" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
-                      â‹®
+                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
+                      ?
                     </button>
                   </div>
 
@@ -1685,7 +1701,7 @@ function TopicFeedStage({
                       {!isEnded && <div className="mt-1 grid grid-cols-3 text-center text-[11px] uppercase text-white/50 md:text-[13px]"><span>horas</span><span>min</span><span>seg</span></div>}
                       <button
                         type="button"
-                        onClick={() => onEnterConversation(cloud.id)}
+                        onClick={() => onEnterConversation(cloud)}
                         className="mt-3 flex h-11 w-full items-center justify-center rounded-[20px] border border-[#9B6CFF] bg-[#0C0D18] px-6 text-[16px] font-semibold text-white shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_25px_rgba(124,58,237,0.12)] transition hover:bg-[#161128] md:text-[17px]"
                       >
                         Entrar na conversa
@@ -1735,7 +1751,7 @@ function TopicFeedStage({
   );
 }
 
-// â”€â”€â”€ Live Card Action Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Live Card Action Buttons ────────────────────────────────────────────────
 
 function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; initialHypes: number }) {
   const [liked, setLiked] = useState(false);
@@ -1798,10 +1814,11 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
   );
 }
 
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function Page() {
   const { user, refresh } = useSessionUser();
+  const router = useRouter();
   // Menu de categorias removido: feed sem filtro.
 
   const [clouds, setClouds] = useState<Cloud[]>(SEED_CLOUDS);
@@ -1819,25 +1836,30 @@ export default function Page() {
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
 
   const navigateCloud = (direction: number) => {
+    const activeClouds = clouds.filter(isCloudActive);
+    if (activeClouds.length <= 1) return;
+
     const dir = direction > 0 ? "left" : "right";
     setSlideAnim(dir);
     setTimeout(() => {
       setCurrentCloudIndex(prev => {
         const newIndex = prev + direction;
-        if (newIndex < 0) return clouds.length - 1;
-        if (newIndex >= clouds.length) return 0;
+        if (newIndex < 0) return activeClouds.length - 1;
+        if (newIndex >= activeClouds.length) return 0;
         return newIndex;
       });
       setSlideAnim(null);
     }, 260);
   };
 
-  const enterConversation = (cloudId: string) => {
-    const nextIndex = clouds.findIndex((cloud) => cloud.id === cloudId);
-    setCurrentCloudIndex(nextIndex >= 0 ? nextIndex : 0);
-    setSlideAnim(null);
-    setExpandedTopicId(null);
-    setHomeStage("live");
+  const enterConversation = (cloud: Cloud) => {
+    const params = new URLSearchParams({
+      title: cloud.title,
+      duration: cloud.duration,
+      createdAt: cloud.createdAt.toISOString(),
+      participants: String(cloud.liveParticipants ?? 1),
+    });
+    router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
 
 
@@ -1901,24 +1923,32 @@ export default function Page() {
     return () => clearInterval(interval);
   }, []);
 
-  // Reset + seed participants when active cloud changes
   useEffect(() => {
-    if (clouds.length === 0) return;
-    const base = 12 + ((clouds[currentCloudIndex]?.id.charCodeAt(0) ?? 0) % 40);
+    const activeClouds = clouds.filter(isCloudActive);
+    if (activeClouds.length === 0) {
+      setParticipants(0);
+      return;
+    }
+
+    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
+    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
     setParticipants(base);
   }, [currentCloudIndex, clouds]);
 
-  // Simulate users joining/leaving every 3â€“7 seconds
   useEffect(() => {
-    if (clouds.length === 0) return;
-    const iv = setInterval(() => {
-      setParticipants(p => {
-        const delta = Math.floor(Math.random() * 5) - 2; // -2 to +2
-        return Math.max(1, p + delta);
-      });
-    }, 3000 + Math.floor(Math.random() * 4000));
-    return () => clearInterval(iv);
-  }, [currentCloudIndex, clouds.length]);
+    const activeClouds = clouds.filter(isCloudActive);
+    if (activeClouds.length === 0) return;
+
+    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
+    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
+
+    const iv = window.setInterval(() => {
+      const delta = Math.floor(Math.random() * 3) - 1;
+      setParticipants(() => Math.max(1, base + delta));
+    }, 4000);
+
+    return () => window.clearInterval(iv);
+  }, [currentCloudIndex, clouds]);
 
   const closeModal = () => setModal(null);
 
@@ -1992,14 +2022,26 @@ export default function Page() {
 
   // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
   const visibleItems = allItems;
+  const activeClouds = clouds.filter(isCloudActive);
+  const currentCloud = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? null;
+  const currentCountdown = currentCloud ? getTopicCountdown(currentCloud) : 0;
 
-  // Aguarda hidrataÃ§Ã£o para evitar flash do feed antes de um possÃ­vel redirect.
+  useEffect(() => {
+    if (homeStage === "live" && !currentCloud) {
+      setHomeStage("topics");
+      setExpandedTopicId(null);
+    }
+  }, [currentCloud, homeStage]);
+
+  // Aguarda hidratação para evitar flash do feed antes de um possível redirect.
   if (!hydrated) return null;
 
-  return (
-    <div className="min-h-screen bg-[#09090B] text-white">
 
-      {/* Modals */}
+  return (
+    <div className="flex h-screen flex-col overflow-hidden text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+
+      {/* ── Modals ── */}
       {modal === "search"        && <SearchModal onClose={closeModal} />}
       {modal === "create"        && <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />}
       {modal === "poll"          && <CreatePollModal onClose={closeModal} onPublish={publishPoll} />}
@@ -2007,227 +2049,246 @@ export default function Page() {
       {modal === "profile"       && <ProfileMenu onClose={closeModal} />}
       {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
 
-      {/* Header */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
-        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-          <a href="#feed" className="flex shrink-0 items-center gap-3">
+      {/* ── Header — fundo preto sólido ── */}
+      <header className="flex-none border-b border-white/[0.07] bg-transparent">
+        <div className="mx-auto flex h-[80px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-3">
+
+          {/* Logo */}
+          <a href="/" className="flex shrink-0 items-center gap-3 pb-1">
             <HeaderBrand />
           </a>
 
-          <nav aria-label="NavegaÃ§Ã£o principal" className="hidden items-center gap-8 md:flex">
-            <Link href="/" className="relative inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white transition-colors hover:text-white/80">
+          {/* Nav */}
+          <nav aria-label="Navegação" className="flex items-end gap-10 pb-1">
+            <a href="/" className="relative inline-flex h-10 items-center text-[18px] font-semibold text-white">
               For You
-              <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#A855F7]"></span>
-            </Link>
-            <Link href="/following" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
+              <span className="absolute -bottom-0.5 left-0 right-0 h-[2.5px] rounded-full bg-[#A855F7]" />
+            </a>
+            <Link href="/following" className="inline-flex h-10 items-center text-[18px] font-semibold text-white/50 transition hover:text-white">
               Seguindo
             </Link>
-
           </nav>
 
-          <div className="flex items-center gap-3">
+          {/* Right icons */}
+          <div className="flex items-center gap-3 pb-1">
             <button type="button" aria-label="Buscar" onClick={() => setModal("search")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <SearchIcon s={23} />
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <SearchIcon s={24} />
             </button>
-            <button type="button" aria-label="NotificaÃ§Ãµes" onClick={() => setModal("notifications")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <BellIcon s={23} />
+            <button type="button" aria-label="Notificações" onClick={() => setModal("notifications")}
+              className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <BellIcon s={24} />
+              <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
             </button>
-            <Link href="/settings" aria-label="ConfiguraÃ§Ãµes"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <GearIcon s={23} />
+            <Link href="/settings" aria-label="Configurações"
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <GearIcon s={24} />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil"
+              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[16px] font-bold text-white">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Main â€” ocupa o restante da viewport abaixo do header fixo (88px) e acima da nav (72px) */}
-      <main className="fixed inset-x-0 top-[88px] bottom-[72px] overflow-hidden">
-        <div className="relative mx-auto h-full max-w-[1280px] px-5 lg:px-8">
-          {homeStage === "topics" && (
-            <div className="absolute inset-0">
-              <TopicFeedStage
-                clouds={clouds}
-                expandedTopicId={expandedTopicId}
-                onToggleExpand={(cloudId) => setExpandedTopicId((current) => (current === cloudId ? null : cloudId))}
-                onEnterConversation={enterConversation}
-                onCreateCloud={() => setModal("create")}
-              />
+      {/* ── Main: card + arrows ── */}
+      <main className="relative flex flex-1 items-center justify-center overflow-hidden px-16">
+        {homeStage === "topics" ? (
+          <>
+            {/* Left arrow — próximo ao card */}
+            <button
+              onClick={() => navigateCloud(-1)}
+              aria-label="Cloud anterior"
+              className="absolute left-[calc(50%-650px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+            >
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+            </button>
+
+            {/* Cloud card */}
+            <div
+              className="relative w-full max-w-[1100px] overflow-hidden rounded-3xl"
+              style={{
+                background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
+                border: "1px solid rgba(168,85,247,0.22)",
+                boxShadow: "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
+                transition: "transform 0.25s ease, opacity 0.25s ease",
+                transform: slideAnim === "left" ? "translateX(-36px)" : slideAnim === "right" ? "translateX(36px)" : "translateX(0)",
+                opacity: slideAnim ? 0.15 : 1,
+              }}
+            >
+          {/* Card header */}
+          <div className="flex items-center justify-between px-10 pt-8 pb-5">
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <img
+                  src={currentCloud?.authorPhoto ?? `https://i.pravatar.cc/80?img=${(hashString(currentCloud?.id ?? "0") % 70) + 1}`}
+                  alt="author"
+                  className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
+                  referrerPolicy="no-referrer"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
+              </div>
+              <div>
+                <p className="flex items-center gap-2 text-[18px] font-semibold text-white">
+                  {currentCloud?.authorName ?? "Autor"}
+                  <svg viewBox="0 0 24 24" width={18} height={18} fill="#A855F7" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </p>
+                <p className="text-[14px] text-white/45">@{currentCloud?.authorHandle ?? "user"}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-5">
+              {/* Timer — destaque maior */}
+              <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
+                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/>
+                </svg>
+                <span className="text-[19px] font-bold tabular-nums text-white">
+                  {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
+                </span>
+              </div>
+              {/* Participants */}
+              <div className="flex items-center gap-2 text-[16px] text-white/55">
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+                {formatParticipantCount(participants)}
+              </div>
+              <button type="button" className="text-white/35 hover:text-white transition">
+                <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Big title */}
+          <div className="px-12 py-12 text-center">
+            <h2
+              className="text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[72px]"
+              style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
+            >
+              {currentCloud?.title ?? "Nenhuma Cloud ativa no momento"}
+            </h2>
+          </div>
+
+          {/* Enter button */}
+          <div className="flex justify-center px-12 pb-12">
+            <button
+              type="button"
+              onClick={() => currentCloud && enterConversation(currentCloud)}
+              disabled={!currentCloud}
+              className="rounded-full border border-[#A855F7]/70 bg-transparent px-24 py-5 text-[18px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Entrar na Cloud
+            </button>
+          </div>
+
+          {/* Dot indicators */}
+          {activeClouds.length > 1 && (
+            <div className="flex justify-center gap-2 pb-5">
+              {activeClouds.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    const dir = i > currentCloudIndex ? "left" : "right";
+                    setSlideAnim(dir);
+                    setTimeout(() => { setCurrentCloudIndex(i); setSlideAnim(null); }, 250);
+                  }}
+                  className={`h-1.5 rounded-full transition-all ${i === currentCloudIndex ? "w-6 bg-[#A855F7]" : "w-1.5 bg-white/20"}`}
+                />
+              ))}
             </div>
           )}
+        </div>
 
-          {homeStage === "live" && (
-            <div className="absolute inset-0 flex h-full flex-col">
+        {/* Right arrow — próximo ao card */}
+        <button
+          onClick={() => navigateCloud(1)}
+          aria-label="Próxima Cloud"
+          className="absolute left-[calc(50%+650px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+        >
+          <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+        </button>
+
+        {/* FAB + */}
+        <button
+          type="button"
+          aria-label="Publicar nova Cloud"
+          onClick={() => setModal("create")}
+          className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white shadow-[0_4px_20px_rgba(168,85,247,0.55)] transition hover:bg-[#9333EA] hover:scale-105 active:scale-95"
+        >
+          <PlusIcon s={22} />
+        </button>
+        </>
+        ) : (
+          <div className="absolute inset-0 flex h-full flex-col px-3 py-4 lg:px-6">
             <div className="mb-3 flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => setHomeStage("topics")}
-                className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
+                className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#120a2e] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
               >
                 <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m15 18-6-6 6-6" />
                 </svg>
-                Voltar aos tÃ³picos
+                Voltar aos tópicos
               </button>
               <span className="hidden text-[12px] font-semibold uppercase tracking-[0.18em] text-white/35 md:inline">
                 Conversa ao vivo
               </span>
             </div>
-
-          {/* â”€â”€ Cloud ativa â”€â”€ */}
-          {clouds.length > 0 && (() => {
-            const cloud = clouds[currentCloudIndex];
-            const durationSecs = parseDurationSeconds(cloud.duration);
-            const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
-            const remaining = Math.max(durationSecs - elapsed, 0);
-            const isLive = remaining > 0;
-            const isEndingSoon = remaining > 0 && remaining < 5 * 60;
-            void tick;
-            return (
-              <div className="relative flex flex-1 flex-col overflow-hidden py-4">
-                {/* Arrow left */}
-                <button
-                  onClick={() => navigateCloud(-1)}
-                  aria-label="Cloud anterior"
-                  className="absolute left-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
-                >
-                  <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-                </button>
-
-                {/* Card â€” slide animation */}
-                <div
-                  className="mx-12 flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111116]"
-                  style={{
-                    transition: "transform 0.26s cubic-bezier(0.4,0,0.2,1), opacity 0.26s ease",
-                    transform: slideAnim === "left"
-                      ? "translateX(-48px)"
-                      : slideAnim === "right"
-                      ? "translateX(48px)"
-                      : "translateX(0)",
-                    opacity: slideAnim ? 0 : 1,
-                  }}
-                >
-
-                  {/* â”€â”€ CabeÃ§alho fixo dentro do card â”€â”€ */}
-                  <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] px-6 py-4">
-                    <div className="min-w-0 flex-1">
-                      <h2 className="text-[20px] font-semibold text-white truncate">{cloud.title}</h2>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        {/* AO VIVO + countdown */}
-                        {isLive ? (
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[11px] font-semibold ${isEndingSoon ? "bg-[#FF5B5B]/15 text-[#FF5B5B]" : "bg-[#22C55E]/15 text-[#22C55E]"}`}>
-                            <span className="relative flex h-2 w-2">
-                              <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
-                              <span className={`relative inline-flex h-2 w-2 rounded-full ${isEndingSoon ? "bg-[#FF5B5B]" : "bg-[#22C55E]"}`} />
-                            </span>
-                            AO VIVO Â· {formatCountdown(remaining)}
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-white/10 px-3 py-0.5 text-[11px] font-semibold text-white/40">ENCERRADA</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <LiveCardActionButton
-                        cloudId={cloud.id}
-                        initialHypes={cloud.hypes ?? 0}
-                      />
-                    </div>
-                  </div>
-
-                  {/* â”€â”€ Chat (ocupa o restante) â”€â”€ */}
-                  <div className="flex-1 overflow-hidden">
-                    <CloudChat cloudId={cloud.id} />
-                  </div>
-                </div>
-
-                {/* Arrow right */}
-                <button
-                  onClick={() => navigateCloud(1)}
-                  aria-label="PrÃ³xima Cloud"
-                  className="absolute right-0 top-1/2 z-10 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A855F7] hover:bg-[#7C3AED]/40 transition"
-                >
-                  <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-                </button>
-              </div>
-            );
-          })()}
-
-          {/* â”€â”€ Estado vazio â”€â”€ */}
-          {clouds.length === 0 && (
-            <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#1C1F2E] border border-white/[0.08]">
-                <svg viewBox="0 0 24 24" width={36} height={36} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
-                  <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
-                  <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-[18px] font-semibold text-white">Nenhuma Cloud ativa</p>
-                <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
-                  EstÃ¡ muito quieto por aqui. Seja o primeiro a iniciar uma conversa!
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setModal("create")}
-                className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
-              >
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 5v14" /><path d="M5 12h14" />
-                </svg>
-                Criar uma Cloud
-              </button>
-            </div>
-          )}
-            </div>
-          )}
-        </div>
+            {currentCloud && (
+              <CloudChat
+                cloudId={currentCloud.id}
+                title={currentCloud.title}
+                duration={currentCloud.duration}
+                createdAt={currentCloud.createdAt.toISOString()}
+                participants={currentCloud.liveParticipants ?? 1}
+              />
+            )}
+          </div>
+        )}
       </main>
 
+      {/* ── Bottom navigation ── */}
+      <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
+        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
 
-      {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
-          <Link href="/" className="flex flex-col items-center gap-1.5">
-            <HomeIcon s={24} className="text-[#A855F7]" />
-            <span className="text-[12px] font-semibold text-[#A855F7]">Home</span>
+          {/* Home */}
+          <a href="/" className="flex flex-col items-center gap-2 text-[#A855F7]">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
+              <path d="M9 21V12h6v9"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Home</span>
+          </a>
+
+          {/* Messages */}
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Messages</span>
           </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-1.5">
-            <MessageIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Messages</span>
+
+          {/* Trending */}
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 384 512" width={30} height={30} fill="currentColor" aria-hidden="true">
+              <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Trending</span>
           </Link>
-          <Link href="/meet" className="flex flex-col items-center gap-1.5">
-            <MeetIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Meet</span>
-          </Link>
+
         </div>
       </nav>
-
-      {/* FAB â€” criar nova Cloud */}
-      <button
-        type="button"
-        aria-label="Criar nova Cloud"
-        onClick={() => setModal("create")}
-        className="fixed bottom-[120px] right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] shadow-[0_4px_24px_rgba(147,51,234,0.5)] transition hover:bg-[#7C3AED] hover:scale-105 active:scale-95 overflow-hidden"
-      >
-        <Image
-          src="/logo_clouds.png"
-          alt="Criar Cloud"
-          width={32}
-          height={32}
-          className="object-contain"
-        />
-      </button>
 
     </div>
   );
 }
-
-
+ 

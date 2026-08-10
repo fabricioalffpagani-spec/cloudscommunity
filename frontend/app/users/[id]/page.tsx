@@ -281,7 +281,8 @@ export default function UserProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-white">
+      <div className="min-h-screen text-white"
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
         <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
           <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
@@ -304,7 +305,8 @@ export default function UserProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-white">
+      <div className="min-h-screen text-white"
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
         <div className="mx-auto max-w-[680px] px-5 py-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center">
             <p className="text-[18px] font-semibold text-white">Perfil indisponível</p>
@@ -319,7 +321,8 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
       <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
         <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />

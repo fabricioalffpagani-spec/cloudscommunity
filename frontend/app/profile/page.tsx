@@ -45,17 +45,8 @@ function BackIcon() {
   );
 }
 
-function FireIcon({ s = 20 }: { s?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-    </svg>
-  );
-}
-
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-2xl border border-white/[0.08] bg-[#111116] p-6 ${className}`}>{children}</div>;
+  return <div className={`rounded-2xl border border-white/[0.08] bg-[#120a2e] p-6 ${className}`}>{children}</div>;
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
@@ -80,7 +71,7 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-white/[0.08] bg-[#1C1F2E] px-4 py-3 text-[14px] text-[#F9FAFB] placeholder:text-[#6B7280] outline-none transition focus:border-[#9333EA]"
+        className="w-full rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-[#F9FAFB] placeholder:text-[#6B7280] outline-none transition focus:border-[#A855F7]"
       />
     </div>
   );
@@ -126,7 +117,7 @@ function formatMemberSince(value?: string | null) {
 
 function ProfileEmptyState() {
   return (
-    <div className="mt-10 rounded-2xl border border-white/[0.06] bg-[#111116] p-6 text-center">
+    <div className="mt-10 rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center">
       <p className="text-[16px] font-semibold text-white">Nenhuma cloud ativa no momento</p>
       <p className="mt-2 text-[13px] text-white/45">Quando você entrar em uma cloud ao vivo, ela aparece aqui.</p>
       <Link
@@ -153,19 +144,34 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
   const createdAt = new Date(cloud.createdAt);
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
   const isLive = remainingSeconds > 0;
+  const isPublic = cloud.visibility === "public";
 
   return (
     <Link
       href={cloud.href}
-      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#111116] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
+      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
     >
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
         </span>
-        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${isLive ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
-          {isLive ? "Ao vivo" : "Encerrada"}
-        </span>
+        <div className="flex items-center gap-2">
+          {isLive && (
+            <span className="inline-flex items-center rounded-full bg-[#A855F7]/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
+              Ao vivo
+            </span>
+          )}
+          {!isLive && isPublic && (
+            <span className="inline-flex items-center rounded-full bg-[#22C55E]/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#86EFAC]">
+              Pública
+            </span>
+          )}
+          {!isLive && !isPublic && (
+            <span className="inline-flex items-center rounded-full bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
+              Privada
+            </span>
+          )}
+        </div>
       </div>
 
       <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white">{cloud.title}</h3>
@@ -176,8 +182,8 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
-        <span>{isLive ? "Encerra em" : "Encerrada"}</span>
-        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+        <span>{isLive ? "Encerra em" : isPublic ? "Criada em" : "Encerrada"}</span>
+        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#A855F7]/12 text-[#D8B4FE]" : isPublic ? "bg-[#22C55E]/12 text-[#86EFAC]" : "bg-white/[0.05] text-white/45"}`}>
           {formatCountdown(remainingSeconds)}
         </span>
       </div>
@@ -186,7 +192,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
 }
 
 export default function ProfilePage() {
-  const { user, status } = useSessionUser();
+  const { user, status, refresh } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
   const [cloudsLoading, setCloudsLoading] = useState(true);
@@ -260,7 +266,6 @@ export default function ProfilePage() {
   const followers = user?.followersCount ?? 0;
   const following = user?.followingCount ?? 0;
   const cloudsCount = user?.cloudsCount ?? 0;
-  const hypesCount = user?.hypesCount ?? 0;
   const memberSince = formatMemberSince(user?.createdAt);
   const region = user?.location || "Sem região informada";
   const bio = user?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
@@ -268,8 +273,9 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090B] text-white">
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
+      <div className="min-h-screen text-white"
+        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] bg-[#060410]/90 px-5 py-3 backdrop-blur-md">
           <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
           </Link>
@@ -279,7 +285,7 @@ export default function ProfilePage() {
           </Link>
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
-          <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center text-white/55">
+          <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-8 text-center text-white/55">
             Carregando seu perfil...
           </div>
         </div>
@@ -288,8 +294,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] bg-[#09090B]/90 px-5 py-3 backdrop-blur-md">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] bg-[#060410]/90 px-5 py-3 backdrop-blur-md">
         <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />
         </Link>
@@ -305,12 +312,12 @@ export default function ProfilePage() {
       <div className="mx-auto max-w-[680px] px-5 pb-32">
         <div className="mt-10 flex flex-col items-center text-center">
           <div className="relative">
-            <SessionUserAvatar user={user} size={96} className="ring-4 ring-[#7C3AED]/40" />
+            <SessionUserAvatar user={user} size={96} className="ring-4 ring-[#9333EA]/40" />
             <button
               type="button"
               onClick={() => setEditing(true)}
               aria-label="Editar perfil"
-              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]"
+              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]"
             >
               <PencilIcon />
             </button>
@@ -331,14 +338,6 @@ export default function ProfilePage() {
               <p className="text-[11px] uppercase tracking-widest text-white/40">Seguindo</p>
             </div>
             <div className="h-8 w-px bg-white/10" />
-            <div className="flex flex-col items-center">
-              <p className="flex items-center gap-1 text-[20px] font-bold text-[#F97316]">
-                <FireIcon s={18} />
-                {hypesCount}
-              </p>
-              <p className="text-[11px] uppercase tracking-widest text-white/40">Hypes</p>
-            </div>
-            <div className="h-8 w-px bg-white/10" />
             <div>
               <p className="text-[20px] font-bold text-white">{cloudsCount}</p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Clouds</p>
@@ -352,10 +351,50 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        {(() => {
+          const activeCloud = clouds.find((c) => {
+            if (c.visibility !== "public") return false;
+            const remaining = parseDurationSeconds(c.duration) - Math.floor((now - new Date(c.createdAt).getTime()) / 1000);
+            return remaining > 0;
+          }) ?? null;
+
+          return activeCloud ? (
+            <div className="mt-10">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Cloud Ativa</p>
+              <Link
+                href={activeCloud.href}
+                className="block w-full overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6 transition hover:border-[#A855F7]/60 hover:bg-[#1e0e45]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+                    {activeCloud.duration}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#A855F7]/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#A855F7] animate-pulse" />
+                    Ao vivo
+                  </span>
+                </div>
+                <h3 className="mt-4 break-words text-[20px] font-bold leading-snug text-white">{activeCloud.title}</h3>
+                {activeCloud.description && (
+                  <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
+                    {activeCloud.description}
+                  </p>
+                )}
+                <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
+                  <span>Encerra em</span>
+                  <span className="rounded-full bg-[#A855F7]/15 px-2.5 py-1 font-semibold text-[#D8B4FE]">
+                    {formatCountdown(Math.max(parseDurationSeconds(activeCloud.duration) - Math.floor((now - new Date(activeCloud.createdAt).getTime()) / 1000), 0))}
+                  </span>
+                </div>
+              </Link>
+            </div>
+          ) : null;
+        })()}
+
         <div className="mt-10">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds Ativas</p>
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Minhas Clouds</p>
           {cloudsLoading ? (
-            <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-6 text-center text-[13px] text-white/45">
+            <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>
           ) : clouds.length > 0 ? (
@@ -368,24 +407,11 @@ export default function ProfilePage() {
             <ProfileEmptyState />
           )}
         </div>
-
-        <div className="mt-8 grid grid-cols-3 gap-3">
-          {[
-            { label: "Clouds criadas", value: cloudsCount },
-            { label: "Hypes dados", value: hypesCount },
-            { label: "Rank Meet", value: "#--" },
-          ].map((item) => (
-            <div key={item.label} className="rounded-2xl border border-white/[0.06] bg-[#111116] p-4 text-center">
-              <p className="text-[22px] font-bold text-white">{item.value}</p>
-              <p className="mt-1 text-[11px] text-white/40">{item.label}</p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.06] bg-[#1C1F2E] p-6 sm:rounded-2xl">
+          <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.06] bg-[#1a0e3d] p-6 sm:rounded-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-[17px] font-bold">Editar perfil</h3>
               <button onClick={() => setEditing(false)} className="text-white/40 transition hover:text-white">
@@ -401,7 +427,7 @@ export default function ProfilePage() {
                   value={draft.bio}
                   onChange={(event) => setDraft({ ...draft, bio: event.target.value })}
                   rows={3}
-                  className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-[14px] text-white outline-none transition focus:border-[#7C3AED]"
+                  className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#22124a] px-4 py-3 text-[14px] text-white outline-none transition focus:border-[#9333EA]"
                 />
               </div>
               <Field
@@ -424,7 +450,7 @@ export default function ProfilePage() {
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="flex-1 rounded-full bg-[#7C3AED] py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
+                className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
               >
                 Salvar
               </button>
@@ -435,3 +461,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+

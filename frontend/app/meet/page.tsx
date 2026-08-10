@@ -100,11 +100,11 @@ function ProfileRow({
   pending: boolean;
 }) {
   const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
-  const avatarColor = user.avatarUrl ? undefined : "#7C3AED";
+  const avatarColor = user.avatarUrl ? undefined : "#9333EA";
   const followLabel = user.isFollowing ? "Seguindo" : "Seguir";
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#111116] px-4 py-3.5 transition hover:border-white/[0.12]">
+    <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#120a2e] px-4 py-3.5 transition hover:border-white/[0.12]">
       <Link href={user.profileUrl} className="shrink-0">
         {user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -122,7 +122,7 @@ function ProfileRow({
             {user.displayName}
           </Link>
           {user.isSelf && (
-            <span className="shrink-0 rounded-full bg-[#7C3AED]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#C084FC]">
+            <span className="shrink-0 rounded-full bg-[#9333EA]/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#C084FC]">
               Você
             </span>
           )}
@@ -145,7 +145,7 @@ function ProfileRow({
           className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
             user.isFollowing
               ? "border border-white/10 bg-transparent text-white/40"
-              : "bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+              : "bg-[#9333EA] text-white hover:bg-[#6D28D9]"
           } ${pending ? "opacity-60" : ""}`}
         >
           {pending ? "..." : followLabel}
@@ -226,8 +226,9 @@ export default function MeetPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090B] text-white">
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#09090B]">
+    <div className="min-h-screen text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(60,15,160,0.70) 0%, rgba(18,6,55,0.98) 45%, #060410 100%)" }}>
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#060410]">
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
             <HeaderBrand />
@@ -240,7 +241,7 @@ export default function MeetPage() {
             <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <GearIcon />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#7C3AED] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
               <SessionUserAvatar user={user} size={48} />
             </Link>
           </div>
@@ -253,7 +254,7 @@ export default function MeetPage() {
           <p className="mt-1 text-[14px] text-white/40">Busque por arroba ou nome de perfil.</p>
         </div>
 
-        <div className="mb-5 flex h-11 items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#111116] px-4">
+        <div className="mb-5 flex h-11 items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#120a2e] px-4">
           <SearchIcon />
           <input
             type="text"
@@ -295,7 +296,7 @@ export default function MeetPage() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#09090B]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#060410]">
         <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
           <Link href="/" className="flex flex-col items-center gap-1.5">
             <HomeIcon s={24} className="text-white/40" />
