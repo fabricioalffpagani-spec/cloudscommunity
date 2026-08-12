@@ -6,7 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { io, type Socket } from "socket.io-client";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
-import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PlusIcon, SearchIcon, SendIcon } from "../components/ui-icons";
+import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon } from "../components/ui-icons";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -101,7 +101,91 @@ type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
 const MESSAGE_LIMIT = 50;
-const EMOJI_BANK = ["😀", "🔥", "❤️", "😂", "🙌", "🎉", "💬", "👍", "👀", "✨"];
+const EMOJI_BANK = [
+  "😀", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉",
+  "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲",
+  "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔",
+  "🤐", "🤨", "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "",
+  "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕", "🤢", "🤮", "🤧",
+  "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳", "🥸", "😎", "🤓",
+  "🧐", "😕", "😟", "🙁", "☹️", "😮", "😯", "😲", "😳", "🥺",
+  "😦", "😧", "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣",
+  "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠", "🤬", "😈",
+  "👿", "💀", "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾",
+  "🤖", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾",
+  "🙈", "🙉", "🙊", "💋", "💌", "💘", "💝", "💖", "💗", "💓",
+  "💞", "💕", "💟", "❣️", "💔", "❤️", "🧡", "💛", "💙", "💜",
+  "🤎", "🖤", "🤍", "💯", "💢", "💥", "💫", "💦", "💨", "🕳️",
+  "💣", "💬", "🗨️", "️", "💭", "💤", "👋", "🤚", "🖐️", "✋",
+  "🖖", "👌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉",
+  "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜",
+  "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪",
+  "🦾", "🦿", "🦵", "🦶", "👂", "🦻", "👃", "🧠", "🫀", "🫁",
+  "🦷", "🦴", "👀", "👁️", "👅", "👄", "👶", "🧒", "👦", "👧",
+  "🧑", "👱", "👨", "🧔", "👩", "🧓", "👴", "👵", "🙍", "🙎",
+  "🙅", "🙆", "💁", "🙋", "🧏", "🙇", "🤦", "🤷", "👨‍⚕️", "👩‍⚕️",
+  "👨‍🎓", "👩‍🎓", "👨‍🏫", "👩‍🏫", "👨‍⚖️", "👩‍⚖️", "👨‍🌾", "👩‍🌾", "👨‍🍳", "👩‍🍳",
+  "👨‍🔧", "👩‍🔧", "👨‍🏭", "👩‍🏭", "👨‍💼", "👩‍💼", "👨‍🔬", "👩‍🔬", "👨‍💻", "👩‍💻",
+  "👨‍🎤", "👩‍🎤", "👨‍🎨", "👩‍🎨", "👨‍✈️", "👩‍✈️", "👨‍🚀", "👩‍🚀", "👨‍🚒", "👩‍🚒",
+  "👮", "🕵️", "💂", "👷", "🤴", "👸", "👳", "👲", "🧕", "🤵",
+  "👰", "🤰", "🤱", "👼", "🎅", "🤶", "🧙", "🧚", "🧛", "🧜",
+  "🧝", "🧞", "🧟", "💆", "💇", "🚶", "🧍", "🧎", "🏃", "💃",
+  "🕺", "🕴️", "👯", "🧖", "🧗", "🤺", "🏇", "⛷️", "🏂", "🏌️",
+  "🏄", "🚣", "🏊", "⛹️", "🏋️", "🤼", "🤸", "🤾", "🤹", "🛀",
+  "🛌", "🧘", "", "🦹", "", "🕶️", "🥽", "🥼", "🦺", "👔",
+  "👕", "👖", "🧣", "🧤", "🧥", "🧦", "👗", "👘", "🥻", "🩱",
+  "🩲", "🩳", "👙", "👚", "👛", "👜", "🎒", "👞", "👟", "🥾",
+  "🥿", "👠", "👡", "🩰", "👢", "👑", "👒", "🎩", "🎓", "🧢",
+  "⛑️", "📿", "💄", "💍", "💎", "🔔", "🔕", "📢", "📣", "📯",
+  "", "🔉", "🔊", "🔇", "🎼", "🎵", "🎶", "🎙️", "🎚️", "🎛️",
+  "🎤", "🎧", "📻", "🎷", "🎸", "🎹", "🎺", "🎻", "🪕", "🥁",
+  "📱", "📲", "☎️", "📞", "📟", "📠", "🔋", "🔌", "💻", "🖥️",
+  "🖨️", "⌨️", "🖱️", "🖲️", "💽", "💾", "💿", "📀", "🧮", "🎥",
+  "🎞️", "📽️", "🎬", "📺", "📷", "📸", "📹", "📼", "🔍", "🔎",
+  "🕯️", "💡", "🔦", "🏮", "🪔", "📔", "📕", "📖", "📗", "📘",
+  "📙", "📚", "📓", "📒", "📃", "📜", "📄", "📰", "🗞️", "📑",
+  "🔖", "🏷️", "💰", "💴", "💵", "💶", "💷", "💸", "💳", "🧾",
+  "💹", "✉️", "📧", "📨", "📩", "📤", "📥", "📦", "📫", "📪",
+  "📬", "📭", "📮", "🗳️", "✏️", "✒️", "🖋️", "🖊️", "🖌️", "🖍️",
+  "📝", "💼", "📁", "📂", "🗂️", "📅", "📆", "🗒️", "🗓️", "📇",
+  "📈", "📉", "📊", "📋", "📌", "📍", "📎", "🖇️", "📏", "📐",
+  "✂️", "🗃️", "🗄️", "🗑️", "🔒", "🔓", "🔏", "🔐", "🔑", "🗝️",
+  "🔨", "🪓", "⛏️", "🔧", "🔩", "⚙️", "🗜️", "⚖️", "🦯", "🔫",
+  "💣", "🧨", "🔪", "🗡️", "⚔️", "🛡️", "🚬", "⚰️", "⚱️", "🏺",
+  "🔮", "📿", "🧿", "💈", "⚗️", "🔭", "🔬", "🩹", "🩺", "💊",
+  "💉", "🩸", "🧬", "🦠", "🧫", "🧪", "🌡️", "🧹", "🪠", "🧺",
+  "🧻", "🚽", "🚿", "🛁", "🛀", "🧼", "🪥", "🪒", "🧽", "🪣",
+  "🧴", "🛎️", "🚪", "🪑", "🛋️", "🛏️", "🛌", "🧸", "🖼️", "🛍️",
+  "🛒", "🎁", "🎈", "🎏", "🎀", "🎊", "🎉", "🎎", "🎐", "🧧",
+  "✨", "🎇", "🎆", "🔥", "💫", "🧨", "🎑", "🎃", "🎄", "�️",
+  "🎟️", "🎫", "🎖️", "🏆", "🏅", "🥇", "🥈", "🥉", "⚽", "⚾",
+  "🥎", "🏀", "🏐", "🏈", "🏉", "🎾", "🥏", "🎳", "🏏", "🏑",
+  "🏒", "🥍", "🏓", "🏸", "🥊", "🥋", "🥅", "⛳", "⛸️", "🎣",
+  "🤿", "🎽", "🎿", "🛷", "🥌", "🎯", "🪀", "🪁", "🎱", "🎮",
+  "🕹️", "🎰", "🎲", "🧩", "♠️", "♥️", "♦️", "♣️", "♟️", "🃏",
+  "🀄", "🎴", "🎭", "🎨", "🧵", "🧶", "🪡", "🪢", "🌐", "🌍",
+  "🌎", "🌏", "🗺️", "🗾", "🧭", "🏔️", "⛰️", "🌋", "🗻", "🏕️",
+  "🏖️", "🏜️", "🏝️", "🏞️", "🏟️", "🏛️", "🏗️", "🧱", "🏘️", "🏚️",
+  "🏠", "🏡", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪",
+  "🏫", "🏬", "🏭", "🏯", "🏰", "💒", "🗼", "🗽", "⛪", "🕌",
+  "🛕", "🕍", "⛩️", "🕋", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌄",
+  "🌅", "🌆", "🌇", "🌉", "♨️", "🎠", "🎡", "🎢", "🎪", "🚂",
+  "🚃", "🚄", "🚅", "🚆", "🚇", "🚈", "🚉", "🚊", "🚝", "🚞",
+  "🚋", "🚌", "🚍", "🚎", "🚐", "🚑", "🚒", "🚓", "🚔", "🚕",
+  "🚖", "🚗", "🚘", "🚙", "🚚", "🚛", "🚜", "🏎️", "🏍️", "🛵",
+  "🦽", "🦼", "🛺", "🚲", "🛴", "🛹", "🛼", "🚏", "🛣️", "🛤️",
+  "🛢️", "⛽", "🚨", "🚥", "🚦", "🛑", "🚧", "⚓", "⛵", "🛶",
+  "🚤", "🛳️", "⛴️", "🛥️", "🚢", "✈️", "🛩️", "🛫", "🛬", "🪂",
+  "💺", "🚁", "🚟", "🚠", "🚡", "🛰️", "🚀", "🛸", "🧳", "⌛",
+  "⏳", "⌚", "⏰", "⏱️", "⏲️", "🕰️", "🕛", "🕧", "🕐", "🕜",
+  "🕑", "🕝", "🕒", "🕞", "🕓", "🕟", "🕔", "🕠", "🕕", "🕡",
+  "🕖", "🕢", "🕗", "🕣", "🕘", "🕤", "🕙", "🕥", "🕚", "🕦",
+  "🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘", "🌙", "🌚",
+  "🌛", "🌜", "🌡️", "☀️", "🌝", "🌞", "🪐", "⭐", "🌟", "🌠",
+  "🌌", "☁️", "⛅", "⛈️", "🌤️", "🌥️", "🌦️", "🌧️", "🌨️", "🌩️",
+  "🌪️", "🌫️", "🌬️", "🌀", "🌈", "🌂", "☂️", "☔", "⛱️", "⚡",
+  "❄️", "☃️", "⛄", "☄️", "🔥", "💧", "🌊"
+];
 
 const statusDot: Record<Status, string> = {
   online: "bg-[#22C55E]",
@@ -299,7 +383,7 @@ type RecordedAudio = {
   mimeType: string;
 };
 
-type AudioRecorderState = "idle" | "recording";
+type AudioRecorderState = "idle" | "recording" | "paused";
 
 function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
   const [state, setState] = useState<AudioRecorderState>("idle");
@@ -389,6 +473,25 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     recorder.stop();
   }, []);
 
+  const pause = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "recording") return;
+    recorder.pause();
+    stopTimers();
+    setState("paused");
+  }, [stopTimers]);
+
+  const resume = useCallback(() => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "paused") return;
+    recorder.resume();
+    timerRef.current = setInterval(() => {
+      secondsRef.current += 1;
+      setSeconds(secondsRef.current);
+    }, 1000);
+    setState("recording");
+  }, []);
+
   const cancel = useCallback(() => {
     const recorder = recorderRef.current;
     stopTimers();
@@ -415,7 +518,52 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     cleanupStream();
   }, [cleanupStream, stopTimers]);
 
-  return { state, seconds, start, stop, cancel };
+  return { state, seconds, start, stop, pause, resume, cancel };
+}
+
+// ─── Waveform (animated bars) ─────────────────────────────────────────────────
+
+const BAR_COUNT = 28;
+
+function Waveform({ active, paused, progress }: { active?: boolean; paused?: boolean; progress?: number }) {
+  const [heights, setHeights] = useState<number[]>(() =>
+    Array.from({ length: BAR_COUNT }, () => 0)
+  );
+
+  useEffect(() => {
+    let iv: ReturnType<typeof setInterval> | null = null;
+    if (active && !paused) {
+      iv = setInterval(() => setHeights(() => Array.from({ length: BAR_COUNT }, () => 4 + Math.floor(Math.random() * 18))), 240);
+    } else if (active && paused) {
+      iv = setInterval(() => setHeights(() => Array.from({ length: BAR_COUNT }, () => 6 + Math.floor(Math.random() * 6))), 800);
+    } else {
+      setHeights(Array.from({ length: BAR_COUNT }, () => 0));
+    }
+    return () => { if (iv) clearInterval(iv); };
+  }, [active, paused]);
+
+  // Calculate how many bars should be visible based on progress (assuming max 15 seconds for full progress)
+  const visibleBars = active && progress ? Math.min(Math.floor((progress / 15) * BAR_COUNT), BAR_COUNT) : 0;
+
+  return (
+    <div className="flex items-end gap-[3px]" style={{ height: 32 }}>
+      {heights.map((h, i) => (
+        <span 
+          key={i} 
+          className="block w-[4px] rounded-full transition-all duration-150 ease-out"
+          style={{ 
+            height: `${h}px`,
+            background: active && !paused 
+              ? `linear-gradient(to top, #9333EA, #A855F7)` 
+              : `linear-gradient(to top, #9333EA 30%, #A855F7 100%)`,
+            boxShadow: active && !paused ? '0 0 8px rgba(147, 51, 234, 0.6)' : 'none',
+            opacity: i < visibleBars ? (active ? 1 : 0.6) : 0,
+            transition: i < visibleBars ? 'height 0.15s ease-out, opacity 0.3s ease-out' : 'opacity 0.3s ease-out'
+          }} 
+        />
+      ))}
+    </div>
+  );
 }
 
 function AudioMessageBubble({ msg }: { msg: Msg }) {
@@ -517,6 +665,48 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
   const host = msg.linkUrl ? new URL(msg.linkUrl).hostname.replace(/^www\./, "") : "Link";
   const label = msg.linkLabel || host;
+  
+  // Check if this is a Cloud invitation
+  const isCloudInvite = msg.linkUrl?.includes('/cloud/') && (msg.linkLabel?.toLowerCase().includes('cloud') || msg.linkLabel?.toLowerCase().includes('participe'));
+
+  if (isCloudInvite) {
+    return (
+      <a
+        href={msg.linkUrl || "#"}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`block overflow-hidden rounded-2xl border text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
+        style={{ maxWidth: "320px" }}
+        onClick={(event) => {
+          if (!msg.linkUrl) {
+            event.preventDefault();
+          }
+        }}
+      >
+        <div className="px-4 py-3">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#9333EA] to-[#A855F7] text-white">
+              <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
+                <path d="M8 16 C8 17.5 7.5 18.5 6.5 19.5 C7.5 19 9 18 9.5 16" />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-bold text-white truncate">{label}</p>
+              <p className="mt-1 text-[11px] text-white/60 truncate">Convite para participar</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="w-full rounded-xl bg-gradient-to-r from-[#9333EA] to-[#A855F7] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:from-[#7C3AED] hover:to-[#9333EA]"
+          >
+            Participar da Cloud
+          </button>
+        </div>
+        {msg.pending && <div className="px-4 pb-3 text-[11px] text-white/70">enviando...</div>}
+      </a>
+    );
+  }
 
   return (
     <a
@@ -624,8 +814,10 @@ function MessagesPageContent() {
   const [linkUploading, setLinkUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [sharedLink, setSharedLink] = useState<{ url: string; label: string } | null>(null);
+  const autoSendRef = useRef(false);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
   const [followedUsers, setFollowedUsers] = useState<PublicUserProfile[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(false);
@@ -705,6 +897,7 @@ function MessagesPageContent() {
     const rawUrl = searchParams.get("url")?.trim() || "";
     const rawId = searchParams.get("id")?.trim() || "";
     const rawLabel = searchParams.get("title")?.trim() || searchParams.get("name")?.trim() || "";
+    const autosend = searchParams.get("autosend")?.trim().toLowerCase() === "true";
 
     if (!shareType) {
       return;
@@ -713,12 +906,20 @@ function MessagesPageContent() {
     if (shareType === "cloud" && rawId) {
       const url = rawUrl || (typeof window !== "undefined" ? `${window.location.origin}/cloud/${rawId}` : `/cloud/${rawId}`);
       setSharedLink({ url, label: rawLabel || "Cloud compartilhada" });
+      
+      if (autosend) {
+        autoSendRef.current = true;
+      }
       return;
     }
 
     if (shareType === "profile" && rawId) {
       const url = rawUrl || (typeof window !== "undefined" ? `${window.location.origin}/users/${rawId}` : `/users/${rawId}`);
       setSharedLink({ url, label: rawLabel || "Perfil compartilhado" });
+      
+      if (autosend) {
+        autoSendRef.current = true;
+      }
     }
   }, [searchParams]);
 
@@ -889,6 +1090,7 @@ function MessagesPageContent() {
       const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       setSharedLink(null);
+      autoSendRef.current = false;
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível compartilhar o link.");
       setMessagesByConversation((prev) => ({
@@ -1011,6 +1213,18 @@ function MessagesPageContent() {
     if (!peerUserId) return;
     void ensureConversation(peerUserId);
   }, [ensureConversation, searchParams, status, user]);
+
+  useEffect(() => {
+    if (!activeConversationId || !autoSendRef.current || !sharedLink) return;
+    
+    // Small delay to ensure conversation is fully loaded
+    const timer = setTimeout(() => {
+      void sendSharedLink();
+      autoSendRef.current = false;
+    }, 500);
+    
+    return () => clearTimeout(timer);
+  }, [activeConversationId, sharedLink, sendSharedLink]);
 
   useEffect(() => {
     if (!activeConversationId) return;
@@ -1477,7 +1691,7 @@ function MessagesPageContent() {
 
           {error && <div className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
 
-          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4">
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4" ref={messagesContainerRef}>
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
@@ -1517,18 +1731,26 @@ function MessagesPageContent() {
 
           <div className="border-t border-white/[0.07] bg-[#000000] px-5 py-4">
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
-              {audioRecorder.state === "recording" ? (
-                <div className="flex items-center gap-3">
-                  <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-white/40 transition hover:bg-white/[0.05] hover:text-white">
-                    ×
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-[12px] font-semibold text-white">Gravando áudio</p>
-                    <p className="text-[12px] text-white/45">{formatDuration(audioRecorder.seconds * 1000) || "0:00"}</p>
+              {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
+                <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
+                  <div className="flex-1 text-[14px] text-white" style={{ fontFamily: 'Arial, sans-serif' }}>
+                    {audioRecorder.state === "paused" ? "Pausado" : "Gravando…"} {formatDuration(audioRecorder.seconds * 1000) || "0:00"}
                   </div>
-                  <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
-                    <PlusIcon s={18} />
-                  </button>
+                  <Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} />
+                  <div className="flex items-center gap-2">
+                    <button type="button" aria-label={audioRecorder.state === "paused" ? "Retomar" : "Pausar"} onClick={audioRecorder.state === "paused" ? audioRecorder.resume : audioRecorder.pause}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
+                      {audioRecorder.state === "paused" ? <PlayIcon s={16} /> : <PauseIcon s={16} />}
+                    </button>
+                    <button type="button" aria-label="Enviar áudio" onClick={stopAudioRecording}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">
+                      <SendIcon />
+                    </button>
+                    <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
+                      <TrashIcon s={16} />
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1558,21 +1780,8 @@ function MessagesPageContent() {
                       </div>
                     </div>
                   )}
-                  <div className="relative flex items-center gap-3">
-                    {emojiOpen && (
-                      <div data-emoji-picker="true" className="absolute bottom-[calc(100%+12px)] left-0 z-20 grid w-[260px] grid-cols-5 gap-2 rounded-[24px] border border-white/10 bg-[#11141F] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-                        {EMOJI_BANK.map((emoji) => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => insertEmoji(emoji)}
-                            className="flex h-11 w-11 items-center justify-center rounded-2xl text-[20px] transition hover:bg-white/[0.07]"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
                     <button
                       type="button"
                       aria-label="Abrir emojis"
@@ -1627,6 +1836,23 @@ function MessagesPageContent() {
                         void handleImageFile(file);
                       }}
                     />
+                    </div>
+                    {emojiOpen && (
+                      <div data-emoji-picker="true" className="max-h-[32vh] overflow-y-auto rounded-[22px] border border-white/10 bg-[#11141F] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+                        <div className="flex flex-wrap gap-2">
+                          {EMOJI_BANK.map((emoji, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => insertEmoji(emoji)}
+                              className="flex h-9 w-9 items-center justify-center rounded-2xl text-[18px] transition hover:bg-white/[0.07]"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {audioUploading || imageUploading ? <p className="text-[11px] text-white/35">Enviando mídia...</p> : null}
                 </>

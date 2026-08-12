@@ -3,17 +3,9 @@ import { NextResponse } from "next/server";
 const BACKEND_ORIGIN_ENV_NAMES = ["CLOUDS_BRIDGE_URL"] as const;
 
 function resolveBackendOrigin() {
-  const configuredOrigin = BACKEND_ORIGIN_ENV_NAMES
-    .map((name) => process.env[name]?.trim())
-    .find((value): value is string => Boolean(value));
-
-  if (!configuredOrigin) {
-    throw new Error(
-      `Missing backend origin. Set ${BACKEND_ORIGIN_ENV_NAMES[0]} in the server environment.`,
-    );
-  }
-
-  return configuredOrigin.replace(/\/+$/, "");
+  // Forçar sempre usar localhost:3001 para desenvolvimento local
+  console.warn(`Using http://localhost:3001 as backend origin for development`);
+  return "http://localhost:3001";
 }
 
 function buildBackendUrl(pathname: string) {

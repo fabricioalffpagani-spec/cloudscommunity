@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import CloudChat from "../cloud/[id]/CloudChat";
 
@@ -82,6 +83,10 @@ function MeetIcon({ s = 24, className = "" }: { s?: number; className?: string }
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   );
+}
+
+function TrendingIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
+  return <FlameIcon s={s} className={className} />;
 }
 
 function parseDurationSeconds(duration: string) {
@@ -348,7 +353,7 @@ function FollowingCloudStage({
                         <span>{Math.max(1, Math.round((cloud.hypesCount ?? 0) * 3.05))}</span>
                       </button>
                       <button type="button" className="inline-flex items-center gap-3 transition hover:text-orange-300">
-                        <svg viewBox="0 0 384 512" width={21} height={25} fill="currentColor" className="text-[#FF632D]" aria-hidden="true"><path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" /></svg>
+                        <FlameIcon s={24} className="text-[#FF632D]" />
                         <span>{cloud.hypesCount ?? 0}</span>
                       </button>
                       <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
@@ -471,7 +476,7 @@ export default function FollowingPage() {
   const isEndingSoon = remaining > 0 && remaining < 5 * 60;
 
   return (
-    <div className="min-h-screen text-white bg-[#030208]">
+    <div className="min-h-screen text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-3">
@@ -479,10 +484,10 @@ export default function FollowingPage() {
           </Link>
 
           <nav aria-label="Navegação principal" className="hidden items-center gap-8 md:flex">
-            <Link href="/" className="inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white/60 transition-colors hover:text-white">
+            <Link href="/" className="inline-flex h-12 items-center rounded-xl px-4 text-[17px] font-semibold text-white/60 transition-colors hover:text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 45%, transparent 100%)" }}>
               For You
             </Link>
-            <Link href="/following" className="relative inline-flex h-12 items-center px-2 text-[17px] font-semibold text-white transition-colors hover:text-white/80">
+            <Link href="/following" className="relative inline-flex h-12 items-center rounded-xl px-4 text-[17px] font-semibold text-white transition-colors hover:text-white/80" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(168,85,247,0.25) 0%, rgba(168,85,247,0.10) 45%, transparent 100%)" }}>
               Seguindo
               <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-[#A855F7]" />
             </Link>
@@ -608,19 +613,24 @@ export default function FollowingPage() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#030208]">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
-          <Link href="/" className="flex flex-col items-center gap-1.5">
-            <HomeIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Home</span>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]">
+        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
+          <Link href="/" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
+              <path d="M9 21V12h6v9"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Home</span>
           </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-1.5">
-            <MessageIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Messages</span>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Messages</span>
           </Link>
-          <Link href="/meet" className="flex flex-col items-center gap-1.5">
-            <MeetIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Meet</span>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <FlameIcon s={30} />
+            <span className="text-[13px] font-semibold">Trending</span>
           </Link>
         </div>
       </nav>

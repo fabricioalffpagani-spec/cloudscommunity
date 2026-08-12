@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
+import { FlameIcon } from "../../components/FlameIcon";
 
 type PublicUserProfile = {
   id: string;
@@ -45,12 +46,7 @@ function BackIcon() {
 }
 
 function FireIcon({ s = 20 }: { s?: number }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
-      <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-      <path d="M12 1C10 5 8 8 8 12c0 4.5 3.5 8.5 4 9-.5-1.5-1-3-1-5 0-2 .8-4 1.5-5.5C13 12.5 13 14 12.5 16c1.5-1.5 3-3.5 3-6 0-2-.5-3.5-1-5C15 6.5 15 7.5 14.5 8.5 14 5 13 2.5 12 1Z" />
-    </svg>
-  );
+  return <FlameIcon s={s} />;
 }
 
 function CheckIcon() {

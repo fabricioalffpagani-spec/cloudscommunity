@@ -164,3 +164,59 @@ export function ArrowLeftIcon({ s = 20, className = "" }: IconProps) {
     </svg>
   );
 }
+
+export function PauseIcon({ s = 16, className = "" }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <rect x="6" y="4" width="4" height="16" />
+      <rect x="14" y="4" width="4" height="16" />
+    </svg>
+  );
+}
+
+export function PlayIcon({ s = 16, className = "" }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="currentColor"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M8 5.14v14l11-7-11-7Z" />
+    </svg>
+  );
+}
+
+export function TrashIcon({ s = 18, className = "" }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}

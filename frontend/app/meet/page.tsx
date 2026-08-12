@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
 type PublicUserProfile = {
@@ -82,6 +83,10 @@ function MeetIcon({ s = 24, className = "" }: { s?: number; className?: string }
   );
 }
 
+function TrendingIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
+  return <FlameIcon s={s} className={className} />;
+}
+
 function normalize(value: string) {
   return value
     .normalize("NFD")
@@ -131,9 +136,6 @@ function ProfileRow({
       </div>
 
       <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[#F97316]">
-        <svg viewBox="0 0 24 24" width={13} height={13} fill="currentColor" aria-hidden="true">
-          <path d="M12 1C9.5 5.5 7 8.5 7 12.5c0 5 4 9 5 9s5-4 5-9c0-2-.5-3.5-1.5-5 .3 1.5.2 2.5-.5 3.5C14.5 9 13.5 5.5 12 1Z" />
-        </svg>
         {user.hypesCount}
       </span>
 
@@ -296,19 +298,24 @@ export default function MeetPage() {
         </div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.08] bg-[#030208]">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-around px-6 py-4">
-          <Link href="/" className="flex flex-col items-center gap-1.5">
-            <HomeIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Home</span>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]">
+        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
+          <Link href="/" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
+              <path d="M9 21V12h6v9"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Home</span>
           </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-1.5">
-            <MessageIcon s={24} className="text-white/40" />
-            <span className="text-[12px] font-semibold text-white/40">Messages</span>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span className="text-[13px] font-semibold">Messages</span>
           </Link>
-          <Link href="/meet" className="flex flex-col items-center gap-1.5">
-            <MeetIcon s={24} className="text-[#A855F7]" />
-            <span className="text-[12px] font-semibold text-[#A855F7]">Meet</span>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
+            <FlameIcon s={30} />
+            <span className="text-[13px] font-semibold">Trending</span>
           </Link>
         </div>
       </nav>

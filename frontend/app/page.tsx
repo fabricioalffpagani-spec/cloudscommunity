@@ -6,6 +6,7 @@ import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "
 import { useRouter } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
 import { HeaderBrand } from "./components/HeaderBrand";
+import { FlameIcon } from "./components/FlameIcon";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -226,6 +227,11 @@ function hashString(value: string) {
   return hash;
 }
 
+function avatarColor(source: string) {
+  const palette = ["#9333EA", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
+  return palette[hashString(source) % palette.length];
+}
+
 function getCloudRemainingSeconds(cloud: Cloud) {
   const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
   return Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0);
@@ -360,12 +366,7 @@ function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
 }
 
 function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
-  // Path traced from classic 3-tongue flame silhouette
-  return (
-    <svg viewBox="0 0 384 512" width={s} height={s} fill="currentColor" aria-hidden="true" className={className}>
-      <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1zM128 480c-52.9 0-96-43.1-96-96 0-41.3 17.7-78.5 46.1-104.5V288c0 39.8 32.2 72 72 72s72-32.2 72-72c0-53-20.8-98.8-50.5-138.3C185.6 183.4 224 226.6 224 288c0 70.7-57.3 128-96 128z" />
-    </svg>
-  );
+  return <FlameIcon s={s} className={className} />;
 }
 
 function CloudBadge({ s = 32 }: { s?: number }) {
@@ -513,14 +514,14 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
 
 // ─── Contacts (shared with share modal) ──────────────────────────────────────
 
-const PLATFORM_CONTACTS = [
-  { id: "joao",  name: "João Silva", avatar: "JS", color: "#8B5CF6", status: "online"  as const },
-  { id: "ana",   name: "Ana Costa",  avatar: "AC", color: "#3B82F6", status: "busy"    as const },
-  { id: "pedro", name: "Pedro Lima", avatar: "PL", color: "#22C55E", status: "offline" as const },
-];
-
-const statusDotColor = { online: "#22C55E", busy: "#F59E0B", offline: "#6B7280" };
 const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
+
+type ShareContact = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
@@ -528,29 +529,31 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
   const [view, setView] = useState<"main" | "contacts" | "external">("main");
   const [sent, setSent] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
+  const [contacts, setContacts] = useState<ShareContact[]>([]);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   const encodedText = encodeURIComponent(`Participe da Cloud "${cloudTitle}" aqui: ${cloudUrl}`);
 
-  const handleSendToContact = (contactId: string) => {
-    const invitation = {
-      id: `cloud-invite-${Date.now()}`,
-      side: "right" as const,
-      type: "link" as const,
-      sender: "Você",
-      content: `Participe da Cloud "${cloudTitle}" comigo!`,
-      url: cloudUrl,
-      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    };
+  useEffect(() => {
+    if (view !== "contacts" || contacts.length > 0 || loadingContacts) return;
 
-    try {
-      const stored = localStorage.getItem(DIRECT_MESSAGES_STORAGE_KEY);
-      const conversations = stored ? JSON.parse(stored) as Record<string, unknown[]> : {};
-      conversations[contactId] = [...(conversations[contactId] ?? []), invitation];
-      localStorage.setItem(DIRECT_MESSAGES_STORAGE_KEY, JSON.stringify(conversations));
-    } catch {
-      // The visual confirmation remains available even if browser storage is unavailable.
-    }
+    setLoadingContacts(true);
+    setContactsError(null);
+    fetch("/api/users/following", { cache: "no-store" })
+      .then(async response => {
+        if (!response.ok) throw new Error("Não foi possível carregar os contatos.");
+        return response.json() as Promise<{ users?: ShareContact[] }>;
+      })
+      .then(payload => setContacts(Array.isArray(payload.users) ? payload.users : []))
+      .catch(error => setContactsError(error instanceof Error ? error.message : "Não foi possível carregar os contatos."))
+      .finally(() => setLoadingContacts(false));
+  }, [contacts.length, loadingContacts, view]);
+
+  const handleSendToContact = (contactId: string) => {
     setSent(prev => ({ ...prev, [contactId]: true }));
+    const params = new URLSearchParams({ id: contactId, share: "cloud", url: cloudUrl, title: cloudTitle, autosend: "true" });
+    window.location.assign(`/messages?${params.toString()}`);
   };
 
   const handleCopy = () => {
@@ -709,38 +712,58 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
         {view === "contacts" && (
           <div className="p-4">
             <p className="mb-3 px-1 text-[12px] text-white/40">Selecione quem deve receber o link desta Cloud:</p>
-            <div className="flex flex-col gap-1">
-              {PLATFORM_CONTACTS.map(contact => (
-                <div key={contact.id} className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.04]">
-                  <div className="relative shrink-0">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                      style={{ backgroundColor: contact.color }}>
-                      {contact.avatar}
+            {loadingContacts ? (
+              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
+                Carregando contatos...
+              </div>
+            ) : contactsError ? (
+              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
+                {contactsError}
+              </div>
+            ) : contacts.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
+                Você ainda não segue ninguém
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {contacts.map(contact => (
+                  <div key={contact.id} className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.04]">
+                    <div className="relative shrink-0">
+                      {contact.avatarUrl ? (
+                        <img 
+                          src={contact.avatarUrl} 
+                          alt={contact.displayName}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                          style={{ backgroundColor: avatarColor(contact.username) }}>
+                          {contact.displayName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                     </div>
-                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#111116]"
-                      style={{ backgroundColor: statusDotColor[contact.status] }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-white truncate">{contact.displayName}</p>
+                      <p className="text-[11px] text-white/40">@{contact.username}</p>
+                    </div>
+                    {sent[contact.id] ? (
+                      <span className="text-[12px] font-semibold text-[#22C55E] flex items-center gap-1">
+                        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+                        Enviado
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleSendToContact(contact.id)}
+                        className="shrink-0 rounded-full bg-[#9333EA] px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#7C3AED]"
+                      >
+                        Enviar
+                      </button>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-semibold text-white truncate">{contact.name}</p>
-                    <p className="text-[11px] text-white/40">{contact.status === "online" ? "online" : contact.status === "busy" ? "ocupado" : "offline"}</p>
-                  </div>
-                  {sent[contact.id] ? (
-                    <span className="text-[12px] font-semibold text-[#22C55E] flex items-center gap-1">
-                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
-                      Enviado
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleSendToContact(contact.id)}
-                      className="shrink-0 rounded-full bg-[#9333EA] px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#7C3AED]"
-                    >
-                      Enviar
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -887,9 +910,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
                 : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
             }`}
           >
-            <svg viewBox="0 0 384 512" width={24} height={24} fill="currentColor" aria-hidden="true">
-              <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" style={{ opacity: hyped ? 1 : 0.6 }} />
-            </svg>
+            <FireIcon s={24} />
             {hypes > 0 && <span>{hypes}</span>}
           </button>
 
@@ -1716,7 +1737,7 @@ function TopicFeedStage({
                         <span>{Math.max(1, Math.round((cloud.hypes ?? 0) * 3.05))}</span>
                       </button>
                       <button type="button" className="inline-flex items-center gap-3 transition hover:text-orange-300">
-                        <svg viewBox="0 0 384 512" width={21} height={25} fill="currentColor" className="text-[#FF632D]" aria-hidden="true"><path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" /></svg>
+                        <FireIcon s={24} className="text-[#FF632D]" />
                         <span>{cloud.hypes ?? 0}</span>
                       </button>
                       <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
@@ -1792,9 +1813,7 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
         onClick={() => { setHyped(v => !v); setHypes(v => hyped ? v - 1 : v + 1); }}
         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition ${hyped ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 bg-white/5 text-white/60 hover:border-orange-500/40 hover:text-orange-400"}`}
       >
-        <svg viewBox="0 0 384 512" width={14} height={14} fill="currentColor" aria-hidden="true">
-          <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z" style={{ opacity: hyped ? 1 : 0.6 }} />
-        </svg>
+        <FireIcon s={14} />
         {hypes > 0 ? hypes : "Hypar"}
       </button>
 
@@ -2279,11 +2298,7 @@ export default function Page() {
 
           {/* Trending */}
           <Link href="/trending" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={30} height={30} fill="currentColor" aria-hidden="true">
-              <path d="M12 2C9 2 7 4 7 7c0 1.5.5 3 1.5 4 .5.5 1 1 1 1h-1c0 0-1-1-1-2s1-1.5 1-1.5h1c.5 0 1-.3 1-.8V6c0-1.1.9-2 2-2zm0 3c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm0 4c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
-              <path d="M15 2c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V3.5c0-1.1.9-2 2-2z"/>
-              <path d="M17 3c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.3c0-1 .8-1.8 1.8-1.8z"/>
-            </svg>
+            <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </Link>
 

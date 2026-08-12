@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FlameIcon } from "../../components/FlameIcon";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -51,14 +52,7 @@ function SmileIcon() {
 }
 
 function FireIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C8 2 5 5 5 9c0 2.2 1 4.2 2.5 5.7C7.7 15.2 8.5 16 8.5 16H7c0 0-1.5-1.5-1.5-3S7 10.5 7 10.5h1c.8 0 1.5-.7 1.5-1.5V8c0-1.7 1.3-3 3-3s3 1.3 3 3v1c0 .8.7 1.5 1.5 1.5h1c0 0 1.5 1.5 1.5 3S16 16 16 16h-2c0 0 .8-.8 1.5-1.5C17 13.2 18 11.2 18 9c0-4-3-7-7-7zm0 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3zm0 5c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
-      <path d="M15 2.5c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V4c0-1.1.9-2 2-2z"/>
-      <path d="M17 3.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.8c0-1 .8-1.8 1.8-1.8z"/>
-      <path d="M18 4.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V5.8c0-1 .8-1.8 1.8-1.8z"/>
-    </svg>
-  );
+  return <FlameIcon className={className} />;
 }
 
 function MicIcon({ s = 18 }: { s?: number }) {
@@ -73,7 +67,7 @@ function MicIcon({ s = 18 }: { s?: number }) {
 
 function PlayIcon({ s = 16 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="white" aria-hidden="true">
       <path d="M8 5.14v14l11-7-11-7Z" />
     </svg>
   );
@@ -81,7 +75,7 @@ function PlayIcon({ s = 16 }: { s?: number }) {
 
 function PauseIcon({ s = 16 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="white" aria-hidden="true">
       <rect x="6" y="5" width="4" height="14" rx="1" />
       <rect x="14" y="5" width="4" height="14" rx="1" />
     </svg>
@@ -90,7 +84,7 @@ function PauseIcon({ s = 16 }: { s?: number }) {
 
 function SendIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M22 2 11 13" />
       <path d="m22 2-7 20-4-9-9-4 20-7Z" />
     </svg>
@@ -106,12 +100,20 @@ function XIcon({ s = 16 }: { s?: number }) {
   );
 }
 
-function TrashIcon({ s = 18 }: { s?: number }) {
+function TrashIcon({ s = 16 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18" />
       <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
       <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </svg>
+  );
+}
+
+function CheckIcon({ s = 12 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m5 12 5 5L20 7"/>
     </svg>
   );
 }
@@ -203,25 +205,7 @@ type CloudChatProps = {
   onBack?: () => void;
 };
 
-// ─── Seed messages ────────────────────────────────────────────────────────────
 
-const BASE_MESSAGES: TextMsg[] = [
-  { id: "c1", sender: "Beatriz", initials: "B",  color: "#A855F7", type: "text", content: "Sejam bem-vindos! Vamos discutir: IA vai substituir programadores?", time: "12:30", host: true, flames: 24, reactions: [
-    { id: "r1", emoji: "🔥", userId: "u1", user: { id: "u1", username: "devmarcos", displayName: "devmarcos", avatarUrl: null }, createdAt: "2024-01-01T12:31:00Z" },
-    { id: "r2", emoji: "🔥", userId: "u2", user: { id: "u2", username: "anavieira", displayName: "anavieira", avatarUrl: null }, createdAt: "2024-01-01T12:31:30Z" },
-    { id: "r3", emoji: "👍", userId: "u3", user: { id: "u3", username: "lucasdev", displayName: "lucasdev", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
-  ]},
-  { id: "c2", sender: "devmarcos", initials: "DM", color: "#22C55E", type: "text", content: "Acho que não. A IA é uma ferramenta, não um substituto.", time: "12:31", flames: 24, reactions: [
-    { id: "r4", emoji: "❤️", userId: "u4", user: { id: "u4", username: "carolcode", displayName: "carolcode", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
-  ]},
-  { id: "c3", sender: "anavieira", initials: "AV", color: "#3B82F6", type: "text", content: "Depende do tipo de programação. Tarefas repetitivas sim, mas criatividade e lógica complexa não.", time: "12:31", flames: 17, reactions: [
-    { id: "r5", emoji: "👍", userId: "u1", user: { id: "u1", username: "devmarcos", displayName: "devmarcos", avatarUrl: null }, createdAt: "2024-01-01T12:32:00Z" },
-    { id: "r6", emoji: "👍", userId: "u5", user: { id: "u5", username: "pedroa.dev", displayName: "pedroa.dev", avatarUrl: null }, createdAt: "2024-01-01T12:33:00Z" },
-  ]},
-  { id: "c4", sender: "lucasdev", initials: "LD", color: "#F59E0B", type: "text", content: "Ferramentas como Copilot já aumentam muito nossa produtividade.", time: "12:32", flames: 12, replyTo: { id: "c3", sender: "anavieira", content: "Depende do tipo de programação..." } },
-  { id: "c5", sender: "carolcode", initials: "CC", color: "#EC4899", type: "text", content: "Concordo! E acho que o real diferencial será saber usar a IA a nosso favor.", time: "12:32", flames: 9 },
-  { id: "c6", sender: "pedroa.dev", initials: "PD", color: "#8B5CF6", type: "text", content: "Concordo! A IA cuida do básico e a gente foca no que realmente importa.", time: "12:33", flames: 7 },
-];
 
 // ─── Recorder hook ────────────────────────────────────────────────────────────
 
@@ -243,7 +227,7 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
   const start = useCallback(async () => {
     try {
       cancelRef.current = false;
-      waveformRef.current = Array.from({ length: 28 }, (_, i) => 4 + ((i * 7) % 18));
+      waveformRef.current = Array.from({ length: 28 }, (_, i) => 4 + Math.floor(Math.random() * 18));
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const rec = new MediaRecorder(stream);
@@ -336,7 +320,7 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
 
 function HeartIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
     </svg>
   );
@@ -344,7 +328,7 @@ function HeartIcon() {
 
 function ForwardIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="15 10 20 15 15 20" />
       <path d="M4 4v7a4 4 0 0 0 4 4h12" />
     </svg>
@@ -353,7 +337,7 @@ function ForwardIcon() {
 
 function DotsIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="white" aria-hidden="true">
       <circle cx="12" cy="5" r="1.5" />
       <circle cx="12" cy="12" r="1.5" />
       <circle cx="12" cy="19" r="1.5" />
@@ -382,9 +366,9 @@ function ClockIcon() {
 
 const BAR_COUNT = 28;
 
-function Waveform({ active, paused }: { active?: boolean; paused?: boolean }) {
+function Waveform({ active, paused, progress }: { active?: boolean; paused?: boolean; progress?: number }) {
   const [heights, setHeights] = useState<number[]>(() =>
-    Array.from({ length: BAR_COUNT }, (_, i) => 4 + ((i * 7) % 18))
+    Array.from({ length: BAR_COUNT }, () => 0)
   );
 
   useEffect(() => {
@@ -394,16 +378,30 @@ function Waveform({ active, paused }: { active?: boolean; paused?: boolean }) {
     } else if (active && paused) {
       iv = setInterval(() => setHeights(() => Array.from({ length: BAR_COUNT }, () => 6 + Math.floor(Math.random() * 6))), 800);
     } else {
-      const reset = Array.from({ length: BAR_COUNT }, (_, i) => 4 + ((i * 7) % 18));
-      iv = setTimeout(() => setHeights(reset), 0) as unknown as ReturnType<typeof setInterval>;
+      setHeights(Array.from({ length: BAR_COUNT }, () => 0));
     }
     return () => { if (iv) clearInterval(iv); };
   }, [active, paused]);
 
+  // Calculate how many bars should be visible based on progress (assuming max 15 seconds for full progress)
+  const visibleBars = active && progress ? Math.min(Math.floor((progress / 15) * BAR_COUNT), BAR_COUNT) : 0;
+
   return (
-    <div className="flex items-end gap-[4px]" style={{ height: 26 }}>
+    <div className="flex items-end gap-[3px]" style={{ height: 32 }}>
       {heights.map((h, i) => (
-        <span key={i} className="block w-[3px] rounded-full bg-white/80 transition-all" style={{ height: `${h}px` }} />
+        <span 
+          key={i} 
+          className="block w-[4px] rounded-full transition-all duration-150 ease-out"
+          style={{ 
+            height: `${h}px`,
+            background: active && !paused 
+              ? `linear-gradient(to top, #9333EA, #A855F7)` 
+              : `linear-gradient(to top, #9333EA 30%, #A855F7 100%)`,
+            boxShadow: active && !paused ? '0 0 8px rgba(147, 51, 234, 0.6)' : 'none',
+            opacity: i < visibleBars ? (active ? 1 : 0.6) : 0,
+            transition: i < visibleBars ? 'height 0.15s ease-out, opacity 0.3s ease-out' : 'opacity 0.3s ease-out'
+          }} 
+        />
       ))}
     </div>
   );
@@ -444,9 +442,17 @@ function AudioBubble({ msg, own }: { msg: AudioMsg; own?: boolean }) {
       </button>
 
       <div className="flex flex-1 flex-col gap-2">
-        <div className="flex items-end gap-[4px]" style={{ height: 26 }}>
-          {(msg.waveform ?? Array.from({ length: BAR_COUNT }, () => 6)).map((h, i) => (
-            <span key={i} className="block w-[3px] rounded-full bg-white/80" style={{ height: `${h}px` }} />
+        <div className="flex items-end gap-[3px]" style={{ height: 32 }}>
+          {(msg.waveform ?? Array.from({ length: BAR_COUNT }, () => 4 + Math.floor(Math.random() * 18))).map((h, i) => (
+            <span 
+              key={i} 
+              className="block w-[4px] rounded-full transition-all duration-150 ease-out"
+              style={{ 
+                height: `${h}px`,
+                background: `linear-gradient(to top, #9333EA 30%, #A855F7 100%)`,
+                opacity: 0.8
+              }} 
+            />
           ))}
         </div>
         <div className="flex justify-between text-[10px] text-white/50">
@@ -592,24 +598,21 @@ function MsgBubble({
 
         {/* reaction picker */}
         {reactionPickerFor === msg.id && (
-          <div className="mt-1 flex flex-wrap gap-2">
-            {EMOJI_BANK.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onAddReaction(msg.id, emoji)}
-                className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2 text-[18px] transition hover:border-white/20 hover:bg-white/10"
-              >
-                {emoji}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setReactionPickerFor(null)}
-              className="rounded-2xl border border-white/[0.08] bg-[#15161C] px-3 py-2 text-[13px] text-white/70 transition hover:border-white/20 hover:bg-white/10"
-            >
-              Fechar
-            </button>
+          <div className="relative mt-1 z-50">
+            <div className="absolute bottom-full left-0 mb-2 max-h-[150px] overflow-y-auto rounded-3xl bg-[#15161C] p-3 shadow-lg">
+              <div className="flex flex-wrap gap-2">
+                {EMOJI_BANK.map((emoji, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => onAddReaction(msg.id, emoji)}
+                    className="rounded-2xl border border-white/[0.08] bg-[#0E0F15] px-3 py-2 text-[18px] transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -681,17 +684,7 @@ type ShareContact = {
   color: string;
 };
 
-const CONTACT_COLORS = ["#A855F7","#3B82F6","#22C55E","#F59E0B","#EC4899","#8B5CF6","#14B8A6","#F97316"];
 
-function getInitials(name: string) {
-  return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-
-function hashColor(id: string) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return CONTACT_COLORS[h % CONTACT_COLORS.length];
-}
 
 function WhatsAppIcon() {
   return (
@@ -727,50 +720,45 @@ function CloudShareModal({
   cloudTitle: string;
   onClose: () => void;
 }) {
-  const [contacts, setContacts] = useState<ShareContact[]>([]);
   const [copied, setCopied] = useState(false);
+  const [contacts, setContacts] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
+  const [contactsError, setContactsError] = useState<string | null>(null);
+  const [loadingContacts, setLoadingContacts] = useState(true);
 
   const cloudUrl = typeof window !== "undefined"
     ? `${window.location.origin}/cloud/${cloudId}`
-    : `/cloud/${cloudId}`;
-
-  // load messenger contacts
-  useEffect(() => {
-    fetch("/api/direct-messages/conversations", { credentials: "include", cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: { conversations?: Array<{ id: string; participant: { id: string; username: string; displayName: string; avatarUrl: string | null } }> } | null) => {
-        if (!data?.conversations) return;
-        setContacts(
-          data.conversations.map(c => ({
-            id: c.participant.id,
-            name: c.participant.displayName,
-            username: c.participant.username,
-            avatarUrl: c.participant.avatarUrl,
-            initials: getInitials(c.participant.displayName),
-            color: hashColor(c.participant.id),
-          }))
-        );
-      })
-      .catch(() => {});
-  }, []);
-
-  const sendToContact = (contact: ShareContact) => {
-    // Navigate to the messages page with the conversation pre-opened and the
-    // cloud link pre-loaded as a shared link — the messages page handles the rest.
-    const params = new URLSearchParams({
-      id: contact.id,
-      share: "cloud",
-      url: cloudUrl,
-      title: cloudTitle,
-    });
-    window.location.href = `/messages?${params.toString()}`;
-  };
+    : `http://localhost:3000/cloud/${cloudId}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(cloudUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/users/following", { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json().catch(() => null) as { users?: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>; message?: string } | null;
+        if (!response.ok || !payload) throw new Error(payload?.message || "Não foi possível carregar seus contatos.");
+        return Array.isArray(payload.users) ? payload.users : [];
+      })
+      .then(items => { if (!cancelled) setContacts(items); })
+      .catch(error => { if (!cancelled) setContactsError(error instanceof Error ? error.message : "Não foi possível carregar seus contatos."); })
+      .finally(() => { if (!cancelled) setLoadingContacts(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const sendToContact = (contactId: string) => {
+    const params = new URLSearchParams({
+      id: contactId,
+      share: "cloud",
+      url: cloudUrl,
+      title: cloudTitle,
+      autosend: "1",
+    });
+    window.location.assign(`/messages?${params.toString()}`);
   };
 
   return (
@@ -807,50 +795,97 @@ function CloudShareModal({
         {/* Messenger contacts */}
         <div className="px-5 mt-4">
           <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-3">Enviar no mensageiro</p>
-          {contacts.length === 0 ? (
-            <p className="text-[13px] text-white/30 py-2">Nenhuma conversa encontrada.</p>
-          ) : (
-            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
-              {contacts.map(contact => {
-                const done = sent.has(contact.id);
-                return (
-                  <button
-                    key={contact.id}
-                    type="button"
-                    onClick={() => sendToContact(contact)}
-                    className="flex flex-col items-center gap-1.5 min-w-[60px] group"
-                  >
-                    <div className="relative">
-                      {contact.avatarUrl ? (
-                        <img
-                          src={contact.avatarUrl}
-                          alt={contact.name}
-                          className="h-12 w-12 rounded-full object-cover ring-2 ring-transparent group-hover:ring-[#A855F7] transition"
-                        />
-                      ) : (
-                        <div
-                          className="h-12 w-12 rounded-full flex items-center justify-center text-[15px] font-bold text-white ring-2 ring-transparent group-hover:ring-[#A855F7] transition"
-                          style={{ background: contact.color }}
-                        >
-                          {contact.initials}
-                        </div>
-                      )}
-                      {done && (
-                        <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-[#22C55E] flex items-center justify-center">
-                          <svg viewBox="0 0 24 24" width={12} height={12} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-white/60 max-w-[56px] truncate group-hover:text-white transition">
-                      {contact.name.split(" ")[0]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none">
+            {loadingContacts && <p className="py-3 text-[13px] text-white/45">Carregando contatos...</p>}
+            {contactsError && <p className="py-3 text-[13px] text-red-300">{contactsError}</p>}
+            {!loadingContacts && !contactsError && contacts.length === 0 && <p className="py-3 text-[13px] text-white/45">Você ainda não possui contatos para enviar.</p>}
+            {/* Test contacts are loaded from the same source as the messenger. */}
+            {contacts.map(contact => (
+              <button
+                key={contact.id}
+                type="button"
+                onClick={() => sendToContact(contact.id)}
+                className="flex flex-col items-center gap-1.5 min-w-[60px] group"
+              >
+                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[15px] font-bold text-white ring-2 ring-transparent transition group-hover:ring-[#A855F7]">
+                  {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : contact.displayName.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="max-w-[56px] truncate text-[11px] text-white/60 transition group-hover:text-white">
+                  {contact.displayName.split(" ")[0]}
+                </span>
+              </button>
+            ))}
+            {false && [
+              { id: "user1", name: "João Silva", initials: "JS", color: "#A855F7" },
+              { id: "user2", name: "Ana Costa", initials: "AC", color: "#3B82F6" },
+              { id: "user3", name: "Pedro Lima", initials: "PL", color: "#22C55E" },
+            ].map(contact => (
+              <button
+                key={contact.id}
+                type="button"
+                onClick={() => sendToContact(contact.id)}
+                className="flex flex-col items-center gap-1.5 min-w-[60px] group"
+              >
+                <div className="h-12 w-12 rounded-full flex items-center justify-center text-[15px] font-bold text-white ring-2 ring-transparent group-hover:ring-[#A855F7] transition"
+                  style={{ background: contact.color }}
+                >
+                  {contact.initials}
+                </div>
+                <span className="text-[11px] text-white/60 max-w-[56px] truncate group-hover:text-white transition">
+                  {contact.name.split(" ")[0]}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Copy link button */}
+        <div className="px-5 mt-4">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-white/[0.10]"
+          >
+            {copied ? (
+              <>
+                <CheckIcon s={18} />
+                Link copiado!
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copiar link
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Copy link button */}
+        <div className="px-5 mt-4">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="w-full flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-white/[0.10]"
+          >
+            {copied ? (
+              <>
+                <CheckIcon s={18} />
+                Link copiado!
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copiar link
+              </>
+            )}
+          </button>
+        </div>
         {/* External share */}
         <div className="px-5 mt-4 mb-5">
           <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-3">Compartilhar fora</p>
@@ -889,12 +924,13 @@ function CloudShareModal({
 }
 
 export default function CloudChat({ cloudId, title, duration: durationProp, createdAt: createdAtProp, participants, onBack }: CloudChatProps) {
-  const [messages, setMessages] = useState<Message[]>(cloudId === "unknown" ? BASE_MESSAGES : []);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Seed cloudMeta imediatamente com as props vindas da URL (fallback rápido),
   // sobrescrito quando o fetch retornar os dados reais do banco.
@@ -980,7 +1016,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   // load existing messages from database
   useEffect(() => {
     if (!cloudId || cloudId === "unknown") {
-      setMessages(BASE_MESSAGES);
+      setMessages([]);
       return;
     }
     let cancelled = false;
@@ -1012,8 +1048,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       .catch((err: unknown) => {
         if (!cancelled) {
           console.warn("[CloudChat] failed to load messages:", err);
-          // Keep seed messages if API fails
-          setMessages(BASE_MESSAGES);
+          setMessages([]);
         }
       });
     return () => { cancelled = true; };
@@ -1023,6 +1058,17 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // scroll messages up when emoji picker opens to show 4 rows of emojis
+  useEffect(() => {
+    if (emojiOpen && messagesContainerRef.current) {
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight - 200;
+        }
+      }, 0);
+    }
+  }, [emojiOpen]);
 
   const sendText = useCallback(async () => {
     const trimmed = draft.trim();
@@ -1526,7 +1572,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                 onClick={() => setManageMembersOpen(true)}
                 className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white"
               >
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -1553,7 +1599,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       <div className="mx-4 shrink-0 border-t border-white/[0.06]" />
 
       {/* ── Messages list ── */}
-      <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
+      <div className="flex-1 overflow-y-auto px-5 pb-5 pt-4" ref={messagesContainerRef}>
         <div className="space-y-4">
           {/* Pinned messages - sticky at top */}
           {messages.filter(msg => msg.isPinned).map((msg) => (
@@ -1591,30 +1637,14 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       {/* ── Input bar ── */}
       <div className="border-t border-white/[0.08] bg-black px-4 py-3">
 
-        {/* Emoji picker */}
-        {emojiOpen && (
-          <div className="mb-3 grid grid-cols-5 gap-2 rounded-3xl bg-[#15161C] p-3">
-            {EMOJI_BANK.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => { setDraft((d) => d + emoji); setEmojiOpen(false); }}
-                className="rounded-2xl border border-white/[0.08] bg-[#0E0F15] px-3 py-2 text-[18px] transition hover:border-white/20 hover:bg-white/10"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Recording state */}
         {isRecording ? (
-          <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-[#12070f] px-4 py-2.5">
-            <Waveform active={recorder.state === "recording"} paused={recorder.state === "paused"} />
-            <div className="flex-1 text-[14px] font-mono text-white">
+          <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
+            <div className="flex-1 text-[14px] text-white" style={{ fontFamily: 'Arial, sans-serif' }}>
               {recorder.state === "paused" ? "Pausado" : "Gravando…"}{" "}
               {fmt(recorder.seconds)}
             </div>
+            <Waveform active={recorder.state === "recording"} paused={recorder.state === "paused"} progress={recorder.seconds} />
             <div className="flex items-center gap-2">
               {recorder.state === "recording" ? (
                 <button type="button" aria-label="Pausar" onClick={recorder.pause}
@@ -1633,7 +1663,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
               </button>
               <button type="button" aria-label="Cancelar gravação" onClick={recorder.cancel}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
-                <XIcon s={16} />
+                <TrashIcon s={16} />
               </button>
             </div>
           </div>
@@ -1686,6 +1716,22 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                   <MicIcon s={18} />
                 </button>
               )}
+            </div>
+          </div>
+        )}
+        {emojiOpen && !isRecording && (
+          <div className="mt-3 max-h-[32vh] overflow-y-auto rounded-[22px] border border-white/[0.08] bg-[#15161C] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+            <div className="flex flex-wrap gap-2">
+              {EMOJI_BANK.map((emoji, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => { setDraft((d) => d + emoji); setEmojiOpen(false); }}
+                  className="flex h-9 w-9 items-center justify-center rounded-2xl border border-white/[0.08] bg-[#0E0F15] text-[18px] transition hover:border-white/20 hover:bg-white/10"
+                >
+                  {emoji}
+                </button>
+              ))}
             </div>
           </div>
         )}

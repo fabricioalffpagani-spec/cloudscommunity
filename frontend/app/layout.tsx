@@ -5,7 +5,6 @@ import { SessionUserProvider } from "./components/session-user";
 export const metadata: Metadata = {
   title: "Clouds Community",
   description: "Interface front-end da rede social Clouds Community.",
-  charset: "utf-8",
   icons: {
     icon: "/clouds_icon.png",
   },

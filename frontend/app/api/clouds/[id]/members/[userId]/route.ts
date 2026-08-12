@@ -1,4 +1,4 @@
-import { proxyJsonRequest } from "../../../../../_lib/nest-proxy";
+import { proxyJsonRequest } from "../../../../../api/_lib/nest-proxy";
 
 export const runtime = "nodejs";
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 
 type TrendingTopic = {
@@ -23,7 +24,7 @@ function SearchIcon({ s = 24 }: { s?: number }) {
 function BellIcon({ s = 24 }: { s?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M15 17H5.5a1 1 0 0 1-.92-1.38l1.42-3.42A5 5 0 0 0 6.4 10V9a5.6 5.0 0 1 11.2 0v1c0 .69.14 1.38.4 2l1.42 3.42A1 1 0 0 1 18.5 17H15" />
+      <path d="M15 17H5.5a1 1 0 0 1-.92-1.38l1.42-3.42A5 5 0 0 0 6.4 10V9a5.6 5.6 0 0 1 11.2 0v1c0 .69.14 1.38.4 2l1.42 3.42A1 1 0 0 1 18.5 17H15" />
       <path d="M10 19a2 2 0 0 0 4 0" />
     </svg>
   );
@@ -34,14 +35,6 @@ function GearIcon({ s = 24 }: { s?: number }) {
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
-    </svg>
-  );
-}
-
-function FireIcon({ s = 20 }: { s?: number }) {
-  return (
-    <svg viewBox="0 0 384 512" width={s} height={s} fill="currentColor" aria-hidden="true">
-      <path d="M216 23.9c0-23.8-30.7-32.3-44.9-13.1C48.2 181.4 200 181.4 200 288c0 22.1-17.9 40-40 40s-40-17.9-40-40V192c0-17.7-21.5-26.5-33.9-14.1C33.8 240.2 0 306.8 0 384c0 70.7 57.3 128 128 128h128c70.7 0 128-57.3 128-128 0-129.2-128-177.5-168-360.1z"/>
     </svg>
   );
 }
@@ -71,21 +64,21 @@ function TrendArrow({ trend }: { trend: "up" | "down" | "same" }) {
 // Mock data for trending topics - in production this would come from an API
 const generateTrendingTopics = (): TrendingTopic[] => {
   const topics = [
-    { word: "Tech", count: 2847, trend: "up" },
-    { word: "Música", count: 2156, trend: "up" },
-    { word: "Futebol", count: 1923, trend: "down" },
-    { word: "Games", count: 1756, trend: "up" },
-    { word: "Filmes", count: 1432, trend: "same" },
-    { word: "Política", count: 1287, trend: "down" },
-    { word: "Cripto", count: 1156, trend: "up" },
-    { word: "Saúde", count: 1034, trend: "same" },
-    { word: "Cinema", count: 923, trend: "up" },
-    { word: "Educação", count: 876, trend: "down" },
-    { word: "Sustentabilidade", count: 754, trend: "up" },
-    { word: "Viagens", count: 698, trend: "same" },
-    { word: "Gastronomia", count: 623, trend: "up" },
-    { word: "Moda", count: 587, trend: "down" },
-    { word: "Arte", count: 534, trend: "same" },
+    { word: "Tech", count: 2847, trend: "up" as const },
+    { word: "Música", count: 2156, trend: "up" as const },
+    { word: "Futebol", count: 1923, trend: "down" as const },
+    { word: "Games", count: 1756, trend: "up" as const },
+    { word: "Filmes", count: 1432, trend: "same" as const },
+    { word: "Política", count: 1287, trend: "down" as const },
+    { word: "Cripto", count: 1156, trend: "up" as const },
+    { word: "Saúde", count: 1034, trend: "same" as const },
+    { word: "Cinema", count: 923, trend: "up" as const },
+    { word: "Educação", count: 876, trend: "down" as const },
+    { word: "Sustentabilidade", count: 754, trend: "up" as const },
+    { word: "Viagens", count: 698, trend: "same" as const },
+    { word: "Gastronomia", count: 623, trend: "up" as const },
+    { word: "Moda", count: 587, trend: "down" as const },
+    { word: "Arte", count: 534, trend: "same" as const },
   ];
 
   return topics.map((topic, index) => ({
@@ -95,7 +88,7 @@ const generateTrendingTopics = (): TrendingTopic[] => {
 };
 
 export default function TrendingPage() {
-  const user = useSessionUser();
+  const { user: sessionUser } = useSessionUser();
   const [trendingTopics, setTrendingTopics] = useState<TrendingTopic[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -142,7 +135,7 @@ export default function TrendingPage() {
               <GearIcon s={24} />
             </a>
             <a href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[16px] font-bold text-white">
-              <SessionUserAvatar user={user} size={48} />
+              <SessionUserAvatar user={sessionUser} size={48} />
             </a>
           </div>
         </div>
@@ -240,12 +233,7 @@ export default function TrendingPage() {
 
           {/* Trending */}
           <a href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <svg viewBox="0 0 24 24" width={30} height={30} fill="currentColor" aria-hidden="true">
-              <path d="M12 2C8 2 5 5 5 9c0 2.2 1 4.2 2.5 5.7C7.7 15.2 8.5 16 8.5 16H7c0 0-1.5-1.5-1.5-3S7 10.5 7 10.5h1c.8 0 1.5-.7 1.5-1.5V8c0-1.7 1.3-3 3-3s3 1.3 3 3v1c0 .8.7 1.5 1.5 1.5h1c0 0 1.5 1.5 1.5 3S16 16 16 16h-2c0 0 .8-.8 1.5-1.5C17 13.2 18 11.2 18 9c0-4-3-7-7-7zm0 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3zm0 5c1.1 0 2 .9 2 2v2h-4v-2c0-1.1.9-2 2-2z"/>
-              <path d="M15 2.5c-1.1 0-2 .9-2 2 0 .6.5 1.2 1 1.5.3.2.5.5.5.8 0 .3-.2.5-.5.5h-.5c-.6 0-1-.4-1-1s.4-1 1-1h.5c.3 0 .5-.2.5-.5V4c0-1.1.9-2 2-2z"/>
-              <path d="M17 3.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V4.8c0-1 .8-1.8 1.8-1.8z"/>
-              <path d="M18 4.5c-1 0-1.8.8-1.8 1.8 0 .5.4 1 .8 1.3.2.2.4.4.4.7 0 .3-.2.5-.4.5h-.4c-.5 0-.9-.4-.9-.9s.4-.9.9-.9h.4c.3 0 .5-.2.5-.5V5.8c0-1 .8-1.8 1.8-1.8z"/>
-            </svg>
+            <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </a>
 
