@@ -3,9 +3,18 @@ import { NextResponse } from "next/server";
 const BACKEND_ORIGIN_ENV_NAMES = ["CLOUDS_BRIDGE_URL"] as const;
 
 function resolveBackendOrigin() {
-  // Forçar sempre usar localhost:3001 para desenvolvimento local
-  console.warn(`Using http://localhost:3001 as backend origin for development`);
-  return "http://localhost:3001";
+  const envOrigin = process.env.CLOUDS_BRIDGE_URL?.trim();
+
+  if (envOrigin) {
+    return envOrigin.replace(/\/+$/, "");
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    console.warn("CLOUDS_BRIDGE_URL is not set. Falling back to http://localhost:3001 for local development.");
+    return "http://localhost:3001";
+  }
+
+  throw new Error(`Missing backend origin. Set one of: ${BACKEND_ORIGIN_ENV_NAMES.join(", ")}`);
 }
 
 function buildBackendUrl(pathname: string) {
