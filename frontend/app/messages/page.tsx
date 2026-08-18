@@ -1248,7 +1248,7 @@ function MessagesPageContent() {
 
     const socket = io(`${socketUrl}/direct-messages`, {
       withCredentials: true,
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
     });
 
     socketRef.current = socket;

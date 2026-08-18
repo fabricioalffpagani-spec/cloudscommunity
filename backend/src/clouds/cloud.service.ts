@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { CloudMode, CloudStatus, CloudVisibility, Prisma } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { CloudMessageReactionPayload, CloudPayload, CreateCloudInput } from './cloud.types';
+import { CloudMessagePayload, CloudMessageReactionPayload, CloudPayload, CreateCloudInput, CreateCloudMessageInput, ListCloudMessagesQuery } from './cloud.types';
 
 const ALLOWED_DURATIONS = ['5 min', '10 min', '30 min', '1h', '24h'] as const;
 
@@ -21,6 +21,34 @@ type CloudWithRelations = Prisma.CloudGetPayload<{
       select: {
         hypes: true;
         members: true;
+      };
+    };
+  };
+}>;
+
+type CloudMessageWithRelations = Prisma.CloudMessageGetPayload<{
+  include: {
+    user: {
+      include: {
+        profile: true;
+      };
+    };
+    replyToMessage: {
+      include: {
+        user: {
+          include: {
+            profile: true;
+          };
+        };
+      };
+    };
+    reactions: {
+      include: {
+        user: {
+          include: {
+            profile: true;
+          };
+        };
       };
     };
   };
@@ -386,158 +414,130 @@ export class CloudService {
     return { ok: true };
   }
 
-  async createMessage(token: string | null, cloudId: string, body: { type: string; content?: string; mediaUrl?: string; replyToMessageId?: string }): Promise<{ ok: true; message: any }> {
+  async createMessage(
+    token: string | null,
+    cloudId: string,
+    body: { type: string; content?: string; mediaUrl?: string; replyToMessageId?: string; clientMessageId?: string },
+  ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
+    await this.requireCloudAccess(current.user.id, cloudId);
 
-    const cloud = await this.prisma.cloud.findFirst({
-      where: {
-        id: cloudId,
-        deletedAt: null,
-      },
-    });
-
-    if (!cloud) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
-    }
-
-    // Check if user is a member of the cloud
-    const member = await this.prisma.cloudMember.findFirst({
-      where: {
-        cloudId,
-        userId: current.user.id,
-        leftAt: null,
-      },
-    });
-
-    if (!member) {
-      throw new UnauthorizedException({
-        message: 'Você não é membro desta cloud.',
-      });
-    }
-
-    const messageType = body.type === 'audio' ? 'audio' : 'text';
-
-    const message = await this.prisma.cloudMessage.create({
-      data: {
-        cloudId,
-        userId: current.user.id,
-        type: messageType,
-        content: body.content ?? null,
-        mediaUrl: body.mediaUrl ?? null,
-        replyToMessageId: body.replyToMessageId ?? null,
-      },
-      include: {
-        user: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
+    const messageType = body.type === 'audio' || body.type === 'image' || body.type === 'link' ? body.type : 'text';
 
     return {
       ok: true,
-      message: {
-        id: message.id,
-        type: message.type,
-        content: message.content,
-        mediaUrl: message.mediaUrl,
-        replyToMessageId: message.replyToMessageId,
-        createdAt: message.createdAt,
-        sender: message.user.profile?.displayName || 'Usuário',
-        initials: message.user.profile?.displayName?.substring(0, 2).toUpperCase() || 'US',
-        color: '#8B5CF6',
-        own: message.userId === current.user.id,
-        isPinned: message.isPinned,
-      },
+      message: await this.createCloudMessage(current.user.id, cloudId, {
+        type: messageType,
+        content: body.content,
+        mediaUrl: body.mediaUrl,
+        replyToMessageId: body.replyToMessageId,
+        clientMessageId: body.clientMessageId,
+      }),
     };
   }
 
-  async getMessages(token: string | null, cloudId: string): Promise<{ ok: true; messages: any[] }> {
-    await this.requireSession(token);
+  async sendAudioMessage(
+    token: string | null,
+    cloudId: string,
+    body: { clientMessageId?: string; replyToMessageId?: string },
+    file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
+  ): Promise<{ ok: true; message: CloudMessagePayload }> {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(current.user.id, cloudId);
 
-    const cloud = await this.prisma.cloud.findFirst({
-      where: {
-        id: cloudId,
-        deletedAt: null,
-      },
-    });
-
-    if (!cloud) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    if (!file) {
+      throw new BadRequestException({ message: 'Envie um arquivo de áudio.' });
     }
+
+    if (!file.mimetype?.startsWith('audio/')) {
+      throw new BadRequestException({ message: 'O arquivo enviado precisa ser um áudio.' });
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      throw new BadRequestException({ message: 'O áudio excede o limite permitido.' });
+    }
+
+    return {
+      ok: true,
+      message: await this.createCloudMessage(current.user.id, cloudId, {
+        type: 'audio',
+        mediaUrl: this.buildDataUrl(file.mimetype, file.buffer),
+        clientMessageId: body.clientMessageId,
+        replyToMessageId: body.replyToMessageId,
+      }),
+    };
+  }
+
+  async sendImageMessage(
+    token: string | null,
+    cloudId: string,
+    body: { clientMessageId?: string; replyToMessageId?: string },
+    file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
+  ): Promise<{ ok: true; message: CloudMessagePayload }> {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(current.user.id, cloudId);
+
+    if (!file) {
+      throw new BadRequestException({ message: 'Envie um arquivo de imagem.' });
+    }
+
+    if (!file.mimetype?.startsWith('image/')) {
+      throw new BadRequestException({ message: 'O arquivo enviado precisa ser uma imagem.' });
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadRequestException({ message: 'A imagem excede o limite permitido.' });
+    }
+
+    return {
+      ok: true,
+      message: await this.createCloudMessage(current.user.id, cloudId, {
+        type: 'image',
+        mediaUrl: this.buildDataUrl(file.mimetype, file.buffer),
+        clientMessageId: body.clientMessageId,
+        replyToMessageId: body.replyToMessageId,
+      }),
+    };
+  }
+
+  async getMessages(
+    token: string | null,
+    cloudId: string,
+    query: ListCloudMessagesQuery = {},
+  ): Promise<{ ok: true; messages: CloudMessagePayload[] }> {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(current.user.id, cloudId);
+
+    const take = this.normalizeTake(query.take);
+    const before = query.before ? new Date(query.before) : null;
 
     const messages = await this.prisma.cloudMessage.findMany({
       where: {
         cloudId,
         deletedAt: null,
+        ...(before && !Number.isNaN(before.getTime())
+          ? { createdAt: { lt: before } }
+          : {}),
       },
-      include: {
-        user: {
-          include: {
-            profile: true,
-          },
-        },
-        replyToMessage: {
-          include: {
-            user: {
-              include: {
-                profile: true,
-              },
-            },
-          },
-        },
-        reactions: {
-          include: {
-            user: {
-              include: {
-                profile: true,
-              },
-            },
-          },
-        },
-      },
+      include: this.messageInclude(),
       orderBy: {
-        createdAt: 'asc',
+        createdAt: 'desc',
       },
+      take,
     });
 
     return {
       ok: true,
-      messages: messages.map((message) => ({
-        id: message.id,
-        type: message.type,
-        content: message.content,
-        mediaUrl: message.mediaUrl,
-        replyToMessageId: message.replyToMessageId,
-        createdAt: message.createdAt,
-        sender: message.user.profile?.displayName || 'Usuário',
-        initials: message.user.profile?.displayName?.substring(0, 2).toUpperCase() || 'US',
-        color: '#8B5CF6',
-        own: message.userId === cloud.authorId,
-        isPinned: message.isPinned,
-        replyTo: message.replyToMessage && message.replyToMessage.user ? {
-          id: message.replyToMessage.id,
-          sender: message.replyToMessage.user.profile?.displayName || 'Usuário',
-          content: message.replyToMessage.content,
-        } : undefined,
-        reactions: message.reactions.map((reaction) => ({
-          id: reaction.id,
-          emoji: reaction.emoji,
-          userId: reaction.userId,
-          user: {
-            id: reaction.user.id,
-            username: reaction.user.profile?.username || '',
-            displayName: reaction.user.profile?.displayName || '',
-            avatarUrl: reaction.user.profile?.avatarUrl,
-          },
-          createdAt: reaction.createdAt,
-        })),
-      })),
+      messages: messages.reverse().map((message) => this.mapMessage(message)),
     };
   }
 
-  async addReaction(token: string | null, cloudId: string, messageId: string, emoji: string): Promise<{ ok: true; reaction: CloudMessageReactionPayload }> {
+  async addReaction(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<{ ok: true; reaction: CloudMessageReactionPayload; removed: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -599,6 +599,7 @@ export class CloudService {
 
       return {
         ok: true,
+        removed: true,
         reaction: {
           id: existingReaction.id,
           emoji: existingReaction.emoji,
@@ -632,6 +633,7 @@ export class CloudService {
 
     return {
       ok: true,
+      removed: false,
       reaction: {
         id: reaction.id,
         emoji: reaction.emoji,
@@ -704,6 +706,150 @@ export class CloudService {
         createdAt: reaction.createdAt.toISOString(),
       })),
     };
+  }
+
+  async requireCloudAccess(userId: string, cloudId: string) {
+    const cloud = await this.prisma.cloud.findFirst({
+      where: {
+        id: cloudId,
+        deletedAt: null,
+      },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    return cloud;
+  }
+
+  private normalizeTake(rawTake?: number): number {
+    if (!rawTake || Number.isNaN(rawTake)) {
+      return 50;
+    }
+
+    return Math.max(1, Math.min(rawTake, 100));
+  }
+
+  private async createCloudMessage(
+    userId: string,
+    cloudId: string,
+    input: CreateCloudMessageInput,
+  ): Promise<CloudMessagePayload> {
+    const cloud = await this.requireCloudAccess(userId, cloudId);
+    const replyToMessageId = input.replyToMessageId?.trim() || null;
+    const type = input.type === 'audio' || input.type === 'image' || input.type === 'link' ? input.type : 'text';
+
+    if (replyToMessageId) {
+      const replyTarget = await this.prisma.cloudMessage.findFirst({
+        where: {
+          id: replyToMessageId,
+          cloudId,
+          deletedAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!replyTarget) {
+        throw new BadRequestException({
+          message: 'A mensagem de resposta não foi encontrada.',
+        });
+      }
+    }
+
+    const created = await this.prisma.cloudMessage.create({
+      data: {
+        cloudId,
+        userId,
+        type,
+        content: input.content ?? null,
+        mediaUrl: input.mediaUrl ?? null,
+        replyToMessageId,
+      },
+      include: this.messageInclude(),
+    });
+
+    void cloud;
+    return this.mapMessage(created, input.clientMessageId?.trim() || null);
+  }
+
+  private messageInclude() {
+    return {
+      user: {
+        include: {
+          profile: true,
+        },
+      },
+      replyToMessage: {
+        include: {
+          user: {
+            include: {
+              profile: true,
+            },
+          },
+        },
+      },
+      reactions: {
+        include: {
+          user: {
+            include: {
+              profile: true,
+            },
+          },
+        },
+      },
+    } as const;
+  }
+
+  private mapMessage(message: CloudMessageWithRelations, clientMessageId: string | null = null): CloudMessagePayload {
+    const profile = message.user.profile;
+
+    if (!profile) {
+      throw new Error('Message sender profile is required.');
+    }
+
+    return {
+      id: message.id,
+      cloudId: message.cloudId,
+      senderId: message.userId,
+      type: message.type as CloudMessagePayload['type'],
+      content: message.content,
+      mediaUrl: message.mediaUrl,
+      clientMessageId,
+      replyToMessageId: message.replyToMessageId,
+      createdAt: message.createdAt.toISOString(),
+      updatedAt: message.updatedAt.toISOString(),
+      deletedAt: message.deletedAt?.toISOString() ?? null,
+      sender: {
+        id: message.user.id,
+        username: profile.username,
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+      },
+      replyTo: message.replyToMessage
+        ? {
+            id: message.replyToMessage.id,
+            sender: message.replyToMessage.user.profile?.displayName || 'Usuário',
+            content: message.replyToMessage.content,
+          }
+        : null,
+      reactions: message.reactions.map((reaction) => ({
+        id: reaction.id,
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        user: {
+          id: reaction.user.id,
+          username: reaction.user.profile?.username || '',
+          displayName: reaction.user.profile?.displayName || '',
+          avatarUrl: reaction.user.profile?.avatarUrl ?? null,
+        },
+        createdAt: reaction.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  private buildDataUrl(mimeType: string, buffer: Buffer) {
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
   }
 
   private cloudInclude() {

@@ -20,6 +20,36 @@ export type CloudMessageReactionPayload = {
   createdAt: string;
 };
 
+export type CloudMessageReplyPayload = {
+  id: string;
+  sender: string;
+  content: string | null;
+};
+
+export type CloudMessageAuthorPayload = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type CloudMessagePayload = {
+  id: string;
+  cloudId: string;
+  senderId: string;
+  type: 'text' | 'audio' | 'image' | 'link';
+  content: string | null;
+  mediaUrl: string | null;
+  clientMessageId: string | null;
+  replyToMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  sender: CloudMessageAuthorPayload;
+  replyTo: CloudMessageReplyPayload | null;
+  reactions: CloudMessageReactionPayload[];
+};
+
 export type CloudPayload = {
   id: string;
   title: string;
@@ -41,4 +71,17 @@ export type CreateCloudInput = {
   description?: string;
   duration?: string;
   visibility?: CloudVisibilityValue;
+};
+
+export type ListCloudMessagesQuery = {
+  take?: number;
+  before?: string;
+};
+
+export type CreateCloudMessageInput = {
+  type: 'text' | 'audio' | 'image' | 'link';
+  content?: string;
+  mediaUrl?: string;
+  clientMessageId?: string;
+  replyToMessageId?: string;
 };
