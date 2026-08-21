@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
 import { HeaderBrand } from "./components/HeaderBrand";
@@ -85,6 +85,14 @@ function mergeClouds(base: Cloud[], incoming: Cloud[]) {
   });
 
   return Array.from(byId.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <PageContent />
+    </Suspense>
+  );
 }
 
 function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
@@ -2233,7 +2241,7 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function Page() {
+function PageContent() {
   const { user, refresh } = useSessionUser();
   const router = useRouter();
   const searchParams = useSearchParams();

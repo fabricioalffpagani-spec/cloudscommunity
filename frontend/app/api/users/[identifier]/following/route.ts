@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { nestProxy } from '../../_lib/nest-proxy';
+import { NextRequest } from 'next/server';
+import { proxyJsonRequest } from '../../../_lib/nest-proxy';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { identifier: string } }
+  context: { params: Promise<{ identifier: string }> }
 ) {
-  return nestProxy(request, `/users/${params.identifier}/following`);
+  const { identifier } = await context.params;
+  return proxyJsonRequest(request, `/users/${identifier}/following`);
 }

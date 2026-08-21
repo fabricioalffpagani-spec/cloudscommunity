@@ -157,7 +157,6 @@ export function UserAvatar({
           style={{ 
             filter: 'none',
             imageRendering: 'auto',
-            imageRendering: '-webkit-optimize-contrast',
             backfaceVisibility: 'hidden',
             transform: 'translateZ(0)'
           }}
