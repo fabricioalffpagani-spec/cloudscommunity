@@ -14,7 +14,6 @@ export type PublicUserProfilePayload = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
-  hypesCount: number;
   isFollowing: boolean;
   isSelf: boolean;
   profileUrl: string;

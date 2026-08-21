@@ -130,19 +130,35 @@ export class UsersService {
       });
     }
 
-    await this.prisma.follow.upsert({
+    const existingFollow = await this.prisma.follow.findUnique({
       where: {
         followerId_followingId: {
           followerId: current.user.id,
           followingId: target.id,
         },
       },
-      update: {},
-      create: {
-        followerId: current.user.id,
-        followingId: target.id,
-      },
     });
+
+    if (!existingFollow) {
+      await this.prisma.follow.create({
+        data: {
+          followerId: current.user.id,
+          followingId: target.id,
+        },
+      });
+
+      // Create notification for the followed user
+      await this.prisma.notification.create({
+        data: {
+          userId: target.id,
+          type: 'follow',
+          entityType: 'follow',
+          entityId: current.user.id,
+          title: 'Novo seguidor',
+          body: `${current.user.profile?.displayName || 'Alguém'} começou a seguir você`,
+        },
+      });
+    }
 
     return {
       ok: true,
@@ -170,6 +186,74 @@ export class UsersService {
     return {
       ok: true,
       user: await this.mapPublicProfile(target, current.user.id),
+    };
+  }
+
+  async getFollowers(token: string | null, identifierInput: string): Promise<UsersSearchResponse> {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+
+    const followers = await this.prisma.follow.findMany({
+      where: { followingId: target.id },
+      include: {
+        follower: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const users: PublicUserProfilePayload[] = [];
+
+    for (const entry of followers) {
+      const user = entry.follower;
+
+      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+        continue;
+      }
+
+      users.push(await this.mapPublicProfile(user, current.user.id));
+    }
+
+    return {
+      ok: true,
+      users,
+    };
+  }
+
+  async getUserFollowing(token: string | null, identifierInput: string): Promise<UsersSearchResponse> {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+
+    const following = await this.prisma.follow.findMany({
+      where: { followerId: target.id },
+      include: {
+        following: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const users: PublicUserProfilePayload[] = [];
+
+    for (const entry of following) {
+      const user = entry.following;
+
+      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+        continue;
+      }
+
+      users.push(await this.mapPublicProfile(user, current.user.id));
+    }
+
+    return {
+      ok: true,
+      users,
     };
   }
 
@@ -300,7 +384,6 @@ export class UsersService {
     const followersCount = await this.prisma.follow.count({ where: { followingId: user.id } });
     const followingCount = await this.prisma.follow.count({ where: { followerId: user.id } });
     const cloudsCount = await this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } });
-    const hypesCount = await this.prisma.cloudHype.count({ where: { userId: user.id } });
     const isFollowing = currentUserId
       ? Boolean(
           await this.prisma.follow.findFirst({
@@ -356,7 +439,6 @@ export class UsersService {
       followersCount,
       followingCount,
       cloudsCount,
-      hypesCount,
       isFollowing,
       isSelf: currentUserId === user.id,
       profileUrl: `/users/${profile.username}`,

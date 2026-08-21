@@ -1,5 +1,18 @@
 export type CloudVisibilityValue = 'public' | 'private';
 
+export type CloudInvitePayload = {
+  token: string;
+  cloudId: string;
+  cloud: {
+    id: string;
+    title: string;
+    duration: string;
+    createdAt: string;
+    authorId: string;
+    visibility: CloudVisibilityValue;
+  };
+};
+
 export type CloudAuthorPayload = {
   id: string;
   name: string;

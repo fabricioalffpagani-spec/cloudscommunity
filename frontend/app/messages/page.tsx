@@ -6,7 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { io, type Socket } from "socket.io-client";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
-import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon } from "../components/ui-icons";
+import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -101,90 +101,124 @@ type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
 const MESSAGE_LIMIT = 50;
-const EMOJI_BANK = [
-  "😀", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉",
-  "😊", "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲",
-  "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔",
-  "🤐", "🤨", "😐", "😑", "😶", "😏", "😒", "🙄", "😬", "",
-  "😔", "😪", "🤤", "😴", "😷", "🤒", "🤕", "🤢", "🤮", "🤧",
-  "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳", "🥸", "😎", "🤓",
-  "🧐", "😕", "😟", "🙁", "☹️", "😮", "😯", "😲", "😳", "🥺",
-  "😦", "😧", "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣",
-  "😞", "😓", "😩", "😫", "🥱", "😤", "😡", "😠", "🤬", "😈",
-  "👿", "💀", "☠️", "💩", "🤡", "👹", "👺", "👻", "👽", "👾",
-  "🤖", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾",
-  "🙈", "🙉", "🙊", "💋", "💌", "💘", "💝", "💖", "💗", "💓",
-  "💞", "💕", "💟", "❣️", "💔", "❤️", "🧡", "💛", "💙", "💜",
-  "🤎", "🖤", "🤍", "💯", "💢", "💥", "💫", "💦", "💨", "🕳️",
-  "💣", "💬", "🗨️", "️", "💭", "💤", "👋", "🤚", "🖐️", "✋",
-  "🖖", "👌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉",
-  "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜",
-  "👏", "🙌", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪",
-  "🦾", "🦿", "🦵", "🦶", "👂", "🦻", "👃", "🧠", "🫀", "🫁",
-  "🦷", "🦴", "👀", "👁️", "👅", "👄", "👶", "🧒", "👦", "👧",
-  "🧑", "👱", "👨", "🧔", "👩", "🧓", "👴", "👵", "🙍", "🙎",
-  "🙅", "🙆", "💁", "🙋", "🧏", "🙇", "🤦", "🤷", "👨‍⚕️", "👩‍⚕️",
-  "👨‍🎓", "👩‍🎓", "👨‍🏫", "👩‍🏫", "👨‍⚖️", "👩‍⚖️", "👨‍🌾", "👩‍🌾", "👨‍🍳", "👩‍🍳",
-  "👨‍🔧", "👩‍🔧", "👨‍🏭", "👩‍🏭", "👨‍💼", "👩‍💼", "👨‍🔬", "👩‍🔬", "👨‍💻", "👩‍💻",
-  "👨‍🎤", "👩‍🎤", "👨‍🎨", "👩‍🎨", "👨‍✈️", "👩‍✈️", "👨‍🚀", "👩‍🚀", "👨‍🚒", "👩‍🚒",
-  "👮", "🕵️", "💂", "👷", "🤴", "👸", "👳", "👲", "🧕", "🤵",
-  "👰", "🤰", "🤱", "👼", "🎅", "🤶", "🧙", "🧚", "🧛", "🧜",
-  "🧝", "🧞", "🧟", "💆", "💇", "🚶", "🧍", "🧎", "🏃", "💃",
-  "🕺", "🕴️", "👯", "🧖", "🧗", "🤺", "🏇", "⛷️", "🏂", "🏌️",
-  "🏄", "🚣", "🏊", "⛹️", "🏋️", "🤼", "🤸", "🤾", "🤹", "🛀",
-  "🛌", "🧘", "", "🦹", "", "🕶️", "🥽", "🥼", "🦺", "👔",
-  "👕", "👖", "🧣", "🧤", "🧥", "🧦", "👗", "👘", "🥻", "🩱",
-  "🩲", "🩳", "👙", "👚", "👛", "👜", "🎒", "👞", "👟", "🥾",
-  "🥿", "👠", "👡", "🩰", "👢", "👑", "👒", "🎩", "🎓", "🧢",
-  "⛑️", "📿", "💄", "💍", "💎", "🔔", "🔕", "📢", "📣", "📯",
-  "", "🔉", "🔊", "🔇", "🎼", "🎵", "🎶", "🎙️", "🎚️", "🎛️",
-  "🎤", "🎧", "📻", "🎷", "🎸", "🎹", "🎺", "🎻", "🪕", "🥁",
-  "📱", "📲", "☎️", "📞", "📟", "📠", "🔋", "🔌", "💻", "🖥️",
-  "🖨️", "⌨️", "🖱️", "🖲️", "💽", "💾", "💿", "📀", "🧮", "🎥",
-  "🎞️", "📽️", "🎬", "📺", "📷", "📸", "📹", "📼", "🔍", "🔎",
-  "🕯️", "💡", "🔦", "🏮", "🪔", "📔", "📕", "📖", "📗", "📘",
-  "📙", "📚", "📓", "📒", "📃", "📜", "📄", "📰", "🗞️", "📑",
-  "🔖", "🏷️", "💰", "💴", "💵", "💶", "💷", "💸", "💳", "🧾",
-  "💹", "✉️", "📧", "📨", "📩", "📤", "📥", "📦", "📫", "📪",
-  "📬", "📭", "📮", "🗳️", "✏️", "✒️", "🖋️", "🖊️", "🖌️", "🖍️",
-  "📝", "💼", "📁", "📂", "🗂️", "📅", "📆", "🗒️", "🗓️", "📇",
-  "📈", "📉", "📊", "📋", "📌", "📍", "📎", "🖇️", "📏", "📐",
-  "✂️", "🗃️", "🗄️", "🗑️", "🔒", "🔓", "🔏", "🔐", "🔑", "🗝️",
-  "🔨", "🪓", "⛏️", "🔧", "🔩", "⚙️", "🗜️", "⚖️", "🦯", "🔫",
-  "💣", "🧨", "🔪", "🗡️", "⚔️", "🛡️", "🚬", "⚰️", "⚱️", "🏺",
-  "🔮", "📿", "🧿", "💈", "⚗️", "🔭", "🔬", "🩹", "🩺", "💊",
-  "💉", "🩸", "🧬", "🦠", "🧫", "🧪", "🌡️", "🧹", "🪠", "🧺",
-  "🧻", "🚽", "🚿", "🛁", "🛀", "🧼", "🪥", "🪒", "🧽", "🪣",
-  "🧴", "🛎️", "🚪", "🪑", "🛋️", "🛏️", "🛌", "🧸", "🖼️", "🛍️",
-  "🛒", "🎁", "🎈", "🎏", "🎀", "🎊", "🎉", "🎎", "🎐", "🧧",
-  "✨", "🎇", "🎆", "🔥", "💫", "🧨", "🎑", "🎃", "🎄", "�️",
-  "🎟️", "🎫", "🎖️", "🏆", "🏅", "🥇", "🥈", "🥉", "⚽", "⚾",
-  "🥎", "🏀", "🏐", "🏈", "🏉", "🎾", "🥏", "🎳", "🏏", "🏑",
-  "🏒", "🥍", "🏓", "🏸", "🥊", "🥋", "🥅", "⛳", "⛸️", "🎣",
-  "🤿", "🎽", "🎿", "🛷", "🥌", "🎯", "🪀", "🪁", "🎱", "🎮",
-  "🕹️", "🎰", "🎲", "🧩", "♠️", "♥️", "♦️", "♣️", "♟️", "🃏",
-  "🀄", "🎴", "🎭", "🎨", "🧵", "🧶", "🪡", "🪢", "🌐", "🌍",
-  "🌎", "🌏", "🗺️", "🗾", "🧭", "🏔️", "⛰️", "🌋", "🗻", "🏕️",
-  "🏖️", "🏜️", "🏝️", "🏞️", "🏟️", "🏛️", "🏗️", "🧱", "🏘️", "🏚️",
-  "🏠", "🏡", "🏢", "🏣", "🏤", "🏥", "🏦", "🏨", "🏩", "🏪",
-  "🏫", "🏬", "🏭", "🏯", "🏰", "💒", "🗼", "🗽", "⛪", "🕌",
-  "🛕", "🕍", "⛩️", "🕋", "⛲", "⛺", "🌁", "🌃", "🏙️", "🌄",
-  "🌅", "🌆", "🌇", "🌉", "♨️", "🎠", "🎡", "🎢", "🎪", "🚂",
-  "🚃", "🚄", "🚅", "🚆", "🚇", "🚈", "🚉", "🚊", "🚝", "🚞",
-  "🚋", "🚌", "🚍", "🚎", "🚐", "🚑", "🚒", "🚓", "🚔", "🚕",
-  "🚖", "🚗", "🚘", "🚙", "🚚", "🚛", "🚜", "🏎️", "🏍️", "🛵",
-  "🦽", "🦼", "🛺", "🚲", "🛴", "🛹", "🛼", "🚏", "🛣️", "🛤️",
-  "🛢️", "⛽", "🚨", "🚥", "🚦", "🛑", "🚧", "⚓", "⛵", "🛶",
-  "🚤", "🛳️", "⛴️", "🛥️", "🚢", "✈️", "🛩️", "🛫", "🛬", "🪂",
-  "💺", "🚁", "🚟", "🚠", "🚡", "🛰️", "🚀", "🛸", "🧳", "⌛",
-  "⏳", "⌚", "⏰", "⏱️", "⏲️", "🕰️", "🕛", "🕧", "🕐", "🕜",
-  "🕑", "🕝", "🕒", "🕞", "🕓", "🕟", "🕔", "🕠", "🕕", "🕡",
-  "🕖", "🕢", "🕗", "🕣", "🕘", "🕤", "🕙", "🕥", "🕚", "🕦",
-  "🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘", "🌙", "🌚",
-  "🌛", "🌜", "🌡️", "☀️", "🌝", "🌞", "🪐", "⭐", "🌟", "🌠",
-  "🌌", "☁️", "⛅", "⛈️", "🌤️", "🌥️", "🌦️", "🌧️", "🌨️", "🌩️",
-  "🌪️", "🌫️", "🌬️", "🌀", "🌈", "🌂", "☂️", "☔", "⛱️", "⚡",
-  "❄️", "☃️", "⛄", "☄️", "🔥", "💧", "🌊"
+const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
+  {
+    label: "Rostos",
+    icon: "😀",
+    emojis: [
+      "😀","😄","😁","😆","😅","🤣","😂","🙂","😊","😇",
+      "🥰","😍","🤩","😘","😋","😛","😜","🤪","😝","🤑",
+      "🤗","🤭","🤫","🤔","😐","😑","😏","😒","🙄","😬",
+      "😔","😪","😴","😷","🤒","🤕","🤢","🤮","🤧","🥵",
+      "🥶","🥴","😵","🤯","🤠","🥳","🥸","😎","🤓","🧐",
+      "😕","😟","🙁","☹️","😮","😯","😲","😳","🥺","😦",
+      "😧","😨","😰","😥","😢","😭","😱","😖","😣","😞",
+      "😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿",
+      "💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖",
+    ],
+  },
+  {
+    label: "Gestos",
+    icon: "👋",
+    emojis: [
+      "👋","🤚","🖐️","✋","🖖","👌","🤏","✌️","🤞","🤟",
+      "🤘","🤙","👈","👉","👆","👇","☝️","👍","👎","✊",
+      "👊","🤛","🤜","👏","🙌","👐","🤲","🤝","🙏","✍️",
+      "💅","🤳","💪","🦾","👀","👁️","👅","👄","💋",
+    ],
+  },
+  {
+    label: "Corações",
+    icon: "❤️",
+    emojis: [
+      "❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔",
+      "❣️","💕","💞","💓","💗","💖","💝","💘","💌","💟",
+      "💯","💢","💥","💫","💦","💨","💬","💭","💤","🔥","✨","🎉","🎊","🎈",
+    ],
+  },
+  {
+    label: "Animais",
+    icon: "🐶",
+    emojis: [
+      "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯",
+      "🦁","🐮","🐷","🐸","🐵","🙈","🙉","🙊","🐔","🐧",
+      "🐦","🐤","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄",
+      "🐝","🐛","🦋","🐌","🐞","🐜","🦟","🦗","🦂","🐢",
+      "🐍","🦎","🦖","🦕","🐙","🦑","🦐","🦞","🦀","🐡",
+      "🐠","🐟","🐬","🐳","🐋","🦈","🐊","🐅","🐆","🦓",
+      "🦍","🦧","🦣","🐘","🦛","🦏","🐪","🐫","🦒","🦘",
+      "🦬","🐃","🐂","🐄","🐎","🐖","🐏","🐑","🦙","🐐",
+      "🦌","🐕","🐩","🦮","🐈","🐓","🦃","🦤","🦚","🦜",
+      "🦢","🦩","🕊️","🐇","🦝","🦨","🦡","🦫","🦦","🦥",
+    ],
+  },
+  {
+    label: "Comida",
+    icon: "🍎",
+    emojis: [
+      "🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🫐","🍈",
+      "🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦",
+      "🥬","🥒","🌶️","🫑","🧄","🧅","🥔","🍠","🥐","🥯",
+      "🍞","🥖","🥨","🧀","🥚","🍳","🧈","🥞","🧇","🥓",
+      "🥩","🍗","🍖","🌭","🍔","🍟","🍕","🫓","🥪","🥙",
+      "🧆","🌮","🌯","🫔","🥗","🥘","🫕","🥫","🍝","🍜",
+      "🍲","🍛","🍣","🍱","🥟","🦪","🍤","🍙","🍚","🍘",
+      "🍥","🥮","🍢","🧁","🍰","🎂","🍮","🍭","🍬","🍫",
+      "🍿","🍩","🍪","🌰","🥜","🍯","🧃","🥤","🧋","🍵",
+      "☕","🍺","🍻","🥂","🍷","🥃","🍸","🍹","🧉","🍾",
+    ],
+  },
+  {
+    label: "Viagens",
+    icon: "✈️",
+    emojis: [
+      "🚗","🚕","🚙","🚌","🚎","🏎️","🚓","🚑","🚒","🚐",
+      "🛻","🚚","🚛","🚜","🏍️","🛵","🚲","🛴","🛹","🛼",
+      "🚁","🛸","✈️","🛩️","🚀","🛶","⛵","🚤","🛥️","🚢",
+      "🚂","🚃","🚄","🚅","🚆","🚇","🚈","🚉","🚊","🚝",
+      "🗺️","🏔️","⛰️","🌋","🏕️","🏖️","🏝️","🌍","🌎","🌏",
+      "🗼","🗽","🏰","🏯","🗿","⛩️","🕌","🕍","⛪","🏛️",
+      "🌁","🌃","🌄","🌅","🌆","🌇","🌉","🎠","🎡","🎢",
+    ],
+  },
+  {
+    label: "Atividades",
+    icon: "⚽",
+    emojis: [
+      "⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏉","🥏","🎱",
+      "🏓","🏸","🏒","🏑","🥍","🏏","⛳","🪃","🥊","🥋",
+      "🎯","⛸️","🎿","🛷","🥌","🎣","🤿","🎽","🏆","🥇",
+      "🥈","🥉","🏅","🎖️","🎪","🤹","🎨","🎭","🎬","🎤",
+      "🎧","🎼","🎹","🎸","🎺","🎻","🪕","🥁","🎲","🎮",
+      "🕹️","🧩","♠️","♥️","♦️","♣️","🃏","🀄","🎴",
+    ],
+  },
+  {
+    label: "Objetos",
+    icon: "💡",
+    emojis: [
+      "💡","🔦","🕯️","🪔","📱","💻","🖥️","⌨️","🖱️","🖨️",
+      "📷","📸","📹","🎥","📺","📻","📡","🔋","🔌","💾",
+      "💿","📀","🧮","🔭","🔬","🩺","💊","💉","🩹","🩸",
+      "🧬","🔑","🗝️","🔒","🔓","🔨","⚙️","🪛","🔧","🔩",
+      "🪤","🪣","🧹","🧺","🧻","🚪","🪑","🛋️","🛏️","🧸",
+      "🖼️","🎁","🎈","🎀","🎊","🎉","📦","📫","📬","📭",
+      "📮","📝","📚","📖","📰","📌","📍","📎","✂️","🗑️",
+      "💰","💳","💸","🧾","📈","📉","📊","🔮","🧿","💈",
+    ],
+  },
+  {
+    label: "Natureza",
+    icon: "🌸",
+    emojis: [
+      "🌸","🌼","🌻","🌺","🌹","🥀","🌷","💐","🍀","🌿",
+      "🍃","🍂","🍁","🌱","🌲","🌳","🌴","🌵","🎋","🎍",
+      "☀️","🌤️","⛅","🌥️","🌦️","🌧️","⛈️","🌩️","🌪️","🌫️",
+      "🌬️","🌀","🌈","❄️","☃️","⛄","☄️","💧","🌊","🔥",
+      "⚡","🌑","🌕","🌙","⭐","🌟","🌠","🌌","🪐","☀️",
+      "🦋","🐝","🌺","🍄","🌾","🐚","🪸","🪨","🪵","🌻",
+    ],
+  },
 ];
 
 const statusDot: Record<Status, string> = {
@@ -223,6 +257,21 @@ function matchesContactQuery(user: PublicUserProfile, query: string) {
   return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
 }
 
+function highlightText(text: string, query: string): string {
+  if (!query.trim()) return text;
+  
+  const normalizedQuery = normalizeText(query);
+  const normalizedText = normalizeText(text);
+  
+  // Simple case-insensitive highlighting
+  const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+  return text.replace(regex, '<mark class="bg-[#7C3AED]/40 text-white rounded px-0.5">$1</mark>');
+}
+
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function hashString(value: string) {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
@@ -256,6 +305,18 @@ function formatDuration(durationMs: number | null) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+function parseLinkPreview(rawLabel: string | null | undefined, fallbackUrl?: string | null): string {
+  if (!rawLabel) return fallbackUrl ? new URL(fallbackUrl).hostname.replace(/^www\./, "") : "Link compartilhado";
+  try {
+    const parsed = JSON.parse(rawLabel) as { type?: string; cloudTitle?: string; cloudVisibility?: string };
+    if (parsed.type === "cloud_invitation") {
+      const visibility = parsed.cloudVisibility === "private" ? "privada" : "pública";
+      return parsed.cloudTitle ? `☁️ Convite: ${parsed.cloudTitle}` : `☁️ Convite para Cloud ${visibility}`;
+    }
+  } catch { /* not JSON */ }
+  return rawLabel;
+}
+
 function previewForMessage(message: BackendMessage) {
   if (message.type === "audio") {
     const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
@@ -269,19 +330,12 @@ function previewForMessage(message: BackendMessage) {
   if (message.type === "link") {
     try {
       const parsed = JSON.parse(message.content || "{}") as { url?: string; label?: string | null };
-      if (parsed.label?.trim()) {
-        return parsed.label.trim();
-      }
-      if (parsed.url) {
-        return new URL(parsed.url).hostname.replace(/^www\./, "");
-      }
+      return parseLinkPreview(parsed.label, parsed.url);
     } catch {
       if (message.content) {
         try {
           return new URL(message.content).hostname.replace(/^www\./, "");
-        } catch {
-          // fall through
-        }
+        } catch { /* fall through */ }
       }
     }
     return "Link compartilhado";
@@ -307,7 +361,7 @@ function buildConversation(payload: BackendConversation): Conversation {
     name,
     status: mapStatus(payload.participant.status),
     avatarUrl: payload.participant.avatarUrl,
-    lastMessage: payload.lastMessagePreview || "",
+    lastMessage: parseLinkPreview(payload.lastMessagePreview) || "",
     time: timeLabel(payload.lastMessageAt),
     unread: payload.unreadCount,
     lastMessageAt: payload.lastMessageAt,
@@ -333,6 +387,25 @@ function buildMessage(
     }
   }
 
+  // Fallback: detect cloud_invitation JSON stored as text or with mismatched type
+  const resolvedKind: MessageKind = (() => {
+    if (payload.type === "link") return "link";
+    if (payload.type === "audio") return "audio";
+    if (payload.type === "image") return "image";
+    // Check if content looks like a link message stored as text
+    if (payload.type === "text" && payload.content) {
+      try {
+        const parsed = JSON.parse(payload.content) as { url?: string; label?: string | null };
+        if (parsed.url) {
+          linkUrl = parsed.url;
+          linkLabel = parsed.label?.trim() || null;
+          return "link";
+        }
+      } catch { /* not JSON */ }
+    }
+    return "text";
+  })();
+
   return {
     id: payload.id,
     conversationId: payload.conversationId,
@@ -341,7 +414,7 @@ function buildMessage(
     sender: isSelf ? "Você" : senderDisplayName,
     senderDisplayName,
     senderAvatarUrl: isSelf ? currentUser?.avatarUrl ?? null : payload.sender.avatarUrl ?? null,
-    kind: payload.type,
+    kind: resolvedKind,
     content: payload.content || "",
     time: timeLabel(payload.createdAt),
     isoTime: payload.createdAt,
@@ -666,44 +739,92 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   const host = msg.linkUrl ? new URL(msg.linkUrl).hostname.replace(/^www\./, "") : "Link";
   const label = msg.linkLabel || host;
   
-  // Check if this is a Cloud invitation
-  const isCloudInvite = msg.linkUrl?.includes('/cloud/') && (msg.linkLabel?.toLowerCase().includes('cloud') || msg.linkLabel?.toLowerCase().includes('participe'));
+  // Check if this is a Cloud invitation (from our custom format)
+  let cloudInviteData = null;
+  try {
+    if (msg.linkLabel) {
+      const parsed = JSON.parse(msg.linkLabel);
+      if (parsed.type === "cloud_invitation") {
+        cloudInviteData = parsed;
+      }
+    }
+  } catch {
+    // Not JSON, handle as regular link
+  }
+
+  const isCloudInvite = cloudInviteData !== null;
 
   if (isCloudInvite) {
+    const inviteUrl = cloudInviteData.inviteToken
+      ? `/invite/${cloudInviteData.inviteToken}`
+      : msg.linkUrl || `/cloud/${cloudInviteData.cloudId}`;
+    const isPrivate = cloudInviteData.cloudVisibility === "private";
+    const senderFirstName = msg.side === "right" ? "Você" : (msg.senderDisplayName || msg.sender).split(" ")[0];
+    const inviteText = msg.side === "right"
+      ? `Você convidou para uma Cloud ${isPrivate ? "privada" : "pública"}`
+      : `${senderFirstName} te convidou para participar de uma Cloud ${isPrivate ? "privada" : "pública"}`;
+
     return (
       <a
-        href={msg.linkUrl || "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`block overflow-hidden rounded-2xl border text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
-        style={{ maxWidth: "320px" }}
-        onClick={(event) => {
-          if (!msg.linkUrl) {
-            event.preventDefault();
-          }
+        href={inviteUrl}
+        className="block text-left transition-opacity hover:opacity-90"
+        style={{ maxWidth: "300px" }}
+        onClick={(e) => {
+          e.preventDefault();
+          window.location.href = inviteUrl;
         }}
       >
-        <div className="px-4 py-3">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#9333EA] to-[#A855F7] text-white">
-              <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
-                <path d="M8 16 C8 17.5 7.5 18.5 6.5 19.5 C7.5 19 9 18 9.5 16" />
+        <div
+          className="overflow-hidden rounded-3xl"
+          style={{ background: "linear-gradient(135deg, #7C3AED 0%, #9333EA 60%, #A855F7 100%)" }}
+        >
+          <div className="px-5 pt-5 pb-4">
+            {/* Invite header */}
+            <div className="flex items-center gap-2 mb-3">
+              <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 opacity-80">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
+              <p className="text-[12px] font-semibold text-white/80 leading-snug">{inviteText}</p>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-bold text-white truncate">{label}</p>
-              <p className="mt-1 text-[11px] text-white/60 truncate">Convite para participar</p>
+
+            {/* Cloud title */}
+            <p className="text-[22px] font-extrabold leading-tight text-white break-words">
+              {cloudInviteData.cloudTitle}
+            </p>
+
+            {/* Meta row */}
+            <div className="mt-2 flex items-center gap-2 text-[13px] font-medium text-white/65">
+              {isPrivate ? (
+                <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                </svg>
+              )}
+              <span>{isPrivate ? "Privada" : "Pública"}</span>
+              {cloudInviteData.cloudDuration && (
+                <>
+                  <span className="text-white/30">•</span>
+                  <span>{cloudInviteData.cloudDuration}</span>
+                </>
+              )}
             </div>
           </div>
-          <button
-            type="button"
-            className="w-full rounded-xl bg-gradient-to-r from-[#9333EA] to-[#A855F7] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:from-[#7C3AED] hover:to-[#9333EA]"
-          >
-            Participar da Cloud
-          </button>
+
+          {/* Button */}
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-center rounded-2xl bg-white/20 px-4 py-3 text-[15px] font-bold text-white backdrop-blur-sm">
+              Entrar na Cloud
+            </div>
+          </div>
         </div>
-        {msg.pending && <div className="px-4 pb-3 text-[11px] text-white/70">enviando...</div>}
+        {msg.pending && <p className="mt-1 text-right text-[11px] text-white/40">enviando...</p>}
       </a>
     );
   }
@@ -738,7 +859,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
 function MessageReceipt({ msg }: { msg: Msg }) {
   const isRead = Boolean(msg.readAt);
   const isDelivered = !msg.pending;
-  const iconClass = isRead ? "text-[#60A5FA]" : "text-white/45";
+  const iconClass = isRead ? "text-[#60A5FA]" : "text-white";
 
   if (!isDelivered) {
     return (
@@ -756,10 +877,206 @@ function MessageReceipt({ msg }: { msg: Msg }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: Msg }) {
-  const isRight = msg.side === "right";
+function DmReplyIcon() {
   return (
-    <div className={`flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </svg>
+  );
+}
+
+function DmDotsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+    </svg>
+  );
+}
+
+function DmMenuCopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function DmMenuTranslateIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 8l6 6" />
+      <path d="M4 14l6-6 2-3" />
+      <path d="M2 5h12" />
+      <path d="M7 2h1" />
+      <path d="M22 22l-5-10-5 10" />
+      <path d="M14 18h6" />
+    </svg>
+  );
+}
+
+function DmMenuEditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+    </svg>
+  );
+}
+
+function DmMenuCancelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M15 9l-6 6" />
+      <path d="M9 9l6 6" />
+    </svg>
+  );
+}
+
+function DmMenuForwardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 17 20 12 15 7" />
+      <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+    </svg>
+  );
+}
+
+function DmMsgMenu({
+  msg,
+  isRight,
+  textContent,
+  onEdit,
+  onDelete,
+  onForward,
+  onClose,
+}: {
+  msg: Msg;
+  isRight: boolean;
+  textContent: string | null;
+  onEdit?: (m: Msg) => void;
+  onDelete?: (m: Msg) => void;
+  onForward?: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translated, setTranslated] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handle = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [onClose]);
+
+  const handleCopy = () => {
+    const text = textContent ?? msg.linkUrl ?? "";
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => { setCopied(false); onClose(); }, 1200);
+    }).catch(() => {});
+  };
+
+  const handleTranslate = async () => {
+    if (!textContent) return;
+    setTranslating(true);
+    try {
+      const res = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=pt&dt=t&q=${encodeURIComponent(textContent)}`
+      );
+      const data = await res.json() as [[string, string][]] | null;
+      const result = data?.[0]?.map(([t]) => t).join("") ?? null;
+      if (result) setTranslated(result);
+    } catch {
+      // silently ignore
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const copyable = !!textContent || !!msg.linkUrl;
+  const isOwn = isRight;
+
+  const items: { label: string; icon: React.ReactNode; action: () => void; danger?: boolean; show: boolean }[] = [
+    {
+      label: copied ? "Copiado!" : "Copiar",
+      icon: <DmMenuCopyIcon />,
+      action: handleCopy,
+      show: copyable,
+    },
+    {
+      label: translating ? "Traduzindo…" : translated ? "Traduzido ✓" : "Traduzir",
+      icon: <DmMenuTranslateIcon />,
+      action: handleTranslate,
+      show: !!textContent,
+    },
+    {
+      label: "Editar",
+      icon: <DmMenuEditIcon />,
+      action: () => { onEdit?.(msg); onClose(); },
+      show: isOwn && msg.kind === "text",
+    },
+    {
+      label: "Cancelar envio",
+      icon: <DmMenuCancelIcon />,
+      action: () => { onDelete?.(msg); onClose(); },
+      danger: true,
+      show: isOwn,
+    },
+    {
+      label: "Encaminhar",
+      icon: <DmMenuForwardIcon />,
+      action: () => { onForward?.(msg); onClose(); },
+      show: true,
+    },
+  ];
+
+  return (
+    <div
+      ref={menuRef}
+      className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
+      style={{ bottom: "calc(100% + 4px)" }}
+    >
+      {translated && (
+        <div className="border-b border-white/[0.06] px-4 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Tradução</p>
+          <p className="text-[13px] text-white leading-snug">{translated}</p>
+        </div>
+      )}
+      {items.filter((i) => i.show).map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={item.action}
+          className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] ${item.danger ? "text-red-400 hover:text-red-300" : "text-white/80 hover:text-white"}`}
+        >
+          <span className={item.danger ? "text-red-400" : "text-white/50"}>{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; searchQuery?: string }) {
+  const isRight = msg.side === "right";
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const textContent = msg.kind === "text" ? msg.content : null;
+  const highlightedContent = searchQuery && textContent ? highlightText(textContent, searchQuery) : textContent;
+
+  return (
+    <div className={`group flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
       <div className="w-9 shrink-0">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderDisplayName, avatarUrl: msg.senderAvatarUrl }}
@@ -776,13 +1093,46 @@ function MessageBubble({ msg }: { msg: Msg }) {
           <LinkMessageBubble msg={msg} />
         ) : (
           <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            {msg.content}
+            <span dangerouslySetInnerHTML={{ __html: highlightedContent || msg.content }} />
             {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
         )}
-        <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${isRight ? "flex-row-reverse" : ""}`}>
-          <span>{msg.time}</span>
+        {/* Action row: reply + three-dot menu */}
+        <div className={`flex items-center gap-1 px-1 ${isRight ? "flex-row-reverse" : ""}`}>
+          <span className="text-[11px] text-white">{msg.time}</span>
           {isRight && <MessageReceipt msg={msg} />}
+          {/* Actions — visible on hover */}
+          <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isRight ? "mr-1.5" : "ml-1.5"}`}>
+            <button
+              type="button"
+              onClick={() => onReply?.(msg)}
+              title="Responder"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-white/70"
+            >
+              <DmReplyIcon />
+            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((o) => !o)}
+                title="Mais opções"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-white/70"
+              >
+                <DmDotsIcon />
+              </button>
+              {menuOpen && (
+                <DmMsgMenu
+                  msg={msg}
+                  isRight={isRight}
+                  textContent={textContent}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onForward={onForward}
+                  onClose={() => setMenuOpen(false)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -813,12 +1163,18 @@ function MessagesPageContent() {
   const [imageUploading, setImageUploading] = useState(false);
   const [linkUploading, setLinkUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState(0);
   const [sharedLink, setSharedLink] = useState<{ url: string; label: string } | null>(null);
   const autoSendRef = useRef(false);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
+  const [editingMsg, setEditingMsg] = useState<Msg | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
+  const [messageSearch, setMessageSearch] = useState("");
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [followedUsers, setFollowedUsers] = useState<PublicUserProfile[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(false);
   const handleAudioRecordingStop = useCallback(async (recording: RecordedAudio) => {
@@ -905,7 +1261,17 @@ function MessagesPageContent() {
 
     if (shareType === "cloud" && rawId) {
       const url = rawUrl || (typeof window !== "undefined" ? `${window.location.origin}/cloud/${rawId}` : `/cloud/${rawId}`);
-      setSharedLink({ url, label: rawLabel || "Cloud compartilhada" });
+      // rawLabel may be a JSON cloud_invitation object (from CloudShareModal)
+      let label = rawLabel || "Cloud compartilhada";
+      try {
+        const parsed = JSON.parse(rawLabel);
+        if (parsed.type === "cloud_invitation") {
+          label = rawLabel; // keep as JSON so LinkMessageBubble can parse it
+        }
+      } catch {
+        // plain string — keep as-is
+      }
+      setSharedLink({ url, label });
       
       if (autosend) {
         autoSendRef.current = true;
@@ -961,6 +1327,21 @@ function MessagesPageContent() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [emojiOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && messageSearchOpen) {
+        setMessageSearch("");
+        setMessageSearchOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [messageSearchOpen]);
 
   const handleImageFile = useCallback(async (file: File | null) => {
     if (!file || !activeConversationIdRef.current || !user?.id) {
@@ -1069,7 +1450,7 @@ function MessagesPageContent() {
       sortConversations(
         prev.map((conversation) =>
           conversation.id === conversationId
-            ? { ...conversation, lastMessage: sharedLink.label, time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
+            ? { ...conversation, lastMessage: parseLinkPreview(sharedLink.label), time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
             : conversation,
         ),
       ),
@@ -1104,7 +1485,6 @@ function MessagesPageContent() {
 
   const insertEmoji = useCallback((emoji: string) => {
     setDraft((current) => `${current}${emoji}`);
-    setEmojiOpen(false);
   }, []);
 
   const filteredConversations = useMemo(() => {
@@ -1118,6 +1498,17 @@ function MessagesPageContent() {
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
   const activeMessages = activeConversationId ? messagesByConversation[activeConversationId] || [] : [];
+  
+  const filteredMessages = useMemo(() => {
+    if (!messageSearch.trim()) return activeMessages;
+    
+    const searchQuery = normalizeText(messageSearch);
+    return activeMessages.filter((msg) => {
+      if (msg.kind !== "text") return false;
+      return normalizeText(msg.content).includes(searchQuery);
+    });
+  }, [activeMessages, messageSearch]);
+  
   const isActiveConversationTyping = Boolean(activeConversationId && typingByConversation[activeConversationId]);
   const isAudioBusy = audioUploading || imageUploading || linkUploading || audioRecorder.state !== "idle";
 
@@ -1322,6 +1713,26 @@ function MessagesPageContent() {
       }
     });
 
+    socket.on("message:edited", (message: BackendMessage) => {
+      const mapped = buildMessage(message, user);
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [message.conversationId]: (prev[message.conversationId] || []).map((m) =>
+          m.id === mapped.id ? mapped : m
+        ),
+      }));
+    });
+
+    socket.on("message:deleted", (payload: { messageId: string }) => {
+      setMessagesByConversation((prev) => {
+        const updated: Record<string, Msg[]> = {};
+        for (const [convId, msgs] of Object.entries(prev)) {
+          updated[convId] = msgs.filter((m) => m.id !== payload.messageId);
+        }
+        return updated;
+      });
+    });
+
     socket.on("conversation:updated", (conversation: BackendConversation) => {
       const built = buildConversation(conversation);
       const mapped = {
@@ -1425,6 +1836,91 @@ function MessagesPageContent() {
       }
     };
   }, [activeConversationId, draft, connectionState]);
+
+  // ── Edit / Delete / Forward ───────────────────────────────────────────────
+
+  const handleEditMsg = (msg: Msg) => {
+    setEditingMsg(msg);
+    setEditDraft(msg.content);
+  };
+
+  const submitEditMsg = useCallback(async () => {
+    if (!editingMsg || !activeConversationIdRef.current) return;
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed === editingMsg.content) { setEditingMsg(null); return; }
+
+    const conversationId = editingMsg.conversationId;
+
+    // Optimistic update
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).map((m) =>
+        m.id === editingMsg.id ? { ...m, content: trimmed } : m
+      ),
+    }));
+    setEditingMsg(null);
+
+    try {
+      const res = await fetch(
+        `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(editingMsg.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: trimmed }),
+        }
+      );
+      if (!res.ok) {
+        // Revert
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [conversationId]: (prev[conversationId] || []).map((m) =>
+            m.id === editingMsg.id ? { ...m, content: editingMsg.content } : m
+          ),
+        }));
+      } else {
+        // Update with server response to ensure consistency
+        const data = await res.json();
+        if (data.ok && data.message) {
+          setMessagesByConversation((prev) => ({
+            ...prev,
+            [conversationId]: (prev[conversationId] || []).map((m) =>
+              m.id === editingMsg.id ? buildMessage(data.message, user) : m
+            ),
+          }));
+        }
+      }
+    } catch {
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] || []).map((m) =>
+          m.id === editingMsg.id ? { ...m, content: editingMsg.content } : m
+        ),
+      }));
+    }
+  }, [editDraft, editingMsg, user]);
+
+  const handleDeleteMsg = useCallback(async (msg: Msg) => {
+    const conversationId = msg.conversationId;
+
+    // Optimistic removal
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] || []).filter((m) => m.id !== msg.id),
+    }));
+
+    try {
+      await fetch(
+        `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(msg.id)}`,
+        { method: "DELETE" }
+      );
+    } catch {
+      // silently ignore — optimistic
+    }
+  }, []);
+
+  const handleForwardMsg = useCallback((msg: Msg) => {
+    setForwardMsg(msg);
+  }, []);
 
   const sendText = useCallback(() => {
     const socket = socketRef.current;
@@ -1538,18 +2034,15 @@ function MessagesPageContent() {
     >
       <div className="flex flex-1 overflow-hidden">
         <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#000000]">
-          <div className="flex items-center border-b border-white/[0.07] px-5 py-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-            <div className="flex items-center gap-3">
-              <Link href="/" aria-label="Voltar para home" className="flex h-7 w-7 items-center justify-center rounded-full text-white hover:text-white/80 transition">
-                <ArrowLeftIcon s={16} />
+          <div className="flex flex-col gap-3 border-b border-white/[0.07] px-6 py-5" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+            <div className="flex items-center gap-4">
+              <Link href="/" aria-label="Voltar para home" className="flex h-9 w-9 items-center justify-center rounded-full text-white hover:text-white/80 transition">
+                <ArrowLeftIcon s={20} />
               </Link>
-              <span className="text-[17px] font-bold text-white">Messages</span>
+              <span className="text-[20px] font-bold text-white">Messages</span>
             </div>
-          </div>
-
-          <div className="border-b border-white/[0.07] px-5 py-4">
-            <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2">
-              <SearchIcon s={16} className="text-white/30" />
+            <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-2.5">
+              <SearchIcon s={20} className="text-white" />
               <input
                 ref={sidebarSearchRef}
                 type="search"
@@ -1557,7 +2050,7 @@ function MessagesPageContent() {
                 onChange={(event) => setConversationSearch(event.target.value)}
                 placeholder="Buscar..."
                 aria-label="Buscar conversas"
-                className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                className="flex-1 bg-transparent text-[16px] text-white placeholder:text-white/30 outline-none"
               />
               {conversationSearch.trim() && (
                 <button
@@ -1645,15 +2138,10 @@ function MessagesPageContent() {
             )}
           </div>
 
-          <div className="border-t border-white/[0.07] px-5 py-4">
-            <Link href="/profile" className="flex items-center gap-3">
-              <SessionUserAvatar user={user} size={38} />
-              <span className="text-[14px] font-medium text-white/70">Você</span>
-            </Link>
-          </div>
+
         </aside>
 
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="relative flex flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-6 py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
@@ -1682,14 +2170,47 @@ function MessagesPageContent() {
             )}
 
             <div className="flex items-center gap-2">
-              <span className={`rounded-full px-3 py-1 text-[12px] ${connectionState === "connected" ? "bg-[#22C55E]/15 text-[#22C55E]" : connectionState === "connecting" ? "bg-[#F59E0B]/15 text-[#F59E0B]" : "bg-white/10 text-white/50"}`}>
-                {connectionState === "connected" ? "tempo real ativo" : connectionState === "connecting" ? "conectando..." : "offline"}
-              </span>
-              <button type="button" aria-label="Buscar na conversa" className="flex h-10 w-10 items-center justify-center rounded-full text-white/50 hover:bg-white/[0.06] hover:text-white transition"><SearchIcon s={18} /></button>
+              {messageSearchOpen ? (
+                <div className="flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.05] px-3 py-2">
+                  <input
+                    type="text"
+                    value={messageSearch}
+                    onChange={(e) => setMessageSearch(e.target.value)}
+                    placeholder="Buscar mensagens..."
+                    className="bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none w-48"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setMessageSearch(""); setMessageSearchOpen(false); }}
+                    className="text-white/40 hover:text-white transition"
+                  >
+                    <XIcon s={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  aria-label="Buscar na conversa"
+                  onClick={() => setMessageSearchOpen(true)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-white hover:bg-white/[0.06] transition"
+                >
+                  <SearchIcon s={18} />
+                </button>
+              )}
             </div>
           </div>
 
           {error && <div className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
+
+          {messageSearch.trim() && (
+            <div className="border-b border-white/[0.07] bg-[#1a0e3d] px-5 py-2 text-[12px] text-white/60">
+              {filteredMessages.length === 0 
+                ? "Nenhuma mensagem encontrada" 
+                : `${filteredMessages.length} mensagem${filteredMessages.length !== 1 ? 's' : ''} encontrada${filteredMessages.length !== 1 ? 's' : ''}`
+              }
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4" ref={messagesContainerRef}>
             {!activeConversationId ? (
@@ -1705,7 +2226,9 @@ function MessagesPageContent() {
               (() => {
                 const rows: Array<Msg | { id: string; type: "date"; label: string }> = [];
                 let previous = "";
-                for (const message of activeMessages) {
+                const messagesToRender = messageSearch.trim() ? filteredMessages : activeMessages;
+                
+                for (const message of messagesToRender) {
                   const current = new Date(message.isoTime).toDateString();
                   if (current !== previous) {
                     rows.push({ id: `date-${current}`, type: "date", label: dateLabel(message.isoTime) });
@@ -1722,15 +2245,83 @@ function MessagesPageContent() {
                     );
                   }
 
-                  return <MessageBubble key={entry.id} msg={entry as Msg} />;
+                  return <MessageBubble key={entry.id} msg={entry as Msg} onReply={() => {}} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />;
                 });
               })()
             )}
             <div ref={bottomRef} />
           </div>
 
-          <div className="border-t border-white/[0.07] bg-[#000000] px-5 py-4">
+          {/* ── Edit bar ── */}
+          {editingMsg && (
+            <div className="border-t border-[#7C3AED]/40 bg-[#000000] px-5 py-3">
+              <div className="flex flex-col gap-2 rounded-2xl border border-[#7C3AED]/40 bg-[#1a0e3d] px-4 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#A855F7]">Editando mensagem</span>
+                  <button type="button" onClick={() => setEditingMsg(null)} className="text-white/40 hover:text-white transition">
+                    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submitEditMsg(); }
+                      if (e.key === "Escape") setEditingMsg(null);
+                    }}
+                    className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void submitEditMsg()}
+                    disabled={!editDraft.trim() || editDraft.trim() === editingMsg.content}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9] disabled:opacity-40"
+                  >
+                    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className={`border-t border-white/[0.07] bg-[#000000] px-5 py-4 relative z-30`}>
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
+              {emojiOpen && (
+                <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
+                  {/* Abas de categorias */}
+                  <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
+                    {EMOJI_CATEGORIES.map((cat, i) => (
+                      <button
+                        key={cat.label}
+                        type="button"
+                        onClick={() => setEmojiCategory(i)}
+                        title={cat.label}
+                        className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${i === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}
+                      >
+                        {cat.icon}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Emojis da categoria ativa */}
+                  <div className="max-h-[28vh] overflow-y-auto p-3">
+                    <div className="flex flex-wrap gap-1.5">
+                      {EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => insertEmoji(emoji)}
+                          className="flex h-9 w-9 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/[0.07]"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
                 <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
                   <div className="flex-1 text-[14px] text-white" style={{ fontFamily: 'Arial, sans-serif' }}>
@@ -1780,15 +2371,14 @@ function MessagesPageContent() {
                       </div>
                     </div>
                   )}
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       aria-label="Abrir emojis"
                       data-emoji-toggle="true"
                       onClick={() => setEmojiOpen((current) => !current)}
                       disabled={!activeConversationId || isAudioBusy}
-                      className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="text-[20px] leading-none transition opacity-90 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       😀
                     </button>
@@ -1797,7 +2387,7 @@ function MessagesPageContent() {
                       aria-label="Adicionar imagem"
                       onClick={triggerImagePicker}
                       disabled={!activeConversationId || isAudioBusy}
-                      className="text-white/25 transition hover:text-white/50 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="text-white transition hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <PlusIcon s={18} />
                     </button>
@@ -1808,7 +2398,7 @@ function MessagesPageContent() {
                       onKeyDown={handleKeyDown}
                       placeholder={activeConversationId ? "Mensagem..." : "Selecione uma conversa para começar"}
                       disabled={!activeConversationId || isAudioBusy}
-                      className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/30 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     {draft.trim() ? (
                       <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
@@ -1820,7 +2410,7 @@ function MessagesPageContent() {
                         aria-label="Gravar áudio"
                         onClick={startAudioRecording}
                         disabled={!activeConversationId || isAudioBusy}
-                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a0e3d] text-white/70 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a0e3d] text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <MicIcon s={18} />
                       </button>
@@ -1836,23 +2426,6 @@ function MessagesPageContent() {
                         void handleImageFile(file);
                       }}
                     />
-                    </div>
-                    {emojiOpen && (
-                      <div data-emoji-picker="true" className="max-h-[32vh] overflow-y-auto rounded-[22px] border border-white/10 bg-[#11141F] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-                        <div className="flex flex-wrap gap-2">
-                          {EMOJI_BANK.map((emoji, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => insertEmoji(emoji)}
-                              className="flex h-9 w-9 items-center justify-center rounded-2xl text-[18px] transition hover:bg-white/[0.07]"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                   </div>
                   {audioUploading || imageUploading ? <p className="text-[11px] text-white/35">Enviando mídia...</p> : null}
                 </>
@@ -1861,6 +2434,57 @@ function MessagesPageContent() {
           </div>
         </main>
       </div>
+
+      {/* ── Forward modal ── */}
+      {forwardMsg && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setForwardMsg(null)}>
+          <div className="relative w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[15px] font-bold text-white">Encaminhar mensagem</h3>
+              <button type="button" onClick={() => setForwardMsg(null)} className="text-white/40 hover:text-white transition">
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>
+              </button>
+            </div>
+            <div className="mb-4 rounded-xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Mensagem</p>
+              <p className="text-[13px] text-white/80 line-clamp-3">
+                {forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "🎵 Mensagem de áudio" : forwardMsg.kind === "image" ? "📷 Imagem" : "🔗 Link"}
+              </p>
+            </div>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {conversations.map((conv) => (
+                <button
+                  key={conv.id}
+                  type="button"
+                  onClick={() => {
+                    const text = forwardMsg.kind === "text"
+                      ? forwardMsg.content
+                      : forwardMsg.kind === "audio" ? "[Áudio]"
+                      : forwardMsg.kind === "image" ? "[Imagem]"
+                      : forwardMsg.linkUrl ?? "[Link]";
+                    const params = new URLSearchParams({
+                      id: conv.peerId,
+                      share: "cloud",
+                      url: forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""),
+                      title: text,
+                      autosend: "true",
+                    });
+                    setForwardMsg(null);
+                    window.location.assign(`/messages?${params.toString()}`);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.05]"
+                >
+                  <UserAvatar user={{ id: conv.peerId, username: conv.peerUsername, displayName: conv.name, avatarUrl: conv.avatarUrl }} size={36} />
+                  <span className="text-[14px] font-medium text-white truncate">{conv.name}</span>
+                </button>
+              ))}
+              {conversations.length === 0 && (
+                <p className="py-4 text-center text-[13px] text-white/40">Nenhuma conversa disponível</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

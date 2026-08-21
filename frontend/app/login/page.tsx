@@ -82,15 +82,15 @@ export default function LoginPage() {
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
             <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">Login</p>
-            <h1 className="mt-4 max-w-[10ch] text-[56px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[72px]">
-              Faça login no Clouds.
+            <h1 className="mt-4 max-w-[14ch] text-[40px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[52px]">
+              Faça login no Clouds, seu streaming de conversas.
             </h1>
           </div>
 
           <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur">
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
-                <label htmlFor="identifier" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                <label htmlFor="identifier" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                   Email ou usuario
                 </label>
                 <input
@@ -112,7 +112,7 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label htmlFor="password" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                <label htmlFor="password" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                   Senha
                 </label>
                 <div className="relative">

@@ -7,7 +7,6 @@ type RankUser = {
   id: string;
   name: string;
   description: string;
-  hypes: string;
   followersInCommon: string;
   initial: string;
   avatarSize: string;
@@ -45,11 +44,7 @@ function ProfileCard({ user }: { user: RankUser }) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2">
-        <div className="rounded-3xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/75">
-          <div className="font-semibold text-white">{user.hypes}</div>
-          <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white/40">Hypes</div>
-        </div>
+      <div className="mt-4">
         <div className="rounded-3xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/75">
           <div className="font-semibold text-white">{user.followersInCommon}</div>
           <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-white/40">Seguidores em comum</div>
@@ -114,7 +109,7 @@ export default function RecommendedProfiles({ profiles }: { profiles: RankUser[]
           <h2 className="mt-3 text-[28px] font-semibold text-white">Escolha quem seguir</h2>
         </div>
         <p className="max-w-[520px] text-[14px] text-white/65">
-          Use as setas para navegar e encontrar perfis com mais hype e conexões em comum.
+          Use as setas para navegar e encontrar perfis com conexões em comum.
         </p>
       </div>
 

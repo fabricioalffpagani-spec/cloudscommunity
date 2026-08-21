@@ -78,15 +78,15 @@ function Field({
 }
 
 const DURATION_SECONDS: Record<string, number> = {
-  "5 min": 5 * 60,
-  "10 min": 10 * 60,
-  "30 min": 30 * 60,
+  "30min": 30 * 60,
   "1h": 60 * 60,
+  "2h": 2 * 60 * 60,
+  "5h": 5 * 60 * 60,
   "24h": 24 * 60 * 60,
 };
 
 function parseDurationSeconds(duration: string) {
-  return DURATION_SECONDS[duration] ?? 5 * 60;
+  return DURATION_SECONDS[duration] ?? 30 * 60;
 }
 
 function formatCountdown(seconds: number) {
@@ -147,10 +147,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
   const isPublic = cloud.visibility === "public";
 
   return (
-    <Link
-      href={cloud.href}
-      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
-    >
+    <article className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
@@ -187,7 +184,8 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
           {formatCountdown(remainingSeconds)}
         </span>
       </div>
-    </Link>
+      <Link href={cloud.href} className="mt-5 inline-flex rounded-full bg-[#A855F7] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#9333EA]">Participar da Cloud</Link>
+    </article>
   );
 }
 
@@ -275,13 +273,12 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-          <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <BackIcon />
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-4 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+          <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+            <BackIcon s={20} />
           </Link>
-          <span className="text-[14px] font-semibold text-white">My Profile</span>
-          <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <GearIcon />
+          <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+            <GearIcon s={20} />
           </Link>
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
@@ -296,15 +293,14 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-        <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-          <BackIcon />
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+        <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+          <BackIcon s={20} />
         </Link>
-        <span className="text-[14px] font-semibold text-white">My Profile</span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {/* <SessionUserLink showLabel className="hidden sm:inline-flex" /> */}
-          <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <GearIcon />
+          <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+            <GearIcon s={20} />
           </Link>
         </div>
       </div>
@@ -351,55 +347,15 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {(() => {
-          const activeCloud = clouds.find((c) => {
-            if (c.visibility !== "public") return false;
-            const remaining = parseDurationSeconds(c.duration) - Math.floor((now - new Date(c.createdAt).getTime()) / 1000);
-            return remaining > 0;
-          }) ?? null;
-
-          return activeCloud ? (
-            <div className="mt-10">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Cloud Ativa</p>
-              <Link
-                href={activeCloud.href}
-                className="block w-full overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6 transition hover:border-[#A855F7]/60 hover:bg-[#1e0e45]"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-                    {activeCloud.duration}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#A855F7]/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#A855F7] animate-pulse" />
-                    Ao vivo
-                  </span>
-                </div>
-                <h3 className="mt-4 break-words text-[20px] font-bold leading-snug text-white">{activeCloud.title}</h3>
-                {activeCloud.description && (
-                  <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
-                    {activeCloud.description}
-                  </p>
-                )}
-                <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
-                  <span>Encerra em</span>
-                  <span className="rounded-full bg-[#A855F7]/15 px-2.5 py-1 font-semibold text-[#D8B4FE]">
-                    {formatCountdown(Math.max(parseDurationSeconds(activeCloud.duration) - Math.floor((now - new Date(activeCloud.createdAt).getTime()) / 1000), 0))}
-                  </span>
-                </div>
-              </Link>
-            </div>
-          ) : null;
-        })()}
-
         <div className="mt-10">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Minhas Clouds</p>
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds ativas</p>
           {cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>
-          ) : clouds.length > 0 ? (
+          ) : clouds.filter((cloud) => parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000) > 0).length > 0 ? (
             <div className="grid gap-3">
-              {clouds.map((cloud) => (
+              {clouds.filter((cloud) => parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000) > 0).map((cloud) => (
                 <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} />
               ))}
             </div>

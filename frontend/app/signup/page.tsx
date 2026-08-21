@@ -443,11 +443,10 @@ export default function SignupPage() {
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
             <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">{step === 1 ? "Cadastro" : "Verificacao"}</p>
-            <h1 className="mt-4 max-w-[10ch] text-[56px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[72px]">
+            <h1 className="mt-4 max-w-[20ch] text-[40px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[52px]">
               {step === 1 ? (
                 <>
-                  Crie sua conta.
-                  Inicie no Clouds.
+                  Crie sua conta e descubra conversas e pessoas no Clouds.
                 </>
               ) : (
                 <>
@@ -468,7 +467,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="email" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="email" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Email
                     </label>
                     <input
@@ -486,7 +485,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="name" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="name" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Nome
                     </label>
                     <input
@@ -503,7 +502,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="birthDate" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="birthDate" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Aniversario
                     </label>
                     <input
@@ -519,7 +518,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="username" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="username" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Nome de usuario
                     </label>
                     <input
@@ -540,7 +539,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="password" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="password" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Senha
                     </label>
                     <div className="relative">
@@ -568,7 +567,7 @@ export default function SignupPage() {
                   </div>
 
                   <div>
-                    <label htmlFor="confirmPassword" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white/45">
+                    <label htmlFor="confirmPassword" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Confirmar senha
                     </label>
                     <div className="relative">

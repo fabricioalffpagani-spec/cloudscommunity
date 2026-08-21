@@ -5,13 +5,14 @@ type FlameIconProps = {
 };
 
 /** Shared Clouds icon used for Trending and Hype. */
-export function FlameIcon({ s = 22, className = "" }: FlameIconProps) {
+export function FlameIcon({ s = 22, className = "", filled = false }: FlameIconProps) {
   return (
     <svg
       viewBox="0 0 24 26"
       width={s}
-      height={Math.round(s * 1.12)}
-      fill="none"
+      height={s}
+      preserveAspectRatio="xMidYMid meet"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth="1.8"
       strokeLinecap="round"

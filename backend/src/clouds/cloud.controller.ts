@@ -51,6 +51,11 @@ export class CloudController {
     return this.cloudService.listFollowing(extractSessionToken(req));
   }
 
+  @Get('invite/:token')
+  async resolveInvite(@Param('token') inviteToken: string, @Req() req: Request) {
+    return this.cloudService.resolveInvite(extractSessionToken(req), inviteToken);
+  }
+
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.findById(extractSessionToken(req), id);
@@ -64,6 +69,31 @@ export class CloudController {
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
     } satisfies CreateCloudInput);
+  }
+
+  @Post(':id/invite')
+  async createInvite(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.createInvite(extractSessionToken(req), id);
+  }
+
+  @Post(':id/join')
+  async joinCloud(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.joinCloud(extractSessionToken(req), id);
+  }
+
+  @Post(':id/leave')
+  async leaveCloud(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.leaveCloud(extractSessionToken(req), id);
+  }
+
+  @Post(':id/hype')
+  async hype(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.hype(extractSessionToken(req), id);
+  }
+
+  @Delete(':id/hype')
+  async unhype(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.unhype(extractSessionToken(req), id);
   }
 
   @Delete(':id')
@@ -94,6 +124,21 @@ export class CloudController {
   @Post(':id/unpin-message')
   async unpinMessagePost(@Param('id') id: string, @Body() body: { messageId: string }, @Req() req: Request) {
     return this.cloudService.unpinMessage(extractSessionToken(req), id, body.messageId);
+  }
+
+  @Patch(':id/messages/:messageId')
+  async editMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { content: string },
+    @Req() req: Request,
+  ) {
+    return this.cloudService.editMessage(extractSessionToken(req), id, messageId, body.content);
+  }
+
+  @Delete(':id/messages/:messageId')
+  async deleteMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.cloudService.deleteMessage(extractSessionToken(req), id, messageId);
   }
 
   @Post(':id/messages')

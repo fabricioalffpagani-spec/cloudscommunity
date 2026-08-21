@@ -256,8 +256,59 @@ export class AuthService {
     };
   }
 
+  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
+    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+
+    const displayName = input.displayName === undefined ? undefined : normalizeName(input.displayName);
+    if (input.displayName !== undefined && !displayName) {
+      throw new BadRequestException({ message: 'Nome obrigatório.' });
+    }
+    const bio = input.bio === undefined ? undefined : normalizeOptionalText(input.bio);
+    const location = input.location === undefined ? undefined : normalizeOptionalText(input.location);
+    const avatarUrl = input.avatarUrl === undefined ? undefined : normalizeOptionalText(input.avatarUrl);
+    if ((bio && bio.length > 500) || (location && location.length > 120) || (avatarUrl && avatarUrl.length > 4_000_000)) {
+      throw new BadRequestException({ message: 'Um dos campos excede o tamanho permitido.' });
+    }
+    if (avatarUrl && !avatarUrl.startsWith('data:image/') && !/^https?:\/\//.test(avatarUrl)) {
+      throw new BadRequestException({ message: 'Imagem de perfil inválida.' });
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: current.user.id },
+      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate } } },
+      include: { profile: true },
+    });
+    return { ok: true, user: await this.mapUserWithStats(updated), session: this.mapSession(current.session) };
+  }
+
   async session(token: string | null): Promise<AuthResponse> {
     return this.me(token);
+  }
+
+  async changePassword(token: string | null, input: { currentPassword?: string; newPassword?: string }): Promise<{ ok: true }> {
+    const current = await this.resolveSession(token);
+    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+
+    const currentPassword = input.currentPassword ?? '';
+    const newPassword = input.newPassword ?? '';
+
+    if (!currentPassword) {
+      throw new BadRequestException({ message: 'Senha atual obrigatória.', fieldErrors: { currentPassword: 'Informe a senha atual.' } });
+    }
+
+    if (!verifyPassword(currentPassword, current.user.passwordHash)) {
+      throw new BadRequestException({ message: 'Senha atual incorreta.', fieldErrors: { currentPassword: 'Senha atual incorreta.' } });
+    }
+
+    validatePassword(newPassword);
+
+    const passwordHash = createPasswordHash(newPassword);
+    await this.prisma.user.update({
+      where: { id: current.user.id },
+      data: { passwordHash },
+    });
+
+    return { ok: true };
   }
 
   async logout(token: string | null): Promise<{ ok: true }> {

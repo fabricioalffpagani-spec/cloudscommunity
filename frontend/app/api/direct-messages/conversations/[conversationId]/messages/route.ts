@@ -10,3 +10,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ conversa
     `/direct-messages/conversations/${encodeURIComponent(resolvedParams.conversationId)}/messages${url.search}`,
   );
 }
+
+export async function POST(req: Request, { params }: { params: Promise<{ conversationId: string }> }) {
+  const resolvedParams = await params;
+  return proxyJsonRequest(
+    req,
+    `/direct-messages/conversations/${encodeURIComponent(resolvedParams.conversationId)}/messages`,
+  );
+}

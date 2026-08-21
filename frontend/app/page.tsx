@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, useEffect, useCallback, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import CloudChat from "./cloud/[id]/CloudChat";
 import { HeaderBrand } from "./components/HeaderBrand";
 import { FlameIcon } from "./components/FlameIcon";
@@ -29,6 +29,7 @@ type Cloud = {
   href?: string;
   likes?: number;
   hypes?: number;
+  hyped?: boolean;
   audioUrl?: string;
   authorName?: string;
   authorHandle?: string;
@@ -71,6 +72,7 @@ type CloudApiPayload = {
   authorId: string;
   author: CloudApiAuthor;
   hypesCount: number;
+  hyped?: boolean;
   membersCount: number;
   href: string;
 };
@@ -96,6 +98,7 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     visibility: cloud.visibility,
     href: cloud.href,
     hypes: cloud.hypesCount,
+    hyped: cloud.hyped ?? false,
     authorName: cloud.author.name,
     authorHandle: cloud.author.username,
     authorPhoto: cloud.author.avatarUrl ?? undefined,
@@ -123,11 +126,11 @@ const SEED_CLOUDS: Cloud[] = [
     id: "seed-2",
     title: "Qual álbum do ano vai dominar?",
     category: "Music",
-    duration: "30 min",
+    duration: "30min",
     createdAt: new Date(Date.now() - 14 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30%20min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString() + "&participants=87",
+    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString() + "&participants=87",
     hypes: 87,
   },
   {
@@ -156,22 +159,22 @@ const SEED_CLOUDS: Cloud[] = [
     id: "seed-5",
     title: "Futebol: tabela e expectativas",
     category: "Sports",
-    duration: "30 min",
+    duration: "30min",
     createdAt: new Date(Date.now() - 2 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30%20min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString() + "&participants=58",
+    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString() + "&participants=58",
     hypes: 58,
   },
   {
     id: "seed-6",
     title: "Memes do momento - compartilhe o seu",
     category: "Memes",
-    duration: "10 min",
+    duration: "30min",
     createdAt: new Date(Date.now() - 1 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=10%20min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString() + "&participants=204",
+    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=30min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString() + "&participants=204",
     hypes: 204,
   },
 ];
@@ -192,13 +195,13 @@ const CATEGORIES: Category[] = [
   { name: "Memes",     bg: "#F43F5E" },
 ];
 
-const DURATIONS = ["5 min", "10 min", "30 min", "1h", "24h"];
+const DURATIONS = ["30min", "1h", "2h", "5h", "24h"];
 
 const DURATION_SECONDS: Record<string, number> = {
-  "5 min": 5 * 60,
-  "10 min": 10 * 60,
-  "30 min": 30 * 60,
+  "30min": 30 * 60,
   "1h": 60 * 60,
+  "2h": 2 * 60 * 60,
+  "5h": 5 * 60 * 60,
   "24h": 24 * 60 * 60,
 };
 
@@ -207,8 +210,12 @@ function parseDurationSeconds(duration: string) {
 }
 
 function formatCountdown(seconds: number) {
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
@@ -455,14 +462,6 @@ function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
       <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function HeartIcon({ s = 24, className }: { s?: number; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     </svg>
   );
 }
@@ -806,11 +805,10 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
 
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
-function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
-  const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(cloud.likes ?? 0);
-  const [hyped, setHyped] = useState(false);
+function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: number) => void }) {
+  const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
+  const [hypeLoading, setHypeLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const siteOrigin = useSiteOrigin();
 
@@ -827,15 +825,31 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
     return `${Math.floor(diff / 3600)}h atrás`;
   })();
 
-  const handleLike = () => {
-    setLiked(v => !v);
-    setLikes(v => liked ? v - 1 : v + 1);
-  };
-
-  const handleHypar = () => {
-    setHyped(v => !v);
-    setHypes(v => hyped ? v - 1 : v + 1);
-    onHypar();
+  const handleHypar = async () => {
+    if (hypeLoading) return;
+    setHypeLoading(true);
+    const wasHyped = hyped;
+    setHyped(!wasHyped);
+    setHypes(v => wasHyped ? v - 1 : v + 1);
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/hype`, {
+        method: wasHyped ? "DELETE" : "POST",
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
+        setHypes(newCount);
+        onHypar(newCount);
+      } else {
+        setHyped(wasHyped);
+        setHypes(v => wasHyped ? v + 1 : v - 1);
+      }
+    } catch {
+      setHyped(wasHyped);
+      setHypes(v => wasHyped ? v + 1 : v - 1);
+    } finally {
+      setHypeLoading(false);
+    }
   };
 
   return (
@@ -882,23 +896,6 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
         {/* Left - reaction buttons */}
         <div className="flex items-center gap-2">
 
-          {/* Curtir */}
-          <button
-            type="button"
-            onClick={handleLike}
-            aria-label="Curtir"
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
-              liked
-                ? "border-pink-500/40 bg-pink-500/15 text-pink-400"
-                : "border-white/10 bg-white/5 text-white/70 hover:border-pink-500/40 hover:text-pink-400"
-            }`}
-          >
-            <svg viewBox="0 0 24 24" width={15} height={15} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
-            </svg>
-            {likes > 0 && <span>{likes}</span>}
-          </button>
-
           {/* Hypar */}
           <button
             type="button"
@@ -937,7 +934,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: () => void }) {
 
         {/* Right — enter */}
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa
@@ -964,7 +961,7 @@ function CreateCloudModal({
   onPublish,
 }: {
   onClose: () => void;
-  onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode">) => void;
+  onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode">) => Promise<Cloud>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -972,6 +969,49 @@ function CreateCloudModal({
   const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFollowersPopup, setShowFollowersPopup] = useState(false);
+  const [followers, setFollowers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
+  const [selectedFollowers, setSelectedFollowers] = useState<Set<string>>(new Set());
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [followersError, setFollowersError] = useState<string | null>(null);
+
+  const fetchFollowers = async () => {
+    setLoadingFollowers(true);
+    setFollowersError(null);
+    try {
+      const response = await fetch("/api/users/following", { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to fetch followers");
+      const data = await response.json();
+      setFollowers(data.users || []);
+    } catch (err) {
+      setFollowersError("Não foi possível carregar seus seguidores.");
+    } finally {
+      setLoadingFollowers(false);
+    }
+  };
+
+  const handleVisibilityChange = (option: "public" | "private") => {
+    setVisibility(option);
+    if (option === "private") {
+      setShowFollowersPopup(true);
+      fetchFollowers();
+    } else {
+      setShowFollowersPopup(false);
+      setSelectedFollowers(new Set());
+    }
+  };
+
+  const toggleFollowerSelection = (followerId: string) => {
+    setSelectedFollowers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(followerId)) {
+        newSet.delete(followerId);
+      } else {
+        newSet.add(followerId);
+      }
+      return newSet;
+    });
+  };
 
   const handlePublish = async () => {
     const normalizedTitle = title.trim();
@@ -982,22 +1022,114 @@ function CreateCloudModal({
       return;
     }
 
+    if (!duration) {
+      setError("Selecione uma duração para a cloud.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
-      await onPublish({
+      const cloudData = {
         title: normalizedTitle,
         category: "general",
         description: normalizedDescription || undefined,
-        duration,
+        duration: duration.trim(),
         visibility,
-      });
+      };
+
+      const publishedCloud = await onPublish(cloudData);
+
+      // A Cloud só existe após a publicação; os convites são enviados agora.
+      if (selectedFollowers.size > 0) {
+        await sendCloudInvitations(cloudData, publishedCloud.id);
+      }
+
       onClose();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : "Nao foi possivel criar a cloud.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const sendCloudInvitations = async (cloudData: { title: string; duration: string; visibility: string }, cloudId: string) => {
+    const followerIds = Array.from(selectedFollowers);
+
+    // For private clouds, generate an invite token first so recipients go through /invite/[token]
+    let inviteToken: string | null = null;
+    if (cloudData.visibility === "private") {
+      try {
+        const tokenRes = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/invite`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json().catch(() => null) as { invite?: { token: string } } | null;
+          inviteToken = tokenData?.invite?.token ?? null;
+        }
+      } catch {
+        // non-critical — fall back to direct cloud URL
+      }
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://clouds.community";
+    const shareUrl = inviteToken
+      ? `${origin}/invite/${inviteToken}`
+      : `${origin}/cloud/${cloudId}`;
+
+    for (const followerId of followerIds) {
+      try {
+        // Create conversation with follower
+        const conversationResponse = await fetch("/api/direct-messages/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ peerUserId: followerId }),
+        });
+
+        if (!conversationResponse.ok) {
+          const errorText = await conversationResponse.text();
+          console.error(`Failed to create conversation with ${followerId}:`, conversationResponse.statusText, errorText);
+          continue;
+        }
+
+        const conversationData = await conversationResponse.json();
+        
+        // Handle different response formats
+        const conversationId = conversationData.id || conversationData.conversation?.id;
+        
+        if (!conversationId) {
+          console.error(`No conversation ID found in response for ${followerId}:`, conversationData);
+          continue;
+        }
+
+        const invitationContent = JSON.stringify({
+          type: "cloud_invitation",
+          cloudId: cloudId,
+          inviteToken: inviteToken ?? null,
+          cloudTitle: cloudData.title,
+          cloudDuration: cloudData.duration,
+          cloudVisibility: cloudData.visibility,
+        });
+
+        const messageResponse = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: shareUrl,
+            label: invitationContent,
+            clientMessageId: `invitation-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          }),
+        });
+
+        if (!messageResponse.ok) {
+          const errorText = await messageResponse.text();
+          console.error(`Failed to send invitation to ${followerId}:`, messageResponse.statusText, errorText);
+        }
+      } catch (error) {
+        console.error(`Error sending invitation to ${followerId}:`, error);
+      }
     }
   };
 
@@ -1062,7 +1194,7 @@ function CreateCloudModal({
                 <button
                   key={option}
                   type="button"
-                  onClick={() => setVisibility(option)}
+                  onClick={() => handleVisibilityChange(option)}
                   className={`rounded-full px-4 py-2 text-[13px] font-medium transition ${
                     visibility === option
                       ? "bg-[#9333EA] text-white border border-[#9333EA]"
@@ -1076,7 +1208,7 @@ function CreateCloudModal({
           </div>
           <button
             onClick={handlePublish}
-            disabled={!title.trim() || submitting}
+            disabled={!title.trim() || !duration || submitting}
             className="w-full rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? "Publicando..." : "Publicar Cloud"}
@@ -1084,6 +1216,82 @@ function CreateCloudModal({
           {error && <p className="text-[12px] text-red-300">{error}</p>}
         </div>
       </div>
+
+      {/* Followers Popup */}
+      {showFollowersPopup && (
+        <div className="absolute right-0 top-0 w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl z-50" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-[16px] font-bold text-white">Convidar seguidores</h3>
+            <button 
+              onClick={() => setShowFollowersPopup(false)}
+              className="text-white/40 hover:text-white p-1"
+            >
+              <XIcon s={16} />
+            </button>
+          </div>
+          
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+            <span className="text-[13px] text-white/60">Participantes: {selectedFollowers.size}</span>
+            <button
+              onClick={async () => {
+                if (selectedFollowers.size === 0) return;
+                
+                setShowFollowersPopup(false);
+              }}
+              disabled={selectedFollowers.size === 0}
+              className="px-4 py-2 rounded-full bg-[#9333EA] text-white text-[13px] font-medium hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Confirmar convidados
+            </button>
+          </div>
+
+          {loadingFollowers ? (
+            <p className="text-[13px] text-white/50 text-center py-4">Carregando seguidores...</p>
+          ) : followersError ? (
+            <p className="text-[13px] text-red-300 text-center py-4">{followersError}</p>
+          ) : followers.length === 0 ? (
+            <p className="text-[13px] text-white/50 text-center py-4">Você ainda não segue ninguém.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {followers.map(follower => (
+                <div 
+                  key={follower.id}
+                  className="flex items-center justify-between p-3 rounded-xl bg-[#252840] border border-white/[0.08] hover:border-white/20 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    {follower.avatarUrl ? (
+                      <img 
+                        src={follower.avatarUrl} 
+                        alt={follower.displayName}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
+                        {follower.displayName.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[14px] font-semibold text-white">{follower.displayName}</p>
+                      <p className="text-[12px] text-white/50">@{follower.username}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleFollowerSelection(follower.id)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition ${
+                      selectedFollowers.has(follower.id)
+                        ? "bg-[#9333EA] text-white"
+                        : "bg-white/10 text-white/60 hover:bg-white/20"
+                    }`}
+                  >
+                    {selectedFollowers.has(follower.id) ? "Convidado" : "Convidar"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1144,6 +1352,10 @@ function RecordAudioModal({
 
   const handlePublish = () => {
     if (!audioUrl) return;
+    if (!duration) {
+      setError("Selecione uma duração para a cloud.");
+      return;
+    }
     onPublish({ title: `Áudio - ${fmt(seconds)}`, category, duration, visibility, audioUrl });
     onClose();
   };
@@ -1360,15 +1572,20 @@ function CreatePollModal({
   const [options, setOptions] = useState(["", ""]);
   const [category, setCategory] = useState(CATEGORIES[1].name);
   const [duration, setDuration] = useState(DURATIONS[0]);
+  const [error, setError] = useState<string | null>(null);
 
   const addOption = () => { if (options.length < 6) setOptions(o => [...o, ""]); };
   const removeOption = (i: number) => { if (options.length > 2) setOptions(o => o.filter((_, idx) => idx !== i)); };
   const updateOption = (i: number, val: string) => setOptions(o => o.map((v, idx) => idx === i ? val : v));
 
-  const canPublish = question.trim() && options.filter(o => o.trim()).length >= 2;
+  const canPublish = question.trim() && options.filter(o => o.trim()).length >= 2 && duration;
 
   const handlePublish = () => {
     if (!canPublish) return;
+    if (!duration) {
+      setError("Selecione uma duração para a enquete.");
+      return;
+    }
     onPublish({
       question: question.trim(),
       options: options.filter(o => o.trim()).map(text => ({ id: crypto.randomUUID(), text, votes: 0 })),
@@ -1479,18 +1696,178 @@ function CreatePollModal({
 
 // ─── Other Modals ─────────────────────────────────────────────────────────────
 
-function SearchModal({ onClose }: { onClose: () => void }) {
+type SearchResult = {
+  users: Array<{
+    id: string;
+    username: string;
+    displayName: string;
+    avatarUrl: string | null;
+    bio: string | null;
+  }>;
+  clouds: Cloud[];
+};
+
+function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds: Cloud[] }) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ESC to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setResults(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const usersRes = await fetch(`/api/users/search?q=${encodeURIComponent(trimmed)}&limit=5`);
+        const usersPayload = usersRes.ok ? (await usersRes.json().catch(() => null)) : null;
+        const users: SearchResult["users"] = Array.isArray(usersPayload?.users)
+          ? usersPayload.users.slice(0, 5).map((u: { id: string; username: string; displayName: string; avatarUrl: string | null; bio: string | null }) => ({
+              id: u.id,
+              username: u.username,
+              displayName: u.displayName,
+              avatarUrl: u.avatarUrl,
+              bio: u.bio,
+            }))
+          : [];
+
+        const lowerTrimmed = trimmed.toLowerCase();
+        const matchedClouds = feedClouds
+          .filter(
+            (c) =>
+              c.title.toLowerCase().includes(lowerTrimmed) ||
+              (c.description ?? "").toLowerCase().includes(lowerTrimmed) ||
+              (c.authorHandle ?? "").toLowerCase().includes(lowerTrimmed) ||
+              (c.authorName ?? "").toLowerCase().includes(lowerTrimmed)
+          )
+          .slice(0, 5);
+
+        setResults({ users, clouds: matchedClouds });
+      } catch {
+        setResults({ users: [], clouds: [] });
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, feedClouds]);
+
+  const hasResults = results && (results.users.length > 0 || results.clouds.length > 0);
+  const showEmpty = results && !hasResults && !loading;
+
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 px-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-[560px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Input */}
         <div className="flex items-center gap-3 rounded-xl bg-[#252840] px-4 py-3">
           <SearchIcon s={18} />
-          <input autoFocus type="text" placeholder="Buscar clouds, categorias, pessoas..."
-            className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/40 outline-none" />
-          <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
+          <input
+            autoFocus
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar clouds, pessoas..."
+            className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/40 outline-none"
+          />
+          {loading ? (
+            <span className="text-white/30">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+            </span>
+          ) : query ? (
+            <button onClick={() => setQuery("")} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
+          ) : (
+            <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
+          )}
         </div>
-        <p className="mt-3 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+
+        {/* Results */}
+        {hasResults && (
+          <div className="mt-3 flex flex-col gap-1 max-h-[420px] overflow-y-auto">
+            {results.users.length > 0 && (
+              <div>
+                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">Pessoas</p>
+                {results.users.map(user => (
+                  <button
+                    key={user.id}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
+                    onClick={() => { router.push(`/users/${user.id}`); onClose(); }}
+                  >
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#A855F7] text-[13px] font-bold text-white overflow-hidden">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+                      ) : (
+                        user.displayName.charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-semibold text-white">{user.displayName}</p>
+                      <p className="truncate text-[12px] text-white/40">@{user.username}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {results.clouds.length > 0 && (
+              <div className={results.users.length > 0 ? "mt-1" : ""}>
+                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">Clouds</p>
+                {results.clouds.map(cloud => (
+                  <button
+                    key={cloud.id}
+                    className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        title: cloud.title,
+                        duration: cloud.duration,
+                        createdAt: cloud.createdAt.toISOString(),
+                        participants: String(cloud.liveParticipants ?? 1),
+                      });
+                      router.push(`/cloud/${cloud.id}?${params.toString()}`);
+                      onClose();
+                    }}
+                  >
+                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#252840] text-white/60">
+                      <CloudIcon s={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-semibold text-white">{cloud.title}</p>
+                      {cloud.authorHandle && (
+                        <p className="truncate text-[12px] text-white/40">@{cloud.authorHandle}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {showEmpty && (
+          <div className="mt-6 pb-3 text-center text-[13px] text-white/30">
+            Nenhum resultado para <span className="text-white/50">&ldquo;{query}&rdquo;</span>
+          </div>
+        )}
+
+        {!query && (
+          <p className="mt-3 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+        )}
       </div>
     </div>
   );
@@ -1567,6 +1944,49 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function TopicHypeButton({ cloud }: { cloud: Cloud }) {
+  const [hyped, setHyped] = useState(cloud.hyped ?? false);
+  const [hypes, setHypes] = useState(cloud.hypes ?? 0);
+  const [loading, setLoading] = useState(false);
+
+  const handleHype = async () => {
+    if (loading) return;
+    setLoading(true);
+    const wasHyped = hyped;
+    setHyped(!wasHyped);
+    setHypes(v => wasHyped ? v - 1 : v + 1);
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/hype`, {
+        method: wasHyped ? "DELETE" : "POST",
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        if (data?.hypesCount !== undefined) setHypes(data.hypesCount);
+      } else {
+        setHyped(wasHyped);
+        setHypes(v => wasHyped ? v + 1 : v - 1);
+      }
+    } catch {
+      setHyped(wasHyped);
+      setHypes(v => wasHyped ? v + 1 : v - 1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={handleHype}
+      className={`inline-flex items-center gap-3 transition disabled:opacity-60 ${hyped ? "text-orange-400" : "hover:text-orange-300"}`}
+    >
+      <FireIcon s={24} className={hyped ? "text-orange-400" : "text-[#FF632D]"} />
+      <span>{hypes}</span>
+    </button>
   );
 }
 
@@ -1679,7 +2099,7 @@ function TopicFeedStage({
                         <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
                       </div>
                     </div>
-                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white/70 transition hover:bg-white/10 hover:text-white">
+                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white transition hover:bg-white/10">
                       ?
                     </button>
                   </div>
@@ -1732,14 +2152,7 @@ function TopicFeedStage({
 
                   <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:mt-5 md:flex-row md:items-center">
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
-                      <button type="button" className="inline-flex items-center gap-3 transition hover:text-pink-300">
-                        <HeartIcon s={25} className="text-white/65" />
-                        <span>{Math.max(1, Math.round((cloud.hypes ?? 0) * 3.05))}</span>
-                      </button>
-                      <button type="button" className="inline-flex items-center gap-3 transition hover:text-orange-300">
-                        <FireIcon s={24} className="text-[#FF632D]" />
-                        <span>{cloud.hypes ?? 0}</span>
-                      </button>
+                      <TopicHypeButton cloud={cloud} />
                       <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
                         <PaperPlaneIcon s={25} className="text-white/65" />
                         <span>Compartilhar</span>
@@ -1752,7 +2165,7 @@ function TopicFeedStage({
                         ))}
                         {profile.participants > 3 && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">+{profile.participants >= 1000 ? "1K" : profile.participants - 3}</span>}
                       </div>
-                      <span className="text-[14px] text-white/55 md:text-[17px]">{participantLabel}</span>
+                      <span className="text-[14px] text-white md:text-[17px]">{participantLabel}</span>
                     </div>
                   </div>
                 </article>
@@ -1775,8 +2188,6 @@ function TopicFeedStage({
 // ─── Live Card Action Buttons ────────────────────────────────────────────────
 
 function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; initialHypes: number }) {
-  const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(0);
   const [hyped, setHyped] = useState(false);
   const [hypes, setHypes] = useState(initialHypes);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1792,19 +2203,6 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
           onClose={() => setShareOpen(false)}
         />
       )}
-
-      {/* Curtir */}
-      <button
-        type="button"
-        aria-label="Curtir"
-        onClick={() => { setLiked(v => !v); setLikes(v => liked ? v - 1 : v + 1); }}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition ${liked ? "border-pink-500/40 bg-pink-500/15 text-pink-400" : "border-white/10 bg-white/5 text-white/60 hover:border-pink-500/40 hover:text-pink-400"}`}
-      >
-        <svg viewBox="0 0 24 24" width={14} height={14} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
-        </svg>
-        {likes > 0 ? likes : "Curtir"}
-      </button>
 
       {/* Hypar */}
       <button
@@ -1838,9 +2236,10 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
 export default function Page() {
   const { user, refresh } = useSessionUser();
   const router = useRouter();
-  // Menu de categorias removido: feed sem filtro.
+  const searchParams = useSearchParams();
+  const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
 
-  const [clouds, setClouds] = useState<Cloud[]>(SEED_CLOUDS);
+  const [clouds, setClouds] = useState<Cloud[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
@@ -1848,14 +2247,41 @@ export default function Page() {
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
+  const [feedOrder, setFeedOrder] = useState<"default" | "recent">("default");
+  const [cloudOptionsOpen, setCloudOptionsOpen] = useState(false);
+  const [cloudInfoOpen, setCloudInfoOpen] = useState(false);
+  const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
   const [participants, setParticipants] = useState<number>(0);
 
   // Slide animation: "left" = next, "right" = prev, null = settled
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
 
+  // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
+  // e o card visível respeitem o filtro selecionado.
+  const orderedClouds = useMemo(() => {
+    let sorted = [...clouds].sort((a, b) => {
+      if (feedOrder === "recent") return b.createdAt.getTime() - a.createdAt.getTime();
+      return (b.liveParticipants ?? 0) - (a.liveParticipants ?? 0)
+        || b.createdAt.getTime() - a.createdAt.getTime();
+    });
+    // Se veio do Trending com ?q=palavra, coloca as clouds com essa palavra primeiro
+    if (trendingQuery) {
+      sorted = [
+        ...sorted.filter((c) => c.title.toLowerCase().includes(trendingQuery)),
+        ...sorted.filter((c) => !c.title.toLowerCase().includes(trendingQuery)),
+      ];
+    }
+    return sorted;
+  }, [clouds, feedOrder, trendingQuery]);
+
+  // Reseta o índice sempre que a ordem muda para mostrar a 1ª cloud da nova ordenação
+  useEffect(() => {
+    setCurrentCloudIndex(0);
+  }, [feedOrder]);
+
   const navigateCloud = (direction: number) => {
-    const activeClouds = clouds.filter(isCloudActive);
+    const activeClouds = orderedClouds.filter(isCloudActive);
     if (activeClouds.length <= 1) return;
 
     const dir = direction > 0 ? "left" : "right";
@@ -1916,7 +2342,7 @@ export default function Page() {
         }
       } catch {
         if (!cancelled) {
-          setClouds(SEED_CLOUDS);
+          setClouds([]);
         }
       } finally {
         if (!cancelled) {
@@ -1943,7 +2369,7 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    const activeClouds = clouds.filter(isCloudActive);
+    const activeClouds = orderedClouds.filter(isCloudActive);
     if (activeClouds.length === 0) {
       setParticipants(0);
       return;
@@ -1952,10 +2378,10 @@ export default function Page() {
     const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
     const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
     setParticipants(base);
-  }, [currentCloudIndex, clouds]);
+  }, [currentCloudIndex, orderedClouds]);
 
   useEffect(() => {
-    const activeClouds = clouds.filter(isCloudActive);
+    const activeClouds = orderedClouds.filter(isCloudActive);
     if (activeClouds.length === 0) return;
 
     const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
@@ -1967,24 +2393,23 @@ export default function Page() {
     }, 4000);
 
     return () => window.clearInterval(iv);
-  }, [currentCloudIndex, clouds]);
+  }, [currentCloudIndex, orderedClouds]);
 
   const closeModal = () => setModal(null);
 
   const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string }) => {
     if (data.audioUrl) {
       const id = crypto.randomUUID();
-      setClouds((prev) => mergeClouds([
-        {
-          ...data,
-          id,
-          createdAt: new Date(),
-          mode: "audio",
-          href: `/cloud/${id}`,
-          hypes: 0,
-        },
-      ], prev));
-      return;
+      const cloud = {
+        ...data,
+        id,
+        createdAt: new Date(),
+        mode: "audio" as const,
+        href: `/cloud/${id}`,
+        hypes: 0,
+      };
+      setClouds((prev) => mergeClouds([cloud], prev));
+      return cloud;
     }
 
     const response = await fetch("/api/clouds", {
@@ -2008,12 +2433,14 @@ export default function Page() {
       throw new Error(payload?.message ?? "Nao foi possivel criar a cloud.");
     }
 
-    setClouds((prev) => mergeClouds([mapApiCloudToCloud(cloudPayload)], prev));
+    const cloud = mapApiCloudToCloud(cloudPayload);
+    setClouds((prev) => mergeClouds([cloud], prev));
     await refresh();
+    return cloud;
   };
 
-  const hyparCloud = (cloudId: string) => {
-    setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: (c.hypes ?? 0) + 1 } : c));
+  const hyparCloud = (cloudId: string, newCount: number) => {
+    setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: newCount } : c));
   };
 
   const publishPoll = (data: Omit<Poll, "id" | "createdAt" | "votedOptionId">) => {
@@ -2040,8 +2467,8 @@ export default function Page() {
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
-  const visibleItems = allItems;
-  const activeClouds = clouds.filter(isCloudActive);
+  const visibleItems = feedOrder === "recent" ? [...allItems].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) : allItems;
+  const activeClouds = orderedClouds.filter(isCloudActive);
   const currentCloud = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? null;
   const currentCountdown = currentCloud ? getTopicCountdown(currentCloud) : 0;
 
@@ -2061,7 +2488,7 @@ export default function Page() {
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
 
       {/* ── Modals ── */}
-      {modal === "search"        && <SearchModal onClose={closeModal} />}
+      {modal === "search"        && <SearchModal onClose={closeModal} feedClouds={clouds} />}
       {modal === "create"        && <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />}
       {modal === "poll"          && <CreatePollModal onClose={closeModal} onPublish={publishPoll} />}
       {modal === "notifications" && <NotificationsPanel onClose={closeModal} />}
@@ -2070,63 +2497,84 @@ export default function Page() {
 
       {/* ── Header — fundo gradiente escuro ── */}
       <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-        <div className="mx-auto flex h-[80px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-3">
+        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
 
           {/* Logo */}
-          <a href="/" className="flex shrink-0 items-center gap-3 pb-1">
+          <a href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
           </a>
 
           {/* Nav */}
-          <nav aria-label="Navegação" className="flex items-end gap-10 pb-1">
-            <a href="/" className="relative inline-flex h-10 items-center text-[18px] font-semibold text-white">
+          <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
+            <a href="/" className="relative inline-flex h-12 items-center text-[22px] font-semibold text-white">
               For You
-              <span className="absolute -bottom-0.5 left-0 right-0 h-[2.5px] rounded-full bg-[#A855F7]" />
+              <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </a>
-            <Link href="/following" className="inline-flex h-10 items-center text-[18px] font-semibold text-white/50 transition hover:text-white">
+            <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Seguindo
             </Link>
           </nav>
 
           {/* Right icons */}
-          <div className="flex items-center gap-3 pb-1">
+          <div className="flex items-center gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setModal("search")}
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <SearchIcon s={24} />
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
+              <SearchIcon s={28} />
             </button>
             <button type="button" aria-label="Notificações" onClick={() => setModal("notifications")}
-              className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <BellIcon s={24} />
-              <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
+              className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <BellIcon s={28} />
             </button>
             <Link href="/settings" aria-label="Configurações"
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <GearIcon s={24} />
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <GearIcon s={28} />
             </Link>
             <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[16px] font-bold text-white">
-              <SessionUserAvatar user={user} size={48} />
+              className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
+              <SessionUserAvatar user={user} size={56} className="rounded-full" />
             </Link>
           </div>
         </div>
       </header>
 
       {/* ── Main: card + arrows ── */}
-      <main className="relative flex flex-1 items-center justify-center overflow-hidden px-16">
+      <main className="relative flex flex-1 items-center justify-center overflow-hidden px-4 gap-4">
         {homeStage === "topics" ? (
           <>
+            {trendingQuery ? (
+              <div className="absolute left-6 top-5 z-20 flex items-center gap-2 rounded-full border border-[#A855F7]/50 bg-[#1a0a3d]/90 px-4 py-2 text-[12px] font-semibold text-white backdrop-blur-md shadow-lg">
+                <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m18 15-6-6-6 6"/>
+                </svg>
+                <span className="text-[#C084FC]">#{trendingQuery.charAt(0).toUpperCase() + trendingQuery.slice(1)}</span>
+                <span className="text-white/50">em alta</span>
+                <a href="/" className="ml-1 text-white/30 hover:text-white transition">×</a>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setFeedOrder((current) => current === "recent" ? "default" : "recent"); setCurrentCloudIndex(0); }}
+                aria-pressed={feedOrder === "recent"}
+                title={feedOrder === "recent" ? "Exibindo as Clouds mais recentes primeiro" : "Exibir as Clouds mais recentes primeiro"}
+                className={`absolute left-6 top-5 z-20 flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[11px] font-bold transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-[#7C3AED] text-white shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white/65 shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45 hover:text-white"}`}
+              >
+                <span className="text-[15px] leading-none">+</span>
+                Recentes
+              </button>
+            )}
             {/* Left arrow — próximo ao card */}
             <button
               onClick={() => navigateCloud(-1)}
               aria-label="Cloud anterior"
-              className="absolute left-[calc(50%-630px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+              className="z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
             >
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
             </button>
 
-            {/* Cloud card */}
+            {/* Cloud card + dot indicators */}
+            <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4">
             <div
-              className="relative w-full max-w-[1100px] overflow-hidden rounded-3xl"
+              className="relative w-full overflow-hidden rounded-3xl"
               style={{
                 background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
                 border: "1px solid rgba(168,85,247,0.22)",
@@ -2171,18 +2619,25 @@ export default function Page() {
                 </span>
               </div>
               {/* Participants */}
-              <div className="flex items-center gap-2 text-[16px] text-white/55">
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <div className="flex items-center gap-2 text-[16px] font-semibold text-white">
+                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
                 {formatParticipantCount(participants)}
               </div>
-              <button type="button" className="text-white/35 hover:text-white transition">
-                <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
-                  <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-                </svg>
-              </button>
+              <div className="relative flex items-center">
+                <button type="button" aria-label="Mais opções da Cloud" onClick={() => setCloudOptionsOpen((open) => !open)} className="flex items-center text-white hover:text-white/70 transition">
+                  <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                </button>
+                {cloudOptionsOpen && currentCloud && (
+                  <div className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
+                    <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudInfoOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Informações da Cloud</button>
+                    <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudDescriptionOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ler descrição</button>
+                    <button type="button" onClick={() => { setCloudOptionsOpen(false); window.alert("Denúncia registrada. Nossa equipe analisará esta Cloud."); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2208,9 +2663,11 @@ export default function Page() {
             </button>
           </div>
 
+        </div>
+
           {/* Dot indicators */}
           {activeClouds.length > 1 && (
-            <div className="flex justify-center gap-2 pb-5">
+            <div className="flex justify-center gap-2">
               {activeClouds.map((_, i) => (
                 <button
                   key={i}
@@ -2224,13 +2681,13 @@ export default function Page() {
               ))}
             </div>
           )}
-        </div>
+            </div>
 
         {/* Right arrow — próximo ao card */}
         <button
           onClick={() => navigateCloud(1)}
           aria-label="Próxima Cloud"
-          className="absolute left-[calc(50%+580px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+          className="z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
         >
           <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
         </button>
@@ -2240,7 +2697,7 @@ export default function Page() {
           type="button"
           aria-label="Publicar nova Cloud"
           onClick={() => setModal("create")}
-          className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white shadow-[0_4px_20px_rgba(168,85,247,0.55)] transition hover:bg-[#9333EA] hover:scale-105 active:scale-95"
+          className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white transition hover:bg-[#9333EA] hover:scale-105 active:scale-95"
         >
           <PlusIcon s={22} />
         </button>
@@ -2275,9 +2732,12 @@ export default function Page() {
         )}
       </main>
 
+      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(participants)}</p></div></div></div>}
+      {cloudDescriptionOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Descrição da Cloud</h3><button onClick={() => setCloudDescriptionOpen(false)} className="text-white/50 hover:text-white">×</button></div><p className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/75">{currentCloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p></div></div>}
+
       {/* ── Bottom navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
-        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
+        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
 
           {/* Home */}
           <a href="/" className="flex flex-col items-center gap-2 text-[#A855F7]">
@@ -2289,7 +2749,7 @@ export default function Page() {
           </a>
 
           {/* Messages */}
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
@@ -2297,7 +2757,7 @@ export default function Page() {
           </Link>
 
           {/* Trending */}
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </Link>

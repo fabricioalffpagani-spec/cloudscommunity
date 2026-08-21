@@ -37,6 +37,16 @@ export class UsersController {
     return this.usersService.getProfile(extractSessionToken(req), identifier);
   }
 
+  @Get(':identifier/followers')
+  async followers(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.getFollowers(extractSessionToken(req), identifier);
+  }
+
+  @Get(':identifier/following')
+  async getUserFollowing(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.getUserFollowing(extractSessionToken(req), identifier);
+  }
+
   @Post(':identifier/follow')
   async follow(@Req() req: Request, @Param('identifier') identifier: string) {
     return this.usersService.follow(extractSessionToken(req), identifier);

@@ -23,7 +23,6 @@ export type SessionUser = {
   followersCount?: number;
   followingCount?: number;
   cloudsCount?: number;
-  hypesCount?: number;
 };
 
 type SessionContextValue = {
@@ -155,6 +154,13 @@ export function UserAvatar({
           alt={getSessionUserDisplayName(user)}
           referrerPolicy="no-referrer"
           className="h-full w-full rounded-full object-cover"
+          style={{ 
+            filter: 'none',
+            imageRendering: 'auto',
+            imageRendering: '-webkit-optimize-contrast',
+            backfaceVisibility: 'hidden',
+            transform: 'translateZ(0)'
+          }}
           onError={() => setImageError(true)}
         />
       </div>

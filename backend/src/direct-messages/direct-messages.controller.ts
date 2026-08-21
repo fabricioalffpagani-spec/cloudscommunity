@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  Patch,
   Post,
   UploadedFile,
   Query,
@@ -197,5 +199,39 @@ export class DirectMessagesController {
       ok: true as const,
       message,
     };
+  }
+
+  @Patch('conversations/:conversationId/messages/:messageId')
+  async editMessage(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: Record<string, unknown>,
+  ) {
+    const session = await this.authService.resolveSession(extractSessionToken(req));
+    if (!session) return { ok: false as const, message: 'Sessão não encontrada.' };
+
+    const message = await this.directMessagesService.editMessage(
+      session.user.id,
+      conversationId,
+      messageId,
+      typeof body.content === 'string' ? body.content : '',
+    );
+    await this.directMessagesGateway.broadcastMessageEdited(conversationId, message);
+    return { ok: true as const, message };
+  }
+
+  @Delete('conversations/:conversationId/messages/:messageId')
+  async deleteMessage(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+  ) {
+    const session = await this.authService.resolveSession(extractSessionToken(req));
+    if (!session) return { ok: false as const, message: 'Sessão não encontrada.' };
+
+    await this.directMessagesService.deleteMessage(session.user.id, conversationId, messageId);
+    await this.directMessagesGateway.broadcastMessageDeleted(conversationId, messageId);
+    return { ok: true as const };
   }
 }

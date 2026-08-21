@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Post,
   Query,
   Req,
@@ -92,6 +93,25 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request) {
     return this.authService.me(extractSessionToken(req));
+  }
+
+  @Patch('me')
+  async updateMe(@Body() body: Record<string, unknown>, @Req() req: Request) {
+    return this.authService.updateProfile(extractSessionToken(req), {
+      displayName: typeof body.displayName === 'string' ? body.displayName : undefined,
+      bio: typeof body.bio === 'string' ? body.bio : undefined,
+      location: typeof body.location === 'string' ? body.location : undefined,
+      avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : undefined,
+      isPrivate: typeof body.isPrivate === 'boolean' ? body.isPrivate : undefined,
+    });
+  }
+
+  @Post('me/change-password')
+  async changePassword(@Body() body: Record<string, unknown>, @Req() req: Request) {
+    return this.authService.changePassword(extractSessionToken(req), {
+      currentPassword: typeof body.currentPassword === 'string' ? body.currentPassword : undefined,
+      newPassword: typeof body.newPassword === 'string' ? body.newPassword : undefined,
+    });
   }
 
   @Get('session')

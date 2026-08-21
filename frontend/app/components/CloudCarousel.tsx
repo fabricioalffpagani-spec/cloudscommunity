@@ -17,14 +17,14 @@ export type CarouselCloud = {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
-    "5 min": 5 * 60,
-    "10 min": 10 * 60,
-    "30 min": 30 * 60,
+    "30min": 30 * 60,
     "1h": 60 * 60,
+    "2h": 2 * 60 * 60,
+    "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,
   };
 
-  return map[duration] ?? 5 * 60;
+  return map[duration] ?? 30 * 60;
 }
 
 function formatCountdown(seconds: number) {
@@ -173,27 +173,27 @@ export function CloudCarousel({ clouds }: { clouds: CarouselCloud[] }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
-            <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.07)", borderRadius: "9999px", padding: "10px 20px" }}>
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 6v6l4 2" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
-              <span className="text-[19px] font-bold tabular-nums text-white">
+              <span style={{ fontSize: "19px", fontWeight: 700, color: "#ffffff", fontVariantNumeric: "tabular-nums" }}>
                 {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[16px] text-white/55">
-              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: 600, color: "#ffffff" }}>
+              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
-              {formatParticipantCount(participants)}
+              <span style={{ color: "#ffffff" }}>{formatParticipantCount(participants)}</span>
             </div>
-            <button type="button" className="text-white/35 transition hover:text-white">
-              <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+            <button type="button" style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true">
                 <circle cx="12" cy="5" r="1.5" />
                 <circle cx="12" cy="12" r="1.5" />
                 <circle cx="12" cy="19" r="1.5" />
@@ -255,7 +255,7 @@ export function CloudCarousel({ clouds }: { clouds: CarouselCloud[] }) {
       <button
         type="button"
         aria-label="Publicar nova Cloud"
-        className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white shadow-[0_4px_20px_rgba(168,85,247,0.55)] transition hover:scale-105 hover:bg-[#9333EA] active:scale-95"
+        className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white transition hover:scale-105 hover:bg-[#9333EA] active:scale-95"
       >
         <PlusIcon s={22} />
       </button>

@@ -22,7 +22,6 @@ type PublicUserProfile = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
-  hypesCount: number;
   isFollowing: boolean;
   isSelf: boolean;
   profileUrl: string;
@@ -135,10 +134,6 @@ function ProfileRow({
         <p className="truncate text-[12px] text-white/40">@{user.username}</p>
       </div>
 
-      <span className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[#F97316]">
-        {user.hypesCount}
-      </span>
-
       {!user.isSelf && (
         <button
           type="button"
@@ -231,26 +226,26 @@ export default function MeetPage() {
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-        <div className="mx-auto flex h-[88px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-          <Link href="/" className="flex shrink-0 items-center gap-3">
+        <div className="mx-auto flex h-[108px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-4">
             <HeaderBrand />
           </Link>
 
-          <div className="flex items-center gap-3">
-            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <BellIcon />
+          <div className="flex items-center gap-4">
+            <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+              <BellIcon s={28} />
             </button>
-            <Link href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <GearIcon />
+            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
+              <GearIcon s={28} />
             </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[17px] font-bold text-white transition hover:bg-[#6D28D9]">
-              <SessionUserAvatar user={user} size={48} />
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[20px] font-bold text-white transition hover:bg-[#6D28D9]">
+              <SessionUserAvatar user={user} size={56} />
             </Link>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[640px] px-5 pb-28 pt-[108px]">
+      <main className="mx-auto max-w-[640px] px-5 pb-28 pt-[128px]">
         <div className="mb-6">
           <h1 className="text-[28px] font-bold tracking-tight text-white">Meet</h1>
           <p className="mt-1 text-[14px] text-white/40">Search by username or profile name.</p>
@@ -299,15 +294,15 @@ export default function MeetPage() {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]">
-        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
               <path d="M9 21V12h6v9"/>
             </svg>
             <span className="text-[13px] font-semibold">Home</span>
           </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>

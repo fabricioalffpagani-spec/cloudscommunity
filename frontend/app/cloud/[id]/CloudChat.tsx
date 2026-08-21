@@ -7,7 +7,17 @@ import { FlameIcon } from "../../components/FlameIcon";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const EMOJI_BANK = ["😀","🔥","❤️","😂","🙌","🎉","💬","👍","👀","✨"];
+const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
+  { label: "Rostos",     icon: "😀", emojis: ["😀","😄","😁","😆","😅","🤣","😂","🙂","😊","😇","🥰","😍","🤩","😘","😋","😛","😜","🤪","😝","🤑","🤗","🤭","🤫","🤔","😐","😑","😏","😒","🙄","😬","😔","😪","😴","😷","🤒","🤕","🤢","🤮","🤧","🥵","🥶","🥴","😵","🤯","🤠","🥳","🥸","😎","🤓","🧐","😕","😟","🙁","☹️","😮","😯","😲","😳","🥺","😦","😧","😨","😰","😥","😢","😭","😱","😖","😣","😞","😓","😩","😫","🥱","😤","😡","😠","🤬","😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖"] },
+  { label: "Gestos",     icon: "👋", emojis: ["👋","🤚","🖐️","✋","🖖","👌","🤏","✌️","🤞","🤟","🤘","🤙","👈","👉","👆","👇","☝️","👍","👎","✊","👊","🤛","🤜","👏","🙌","👐","🤲","🤝","🙏","✍️","💅","🤳","💪","🦾","👀","👁️","👅","👄","💋"] },
+  { label: "Corações",   icon: "❤️", emojis: ["❤️","🧡","💛","💚","💙","💜","🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💝","💘","💌","💟","💯","💢","💥","💫","💦","💨","💬","💭","💤","🔥","✨","🎉","🎊","🎈"] },
+  { label: "Animais",    icon: "🐶", emojis: ["🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵","🙈","🙉","🙊","🐔","🐧","🐦","🐤","🦆","🦅","🦉","🦇","🐺","🐗","🐴","🦄","🐝","🐛","🦋","🐌","🐞","🐜","🐢","🐍","🦎","🐙","🦑","🦀","🐡","🐠","🐟","🐬","🐳","🐋","🦈","🦓","🐘","🦒","🐕","🐈"] },
+  { label: "Comida",     icon: "🍎", emojis: ["🍎","🍐","🍊","🍋","🍌","🍉","🍇","🍓","🫐","🍒","🍑","🥭","🍍","🥥","🥝","🍅","🍆","🥑","🥦","🥬","🥒","🌶️","🥔","🍠","🥐","🥯","🍞","🥖","🧀","🥚","🍳","🥞","🥓","🥩","🍗","🍖","🌭","🍔","🍟","🍕","🥪","🌮","🌯","🥗","🥘","🍝","🍜","🍲","🍛","🍣","🍱","🥟","🍤","🍙","🍚","🧁","🍰","🎂","🍮","🍭","🍬","🍫","🍿","🍩","🍪","🌰","🥜","🧃","🥤","🧋","🍵","☕","🍺","🍻","🥂","🍷","🥃","🍸","🍹","🍾"] },
+  { label: "Viagens",    icon: "✈️", emojis: ["🚗","🚕","🚙","🚌","🏎️","🚓","🚑","🚒","🛻","🚲","🛴","🛹","🚁","🛸","✈️","🛩️","🚀","🛶","⛵","🚤","🚢","🚂","🚄","🚇","🌍","🌎","🌏","🗺️","🏔️","🌋","🏕️","🏖️","🏝️","🗼","🗽","🏰","🏯","⛩️","🏛️","🌃","🌆","🌇","🌉"] },
+  { label: "Atividades", icon: "⚽", emojis: ["⚽","🏀","🏈","⚾","🥎","🎾","🏐","🏉","🥏","🎱","🏓","🏸","🏒","🥊","🥋","🎯","⛸️","🎿","🛷","🥌","🎣","🤿","🎽","🏆","🥇","🥈","🥉","🏅","🎪","🤹","🎨","🎭","🎬","🎤","🎧","🎼","🎹","🎸","🎺","🎻","🥁","🎲","🎮","🕹️","🧩","♠️","♥️","♦️","♣️"] },
+  { label: "Objetos",    icon: "💡", emojis: ["💡","🔦","🕯️","📱","💻","🖥️","📷","📸","📹","🎥","📺","📻","🔋","🔌","💾","💿","📀","🔭","🔬","🩺","💊","💉","🩹","🧬","🔑","🗝️","🔒","🔓","🔨","⚙️","🔧","🔩","🧹","🧺","🧻","🚪","🪑","🛋️","🛏️","🧸","🖼️","🎁","🎈","🎀","🎊","🎉","📦","📫","📝","📚","📖","📰","📌","📍","📎","✂️","💰","💳","💸","📈","📉","📊","🔮","🧿","💈"] },
+  { label: "Natureza",   icon: "🌸", emojis: ["🌸","🌼","🌻","🌺","🌹","🥀","🌷","💐","🍀","🌿","🍃","🍂","🍁","🌱","🌲","🌳","🌴","🌵","🎋","🎍","☀️","🌤️","⛅","🌥️","🌦️","🌧️","⛈️","🌩️","🌪️","🌫️","🌬️","🌀","🌈","❄️","☃️","⛄","☄️","💧","🌊","🔥","⚡","🌑","🌕","🌙","⭐","🌟","🌠","🌌","🪐","🦋","🐝","🍄","🌾","🐚","🪨"] },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,8 +61,8 @@ function SmileIcon() {
   );
 }
 
-function FireIcon({ className = "" }: { className?: string }) {
-  return <FlameIcon className={className} />;
+function FireIcon({ className = "", filled = false }: { className?: string; filled?: boolean }) {
+  return <FlameIcon s={26} className={`block ${className}`} filled={filled} />;
 }
 
 function MicIcon({ s = 18 }: { s?: number }) {
@@ -102,10 +112,14 @@ function XIcon({ s = 16 }: { s?: number }) {
 
 function TrashIcon({ s = 16 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 6h18" />
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible">
+      {/* Lid + handle grouped — move together on hover */}
+      <g className="transition-transform duration-200 group-hover:-translate-y-[2.5px] group-hover:rotate-[-6deg]" style={{ transformOrigin: '12px 6px' }}>
+        <path d="M3 6h18" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </g>
+      {/* Body stays put */}
       <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
     </svg>
   );
 }
@@ -115,6 +129,179 @@ function CheckIcon({ s = 12 }: { s?: number }) {
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m5 12 5 5L20 7"/>
     </svg>
+  );
+}
+
+function DotsMenuIcon({ s = 16 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="white" aria-hidden="true">
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
+    </svg>
+  );
+}
+
+function CopyMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function TranslateMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 8l6 6" />
+      <path d="M4 14l6-6 2-3" />
+      <path d="M2 5h12" />
+      <path d="M7 2h1" />
+      <path d="M22 22l-5-10-5 10" />
+      <path d="M14 18h6" />
+    </svg>
+  );
+}
+
+function EditMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+    </svg>
+  );
+}
+
+function CancelSendMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M15 9l-6 6" />
+      <path d="M9 9l6 6" />
+    </svg>
+  );
+}
+
+function ForwardMenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="15 17 20 12 15 7" />
+      <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+    </svg>
+  );
+}
+
+type CloudMsgMenuProps = {
+  msg: Message;
+  own: boolean;
+  onEdit: (msg: Message) => void;
+  onDelete: (msgId: string) => void;
+  onForward: (msg: Message) => void;
+  onClose: () => void;
+};
+
+function CloudMsgMenu({ msg, own, onEdit, onDelete, onForward, onClose }: CloudMsgMenuProps) {
+  const [copied, setCopied] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translated, setTranslated] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handle = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [onClose]);
+
+  const textContent = msg.type === "text" ? msg.content : null;
+
+  const handleCopy = () => {
+    if (!textContent) return;
+    navigator.clipboard.writeText(textContent).then(() => {
+      setCopied(true);
+      setTimeout(() => { setCopied(false); onClose(); }, 1200);
+    }).catch(() => {});
+  };
+
+  const handleTranslate = async () => {
+    if (!textContent) return;
+    setTranslating(true);
+    try {
+      const res = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=pt&dt=t&q=${encodeURIComponent(textContent)}`
+      );
+      const data = await res.json() as [[string, string][]] | null;
+      const result = data?.[0]?.map(([t]) => t).join("") ?? null;
+      if (result) setTranslated(result);
+    } catch {
+      // silently ignore
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const items: { label: string; icon: React.ReactNode; action: () => void; danger?: boolean; show: boolean }[] = [
+    {
+      label: copied ? "Copiado!" : "Copiar",
+      icon: <CopyMenuIcon />,
+      action: handleCopy,
+      show: !!textContent,
+    },
+    {
+      label: translating ? "Traduzindo…" : translated ? "Traduzido ✓" : "Traduzir",
+      icon: <TranslateMenuIcon />,
+      action: handleTranslate,
+      show: !!textContent,
+    },
+    {
+      label: "Editar",
+      icon: <EditMenuIcon />,
+      action: () => { onEdit(msg); onClose(); },
+      show: own && msg.type === "text",
+    },
+    {
+      label: "Cancelar envio",
+      icon: <CancelSendMenuIcon />,
+      action: () => { onDelete(msg.id); onClose(); },
+      danger: true,
+      show: own,
+    },
+    {
+      label: "Encaminhar",
+      icon: <ForwardMenuIcon />,
+      action: () => { onForward(msg); onClose(); },
+      show: true,
+    },
+  ];
+
+  return (
+    <div
+      ref={menuRef}
+      className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${own ? "right-0" : "left-0"}`}
+      style={{ top: "calc(100% + 4px)" }}
+    >
+      {translated && (
+        <div className="border-b border-white/[0.06] px-4 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Tradução</p>
+          <p className="text-[13px] text-white leading-snug">{translated}</p>
+        </div>
+      )}
+      {items.filter(i => i.show).map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={item.action}
+          className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] ${item.danger ? "text-red-400 hover:text-red-300" : "text-white/80 hover:text-white"}`}
+        >
+          <span className={item.danger ? "text-red-400" : "text-white/50"}>{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -192,7 +379,11 @@ type CloudMeta = {
   duration: string;
   createdAt: string;
   membersCount: number;
+  description?: string | null;
   authorId?: string;
+  visibility?: "public" | "private";
+  hypesCount?: number;
+  hyped?: boolean;
   members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }>;
 };
 
@@ -202,6 +393,7 @@ type CloudChatProps = {
   duration?: string;
   createdAt?: string;
   participants?: number;
+  visibility?: string;
   onBack?: () => void;
 };
 
@@ -318,29 +510,21 @@ function useRecorder(onDone: (url: string, dur: string, waveform?: number[]) => 
 
 // ─── Header icons ─────────────────────────────────────────────────────────────
 
-function HeartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
-    </svg>
-  );
-}
-
 function ForwardIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="15 10 20 15 15 20" />
-      <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+    <svg viewBox="0 0 24 24" width={26} height={26} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible">
+      <polyline points="15 10 20 15 15 20" className="transition-transform duration-200 group-hover:translate-x-[2px]" style={{ transformOrigin: '17.5px 15px' }} />
+      <path d="M4 4v7a4 4 0 0 0 4 4h12" className="transition-transform duration-200 group-hover:translate-x-[2px]" />
     </svg>
   );
 }
 
 function DotsIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="white" aria-hidden="true">
-      <circle cx="12" cy="5" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-      <circle cx="12" cy="19" r="1.5" />
+    <svg viewBox="0 0 24 24" width={26} height={26} fill="white" aria-hidden="true">
+      <circle cx="12" cy="5" r="1.5" className="transition-opacity duration-300 group-hover:opacity-70" style={{ transitionDelay: '0ms' }} />
+      <circle cx="12" cy="12" r="1.5" className="transition-opacity duration-300 group-hover:opacity-70" style={{ transitionDelay: '100ms' }} />
+      <circle cx="12" cy="19" r="1.5" className="transition-opacity duration-300 group-hover:opacity-70" style={{ transitionDelay: '200ms' }} />
     </svg>
   );
 }
@@ -470,6 +654,9 @@ function AudioBubble({ msg, own }: { msg: AudioMsg; own?: boolean }) {
 function MsgBubble({
   msg,
   onReply,
+  onEdit,
+  onDelete,
+  onForward,
   reactionPickerFor,
   setReactionPickerFor,
   onAddReaction,
@@ -479,6 +666,9 @@ function MsgBubble({
 }: {
   msg: Message;
   onReply: (m: Message) => void;
+  onEdit: (m: Message) => void;
+  onDelete: (msgId: string) => void;
+  onForward: (m: Message) => void;
   reactionPickerFor: string | null;
   setReactionPickerFor: (id: string | null) => void;
   onAddReaction: (id: string, emoji: string) => void;
@@ -487,22 +677,23 @@ function MsgBubble({
   onShowReactionUsers: (msgId: string, emoji: string, reactions: Reaction[]) => void;
 }) {
   const own = !!msg.own;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className={`flex items-start gap-2 ${own ? "flex-row-reverse" : "flex-row"} ${msg.isPinned ? "rounded-lg bg-[#1a1a2e] p-2 border border-[#7C3AED]/30" : ""}`}>
+    <div className={`group flex items-center gap-3 ${own ? "flex-row-reverse" : "flex-row"} ${msg.isPinned ? "rounded-lg bg-[#1a1a2e] p-2 border border-[#7C3AED]/30" : ""}`}>
       {/* Avatar fixed column */}
-      <div className="shrink-0 pt-0.5">
-        <Avatar initials={msg.initials} color={msg.color} size={28} />
+      <div className={`${own ? "w-11" : "w-9"} shrink-0`}>
+        <Avatar initials={msg.initials} color={msg.color} size={own ? 44 : 36} />
       </div>
 
       {/* Content column aligned with avatar */}
-      <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`} style={{ maxWidth: "74%" }}>
-        {/* sender + host badge + time + pinned badge */}
-        <div className={`flex flex-wrap items-center gap-2 ${own ? "flex-row-reverse" : ""}`}>
+      <div className={`relative mt-5 flex w-fit max-w-[72%] flex-col gap-2 ${own ? "items-end" : "items-start"}`}>
+        {/* sender + host badge + pinned badge */}
+        <div className={`absolute bottom-full mb-1 flex flex-wrap items-center gap-2 whitespace-nowrap ${own ? "right-0 flex-row-reverse" : "left-0"}`}>
           {msg.sender === "Você" ? (
-            <span className="text-[12px] font-semibold text-white">{msg.sender}</span>
+            <span className="px-1 text-[12px] font-semibold text-white">{msg.sender}</span>
           ) : (
-            <Link href={profileHrefFromName(msg.sender)} className="text-[12px] font-semibold text-white transition hover:text-white hover:underline">
+            <Link href={profileHrefFromName(msg.sender)} className="px-1 text-[12px] font-semibold text-white transition hover:text-white hover:underline">
               {msg.sender}
             </Link>
           )}
@@ -535,71 +726,138 @@ function MsgBubble({
         {/* bubble */}
         {msg.type === "text" ? (
           <div
-            className={`rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed text-white ${
-              own ? "rounded-br-[4px] bg-[#7C3AED]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#111827]"
+            className={`relative rounded-[22px] px-4 py-2.5 text-[15px] leading-relaxed text-white ${
+              own ? "rounded-br-lg bg-[#6D28D9] shadow-[0_12px_28px_rgba(109,40,217,0.24)]" : "rounded-bl-lg border border-white/[0.08] bg-[#111827]"
             }`}
           >
             {msg.content}
+            
+            {/* Ações laterais: aparecem somente ao passar o mouse (ou focar) na mensagem. */}
+            <div className={`absolute top-1/2 z-20 -translate-y-1/2 ${own ? "right-full mr-2" : "left-full ml-2"}`}>
+              {/* Actions — visible on hover */}
+              <div className="flex items-center gap-0.5 rounded-full bg-black/35 p-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    title="Mais opções"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    <DotsMenuIcon s={15} />
+                  </button>
+                  {menuOpen && (
+                    <CloudMsgMenu
+                      msg={msg}
+                      own={own}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onForward={onForward}
+                      onClose={() => setMenuOpen(false)}
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onReply(msg)}
+                  title="Responder"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                >
+                  <ReplyIcon s={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
+                  title="Reagir"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                >
+                  <ReactionIcon s={15} />
+                </button>
+                {isCloudAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => onPinToggle(msg.id)}
+                    title={msg.isPinned ? "Desfixar" : "Fixar"}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    <PinIcon s={15} filled={msg.isPinned} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
-          <AudioBubble msg={msg} own={own} />
+          <div className="relative">
+            <AudioBubble msg={msg} own={own} />
+            
+            {/* Ações laterais: aparecem somente ao passar o mouse (ou focar) na mensagem. */}
+            <div className={`absolute top-1/2 z-20 -translate-y-1/2 ${own ? "right-full mr-2" : "left-full ml-2"}`}>
+              {/* Actions — visible on hover */}
+              <div className="flex items-center gap-0.5 rounded-full bg-black/35 p-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    title="Mais opções"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    <DotsMenuIcon s={15} />
+                  </button>
+                  {menuOpen && (
+                    <CloudMsgMenu
+                      msg={msg}
+                      own={own}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onForward={onForward}
+                      onClose={() => setMenuOpen(false)}
+                    />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onReply(msg)}
+                  title="Responder"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                >
+                  <ReplyIcon s={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
+                  title="Reagir"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                >
+                  <ReactionIcon s={15} />
+                </button>
+                {isCloudAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => onPinToggle(msg.id)}
+                    title={msg.isPinned ? "Desfixar" : "Fixar"}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    <PinIcon s={15} filled={msg.isPinned} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* actions row — hype/fire removed */}
-        <div className={`flex flex-wrap items-center gap-2 text-[11px] text-white/40 ${own ? "flex-row-reverse" : ""}`}>
-          <button type="button" onClick={() => onReply(msg)} className="rounded-full p-1 transition hover:bg-white/10" title="Responder">
-            <ReplyIcon s={18} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setReactionPickerFor(reactionPickerFor === msg.id ? null : msg.id)}
-            className="rounded-full p-1 transition hover:bg-white/10"
-            title="Reagir"
-          >
-            <ReactionIcon s={18} />
-          </button>
-          {isCloudAuthor && (
-            <button
-              type="button"
-              onClick={() => onPinToggle(msg.id)}
-              className="rounded-full p-1 transition hover:bg-white/10"
-              title={msg.isPinned ? "Desfixar" : "Fixar"}
-            >
-              <PinIcon s={18} filled={msg.isPinned} />
-            </button>
-          )}
-          
-          {/* Reaction counters */}
-          {msg.reactions && msg.reactions.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(
-                msg.reactions.reduce((acc, reaction) => {
-                  if (!acc[reaction.emoji]) {
-                    acc[reaction.emoji] = [];
-                  }
-                  acc[reaction.emoji].push(reaction);
-                  return acc;
-                }, {} as Record<string, Reaction[]>)
-              ).map(([emoji, reactions]) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onShowReactionUsers(msg.id, emoji, reactions)}
-                  className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20 flex items-center gap-1"
-                  title={`${reactions.length} usuário(s) reagiram com ${emoji}`}
-                >
-                  <span>{emoji}</span>
-                  <span className="text-white/70">{reactions.length}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <div className={`text-[11px] text-white/45 ${own ? "pr-1 text-right" : "pl-1"}`}>{msg.time}</div>
+
+        {msg.reactions && msg.reactions.length > 0 && (
+          <div className="flex flex-wrap gap-1 px-1">
+            {Object.entries(msg.reactions.reduce((acc, reaction) => { (acc[reaction.emoji] ??= []).push(reaction); return acc; }, {} as Record<string, Reaction[]>)).map(([emoji, reactions]) => (
+              <button key={emoji} type="button" onClick={() => onShowReactionUsers(msg.id, emoji, reactions)} className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20 flex items-center gap-1" title={`${reactions.length} usuário(s) reagiram com ${emoji}`}><span>{emoji}</span><span className="text-white/70">{reactions.length}</span></button>
+            ))}
+          </div>
+        )}
 
         {/* reaction picker */}
         {reactionPickerFor === msg.id && (
           <div className="relative mt-1 z-50">
-            <div className="absolute bottom-full left-0 mb-2 max-h-[150px] overflow-y-auto rounded-3xl bg-[#15161C] p-3 shadow-lg">
+            <div className="absolute top-full left-0 mt-2 max-h-[150px] overflow-y-auto rounded-3xl bg-[#15161C] p-3 shadow-lg">
               <div className="flex flex-wrap gap-2">
                 {EMOJI_BANK.map((emoji, index) => (
                   <button
@@ -627,10 +885,10 @@ function MsgBubble({
 // ─── Live timer hook ──────────────────────────────────────────────────────────
 
 const DURATION_SECONDS: Record<string, number> = {
-  "5 min":  5 * 60,
-  "10 min": 10 * 60,
-  "30 min": 30 * 60,
+  "30min":  30 * 60,
   "1h":     60 * 60,
+  "2h":     2 * 60 * 60,
+  "5h":     5 * 60 * 60,
   "24h":    24 * 60 * 60,
 };
 
@@ -714,23 +972,53 @@ function CopyLinkIcon() {
 function CloudShareModal({
   cloudId,
   cloudTitle,
+  cloudDuration,
+  cloudMembersCount,
+  cloudVisibility,
   onClose,
 }: {
   cloudId: string;
   cloudTitle: string;
+  cloudDuration?: string;
+  cloudMembersCount?: number;
+  cloudVisibility?: "public" | "private";
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [contacts, setContacts] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [loadingContacts, setLoadingContacts] = useState(true);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
-  const cloudUrl = typeof window !== "undefined"
+  // For public clouds the share URL is the cloud itself.
+  // For private clouds we generate an invite token so the recipient
+  // goes through /invite/[token] which does the join before entering.
+  const isPrivate = cloudVisibility === "private";
+
+  const baseCloudUrl = typeof window !== "undefined"
     ? `${window.location.origin}/cloud/${cloudId}`
     : `http://localhost:3000/cloud/${cloudId}`;
 
+  const shareUrl = inviteToken
+    ? `${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/invite/${inviteToken}`
+    : baseCloudUrl;
+
+  // Auto-generate invite token for private clouds
+  useEffect(() => {
+    if (!isPrivate) return;
+    fetch(`/api/clouds/${encodeURIComponent(cloudId)}/invite`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((data: { invite?: { token: string } }) => {
+        if (data?.invite?.token) setInviteToken(data.invite.token);
+      })
+      .catch(() => {/* non-critical */});
+  }, [cloudId, isPrivate]);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(cloudUrl).then(() => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {});
@@ -751,12 +1039,21 @@ function CloudShareModal({
   }, []);
 
   const sendToContact = (contactId: string) => {
+    const inviteLabel = JSON.stringify({
+      type: "cloud_invitation",
+      cloudId,
+      inviteToken: inviteToken ?? null,
+      cloudTitle,
+      cloudDuration: cloudDuration ?? "",
+      cloudMembersCount: cloudMembersCount ?? 1,
+      cloudVisibility: cloudVisibility ?? "public",
+    });
     const params = new URLSearchParams({
       id: contactId,
       share: "cloud",
-      url: cloudUrl,
-      title: cloudTitle,
-      autosend: "1",
+      url: shareUrl,
+      title: inviteLabel,
+      autosend: "true",
     });
     window.location.assign(`/messages?${params.toString()}`);
   };
@@ -789,7 +1086,7 @@ function CloudShareModal({
         <div className="mx-5 mt-4 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
           <p className="text-[14px] font-semibold text-white line-clamp-1">{cloudTitle}</p>
-          <p className="text-[12px] text-white/40 mt-0.5 truncate">{cloudUrl}</p>
+          <p className="text-[12px] text-white/40 mt-0.5 truncate">{shareUrl}</p>
         </div>
 
         {/* Messenger contacts */}
@@ -800,21 +1097,27 @@ function CloudShareModal({
             {contactsError && <p className="py-3 text-[13px] text-red-300">{contactsError}</p>}
             {!loadingContacts && !contactsError && contacts.length === 0 && <p className="py-3 text-[13px] text-white/45">Você ainda não possui contatos para enviar.</p>}
             {/* Test contacts are loaded from the same source as the messenger. */}
-            {contacts.map(contact => (
-              <button
-                key={contact.id}
-                type="button"
-                onClick={() => sendToContact(contact.id)}
-                className="flex flex-col items-center gap-1.5 min-w-[60px] group"
-              >
-                <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[15px] font-bold text-white ring-2 ring-transparent transition group-hover:ring-[#A855F7]">
-                  {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : contact.displayName.slice(0, 2).toUpperCase()}
-                </div>
-                <span className="max-w-[56px] truncate text-[11px] text-white/60 transition group-hover:text-white">
-                  {contact.displayName.split(" ")[0]}
-                </span>
-              </button>
-            ))}
+            {contacts.map(contact => {
+              // For private clouds, wait until the invite token is ready before allowing send
+              const pendingToken = isPrivate && !inviteToken;
+              return (
+                <button
+                  key={contact.id}
+                  type="button"
+                  onClick={() => !pendingToken && sendToContact(contact.id)}
+                  disabled={pendingToken}
+                  title={pendingToken ? "Gerando link de convite..." : undefined}
+                  className="flex flex-col items-center gap-1.5 min-w-[60px] group disabled:opacity-50 disabled:cursor-wait"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[15px] font-bold text-white ring-2 ring-transparent transition group-hover:ring-[#A855F7]">
+                    {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : contact.displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="max-w-[56px] truncate text-[11px] text-white/60 transition group-hover:text-white">
+                    {contact.displayName.split(" ")[0]}
+                  </span>
+                </button>
+              );
+            })}
             {false && [
               { id: "user1", name: "João Silva", initials: "JS", color: "#A855F7" },
               { id: "user2", name: "Ana Costa", initials: "AC", color: "#3B82F6" },
@@ -839,59 +1142,12 @@ function CloudShareModal({
           </div>
         </div>
 
-        {/* Copy link button */}
-        <div className="px-5 mt-4">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="w-full flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-white/[0.10]"
-          >
-            {copied ? (
-              <>
-                <CheckIcon s={18} />
-                Link copiado!
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="9" width="13" height="13" rx="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-                Copiar link
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* Copy link button */}
-        <div className="px-5 mt-4">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="w-full flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-3 text-[14px] font-semibold text-white transition hover:bg-white/[0.10]"
-          >
-            {copied ? (
-              <>
-                <CheckIcon s={18} />
-                Link copiado!
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="9" width="13" height="13" rx="2"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-                Copiar link
-              </>
-            )}
-          </button>
-        </div>
         {/* External share */}
         <div className="px-5 mt-4 mb-5">
           <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-3">Compartilhar fora</p>
           <div className="flex flex-col gap-2">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`${cloudTitle}\n${cloudUrl}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`${cloudTitle}\n${shareUrl}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[14px] font-medium text-white hover:border-[#25D366]/40 hover:bg-[#25D366]/10 transition"
@@ -900,7 +1156,7 @@ function CloudShareModal({
               WhatsApp
             </a>
             <a
-              href={`https://t.me/share/url?url=${encodeURIComponent(cloudUrl)}&text=${encodeURIComponent(cloudTitle)}`}
+              href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(cloudTitle)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.04] px-4 py-3 text-[14px] font-medium text-white hover:border-[#2AABEE]/40 hover:bg-[#2AABEE]/10 transition"
@@ -923,12 +1179,182 @@ function CloudShareModal({
   );
 }
 
-export default function CloudChat({ cloudId, title, duration: durationProp, createdAt: createdAtProp, participants, onBack }: CloudChatProps) {
+// ─── ManageMembersModal ───────────────────────────────────────────────────────
+
+type CloudMemberEntry = {
+  id: string;
+  userId: string;
+  role: string;
+  user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } };
+};
+
+function ManageMembersModal({
+  cloudId,
+  cloudTitle,
+  isPrivate,
+  members,
+  isRemovingMember,
+  onRemoveMember,
+  onClose,
+}: {
+  cloudId: string;
+  cloudTitle: string;
+  isPrivate: boolean;
+  members: CloudMemberEntry[];
+  isRemovingMember: boolean;
+  onRemoveMember: (userId: string) => void;
+  onClose: () => void;
+}) {
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const generateInvite = async () => {
+    setIsGenerating(true);
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/invite`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.invite?.token) {
+        const link = `${window.location.origin}/invite/${data.invite.token}`;
+        setInviteLink(link);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
+
+  const nonHostMembers = members.filter((m) => m.role !== "host");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[18px] font-bold text-white">Gerenciar Membros</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
+          >
+            <XIcon s={16} />
+          </button>
+        </div>
+
+        {/* Invite link section — only for private clouds */}
+        {isPrivate && (
+          <div className="mb-4 rounded-xl border border-[#7C3AED]/20 bg-[#7C3AED]/5 p-4">
+            <p className="text-[12px] font-semibold uppercase tracking-wider text-[#C4B5FD] mb-3">
+              Convite por link
+            </p>
+            {inviteLink ? (
+              <div className="flex flex-col gap-2">
+                <div className="rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-[12px] text-white/60 break-all">
+                  {inviteLink}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="flex items-center justify-center gap-2 rounded-full bg-[#7C3AED] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#6D28D9]"
+                >
+                  {copied ? (
+                    <>
+                      <CheckIcon s={14} />
+                      Link copiado!
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                      Copiar link de convite
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={generateInvite}
+                disabled={isGenerating}
+                className="flex items-center justify-center gap-2 w-full rounded-full border border-[#7C3AED]/40 bg-[#7C3AED]/10 px-4 py-2.5 text-[13px] font-semibold text-[#C4B5FD] transition hover:bg-[#7C3AED]/20 disabled:opacity-50"
+              >
+                <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                {isGenerating ? "Gerando..." : "Gerar link de convite"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Members list */}
+        <div className="space-y-3 max-h-72 overflow-y-auto">
+          {nonHostMembers.map((member) => (
+            <div key={member.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                {member.user.profile.avatarUrl ? (
+                  <img
+                    src={member.user.profile.avatarUrl}
+                    alt={member.user.profile.displayName}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
+                    {member.user.profile.displayName.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <p className="text-[14px] font-semibold text-white">{member.user.profile.displayName}</p>
+                  <p className="text-[12px] text-white/50">@{member.user.profile.username}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemoveMember(member.userId)}
+                disabled={isRemovingMember}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition hover:bg-red-500/20 hover:text-red-500 disabled:opacity-50"
+                title="Remover membro"
+              >
+                <XIcon s={14} />
+              </button>
+            </div>
+          ))}
+          {nonHostMembers.length === 0 && (
+            <p className="text-[14px] text-white/50 text-center py-6">Nenhum membro para gerenciar</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CloudChat({ cloudId, title, duration: durationProp, createdAt: createdAtProp, participants, visibility: visibilityProp, onBack }: CloudChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState(0);
   const [replyTo, setReplyTo] = useState<ReplyMeta | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const [hyped, setHyped] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -936,7 +1362,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   // sobrescrito quando o fetch retornar os dados reais do banco.
   const [cloudMeta, setCloudMeta] = useState<CloudMeta | null>(() => {
     if (title && durationProp && createdAtProp) {
-      return { title, duration: durationProp, createdAt: createdAtProp, membersCount: participants ?? 1 };
+      return { title, duration: durationProp, createdAt: createdAtProp, membersCount: participants ?? 1, visibility: (visibilityProp === "private" ? "private" : "public") };
     }
     return null;
   });
@@ -948,8 +1374,12 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [reactionUsersOpen, setReactionUsersOpen] = useState(false);
   const [selectedReaction, setSelectedReaction] = useState<{ emoji: string; reactions: Reaction[] } | null>(null);
+  const [editingMsg, setEditingMsg] = useState<Message | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
 
   // Redirect to feed when cloud expires
   useEffect(() => {
@@ -974,6 +1404,29 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       });
   }, []);
 
+  // Auto-join the cloud when entering (creates membership if not already a member)
+  useEffect(() => {
+    if (!cloudId || cloudId === "unknown") return;
+    fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {
+      // Non-critical — user may already be a member or not logged in
+    });
+  }, [cloudId]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuOpen && !(event.target as HTMLElement).closest('[data-menu="true"]')) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
   // fetch cloud metadata (title, duration, membersCount, authorId)
   useEffect(() => {
     if (!cloudId || cloudId === "unknown") return;
@@ -983,7 +1436,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
       credentials: "include",
     })
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data: { cloud?: { title: string; duration: string; createdAt: string; membersCount: number; authorId: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
+      .then((data: { cloud?: { title: string; description?: string | null; duration: string; createdAt: string; membersCount: number; authorId: string; visibility?: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
         if (cancelled || !data?.cloud) return;
         const c = data.cloud;
         setCloudMeta({
@@ -991,7 +1444,9 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           duration: c.duration,
           createdAt: c.createdAt,
           membersCount: c.membersCount,
+          description: c.description,
           authorId: c.authorId,
+          visibility: c.visibility === "private" ? "private" : "public",
           members: c.members,
         });
       })
@@ -1043,6 +1498,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           duration: msg.type === "audio" ? "0:00" : undefined,
           reactions: msg.reactions || [],
         }));
+        console.log("[CloudChat] Loaded messages from server:", mappedMessages);
         setMessages(mappedMessages);
       })
       .catch((err: unknown) => {
@@ -1058,17 +1514,6 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // scroll messages up when emoji picker opens to show 4 rows of emojis
-  useEffect(() => {
-    if (emojiOpen && messagesContainerRef.current) {
-      setTimeout(() => {
-        if (messagesContainerRef.current) {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight - 200;
-        }
-      }, 0);
-    }
-  }, [emojiOpen]);
 
   const sendText = useCallback(async () => {
     const trimmed = draft.trim();
@@ -1110,6 +1555,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
 
       if (response.ok) {
         const data = await response.json();
+        console.log('[CloudChat] Message sent successfully:', data.message);
         // Replace optimistic message with server message
         setMessages((prev) => prev.map((m) => 
           m.id === optimisticMsg.id 
@@ -1441,6 +1887,55 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
     }
   };
 
+  const startEditMsg = (msg: Message) => {
+    if (msg.type !== "text") return;
+    setEditingMsg(msg);
+    setEditDraft(msg.content);
+  };
+
+  const submitEditMsg = useCallback(async () => {
+    if (!editingMsg || editingMsg.type !== "text") return;
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed === editingMsg.content) { setEditingMsg(null); return; }
+
+    // Optimistic update
+    setMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, content: trimmed } : m));
+    setEditingMsg(null);
+
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(editingMsg.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content: trimmed }),
+      });
+      if (!res.ok) {
+        // Revert on failure
+        setMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, content: (editingMsg as TextMsg).content } : m));
+      }
+    } catch {
+      setMessages((prev) => prev.map((m) => m.id === editingMsg.id ? { ...m, content: (editingMsg as TextMsg).content } : m));
+    }
+  }, [cloudId, editDraft, editingMsg]);
+
+  const deleteMsg = useCallback(async (msgId: string) => {
+    // Optimistic removal
+    setMessages((prev) => prev.filter((m) => m.id !== msgId));
+
+    try {
+      await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msgId)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      // If delete fails the message just won't reappear until refresh — acceptable
+    }
+  }, [cloudId]);
+
+  const startForwardMsg = (msg: Message) => {
+    setForwardMsg(msg);
+  };
+
   const handleDeleteCloud = async () => {
     if (!cloudId || cloudId === "unknown") return;
     setIsDeleting(true);
@@ -1477,7 +1972,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           credentials: "include",
         })
           .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-          .then((data: { cloud?: { title: string; duration: string; createdAt: string; membersCount: number; authorId: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
+          .then((data: { cloud?: { title: string; description?: string | null; duration: string; createdAt: string; membersCount: number; authorId: string; visibility?: string; members?: Array<{ id: string; userId: string; role: string; user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } } }> } }) => {
             if (data?.cloud) {
               const c = data.cloud;
               setCloudMeta({
@@ -1485,7 +1980,9 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                 duration: c.duration,
                 createdAt: c.createdAt,
                 membersCount: c.membersCount,
+                description: c.description,
                 authorId: c.authorId,
+                visibility: c.visibility === "private" ? "private" : "public",
                 members: c.members,
               });
             }
@@ -1500,6 +1997,28 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
     }
   };
 
+  const handleLeaveCloud = async () => {
+    if (!cloudId || cloudId === "unknown") return;
+    setIsLeaving(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/leave`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (response.ok) {
+        router.replace('/');
+      } else {
+        const data = await response.json().catch(() => null);
+        console.error('Failed to leave cloud:', data?.message);
+        setLeaveConfirmOpen(false);
+      }
+    } catch (error) {
+      console.error('Error leaving cloud:', error);
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
   const isRecording = recorder.state === "recording" || recorder.state === "paused";
 
   const cloudTitle = cloudMeta?.title ?? title ?? "…";
@@ -1509,14 +2028,14 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
     <div className="flex h-full flex-col bg-black text-white">
 
       {/* ── Header ── */}
-      <div className="flex shrink-0 items-start gap-3 px-4 pb-3 pt-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <div className="flex shrink-0 items-center gap-3 px-4 pb-3 pt-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
         {/* Back */}
         {onBack ? (
           <button
             type="button"
             aria-label="Voltar"
             onClick={onBack}
-            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
           >
             <BackArrowIcon />
           </button>
@@ -1524,7 +2043,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           <Link
             href="/"
             aria-label="Voltar"
-            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
+            className="flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
           >
             <BackArrowIcon />
           </Link>
@@ -1532,16 +2051,16 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
 
         {/* Title + meta */}
         <div className="flex flex-1 flex-col gap-1 overflow-hidden">
-          <h1 className="truncate text-[24px] font-bold leading-tight text-white">
+          <h1 className="truncate text-[28px] font-bold leading-tight text-white">
             {cloudTitle}
           </h1>
-          <div className="flex items-center gap-3 text-[14px] text-white/50">
+          <div className="flex items-center gap-3 text-[16px] text-white/50">
             <span className="flex items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
+              <span className="inline-block h-3 w-3 rounded-full bg-[#A855F7]" />
               {participantCount} {participantCount === 1 ? "pessoa" : "pessoas"} na conversa
             </span>
             <span className="text-white/20">|</span>
-            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] bg-[#A855F7]/10 px-4 py-2 rounded-md text-[18px]" style={{ fontFamily: 'Arial, sans-serif' }}>
+            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] text-[22px]" style={{ fontFamily: 'Arial, sans-serif' }}>
               <ClockIcon />
               {liveTimer}
             </span>
@@ -1549,49 +2068,115 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
         </div>
 
         {/* Action icons */}
-        <div className="flex shrink-0 items-center gap-1">
-          <button type="button" aria-label="Curtir" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white">
-            <HeartIcon />
-          </button>
-          <button type="button" aria-label="Hype" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-[#F97316]">
-            <FireIcon />
-          </button>
-          <button
-            type="button"
-            aria-label="Encaminhar"
-            onClick={() => setShareOpen(true)}
-            className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white"
-          >
-            <ForwardIcon />
-          </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {cloudMeta?.visibility !== "private" && (
+            <>
+              <button 
+                type="button" 
+                aria-label="Hype" 
+                onClick={() => setHyped(!hyped)}
+                className={`flex h-10 w-10 items-center justify-center transition ${hyped ? 'text-[#F97316]' : 'text-white hover:text-[#F97316]'}`}
+              >
+                <FireIcon filled={hyped} />
+              </button>
+              <button
+                type="button"
+                aria-label="Encaminhar"
+                onClick={() => setShareOpen(true)}
+                className="group flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <ForwardIcon />
+              </button>
+            </>
+          )}
           {currentUserId === cloudMeta?.authorId && (
             <>
               <button
                 type="button"
                 aria-label="Gerenciar membros"
                 onClick={() => setManageMembersOpen(true)}
-                className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white"
+                className="group flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
               >
-                <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible">
+                  {/* Main person — rises first, no delay */}
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" className="transition-transform duration-200 group-hover:-translate-y-[3px]" style={{ transitionDelay: '0ms' }} />
+                  <circle cx="9" cy="7" r="4" className="transition-transform duration-200 group-hover:-translate-y-[3px]" style={{ transitionDelay: '0ms' }} />
+                  {/* Second person — rises after, with delay */}
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" className="transition-transform duration-200 group-hover:-translate-y-[3px]" style={{ transitionDelay: '80ms' }} />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" className="transition-transform duration-200 group-hover:-translate-y-[3px]" style={{ transitionDelay: '80ms' }} />
                 </svg>
               </button>
               <button
                 type="button"
                 aria-label="Excluir Cloud"
                 onClick={() => setDeleteConfirmOpen(true)}
-                className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-red-500"
+                className="group flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-red-500"
               >
-                <TrashIcon />
+                <TrashIcon s={24} />
               </button>
             </>
           )}
-          <button type="button" aria-label="Mais opções" className="flex h-9 w-9 items-center justify-center text-white/60 transition hover:text-white">
-            <DotsIcon />
-          </button>
+          {/* Three-dots menu — always visible */}
+          <div className="relative" data-menu="true">
+            <button 
+              type="button" 
+              aria-label="Mais opções" 
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
+            >
+              <DotsIcon />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-white/10 bg-[#11141F] shadow-xl z-50 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); setInfoOpen(true); }}
+                  className="w-full px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 hover:text-white transition flex items-center gap-3"
+                >
+                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4" />
+                    <path d="M12 8h.01" />
+                  </svg>
+                  Informações da Cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); setDescriptionOpen(true); }}
+                  className="w-full px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 hover:text-white transition flex items-center gap-3"
+                >
+                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></svg>
+                  Ler descrição
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMenuOpen(false); setReportOpen(true); }}
+                  className="w-full px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 hover:text-red-400 transition flex items-center gap-3"
+                >
+                  <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                  </svg>
+                  Denunciar Cloud
+                </button>
+                {currentUserId !== cloudMeta?.authorId && (
+                  <button
+                    type="button"
+                    onClick={() => { setMenuOpen(false); setLeaveConfirmOpen(true); }}
+                    className="w-full px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 hover:text-red-400 transition flex items-center gap-3"
+                  >
+                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    Sair da Cloud
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1607,6 +2192,9 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
               <MsgBubble
                 msg={msg}
                 onReply={startReply}
+                onEdit={startEditMsg}
+                onDelete={deleteMsg}
+                onForward={startForwardMsg}
                 reactionPickerFor={reactionPickerFor}
                 setReactionPickerFor={setReactionPickerFor}
                 onAddReaction={addReaction}
@@ -1622,6 +2210,9 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
               key={msg.id}
               msg={msg}
               onReply={startReply}
+              onEdit={startEditMsg}
+              onDelete={deleteMsg}
+              onForward={startForwardMsg}
               reactionPickerFor={reactionPickerFor}
               setReactionPickerFor={setReactionPickerFor}
               onAddReaction={addReaction}
@@ -1633,6 +2224,38 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
         </div>
         <div ref={bottomRef} />
       </div>
+
+      {/* ── Edit bar (replaces input when editing) ── */}
+      {editingMsg && (
+        <div className="border-t border-[#7C3AED]/40 bg-black px-4 py-3">
+          <div className="flex flex-col gap-2 rounded-2xl border border-[#7C3AED]/40 bg-[#1C1F2E] px-4 py-2.5">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-semibold uppercase tracking-wider text-[#A855F7]">Editando mensagem</span>
+              <button type="button" onClick={() => setEditingMsg(null)} className="text-white/40 hover:text-white transition">
+                <XIcon s={14} />
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                type="text"
+                value={editDraft}
+                onChange={(e) => setEditDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submitEditMsg(); } if (e.key === "Escape") setEditingMsg(null); }}
+                className="flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-white/30"
+              />
+              <button
+                type="button"
+                onClick={() => void submitEditMsg()}
+                disabled={!editDraft.trim() || editDraft.trim() === (editingMsg.type === "text" ? editingMsg.content : "")}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9] disabled:opacity-40"
+              >
+                <CheckIcon s={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Input bar ── */}
       <div className="border-t border-white/[0.08] bg-black px-4 py-3">
@@ -1701,7 +2324,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendText())}
                 placeholder="Mensagem..."
-                className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+                className="flex-1 bg-transparent text-[14px] text-white placeholder:text-white outline-none"
               />
 
               {/* Send / Mic toggle */}
@@ -1712,7 +2335,7 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
                 </button>
               ) : (
                 <button type="button" aria-label="Gravar áudio" onClick={recorder.start}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#1C1F2E] text-white/60 hover:border-[#7C3AED] hover:text-white transition">
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#1C1F2E] text-white hover:border-[#7C3AED] transition">
                   <MicIcon s={18} />
                 </button>
               )}
@@ -1720,18 +2343,35 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
           </div>
         )}
         {emojiOpen && !isRecording && (
-          <div className="mt-3 max-h-[32vh] overflow-y-auto rounded-[22px] border border-white/[0.08] bg-[#15161C] p-3 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-            <div className="flex flex-wrap gap-2">
-              {EMOJI_BANK.map((emoji, index) => (
+          <div className="mt-3 rounded-[22px] border border-white/[0.08] bg-[#15161C] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
+            {/* Abas de categorias */}
+            <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
+              {EMOJI_CATEGORIES.map((cat, i) => (
                 <button
-                  key={index}
+                  key={cat.label}
                   type="button"
-                  onClick={() => { setDraft((d) => d + emoji); setEmojiOpen(false); }}
-                  className="flex h-9 w-9 items-center justify-center rounded-2xl border border-white/[0.08] bg-[#0E0F15] text-[18px] transition hover:border-white/20 hover:bg-white/10"
+                  onClick={() => setEmojiCategory(i)}
+                  title={cat.label}
+                  className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${i === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}
                 >
-                  {emoji}
+                  {cat.icon}
                 </button>
               ))}
+            </div>
+            {/* Emojis da categoria ativa */}
+            <div className="max-h-[28vh] overflow-y-auto p-3">
+              <div className="flex flex-wrap gap-1.5">
+                {EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setDraft((d) => d + emoji)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-[#0E0F15] text-[18px] transition hover:border-white/20 hover:bg-white/10"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1742,6 +2382,9 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
         <CloudShareModal
           cloudId={cloudId}
           cloudTitle={cloudTitle}
+          cloudDuration={cloudMeta?.duration}
+          cloudMembersCount={cloudMeta?.membersCount}
+          cloudVisibility={cloudMeta?.visibility}
           onClose={() => setShareOpen(false)}
         />
       )}
@@ -1821,56 +2464,151 @@ export default function CloudChat({ cloudId, title, duration: durationProp, crea
 
       {/* ── Manage members modal ── */}
       {manageMembersOpen && (
+        <ManageMembersModal
+          cloudId={cloudId}
+          cloudTitle={cloudTitle}
+          isPrivate={cloudMeta?.visibility === "private"}
+          members={cloudMeta?.members ?? []}
+          isRemovingMember={isRemovingMember}
+          onRemoveMember={handleRemoveMember}
+          onClose={() => setManageMembersOpen(false)}
+        />
+      )}
+
+      {/* ── Cloud info modal ── */}
+      {infoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[18px] font-bold text-white">Gerenciar Membros</h3>
+              <h3 className="text-[18px] font-bold text-white">Informações da Cloud</h3>
               <button
                 type="button"
-                onClick={() => setManageMembersOpen(false)}
+                onClick={() => setInfoOpen(false)}
                 className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
               >
                 <XIcon s={16} />
               </button>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {cloudMeta?.members?.filter(m => m.role !== 'host').map((member) => (
-                <div key={member.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/[0.02]">
-                  <div className="flex items-center gap-3">
-                    {member.user.profile.avatarUrl ? (
-                      <img
-                        src={member.user.profile.avatarUrl}
-                        alt={member.user.profile.displayName}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
-                        {member.user.profile.displayName.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-[14px] font-semibold text-white">{member.user.profile.displayName}</p>
-                      <p className="text-[12px] text-white/50">@{member.user.profile.username}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMember(member.userId)}
-                    disabled={isRemovingMember}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition hover:bg-red-500/20 hover:text-red-500 disabled:opacity-50"
-                  >
-                    <XIcon s={14} />
-                  </button>
-                </div>
-              ))}
-              {(!cloudMeta?.members || cloudMeta.members.filter(m => m.role !== 'host').length === 0) && (
-                <p className="text-[14px] text-white/50 text-center py-8">Nenhum membro para gerenciar</p>
-              )}
+            <div className="space-y-4">
+              <div>
+                <p className="text-[12px] uppercase tracking-wider text-white/40 mb-1">Título</p>
+                <p className="text-[16px] text-white">{cloudTitle}</p>
+              </div>
+              <div>
+                <p className="text-[12px] uppercase tracking-wider text-white/40 mb-1">Duração</p>
+                <p className="text-[16px] text-white">{cloudMeta?.duration || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-[12px] uppercase tracking-wider text-white/40 mb-1">Participantes</p>
+                <p className="text-[16px] text-white">{participantCount} {participantCount === 1 ? 'pessoa' : 'pessoas'}</p>
+              </div>
+              <div>
+                <p className="text-[12px] uppercase tracking-wider text-white/40 mb-1">Criada em</p>
+                <p className="text-[16px] text-white">{cloudMeta?.createdAt ? new Date(cloudMeta.createdAt).toLocaleDateString('pt-BR') : 'N/A'}</p>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {descriptionOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="flex items-center justify-between gap-4 mb-4"><h3 className="text-[18px] font-bold text-white">Descrição da Cloud</h3><button type="button" onClick={() => setDescriptionOpen(false)} className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"><XIcon s={16} /></button></div>
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-white/75">{cloudMeta?.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Report modal ── */}
+      {reportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[18px] font-bold text-white">Denunciar Cloud</h3>
+              <button
+                type="button"
+                onClick={() => setReportOpen(false)}
+                className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <XIcon s={16} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-[14px] text-white/70">Por favor, selecione o motivo da denúncia:</p>
+              <div className="space-y-2">
+                {['Conteúdo inadequado', 'Spam', 'Harassment', 'Violação de privacidade', 'Outro'].map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => {
+                      setReportOpen(false);
+                      // Aqui você pode adicionar a lógica de envio da denúncia
+                      alert(`Denúncia enviada: ${reason}`);
+                    }}
+                    className="w-full px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 hover:text-white transition rounded-lg border border-white/5"
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Leave Cloud confirmation modal ── */}
+      {leaveConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[18px] font-bold text-white">Sair da Cloud</h3>
+              <button
+                type="button"
+                onClick={() => setLeaveConfirmOpen(false)}
+                className="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white"
+              >
+                <XIcon s={16} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-[14px] text-white/70">
+                Tem certeza que deseja sair desta Cloud? Você não poderá mais participar das conversas.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLeaveConfirmOpen(false)}
+                  disabled={isLeaving}
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-white/70 hover:bg-white/5 hover:text-white transition disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLeaveCloud}
+                  disabled={isLeaving}
+                  className="flex-1 px-4 py-3 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition disabled:opacity-50"
+                >
+                  {isLeaving ? "Saindo..." : "Sair"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Forward modal ── */}
+      {forwardMsg && (
+        <CloudShareModal
+          cloudId={cloudId}
+          cloudTitle={forwardMsg.type === "text" ? forwardMsg.content.slice(0, 60) : "Mensagem de áudio"}
+          cloudDuration={cloudMeta?.duration}
+          cloudMembersCount={cloudMeta?.membersCount}
+          cloudVisibility={cloudMeta?.visibility}
+          onClose={() => setForwardMsg(null)}
+        />
+      )}
     </div>
   );
 }
- 

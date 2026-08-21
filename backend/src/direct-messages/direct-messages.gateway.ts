@@ -274,6 +274,14 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     this.server.to(this.userRoom(senderConversation.participant.id)).emit('conversation:updated', recipientConversation);
   }
 
+  async broadcastMessageEdited(conversationId: string, message: DirectMessagePayload) {
+    this.server.to(this.conversationRoom(conversationId)).emit('message:edited', message);
+  }
+
+  async broadcastMessageDeleted(conversationId: string, messageId: string) {
+    this.server.to(this.conversationRoom(conversationId)).emit('message:deleted', { messageId });
+  }
+
   async broadcastConversationRead(userId: string, conversationId: string) {
     const conversation = await this.directMessagesService.markConversationRead(userId, conversationId);
     const readAt = new Date().toISOString();

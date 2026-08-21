@@ -245,6 +245,7 @@ export class DirectMessagesService {
 
       const preview = truncatePreview(content);
       const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      const recipientId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -256,6 +257,24 @@ export class DirectMessagesService {
           [unreadField]: {
             increment: 1,
           },
+        },
+      });
+
+      // Get sender profile for notification
+      const senderProfile = await tx.user.findUnique({
+        where: { id: userId },
+        include: { profile: true },
+      });
+
+      // Create notification for the recipient
+      await tx.notification.create({
+        data: {
+          userId: recipientId,
+          type: 'direct_message',
+          entityType: 'direct_message',
+          entityId: created.id,
+          title: 'Nova mensagem',
+          body: `${senderProfile?.profile?.displayName || 'Alguém'} te enviou uma mensagem`,
         },
       });
 
@@ -353,6 +372,7 @@ export class DirectMessagesService {
       });
 
       const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      const recipientId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -364,6 +384,24 @@ export class DirectMessagesService {
           [unreadField]: {
             increment: 1,
           },
+        },
+      });
+
+      // Get sender profile for notification
+      const senderProfile = await tx.user.findUnique({
+        where: { id: userId },
+        include: { profile: true },
+      });
+
+      // Create notification for the recipient
+      await tx.notification.create({
+        data: {
+          userId: recipientId,
+          type: 'direct_message',
+          entityType: 'direct_message',
+          entityId: created.id,
+          title: 'Nova mensagem',
+          body: `${senderProfile?.profile?.displayName || 'Alguém'} te enviou uma mensagem de áudio`,
         },
       });
 
@@ -681,6 +719,58 @@ export class DirectMessagesService {
     } as const;
   }
 
+  async editMessage(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    content: string,
+  ): Promise<DirectMessagePayload> {
+    await this.requireConversationAccess(conversationId, userId);
+
+    const message = await this.prisma.directMessage.findFirst({
+      where: { id: messageId, conversationId, deletedAt: null },
+      include: this.messageInclude(),
+    });
+
+    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (message.senderId !== userId)
+      throw new ForbiddenException({ message: 'Você só pode editar suas próprias mensagens.' });
+    if (message.type !== 'text')
+      throw new BadRequestException({ message: 'Apenas mensagens de texto podem ser editadas.' });
+
+    const trimmed = (content ?? '').trim();
+    if (!trimmed) throw new BadRequestException({ message: 'O conteúdo não pode ser vazio.' });
+
+    const updated = await this.prisma.directMessage.update({
+      where: { id: messageId },
+      data: { content: trimmed },
+      include: this.messageInclude(),
+    });
+
+    return this.mapMessage(updated);
+  }
+
+  async deleteMessage(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<void> {
+    await this.requireConversationAccess(conversationId, userId);
+
+    const message = await this.prisma.directMessage.findFirst({
+      where: { id: messageId, conversationId, deletedAt: null },
+    });
+
+    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (message.senderId !== userId)
+      throw new ForbiddenException({ message: 'Você só pode apagar suas próprias mensagens.' });
+
+    await this.prisma.directMessage.update({
+      where: { id: messageId },
+      data: { deletedAt: new Date() },
+    });
+  }
+
   private messageInclude() {
     return {
       sender: { include: { profile: true } },
@@ -787,6 +877,17 @@ export class DirectMessagesService {
     const cleanLabel = label?.trim();
 
     if (cleanLabel) {
+      // Detect cloud_invitation JSON and return human-readable preview
+      try {
+        const parsed = JSON.parse(cleanLabel) as { type?: string; cloudTitle?: string; cloudVisibility?: string };
+        if (parsed.type === 'cloud_invitation') {
+          const visibility = parsed.cloudVisibility === 'private' ? 'privada' : 'pública';
+          return parsed.cloudTitle
+            ? `Convite: ${parsed.cloudTitle}`
+            : `Convite para Cloud ${visibility}`;
+        }
+      } catch { /* not JSON, use as-is */ }
+
       return truncatePreview(cleanLabel);
     }
 

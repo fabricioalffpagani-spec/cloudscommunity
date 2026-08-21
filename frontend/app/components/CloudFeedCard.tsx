@@ -24,14 +24,14 @@ export type FeedCloud = {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
-    "5 min": 5 * 60,
-    "10 min": 10 * 60,
-    "30 min": 30 * 60,
+    "30min": 30 * 60,
     "1h": 60 * 60,
+    "2h": 2 * 60 * 60,
+    "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,
   };
 
-  return map[duration] ?? 5 * 60;
+  return map[duration] ?? 30 * 60;
 }
 
 function formatCountdown(seconds: number) {
@@ -94,8 +94,6 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
 }
 
 export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: () => void }) {
-  const [liked, setLiked] = useState(false);
-  const [likes, setLikes] = useState(Math.max(1, Math.round((cloud.hypes ?? 0) * 3.05)));
   const [hyped, setHyped] = useState(false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [shareOpen, setShareOpen] = useState(false);
@@ -120,11 +118,6 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleLike = () => {
-    setLiked((value) => !value);
-    setLikes((value) => (liked ? value - 1 : value + 1));
-  };
 
   const handleHypar = () => {
     setHyped((value) => !value);
@@ -172,12 +165,6 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
 
       <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:flex-row md:items-center">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
-          <button type="button" onClick={handleLike} className="inline-flex items-center gap-3 transition hover:text-pink-300">
-            <svg viewBox="0 0 24 24" width={22} height={22} fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="text-white/65">
-              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-            </svg>
-            <span>{likes}</span>
-          </button>
           <button type="button" onClick={handleHypar} className="inline-flex items-center gap-3 transition hover:text-orange-300">
             <FlameIcon s={24} className="text-[#FF632D]" />
             <span>{hypes}</span>
@@ -208,7 +195,7 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
               </span>
             )}
           </div>
-          <span className="text-[14px] text-white/55 md:text-[17px]">
+          <span className="text-[14px] text-white md:text-[17px]">
             {participantCount >= 1000 ? `${(participantCount / 1000).toFixed(1).replace(".0", "")}K participantes` : `${participantCount} participantes`}
           </span>
         </div>
@@ -216,7 +203,7 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
 
       <div className="mt-4 flex justify-end">
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility)}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa

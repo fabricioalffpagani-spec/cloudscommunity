@@ -220,3 +220,23 @@ export function TrashIcon({ s = 18, className = "" }: IconProps) {
     </svg>
   );
 }
+
+export function XIcon({ s = 16, className = "" }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6L6 18" />
+    </svg>
+  );
+}

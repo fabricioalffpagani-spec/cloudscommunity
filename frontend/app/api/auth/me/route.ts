@@ -7,3 +7,7 @@ export async function GET(req: Request) {
   return proxyJsonRequest(req, `/auth/me${url.search}`);
 }
 
+export async function PATCH(req: Request) {
+  return proxyJsonRequest(req, "/auth/me");
+}
+

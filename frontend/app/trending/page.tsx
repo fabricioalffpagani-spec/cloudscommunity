@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
+import { SearchModal } from "../components/SearchModal";
 
 type TrendingTopic = {
   word: string;
   count: number;
   rank: number;
-  trend: "up" | "down" | "same";
+  cloudIds: string[];
 };
 
 function SearchIcon({ s = 24 }: { s?: number }) {
@@ -39,172 +41,189 @@ function GearIcon({ s = 24 }: { s?: number }) {
   );
 }
 
-function TrendArrow({ trend }: { trend: "up" | "down" | "same" }) {
-  if (trend === "up") {
-    return (
-      <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m18 15-6-6-6 6"/>
-      </svg>
-    );
-  }
-  if (trend === "down") {
-    return (
-      <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="m6 9 6 6 6-6"/>
-      </svg>
-    );
-  }
+function RefreshIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 12h8"/>
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   );
 }
 
-// Mock data for trending topics - in production this would come from an API
-const generateTrendingTopics = (): TrendingTopic[] => {
-  const topics = [
-    { word: "Tech", count: 2847, trend: "up" as const },
-    { word: "Música", count: 2156, trend: "up" as const },
-    { word: "Futebol", count: 1923, trend: "down" as const },
-    { word: "Games", count: 1756, trend: "up" as const },
-    { word: "Filmes", count: 1432, trend: "same" as const },
-    { word: "Política", count: 1287, trend: "down" as const },
-    { word: "Cripto", count: 1156, trend: "up" as const },
-    { word: "Saúde", count: 1034, trend: "same" as const },
-    { word: "Cinema", count: 923, trend: "up" as const },
-    { word: "Educação", count: 876, trend: "down" as const },
-    { word: "Sustentabilidade", count: 754, trend: "up" as const },
-    { word: "Viagens", count: 698, trend: "same" as const },
-    { word: "Gastronomia", count: 623, trend: "up" as const },
-    { word: "Moda", count: 587, trend: "down" as const },
-    { word: "Arte", count: 534, trend: "same" as const },
-  ];
+// Barra de progresso visual relativa ao #1
+function BarFill({ count, max }: { count: number; max: number }) {
+  const pct = max > 0 ? Math.round((count / max) * 100) : 0;
+  return (
+    <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+      <div
+        className="h-full rounded-full bg-[#A855F7]/60 transition-all duration-700"
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
 
-  return topics.map((topic, index) => ({
-    ...topic,
-    rank: index + 1,
-  }));
-};
+function RankBadge({ rank }: { rank: number }) {
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#A855F7]/20 text-[#C084FC] font-bold text-[16px]">
+      {rank}
+    </div>
+  );
+}
 
 export default function TrendingPage() {
   const { user: sessionUser } = useSessionUser();
-  const [trendingTopics, setTrendingTopics] = useState<TrendingTopic[]>([]);
+  const [topics, setTopics] = useState<TrendingTopic[]>([]);
+  const [totalActiveClouds, setTotalActiveClouds] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setTrendingTopics(generateTrendingTopics());
+  const loadTrending = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/trending", { cache: "no-store" });
+      const data = (await res.json()) as { ok: boolean; topics: TrendingTopic[]; totalActiveClouds: number };
+      if (data.ok) {
+        setTopics(data.topics);
+        setTotalActiveClouds(data.totalActiveClouds ?? 0);
+        setLastUpdated(new Date());
+      }
+    } catch {
+      // mantém estado anterior em caso de erro
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   }, []);
 
-  return (
-    <div className="flex h-screen flex-col overflow-hidden text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+  // Carrega ao montar e atualiza a cada 60s
+  useEffect(() => {
+    void loadTrending();
+    const interval = setInterval(() => void loadTrending(), 60_000);
+    return () => clearInterval(interval);
+  }, [loadTrending]);
 
+  const maxCount = topics[0]?.count ?? 1;
+
+  return (
+    <div
+      className="flex h-screen flex-col overflow-hidden text-white"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
+    >
+      {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {/* ── Header ── */}
       <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
-        <div className="mx-auto flex h-[80px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-3">
-
-          {/* Logo */}
-          <a href="/" className="flex shrink-0 items-center gap-3 pb-1">
+        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
+          <a href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
           </a>
-
-          {/* Nav */}
-          <nav aria-label="Navegação" className="flex items-end gap-10 pb-1">
-            <a href="/" className="inline-flex h-10 items-center text-[18px] font-semibold text-white/50 transition hover:text-white">
-              For You
-            </a>
-            <a href="/following" className="inline-flex h-10 items-center text-[18px] font-semibold text-white/50 transition hover:text-white">
-              Seguindo
-            </a>
+          <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
+            <a href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">For You</a>
+            <a href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Seguindo</a>
           </nav>
-
-          {/* Right icons */}
-          <div className="flex items-center gap-3 pb-1">
-            <button type="button" aria-label="Buscar" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <SearchIcon s={24} />
+          <div className="flex items-center gap-4 pb-2">
+            <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
+              <SearchIcon s={28} />
             </button>
-            <button type="button" aria-label="Notificações" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <BellIcon s={24} />
+            <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <BellIcon s={28} />
             </button>
-            <a href="/settings" aria-label="Configurações" className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <GearIcon s={24} />
+            <a href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <GearIcon s={28} />
             </a>
-            <a href="/profile" aria-label="Meu perfil" className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[16px] font-bold text-white">
-              <SessionUserAvatar user={sessionUser} size={48} />
+            <a href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
+              <SessionUserAvatar user={sessionUser} size={56} />
             </a>
           </div>
         </div>
       </header>
 
       {/* ── Main Content ── */}
-      <main className="flex flex-1 overflow-hidden">
-        <div className="mx-auto w-full max-w-[1280px] px-8 py-8">
-          
+      <main className="flex flex-1 flex-col overflow-y-auto">
+        <div className="mx-auto w-full max-w-[860px] px-6 py-8">
+
           {/* Page Header */}
-          <div className="mb-8">
-            <h1 className="text-[48px] font-extrabold tracking-tight text-white mb-2" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}>
-              Trending
-            </h1>
-            <p className="text-[16px] text-white/60">
-              Os tópicos mais discutidos da plataforma agora mesmo
-            </p>
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-[44px] font-extrabold tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}>
+                Trending
+              </h1>
+              <p className="mt-1 text-[15px] text-white/50">
+                Palavras que mais aparecem nos títulos das Clouds ativas agora
+                {totalActiveClouds > 0 && (
+                  <span className="ml-2 rounded-full bg-white/[0.07] px-2.5 py-0.5 text-[13px] text-white/60">
+                    {totalActiveClouds} {totalActiveClouds === 1 ? "cloud ativa" : "clouds ativas"}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadTrending()}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-[13px] text-white/60 transition hover:bg-white/[0.10] hover:text-white disabled:opacity-40"
+            >
+              <RefreshIcon s={15} />
+              Atualizar
+            </button>
           </div>
 
-          {/* Trending List */}
+          {lastUpdated && !loading && (
+            <p className="mb-5 text-[12px] text-white/30">
+              Atualizado às {lastUpdated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
+
+          {/* Lista */}
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-[16px] text-white/50">Carregando trending topics...</div>
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-[80px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
+              ))}
+            </div>
+          ) : topics.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] py-20 text-center">
+              <FlameIcon s={40} />
+              <p className="text-[18px] font-semibold text-white/60">Nenhuma Cloud ativa no momento</p>
+              <p className="text-[14px] text-white/30">Quando as pessoas criarem Clouds, as palavras mais usadas vão aparecer aqui.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
-              {trendingTopics.map((topic) => (
-                <div
-                  key={topic.word}
-                  className="relative flex items-center gap-6 rounded-2xl border border-white/[0.08] bg-[#100828]/80 backdrop-blur-sm px-6 py-5 transition hover:border-[#A855F7]/30 hover:bg-[#180d38]/80"
-                >
-                  {/* Rank */}
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#A855F7]/20 text-[#C084FC] font-bold text-[18px]">
-                    {topic.rank}
-                  </div>
+            <div className="flex flex-col gap-3">
+              {topics.map((topic) => {
+                const searchUrl = `/trending/${encodeURIComponent(topic.word.toLowerCase())}`;
 
-                  {/* Topic Info */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-[20px] font-semibold text-white mb-1">
-                      {topic.word}
-                    </h3>
-                    <p className="text-[14px] text-white/50">
-                      {topic.count.toLocaleString()} menções
-                    </p>
-                  </div>
-
-                  {/* Trend Indicator */}
-                  <div className="flex items-center gap-2">
-                    <TrendArrow trend={topic.trend} />
-                    <span className={`text-[14px] font-semibold ${
-                      topic.trend === "up" ? "text-[#22C55E]" :
-                      topic.trend === "down" ? "text-[#EF4444]" :
-                      "text-white/50"
-                    }`}>
-                      {topic.trend === "up" ? "Em alta" :
-                       topic.trend === "down" ? "Em queda" :
-                       "Estável"}
-                    </span>
-                  </div>
-
-                  {/* Join Button */}
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-full border border-[#A855F7]/70 bg-transparent px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#A855F7]/20"
+                return (
+                  <div
+                    key={topic.word}
+                    className="group relative flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-[#100828]/80 px-5 py-4 transition hover:border-[#A855F7]/40 hover:bg-[#180d38]/80"
                   >
-                    Ver Clouds
-                  </button>
-                </div>
-              ))}
+                    {/* Rank */}
+                    <RankBadge rank={topic.rank} />
+
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-3">
+                        <span className="text-[19px] font-bold text-white">
+                          #{topic.word}
+                        </span>
+                        <span className="text-[13px] text-white/40">
+                          {topic.count} {topic.count === 1 ? "Cloud" : "Clouds"}
+                        </span>
+                      </div>
+                      <BarFill count={topic.count} max={maxCount} />
+                    </div>
+
+                    {/* Botão Ver Clouds */}
+                    <Link
+                      href={searchUrl}
+                      className="shrink-0 rounded-full border border-[#A855F7]/60 bg-transparent px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#A855F7]/20"
+                    >
+                      Ver Clouds
+                    </Link>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -212,34 +231,26 @@ export default function TrendingPage() {
 
       {/* ── Bottom Navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
-        <div className="mx-auto flex max-w-[480px] items-center justify-around px-4 py-5">
-
-          {/* Home */}
-          <a href="/" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+          <a href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
               <path d="M9 21V12h6v9"/>
             </svg>
             <span className="text-[13px] font-semibold">Home</span>
           </a>
-
-          {/* Messages */}
-          <a href="/messages" className="flex flex-col items-center gap-2 text-white/40 transition hover:text-white">
+          <a href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             <span className="text-[13px] font-semibold">Messages</span>
           </a>
-
-          {/* Trending */}
           <a href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
             <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </a>
-
         </div>
       </nav>
-
     </div>
   );
 }

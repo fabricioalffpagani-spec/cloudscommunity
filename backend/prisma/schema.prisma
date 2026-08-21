@@ -134,6 +134,7 @@ model Cloud {
   hypes        CloudHype[]
   messages     CloudMessage[]
   members      CloudMember[]
+  invites      CloudInvite[]
 
   @@index([authorId, createdAt])
   @@index([category])
@@ -249,6 +250,19 @@ model CloudMessageReaction {
   @@unique([messageId, userId, emoji])
   @@index([messageId])
   @@index([userId])
+}
+
+model CloudInvite {
+  id        String   @id @default(uuid()) @db.Uuid
+  cloudId   String   @db.Uuid
+  token     String   @unique @db.VarChar(64)
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  cloud     Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+
+  @@index([cloudId])
+  @@index([token])
 }
 
 model ConversationMember {

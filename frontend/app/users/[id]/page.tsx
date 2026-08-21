@@ -6,6 +6,14 @@ import { useParams } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 
+type FollowListUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isFollowing: boolean;
+};
+
 type PublicUserProfile = {
   id: string;
   username: string;
@@ -22,7 +30,6 @@ type PublicUserProfile = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
-  hypesCount: number;
   isFollowing: boolean;
   isSelf: boolean;
   profileUrl: string;
@@ -97,9 +104,9 @@ function formatMemberSince(value?: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
-function FieldStat({ value, label }: { value: string | number; label: string }) {
+function FieldStat({ value, label, onClick }: { value: string | number; label: string; onClick?: () => void }) {
   return (
-    <div>
+    <div onClick={onClick} className={onClick ? "cursor-pointer hover:opacity-80 transition" : ""}>
       <p className="text-[20px] font-bold text-white">{value}</p>
       <p className="text-[11px] uppercase tracking-widest text-white/40">{label}</p>
     </div>
@@ -120,14 +127,14 @@ function formatCountdown(seconds: number) {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
-    "5 min": 5 * 60,
-    "10 min": 10 * 60,
-    "30 min": 30 * 60,
+    "30min": 30 * 60,
     "1h": 60 * 60,
+    "2h": 2 * 60 * 60,
+    "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,
   };
 
-  return map[duration] ?? 5 * 60;
+  return map[duration] ?? 30 * 60;
 }
 
 function ActiveCloudCard({ cloud }: { cloud: PublicUserProfile["activeClouds"][number] }) {
@@ -176,6 +183,12 @@ export default function UserProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [followersModalOpen, setFollowersModalOpen] = useState(false);
+  const [followingModalOpen, setFollowingModalOpen] = useState(false);
+  const [followersList, setFollowersList] = useState<FollowListUser[]>([]);
+  const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [loadingFollowing, setLoadingFollowing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -258,12 +271,55 @@ export default function UserProfilePage() {
     }
   };
 
+  const loadFollowers = async () => {
+    if (!profile) return;
+    
+    setLoadingFollowers(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/followers`);
+      const payload = await response.json();
+      if (payload.ok && payload.users) {
+        setFollowersList(payload.users);
+      }
+    } catch (error) {
+      console.error("Failed to load followers:", error);
+    } finally {
+      setLoadingFollowers(false);
+    }
+  };
+
+  const loadFollowing = async () => {
+    if (!profile) return;
+    
+    setLoadingFollowing(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/following`);
+      const payload = await response.json();
+      if (payload.ok && payload.users) {
+        setFollowingList(payload.users);
+      }
+    } catch (error) {
+      console.error("Failed to load following:", error);
+    } finally {
+      setLoadingFollowing(false);
+    }
+  };
+
+  const openFollowersModal = () => {
+    setFollowersModalOpen(true);
+    loadFollowers();
+  };
+
+  const openFollowingModal = () => {
+    setFollowingModalOpen(true);
+    loadFollowing();
+  };
+
   const displayName = profile?.displayName ?? profile?.name ?? "Perfil";
   const handle = profile ? `@${profile.username}` : "@perfil";
   const initials = displayName.trim().charAt(0).toUpperCase() || "C";
   const followers = profile?.followersCount ?? 0;
   const following = profile?.followingCount ?? 0;
-  const hypesCount = profile?.hypesCount ?? 0;
   const cloudsCount = profile?.cloudsCount ?? 0;
   const memberSince = formatMemberSince(profile?.createdAt);
   const bio = profile?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
@@ -387,17 +443,9 @@ export default function UserProfilePage() {
           {bio && <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>}
 
           <div className="mt-5 flex items-center gap-6">
-            <FieldStat value={followers} label="Followers" />
+            <FieldStat value={followers} label="Followers" onClick={openFollowersModal} />
             <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={following} label="Following" />
-            <div className="h-8 w-px bg-white/10" />
-            <div className="flex flex-col items-center">
-              <p className="flex items-center gap-1 text-[20px] font-bold text-[#F97316]">
-                <FireIcon s={18} />
-                {hypesCount}
-              </p>
-              <p className="text-[11px] uppercase tracking-widest text-white/40">Hypes</p>
-            </div>
+            <FieldStat value={following} label="Following" onClick={openFollowingModal} />
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={cloudsCount} label="Clouds" />
           </div>
@@ -446,6 +494,90 @@ export default function UserProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Followers Modal */}
+      {followersModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setFollowersModalOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[18px] font-bold">Seguidores</h3>
+              <button onClick={() => setFollowersModalOpen(false)} className="text-white/50 hover:text-white">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {loadingFollowers ? (
+                <p className="text-center text-white/50 py-4">Carregando...</p>
+              ) : followersList.length === 0 ? (
+                <p className="text-center text-white/50 py-4">Nenhum seguidor ainda</p>
+              ) : (
+                <div className="space-y-3">
+                  {followersList.map((user) => (
+                    <Link
+                      key={user.id}
+                      href={`/users/${user.username}`}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition"
+                      onClick={() => setFollowersModalOpen(false)}
+                    >
+                      <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center text-white font-bold overflow-hidden">
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          user.displayName.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{user.displayName}</p>
+                        <p className="text-sm text-white/50">@{user.username}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Following Modal */}
+      {followingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setFollowingModalOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-[18px] font-bold">Seguindo</h3>
+              <button onClick={() => setFollowingModalOpen(false)} className="text-white/50 hover:text-white">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {loadingFollowing ? (
+                <p className="text-center text-white/50 py-4">Carregando...</p>
+              ) : followingList.length === 0 ? (
+                <p className="text-center text-white/50 py-4">Não seguindo ninguém ainda</p>
+              ) : (
+                <div className="space-y-3">
+                  {followingList.map((user) => (
+                    <Link
+                      key={user.id}
+                      href={`/users/${user.username}`}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition"
+                      onClick={() => setFollowingModalOpen(false)}
+                    >
+                      <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center text-white font-bold overflow-hidden">
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          user.displayName.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{user.displayName}</p>
+                        <p className="text-sm text-white/50">@{user.username}</p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
