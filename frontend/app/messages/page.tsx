@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -2151,9 +2151,9 @@ function MessagesPageContent() {
                 </Link>
                 <div>
                   <Link href={`/users/${activeConversation.peerId}`} className="text-[16px] font-semibold text-white hover:underline">{activeConversation.name}</Link>
-                  <p className={`text-[13px] ${activeConversation.status === "online" ? "text-[#22C55E]" : activeConversation.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
+                  <p className={`text-[13px] ${isActiveConversationTyping ? "text-white/60" : activeConversation.status === "online" ? "text-[#22C55E]" : activeConversation.status === "busy" ? "text-[#F59E0B]" : "text-white/40"}`}>
                     {isActiveConversationTyping
-                      ? "digitando..."
+                      ? `${activeConversation.name} digitando...`
                       : activeConversation.status === "online"
                         ? "online"
                         : activeConversation.status === "busy"
