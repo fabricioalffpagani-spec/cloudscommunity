@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { SearchModal } from "../components/SearchModal";
+import { NotificationsBell } from "../components/NotificationsPanel";
 import {
   SessionUserAvatar,
   SessionUserLink,
@@ -415,14 +416,14 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header({ onSearchOpen }: { onSearchOpen: () => void }) {
   const { user } = useSessionUser();
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+    <header className="relative z-50 shrink-0 bg-[#030208]">
       <div className="mx-auto flex h-[108px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-4">
           <HeaderBrand />
         </Link>
         <div className="flex items-center gap-4">
           <button type="button" aria-label="Buscar" onClick={onSearchOpen} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white hover:bg-white/[0.20]"><SearchIcon s={28}/></button>
-          <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]"><BellIcon s={28}/></button>
+          <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]" />
           <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] text-white hover:bg-[#6D28D9]"><GearIcon s={28}/></Link>
           <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[20px] font-bold text-white hover:bg-[#6D28D9]">
             <SessionUserAvatar user={user} size={56} />
@@ -442,11 +443,11 @@ export default function SettingsPage() {
     seguranca:<PanelSeguranca/>, dados:<PanelDados/>, sobre:<PanelSobre/>
   };
   return (
-    <div className="min-h-screen text-white"
+    <div className="flex h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       <Header onSearchOpen={() => setSearchOpen(true)} />
-      <div className="mx-auto flex max-w-[1280px] gap-8 px-5 pb-24 pt-[128px] lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-1 gap-8 overflow-y-auto px-5 pb-24 pt-4 lg:px-8">
         {/* Sidebar */}
         <aside className="hidden w-[220px] shrink-0 md:flex flex-col gap-1 pt-8">
           <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white/70">Settings</p>

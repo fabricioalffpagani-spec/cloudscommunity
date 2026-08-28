@@ -1,0 +1,13 @@
+# Override para desenvolvimento: hot-reload do frontend igual ao backend
+# Docker Compose carrega automaticamente este arquivo (docker compose up)
+# Para produção use: docker compose -f docker-compose.yml up --build
+services:
+  frontend:
+    build:
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./frontend:/app
+      - clouds_frontend_node_modules:/app/node_modules
+      - /app/.next

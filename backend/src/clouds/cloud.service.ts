@@ -13,7 +13,7 @@ import {
   ListCloudMessagesQuery,
 } from './cloud.types';
 
-const ALLOWED_DURATIONS = ['30min', '1h', '2h', '5h', '24h'] as const;
+const ALLOWED_DURATIONS = ['10min', '30min', '2h', '5h', '24h'] as const;
 
 type CloudWithRelations = Prisma.CloudGetPayload<{
   include: {
@@ -60,8 +60,8 @@ type CloudMessageWithRelations = Prisma.CloudMessageGetPayload<{
 }>;
 
 const DURATION_TO_SECONDS: Record<string, number> = {
+  '10min': 10 * 60,
   '30min': 30 * 60,
-  '1h': 60 * 60,
   '2h': 2 * 60 * 60,
   '5h': 5 * 60 * 60,
   '24h': 24 * 60 * 60,
@@ -70,12 +70,12 @@ const DURATION_TO_SECONDS: Record<string, number> = {
 function normalizeDuration(value: string): (typeof ALLOWED_DURATIONS)[number] | null {
   const compactValue = value.trim().toLowerCase().replace(/[\s.]/g, '');
   const aliases: Record<string, (typeof ALLOWED_DURATIONS)[number]> = {
+    '10min': '10min',
+    '10m': '10min',
+    '10minutos': '10min',
     '30min': '30min',
     '30m': '30min',
     '30minutos': '30min',
-    '1h': '1h',
-    '1hora': '1h',
-    '1horas': '1h',
     '2h': '2h',
     '2horas': '2h',
     '5h': '5h',
@@ -256,7 +256,7 @@ export class CloudService {
     if (!normalizedDuration) {
       throw new BadRequestException({
         message: 'Duração inválida.',
-        fieldErrors: { duration: 'Selecione 30min, 1h, 2h, 5h ou 24h.' },
+        fieldErrors: { duration: 'Selecione 10min, 30min, 2h, 5h ou 24h.' },
       });
     }
 

@@ -17,8 +17,8 @@ export type CarouselCloud = {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
+    "10min": 10 * 60,
     "30min": 30 * 60,
-    "1h": 60 * 60,
     "2h": 2 * 60 * 60,
     "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,
@@ -68,7 +68,7 @@ function isCloudActive(cloud: CarouselCloud, now: number) {
   return Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0) > 0;
 }
 
-export function CloudCarousel({ clouds }: { clouds: CarouselCloud[] }) {
+export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud[]; onCreateCloud?: () => void }) {
   const router = useRouter();
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
@@ -118,11 +118,27 @@ export function CloudCarousel({ clouds }: { clouds: CarouselCloud[] }) {
 
   if (activeClouds.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center rounded-[28px] border border-white/[0.06] bg-[#120a2e] p-8 text-center">
-        <p className="text-[20px] font-semibold text-white">Nenhuma cloud ativa</p>
-        <p className="mt-2 max-w-[420px] text-[14px] text-white/50">
-          Não há clouds ativas de quem você segue neste momento.
+      <div className="flex h-full flex-col items-center justify-center text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/empty-clouds-sad.png"
+          alt="Sem clouds ativas"
+          className="h-72 w-72 select-none"
+          style={{ mixBlendMode: "lighten" }}
+          draggable={false}
+        />
+        <p className="mt-4 text-[18px] font-semibold text-white/80">
+          Sem clouds de seus seguidores, que tal acordar o pessoal?
         </p>
+        {onCreateCloud && (
+          <button
+            type="button"
+            onClick={onCreateCloud}
+            className="mt-6 rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
+          >
+            Criar uma Cloud
+          </button>
+        )}
       </div>
     );
   }

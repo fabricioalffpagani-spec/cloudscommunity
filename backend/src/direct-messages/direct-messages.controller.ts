@@ -96,6 +96,33 @@ export class DirectMessagesController {
     };
   }
 
+  @Post('conversations/:conversationId/messages')
+  async sendTextMessage(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+    @Body() body: Record<string, unknown> = {},
+  ) {
+    const session = await this.authService.resolveSession(extractSessionToken(req));
+
+    if (!session) {
+      return { ok: false as const, message: 'Sessão não encontrada.' };
+    }
+
+    const message = await this.directMessagesService.sendTextMessage(session.user.id, {
+      conversationId,
+      content: typeof body.content === 'string' ? body.content : '',
+      clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : undefined,
+      replyToMessageId: typeof body.replyToMessageId === 'string' ? body.replyToMessageId : undefined,
+    });
+
+    await this.directMessagesGateway.broadcastMessageCreated(session.user.id, conversationId, message);
+
+    return {
+      ok: true as const,
+      message,
+    };
+  }
+
   @Post('conversations/:conversationId/audio')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),

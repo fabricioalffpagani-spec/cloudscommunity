@@ -323,7 +323,7 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
 
     const timer = setTimeout(() => {
       void this.stopTyping(socket, conversationId);
-    }, 2500);
+    }, 1000);
 
     this.typingTimers.set(key, timer);
   }

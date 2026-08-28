@@ -1,8 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { createContext, useContext, useCallback, useEffect, useState } from "react";
 
 export type SessionUser = {
   id: string;
@@ -41,41 +40,39 @@ type SessionPayload = {
 export function SessionUserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
-  const pathname = usePathname();
 
-  const refresh = useMemo(
-    () => async () => {
-      setStatus("loading");
+  const refresh = useCallback(async () => {
+    setStatus((current) =>
+      current === "authenticated" || current === "anonymous" ? current : "loading",
+    );
 
-      try {
-        const response = await fetch("/api/auth/me", {
-          cache: "no-store",
-          headers: {
-            "Cache-Control": "no-cache",
-          },
-        });
+    try {
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache",
+        },
+      });
 
-        const payload = (await response.json().catch(() => null)) as SessionPayload | null;
+      const payload = (await response.json().catch(() => null)) as SessionPayload | null;
 
-        if (!response.ok || !payload?.user) {
-          setUser(null);
-          setStatus(response.status === 401 ? "anonymous" : "error");
-          return;
-        }
-
-        setUser(payload.user);
-        setStatus("authenticated");
-      } catch {
+      if (!response.ok || !payload?.user) {
         setUser(null);
-        setStatus("error");
+        setStatus(response.status === 401 ? "anonymous" : "error");
+        return;
       }
-    },
-    [],
-  );
+
+      setUser(payload.user);
+      setStatus("authenticated");
+    } catch {
+      setUser(null);
+      setStatus("error");
+    }
+  }, []);
 
   useEffect(() => {
     void refresh();
-  }, [pathname, refresh]);
+  }, [refresh]);
 
   return (
     <SessionUserContext.Provider value={{ user, status, refresh }}>

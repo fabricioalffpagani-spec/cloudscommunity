@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
+import { NotificationsBell } from "../../components/NotificationsPanel";
 
 type FollowListUser = {
   id: string;
@@ -31,6 +32,7 @@ type PublicUserProfile = {
   followingCount: number;
   cloudsCount: number;
   isFollowing: boolean;
+  isFollowRequested?: boolean;
   isSelf: boolean;
   profileUrl: string;
   activeClouds: Array<{
@@ -127,8 +129,8 @@ function formatCountdown(seconds: number) {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
+    "10min": 10 * 60,
     "30min": 30 * 60,
-    "1h": 60 * 60,
     "2h": 2 * 60 * 60,
     "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,
@@ -254,7 +256,7 @@ export default function UserProfilePage() {
 
     try {
       const response = await fetch(`/api/follow/${encodeURIComponent(profile.username)}`, {
-        method: profile.isFollowing ? "DELETE" : "POST",
+        method: profile.isFollowing || profile.isFollowRequested ? "DELETE" : "POST",
         headers: { "Content-Type": "application/json" },
       });
       const payload = await response.json().catch(() => null) as { ok?: boolean; user?: PublicUserProfile; message?: string } | null;
@@ -335,16 +337,12 @@ export default function UserProfilePage() {
     return (
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between bg-transparent px-5 py-3">
           <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
           </Link>
           <span className="text-[14px] font-semibold text-white">Profile</span>
-          <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-            </svg>
-          </Link>
+          <NotificationsBell buttonClassName="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center text-white/55">
@@ -359,7 +357,7 @@ export default function UserProfilePage() {
     return (
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between bg-transparent px-5 py-3">
           <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon />
           </Link>
@@ -381,19 +379,22 @@ export default function UserProfilePage() {
   return (
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-3 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 bg-transparent px-5 py-3">
         <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />
         </Link>
         <span className="truncate text-[14px] font-semibold text-white">{displayName}</span>
-        <button
-          type="button"
-          aria-label="Compartilhar perfil"
-          onClick={() => setShareOpen((open) => !open)}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10"
-        >
-          <ShareIcon />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationsBell buttonClassName="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
+          <button
+            type="button"
+            aria-label="Compartilhar perfil"
+            onClick={() => setShareOpen((open) => !open)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10"
+          >
+            <ShareIcon />
+          </button>
+        </div>
       </div>
 
       {shareOpen && (
@@ -477,19 +478,30 @@ export default function UserProfilePage() {
                 Edit profile
               </Link>
             ) : (
-              <button
-                type="button"
-                onClick={toggleFollow}
-                disabled={mutating}
-                className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-[14px] font-semibold transition ${
-                  profile.isFollowing
-                    ? "border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/10"
-                    : "bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
-                } ${mutating ? "opacity-60" : ""}`}
-              >
-                {profile.isFollowing && <CheckIcon />}
-                {mutating ? "..." : profile.isFollowing ? "Following" : "Follow"}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={toggleFollow}
+                  disabled={mutating}
+                  className={`inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-[14px] font-semibold transition ${
+                    profile.isFollowing || profile.isFollowRequested
+                      ? "border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/10"
+                      : "bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+                  } ${mutating ? "opacity-60" : ""}`}
+                >
+                  {profile.isFollowing && <CheckIcon />}
+                  {mutating ? "..." : profile.isFollowing ? "Following" : profile.isFollowRequested ? "Solicitado" : "Follow"}
+                </button>
+                {(!profile.isPrivate || profile.isFollowing) && (
+                  <Link
+                    href={`/messages?id=${encodeURIComponent(profile.id)}`}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-white/10"
+                  >
+                    <MessageIcon />
+                    Mensagem
+                  </Link>
+                )}
+              </>
             )}
           </div>
         </div>

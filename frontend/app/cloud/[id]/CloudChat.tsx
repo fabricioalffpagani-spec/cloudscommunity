@@ -1,13 +1,14 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 
 import { FlameIcon } from "../../components/FlameIcon";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
+import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 
 type CloudPayload = {
   id: string;
@@ -128,6 +129,7 @@ type RecordedAudio = {
   blob: Blob;
   durationMs: number;
   mimeType: string;
+  peaks?: number[];
 };
 
 type RecorderState = "idle" | "recording" | "paused";
@@ -153,6 +155,7 @@ type ChatMessage = {
   pending?: boolean;
   clientMessageId?: string | null;
   audioDurationMs?: number | null;
+  audioPeaks?: number[] | null;
 };
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
@@ -333,6 +336,7 @@ function mergeMessage(list: ChatMessage[], next: ChatMessage) {
         ...next,
         pending: false,
         audioDurationMs: next.audioDurationMs ?? item.audioDurationMs ?? null,
+        audioPeaks: next.audioPeaks ?? item.audioPeaks ?? null,
       };
     });
   }
@@ -362,6 +366,8 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     time: timeLabel(payload.createdAt),
     isoTime: payload.createdAt,
     clientMessageId: payload.clientMessageId,
+    audioDurationMs: (payload as { audioDurationMs?: number | null }).audioDurationMs ?? null,
+    audioPeaks: (payload as { peaks?: number[] | null }).peaks ?? null,
   };
 }
 
@@ -460,7 +466,7 @@ function HeaderFireIcon({ active = false }: { active?: boolean }) {
 
 function HeaderForwardIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible transition-transform duration-200 group-hover:translate-x-[2px] group-hover:-translate-y-[2px]">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible transition-transform duration-200 group-hover:translate-x-[2px] group-hover:-translate-y-[2px]">
       <path d="M22 2L11 13" />
       <path d="M22 2L15 22 11 13 2 9l20-7z" />
     </svg>
@@ -510,6 +516,23 @@ function AnimatedTrashIcon({ s = 24 }: { s?: number }) {
   );
 }
 
+function downsampleWaveform(raw: number[], target: number): number[] {
+  if (raw.length === 0) return [];
+  const max = Math.max(...raw, 0.0001);
+  const normalized = raw.map((v) => Math.max(0.05, v / max));
+  if (normalized.length <= target) return normalized;
+  const out: number[] = [];
+  const chunk = normalized.length / target;
+  for (let i = 0; i < target; i++) {
+    const start = Math.floor(i * chunk);
+    const end = Math.max(start + 1, Math.floor((i + 1) * chunk));
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += normalized[j];
+    out.push(sum / (end - start));
+  }
+  return out;
+}
+
 function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
   const [state, setState] = useState<RecorderState>("idle");
   const [seconds, setSeconds] = useState(0);
@@ -517,7 +540,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sampleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const secondsRef = useRef(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const peaksRef = useRef<number[]>([]);
 
   const stopTimers = useCallback(() => {
     if (timerRef.current) {
@@ -526,12 +554,45 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     }
   }, []);
 
+  const stopSampler = useCallback(() => {
+    if (sampleTimerRef.current) {
+      clearInterval(sampleTimerRef.current);
+      sampleTimerRef.current = null;
+    }
+  }, []);
+
+  const startSampler = useCallback(() => {
+    stopSampler();
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const buf = new Uint8Array(analyser.fftSize);
+    sampleTimerRef.current = setInterval(() => {
+      analyser.getByteTimeDomainData(buf);
+      let max = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const d = Math.abs(buf[i] - 128) / 128;
+        if (d > max) max = d;
+      }
+      peaksRef.current.push(max);
+    }, 80);
+  }, [stopSampler]);
+
   const cleanupStream = useCallback(() => {
+    stopSampler();
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch { /* ignore */ }
+      sourceRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try { void audioCtxRef.current.close(); } catch { /* ignore */ }
+      audioCtxRef.current = null;
+    }
+    analyserRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-  }, []);
+  }, [stopSampler]);
 
   const start = useCallback(async () => {
     if (state !== "idle") {
@@ -552,6 +613,23 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       setSeconds(0);
       setState("recording");
 
+      try {
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = new AC();
+        void audioCtx.resume?.();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioCtxRef.current = audioCtx;
+        sourceRef.current = source;
+        analyserRef.current = analyser;
+        peaksRef.current = [];
+        startSampler();
+      } catch {
+        peaksRef.current = [];
+      }
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
@@ -561,10 +639,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       recorder.onstop = () => {
         stopTimers();
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const rawPeaks = peaksRef.current.length ? peaksRef.current : [0.3];
         onStop({
           blob,
           durationMs: secondsRef.current * 1000,
           mimeType: recorder.mimeType || "audio/webm",
+          peaks: downsampleWaveform(rawPeaks, 40),
         });
         chunksRef.current = [];
         cleanupStream();
@@ -587,7 +667,7 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       secondsRef.current = 0;
       throw new Error("Permissão de microfone negada.");
     }
-  }, [cleanupStream, onStop, state, stopTimers]);
+  }, [cleanupStream, onStop, state, startSampler, stopTimers]);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
@@ -606,8 +686,9 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
 
     recorder.pause();
     stopTimers();
+    stopSampler();
     setState("paused");
-  }, [stopTimers]);
+  }, [stopTimers, stopSampler]);
 
   const resume = useCallback(() => {
     const recorder = recorderRef.current;
@@ -616,12 +697,13 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     }
 
     recorder.resume();
+    startSampler();
     timerRef.current = setInterval(() => {
       secondsRef.current += 1;
       setSeconds(secondsRef.current);
     }, 1000);
     setState("recording");
-  }, []);
+  }, [startSampler]);
 
   const cancel = useCallback(() => {
     const recorder = recorderRef.current;
@@ -705,15 +787,28 @@ function MessageReceipt() {
 
 function CloudPinIcon({ pinned }: { pinned?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" width={14} height={14} fill={pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 4v5l3 3v2H7v-2l3-3V4" />
+      <path d="M12 14v6" />
+      {pinned && <path d="M9 4h6" strokeWidth="3" />}
+    </svg>
+  );
+}
+
+function CloudEmojiIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
     </svg>
   );
 }
 
 function CloudReplyIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="9 17 4 12 9 7" />
       <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
     </svg>
@@ -722,10 +817,10 @@ function CloudReplyIcon() {
 
 function CloudDotsIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden="true">
-      <circle cx="12" cy="5" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="12" cy="19" r="1.8" />
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true">
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
     </svg>
   );
 }
@@ -737,6 +832,8 @@ function CloudMsgMenu({
   isPinned,
   onPin,
   onForward,
+  onEdit,
+  onDelete,
   onClose,
 }: {
   msg: ChatMessage;
@@ -745,12 +842,15 @@ function CloudMsgMenu({
   isPinned: boolean;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
+  onEdit: (msg: ChatMessage) => void;
+  onDelete: (msg: ChatMessage) => void;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const isOwn = isRight;
 
   useEffect(() => {
     const handle = (e: MouseEvent) => {
@@ -788,6 +888,52 @@ function CloudMsgMenu({
     }
   };
 
+  const items: { key: string; label: string; action: () => void; danger?: boolean; show: boolean; icon: ReactNode }[] = [
+    {
+      key: "copy",
+      label: copied ? "Copiado!" : "Copiar",
+      action: handleCopy,
+      show: Boolean(textContent),
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>,
+    },
+    {
+      key: "translate",
+      label: translating ? "Traduzindo…" : translated ? "Traduzido ✓" : "Traduzir",
+      action: () => void handleTranslate(),
+      show: Boolean(textContent),
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>,
+    },
+    {
+      key: "forward",
+      label: "Encaminhar",
+      action: () => { onForward(msg); onClose(); },
+      show: true,
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>,
+    },
+    {
+      key: "edit",
+      label: "Editar",
+      action: () => { onEdit(msg); onClose(); },
+      show: isOwn && msg.kind === "text",
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>,
+    },
+    {
+      key: "unsend",
+      label: "Cancelar envio",
+      action: () => { onDelete(msg); onClose(); },
+      danger: true,
+      show: isOwn,
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>,
+    },
+    {
+      key: "pin",
+      label: isPinned ? "Desafixar" : "Fixar mensagem",
+      action: () => { onPin(msg); onClose(); },
+      show: !isOwn && isCloudAuthor,
+      icon: <CloudPinIcon pinned={isPinned} />,
+    },
+  ];
+
   return (
     <div
       ref={menuRef}
@@ -800,88 +946,73 @@ function CloudMsgMenu({
           <p className="text-[13px] text-white leading-snug">{translated}</p>
         </div>
       )}
-      {textContent && (
-        <button type="button" onClick={handleCopy} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white">
-          <span className="text-white/50">
-            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-          </span>
-          {copied ? "Copiado!" : "Copiar"}
+      {items.filter((item) => item.show).map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={item.action}
+          disabled={translating && item.key === "translate"}
+          className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium transition hover:bg-white/[0.06] disabled:opacity-50 ${item.danger ? "text-red-400 hover:text-red-300" : "text-white/80 hover:text-white"}`}
+        >
+          <span className={item.danger ? "text-red-400" : "text-white/50"}>{item.icon}</span>
+          {item.label}
         </button>
-      )}
-      {textContent && (
-        <button type="button" onClick={() => void handleTranslate()} disabled={translating} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white disabled:opacity-50">
-          <span className="text-white/50">
-            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg>
-          </span>
-          {translating ? "Traduzindo…" : translated ? "Traduzido ✓" : "Traduzir"}
-        </button>
-      )}
-      {isCloudAuthor && (
-        <button type="button" onClick={() => { onPin(msg); onClose(); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white">
-          <span className="text-white/50">
-            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>
-          </span>
-          {isPinned ? "Desafixar" : "Fixar mensagem"}
-        </button>
-      )}
-      <button type="button" onClick={() => { onForward(msg); onClose(); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] font-medium text-white/80 transition hover:bg-white/[0.06] hover:text-white">
-        <span className="text-white/50">
-          <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
-        </span>
-        Encaminhar
-      </button>
+      ))}
+    </div>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="typing-ellipsis inline-flex items-center gap-[5px]" aria-hidden="true">
+      <span className="h-[8px] w-[8px] rounded-full bg-white" />
+      <span className="h-[8px] w-[8px] rounded-full bg-white" />
+      <span className="h-[8px] w-[8px] rounded-full bg-white" />
+    </span>
+  );
+}
+
+/* Balão iMessage com animação de entrada/saída */
+function TypingBubble({ avatars, exiting }: { avatars: Array<{ id: string; name: string; avatarUrl: string | null }>; exiting?: boolean }) {
+  return (
+    <div className={`flex items-end gap-2 ${exiting ? "typing-bubble-exit" : "typing-bubble-enter"}`} style={{ transformOrigin: "left bottom" }}>
+      {/* Avatars empilhados */}
+      <div className="flex -space-x-2 shrink-0">
+        {avatars.slice(0, 3).map((p) => (
+          <UserAvatar
+            key={p.id}
+            user={{ id: p.id, username: p.id, displayName: p.name, avatarUrl: p.avatarUrl }}
+            size={26}
+          />
+        ))}
+      </div>
+      {/* Balão azul com bolinhas */}
+      <div
+        className="flex items-center gap-1 rounded-[18px] rounded-bl-[4px] px-4 py-[10px]"
+        style={{ background: "#2B6BFF" }}
+      >
+        <TypingDots />
+      </div>
     </div>
   );
 }
 
 function AudioBubble({ msg, own }: { msg: ChatMessage; own?: boolean }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    const a = audioRef.current;
-    if (!a) {
-      return;
-    }
-
-    const onEnded = () => setPlaying(false);
-    a.addEventListener("ended", onEnded);
-    return () => a.removeEventListener("ended", onEnded);
-  }, []);
-
-  return (
-    <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`} style={{ minWidth: 220 }}>
-      <button
-        type="button"
-        onClick={() => {
-          const audio = audioRef.current;
-          if (!audio) {
-            return;
-          }
-
-          if (playing) {
-            audio.pause();
-            setPlaying(false);
-            return;
-          }
-
-          void audio.play();
-          setPlaying(true);
-        }}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${own ? "bg-white/20 hover:bg-white/30" : "bg-[#7C3AED] hover:bg-[#6D28D9]"}`}
-        aria-label={playing ? "Pausar" : "Reproduzir"}
-      >
-        {playing ? <PauseIcon s={14} /> : <PlayIcon s={14} />}
-      </button>
-
-      <div className="flex flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2 text-[12px] text-white/60">
-          <span>Áudio</span>
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{msg.audioDurationMs ? `${Math.max(1, Math.round(msg.audioDurationMs / 1000))}s` : "0s"}</span>
-        </div>
-        {msg.mediaUrl && <audio ref={audioRef} src={msg.mediaUrl} className="hidden" preload="metadata" />}
+  if (!msg.mediaUrl) {
+    return (
+      <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`} style={{ minWidth: 220 }}>
+        <span className="text-[12px] text-white/60">Áudio indisponível</span>
       </div>
-    </div>
+    );
+  }
+  return (
+    <AudioWaveformPlayer
+      src={msg.mediaUrl}
+      peaks={msg.audioPeaks ?? undefined}
+      durationMs={msg.audioDurationMs ?? null}
+      isOwn={Boolean(own)}
+      roundedCorner={own ? "right" : "left"}
+    />
   );
 }
 
@@ -903,6 +1034,8 @@ function CloudMessageBubble({
   onReply,
   onPin,
   onForward,
+  onEdit,
+  onDelete,
   isCloudAuthor,
   isPinned,
 }: {
@@ -911,6 +1044,8 @@ function CloudMessageBubble({
   onReply: (msg: ChatMessage) => void;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
+  onEdit: (msg: ChatMessage) => void;
+  onDelete: (msg: ChatMessage) => void;
   isCloudAuthor: boolean;
   isPinned: boolean;
 }) {
@@ -936,125 +1071,131 @@ function CloudMessageBubble({
         />
       </div>
 
-      <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`} style={{ maxWidth: "74%" }}>
-        <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
-          <span className="text-[12px] font-semibold text-white/40">{own ? "Você" : msg.senderName}</span>
-          {isPinned && <span className="text-[10px] text-[#A855F7]">📌 fixada</span>}
+      <div className={`flex items-center gap-2 ${own ? "flex-row-reverse" : "flex-row"}`} style={{ maxWidth: "74%" }}>
+        <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
+          <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
+            <span className="text-[12px] font-semibold text-white/40">{own ? "Você" : msg.senderName}</span>
+            {isPinned && <span className="flex items-center gap-1 text-[10px] text-[#A855F7]"><CloudPinIcon pinned={true} /> fixada</span>}
+          </div>
+
+          {msg.replyTo && (
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[12px] text-white/70">
+              <p className="font-semibold text-white">{msg.replyTo.sender}</p>
+              <p className="mt-1 line-clamp-2 leading-snug">{msg.replyTo.content || ""}</p>
+            </div>
+          )}
+
+          {msg.kind === "audio" ? (
+            <AudioBubble msg={msg} own={own} />
+          ) : msg.kind === "image" ? (
+            <ImageBubble msg={msg} />
+          ) : msg.kind === "link" ? (
+            <div className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+              {msg.content}
+            </div>
+          ) : (
+            <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+              {msg.content}
+              {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
+            </div>
+          )}
+
+          {/* Reactions */}
+          {Object.keys(groupedReactions).length > 0 && (
+            <div className={`flex flex-wrap gap-1 px-1 ${own ? "justify-end" : ""}`}>
+              {Object.entries(groupedReactions).map(([emoji, reactions]) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReact(msg.id, emoji)}
+                  className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20"
+                  title={`${reactions.length} reação(ões) com ${emoji}`}
+                >
+                  <span>{emoji}</span>
+                  <span className="ml-1 text-white/70">{reactions.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Message actions row */}
+          <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
+            <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
+              <span>{msg.time}</span>
+              {own && !msg.pending && <MessageReceipt />}
+            </div>
+          </div>
         </div>
 
-        {msg.replyTo && (
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[12px] text-white/70">
-            <p className="font-semibold text-white">{msg.replyTo.sender}</p>
-            <p className="mt-1 line-clamp-2 leading-snug">{msg.replyTo.content || ""}</p>
-          </div>
-        )}
-
-        {msg.kind === "audio" ? (
-          <AudioBubble msg={msg} own={own} />
-        ) : msg.kind === "image" ? (
-          <ImageBubble msg={msg} />
-        ) : msg.kind === "link" ? (
-          <div className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            {msg.content}
-          </div>
-        ) : (
-          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            {msg.content}
-            {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
-          </div>
-        )}
-
-        {/* Action icons row */}
-        <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
-          <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
-            <span>{msg.time}</span>
-            {own && !msg.pending && <MessageReceipt />}
-          </div>
-          {/* Hover action icons */}
-          <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${own ? "mr-2" : "ml-2"}`}>
-            {isCloudAuthor && (
-              <button
-                type="button"
-                title={isPinned ? "Desafixar" : "Fixar mensagem"}
-                onClick={() => onPin(msg)}
-                className={`flex h-7 w-7 items-center justify-center rounded-full transition hover:bg-white/10 ${isPinned ? "text-[#A855F7]" : "text-white"}`}
-              >
-                <CloudPinIcon pinned={isPinned} />
-              </button>
-            )}
-            {/* Quick emoji picker */}
-            <div className="relative">
-              <button
-                type="button"
-                title="Reagir"
-                onClick={() => setEmojiPickerOpen((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-              >
-                <span className="text-[14px] leading-none">😀</span>
-              </button>
-              {emojiPickerOpen && (
-                <div className={`absolute bottom-full z-50 mb-1 flex gap-1 rounded-2xl border border-white/10 bg-[#15161C] p-2 shadow-xl ${own ? "right-0" : "left-0"}`}>
-                  {["❤️","😂","😮","😢","👍","🔥"].map((e) => (
-                    <button
-                      key={e}
-                      type="button"
-                      onClick={() => { onReact(msg.id, e); setEmojiPickerOpen(false); }}
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/10"
-                    >
-                      {e}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+        {/* Action icons aligned to the side of message box */}
+        <div className={`flex items-start gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${own ? "ml-2" : "mr-2"}`}>
+          {isCloudAuthor && (
             <button
               type="button"
-              title="Responder"
-              onClick={() => onReply(msg)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10"
+              title={isPinned ? "Desafixar" : "Fixar mensagem"}
+              onClick={() => onPin(msg)}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-white/15 ${isPinned ? "text-[#A855F7]" : "text-white"}`}
             >
-              <CloudReplyIcon />
+              <CloudPinIcon pinned={isPinned} />
             </button>
-            <div className="relative">
-              <button
-                type="button"
-                title="Mais opções"
-                onClick={() => setMsgMenuOpen((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10"
-              >
-                <CloudDotsIcon />
-              </button>
-              {msgMenuOpen && (
-                <CloudMsgMenu
-                  msg={msg}
-                  isRight={own}
-                  isCloudAuthor={isCloudAuthor}
-                  isPinned={isPinned}
-                  onPin={onPin}
-                  onForward={onForward}
-                  onClose={() => setMsgMenuOpen(false)}
-                />
-              )}
-            </div>
+          )}
+          {/* Quick emoji picker */}
+          <div className="relative">
+            <button
+              type="button"
+              title="Reagir"
+              onClick={() => setEmojiPickerOpen((v) => !v)}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15 hover:text-white"
+            >
+              <CloudEmojiIcon />
+            </button>
+            {emojiPickerOpen && (
+              <div className={`absolute bottom-full z-50 mb-1 flex gap-1 rounded-2xl border border-white/10 bg-[#15161C] p-2 shadow-xl ${own ? "right-0" : "left-0"}`}>
+                {["❤️","😂","😮","😢","👍","🔥"].map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => { onReact(msg.id, e); setEmojiPickerOpen(false); }}
+                    className="flex h-8 w-8 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/10"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            title="Responder"
+            onClick={() => onReply(msg)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
+          >
+            <CloudReplyIcon />
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              title="Mais opções"
+              onClick={() => setMsgMenuOpen((v) => !v)}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
+            >
+              <CloudDotsIcon />
+            </button>
+            {msgMenuOpen && (
+              <CloudMsgMenu
+                msg={msg}
+                isRight={own}
+                isCloudAuthor={isCloudAuthor}
+                isPinned={isPinned}
+                onPin={onPin}
+                onForward={onForward}
+                onEdit={onEdit}
+                onDelete={onDelete}
+                onClose={() => setMsgMenuOpen(false)}
+              />
+            )}
           </div>
         </div>
-
-        {Object.keys(groupedReactions).length > 0 && (
-          <div className={`flex flex-wrap gap-1 px-1 ${own ? "justify-end" : ""}`}>
-            {Object.entries(groupedReactions).map(([emoji, reactions]) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => onReact(msg.id, emoji)}
-                className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20"
-                title={`${reactions.length} reação(ões) com ${emoji}`}
-              >
-                <span>{emoji}</span>
-                <span className="ml-1 text-white/70">{reactions.length}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1086,6 +1227,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
   const [contacts, setContacts] = useState<PublicUserProfile[]>([]);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [typingUserIds, setTypingUserIds] = useState<Record<string, boolean>>({});
+  const [isLocallyTyping, setIsLocallyTyping] = useState(false);
+  const [typingExiting, setTypingExiting] = useState(false);
+  const typingExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState<{ name: string } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -1102,8 +1246,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
   const [isManagingMemberId, setIsManagingMemberId] = useState<string | null>(null);
   const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const activeCloudIdRef = useRef(cloudId);
-  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const outgoingTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const incomingTypingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     activeCloudIdRef.current = cloudId;
@@ -1206,26 +1354,32 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
 
   const isCloudAuthor = Boolean(user?.id && cloud?.authorId && user.id === cloud.authorId);
   const isPrivateCloud = (cloud?.visibility ?? visibility ?? "public") === "private";
-  const typingNames = Object.entries(typingUserIds)
+  const typingPeople = Object.entries(typingUserIds)
     .filter(([, isTyping]) => isTyping)
     .map(([typingUserId]) => {
       const member = cloud?.members?.find((entry) => entry.userId === typingUserId);
       if (member) {
-        return member.user.displayName;
+        return {
+          id: typingUserId,
+          name: member.user.displayName || member.user.username || "Pessoa",
+          avatarUrl: member.user.avatarUrl,
+        };
       }
 
       if (cloud?.authorId === typingUserId) {
-        return cloud.author?.name || cloud.author?.username || "Pessoa";
+        return {
+          id: typingUserId,
+          name: cloud.author?.name || cloud.author?.username || "Pessoa",
+          avatarUrl: cloud.author?.avatarUrl ?? null,
+        };
       }
 
-      return null;
-    })
-    .filter((value): value is string => Boolean(value));
-  const typingLabel = typingNames.length === 0
-    ? ""
-    : typingNames.length === 1
-      ? `${typingNames[0]} digitando...`
-      : `${typingNames.slice(0, 2).join(", ")}${typingNames.length > 2 ? ` e mais ${typingNames.length - 2}` : ""} digitando...`;
+      return {
+        id: typingUserId,
+        name: "Pessoa",
+        avatarUrl: null as string | null,
+      };
+    });
 
   const handleToggleHype = useCallback(async () => {
     if (!user || !cloud) {
@@ -1406,24 +1560,33 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
         return;
       }
 
+      const existingTimer = incomingTypingTimersRef.current[payload.userId];
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        delete incomingTypingTimersRef.current[payload.userId];
+      }
+
       setTypingUserIds((prev) => ({
         ...prev,
         [payload.userId]: payload.isTyping,
       }));
 
-      if (typingTimerRef.current) {
-        clearTimeout(typingTimerRef.current);
+      if (!payload.isTyping) {
+        return;
       }
 
-      typingTimerRef.current = setTimeout(() => {
+      incomingTypingTimersRef.current[payload.userId] = setTimeout(() => {
         setTypingUserIds((prev) => ({
           ...prev,
           [payload.userId]: false,
         }));
-      }, 3500);
+        delete incomingTypingTimersRef.current[payload.userId];
+      }, 1000);
     });
 
     return () => {
+      Object.values(incomingTypingTimersRef.current).forEach(clearTimeout);
+      incomingTypingTimersRef.current = {};
       socket.emit("cloud:leave", { cloudId });
       socket.disconnect();
       socketRef.current = null;
@@ -1449,7 +1612,31 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
     if (messages.length > 0) {
       bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
     }
-  }, [messages]);
+  }, [isLocallyTyping, messages, typingUserIds]);
+
+  // Animação de saída do balão de digitação
+  const prevTypingCountRef = useRef(0);
+  useEffect(() => {
+    const count = typingPeople.length;
+    if (prevTypingCountRef.current > 0 && count === 0) {
+      setTypingExiting(true);
+      if (typingExitTimerRef.current) clearTimeout(typingExitTimerRef.current);
+      typingExitTimerRef.current = setTimeout(() => setTypingExiting(false), 220);
+    }
+    prevTypingCountRef.current = count;
+  }, [typingPeople.length]);
+
+  useEffect(() => {
+    if (!draft.trim()) {
+      setIsLocallyTyping(false);
+      return;
+    }
+    setIsLocallyTyping(true);
+    localTypingPreviewTimerRef.current = setTimeout(() => setIsLocallyTyping(false), 1000);
+    return () => {
+      if (localTypingPreviewTimerRef.current) clearTimeout(localTypingPreviewTimerRef.current);
+    };
+  }, [draft]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -1460,14 +1647,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
     const currentTyping = Boolean(draft.trim());
     socket.emit("cloud:typing", { cloudId, isTyping: currentTyping });
 
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
+    if (outgoingTypingTimerRef.current) {
+      clearTimeout(outgoingTypingTimerRef.current);
     }
 
-    typingTimerRef.current = setTimeout(() => {
+    outgoingTypingTimerRef.current = setTimeout(() => {
       socket.emit("cloud:typing", { cloudId, isTyping: false });
-    }, currentTyping ? 1500 : 0);
-  }, [cloudId, draft]);
+    }, currentTyping ? 1000 : 0);
+  }, [cloudId, connectionState, draft]);
 
   const openImagePicker = useCallback(() => {
     if (!audioRecorder || audioRecorder.state !== "idle") {
@@ -1577,6 +1764,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
       pending: true,
       clientMessageId,
       audioDurationMs: recording.durationMs,
+      audioPeaks: recording.peaks ?? null,
     };
 
     setAudioUploading(true);
@@ -1586,6 +1774,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
       const formData = new FormData();
       formData.set("file", recording.blob, `audio-${Date.now()}.webm`);
       formData.set("clientMessageId", clientMessageId);
+      if (recording.peaks && recording.peaks.length) {
+        formData.set("peaks", JSON.stringify(recording.peaks));
+      }
 
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/audio`, {
         method: "POST",
@@ -1668,20 +1859,82 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
   }, []);
 
   const handleReply = useCallback((msg: ChatMessage) => {
+    setEditingMsg(null);
     setReplyingTo(msg);
   }, []);
 
-  const handleForwardMsg = useCallback((msg: ChatMessage) => {
+  const handleForwardMsg = useCallback((_msg: ChatMessage) => {
     setShareOpen(true);
   }, []);
+
+  const handleEditMsg = useCallback((msg: ChatMessage) => {
+    if (msg.kind !== "text") return;
+    setReplyingTo(null);
+    setEditingMsg(msg);
+    setEditDraft(msg.content);
+  }, []);
+
+  const submitEditMsg = useCallback(async () => {
+    if (!editingMsg || !user) return;
+    const trimmed = editDraft.trim();
+    if (!trimmed || trimmed === editingMsg.content) {
+      setEditingMsg(null);
+      return;
+    }
+
+    const messageId = editingMsg.id;
+    const previous = editingMsg.content;
+    setMessages((prev) => prev.map((message) => (message.id === messageId ? { ...message, content: trimmed } : message)));
+    setEditingMsg(null);
+
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(messageId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: trimmed }),
+      });
+      if (!response.ok) {
+        setMessages((prev) => prev.map((message) => (message.id === messageId ? { ...message, content: previous } : message)));
+        setError("Não foi possível editar a mensagem.");
+      }
+    } catch {
+      setMessages((prev) => prev.map((message) => (message.id === messageId ? { ...message, content: previous } : message)));
+      setError("Não foi possível editar a mensagem.");
+    }
+  }, [cloudId, editDraft, editingMsg, user]);
+
+  const handleDeleteMsg = useCallback(async (msg: ChatMessage) => {
+    setMessages((prev) => prev.filter((message) => message.id !== msg.id));
+    if (pinnedMessageId === msg.id) {
+      setPinnedMessageId(null);
+    }
+    if (msg.pending) {
+      return;
+    }
+
+    try {
+      await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msg.id)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      setError("Não foi possível cancelar o envio.");
+    }
+  }, [cloudId, pinnedMessageId]);
 
   const isAudioBusy = audioUploading || imageUploading || audioRecorder.state !== "idle";
   const resolvedTitle = cloud?.title || title || "Cloud";
   const resolvedParticipants = cloud?.membersCount ?? participants ?? 0;
-  const { formatted: liveTimer } = useCountdown(cloud);
+  const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const shareLink = typeof window !== "undefined" ? `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}` : `/cloud/${encodeURIComponent(cloudId)}`;
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
+
+  // Redireciona ao feed quando o tempo da Cloud zera
+  useEffect(() => {
+    if (isExpired && cloud) {
+      router.replace("/");
+    }
+  }, [isExpired, cloud, router]);
 
   if (status === "loading" || loadingCloud) {
     return (
@@ -1693,7 +1946,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
 
   return (
     <div className="flex h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="flex shrink-0 items-center gap-3 px-4 pb-3 pt-4" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <div className="flex shrink-0 items-center gap-3 bg-black px-4 pb-3 pt-4">
         <Link
           href="/"
           aria-label="Voltar"
@@ -1717,11 +1970,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
               {liveTimer}
             </span>
           </div>
-          {typingLabel && (
-            <p className="text-[13px] text-white/45">
-              {typingLabel}
-            </p>
-          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
@@ -1740,7 +1988,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                 type="button"
                 aria-label="Encaminhar"
                 onClick={() => setShareOpen(true)}
-                className="group flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
+                className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
               >
                 <HeaderForwardIcon />
               </button>
@@ -1761,7 +2009,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                 type="button"
                 aria-label="Excluir cloud"
                 onClick={() => setDeleteConfirmOpen(true)}
-                className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
+                className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-red-500"
               >
                 <AnimatedTrashIcon s={24} />
               </button>
@@ -1845,7 +2093,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
         if (!pinned) return null;
         return (
           <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] bg-[#1a0e3d]/60 px-5 py-2">
-            <span className="text-[#A855F7]">📌</span>
+            <span className="text-[#A855F7]"><CloudPinIcon pinned={true} /></span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-semibold text-[#A855F7]">Mensagem fixada</p>
               <p className="truncate text-[13px] text-white/70">{pinned.content || "Mídia"}</p>
@@ -1857,7 +2105,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
         );
       })()}
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto scrollbar-purple px-8 py-6">
         {loadingMessages && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
         ) : messages.length === 0 ? (
@@ -1889,10 +2137,15 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                 );
               }
 
-              return <CloudMessageBubble key={entry.id} msg={entry as ChatMessage} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === (entry as ChatMessage).id} />;
+              return <CloudMessageBubble key={entry.id} msg={entry as ChatMessage} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === (entry as ChatMessage).id} />;
             });
           })()
         )}
+        <div className="px-3 pb-2 min-h-[44px] flex items-end">
+          {(typingPeople.length > 0 || typingExiting) && (
+            <TypingBubble avatars={typingPeople.length > 0 ? typingPeople : []} exiting={typingExiting} />
+          )}
+        </div>
         <div ref={bottomRef} />
       </div>
 
@@ -1909,9 +2162,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                   {audioRecorder.state === "paused" ? <PlayIcon s={16} /> : <PauseIcon s={16} />}
                 </button>
                 <button type="button" aria-label="Enviar áudio" onClick={audioRecorder.stop} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
-                  <SendIcon />
+                  <SendIcon className="text-white" />
                 </button>
-                <button type="button" aria-label="Cancelar gravação" onClick={audioRecorder.cancel} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10">
+                <button type="button" aria-label="Cancelar gravação" onClick={audioRecorder.cancel} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10 hover:text-red-500">
                   <TrashIcon s={16} />
                 </button>
               </div>
@@ -1931,8 +2184,31 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
               )}
 
               <div className="flex flex-col gap-3">
-                {replyingTo && (
-                  <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2">
+                {editingMsg && (
+                  <div className="flex items-center gap-2 rounded-2xl border border-[#7C3AED]/40 bg-white/[0.04] px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold text-[#A855F7]">Editando mensagem</p>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editDraft}
+                        onChange={(event) => setEditDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            void submitEditMsg();
+                          }
+                          if (event.key === "Escape") setEditingMsg(null);
+                        }}
+                        className="w-full bg-transparent text-[12px] text-white outline-none"
+                      />
+                    </div>
+                    <button type="button" onClick={() => void submitEditMsg()} className="text-[#A855F7] transition hover:text-white">Salvar</button>
+                    <button type="button" onClick={() => setEditingMsg(null)} className="text-white/40 transition hover:text-white">×</button>
+                  </div>
+                )}
+                {replyingTo && !editingMsg && (
+                  <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-semibold text-[#A855F7]">Respondendo a {replyingTo.senderName}</p>
                       <p className="truncate text-[12px] text-white/60">{replyingTo.content || "Mídia"}</p>
@@ -1971,7 +2247,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                   />
                   {draft.trim() ? (
                     <button type="button" aria-label="Enviar" onClick={() => void sendText()} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
-                      <SendIcon s={18} />
+                      <SendIcon s={18} className="text-white" />
                     </button>
                   ) : (
                     <button

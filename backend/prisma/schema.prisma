@@ -49,6 +49,7 @@ enum NotificationType {
   cloud_member_left
   direct_message
   follow
+  follow_request
   system
 }
 
@@ -78,6 +79,8 @@ model User {
   cloudHypes                CloudHype[]
   following                 Follow[]        @relation("FollowFollower")
   followers                 Follow[]        @relation("FollowFollowing")
+  followRequestsSent        FollowRequest[] @relation("FollowRequestRequester")
+  followRequestsReceived    FollowRequest[] @relation("FollowRequestTarget")
   cloudMessages             CloudMessage[]
   directMessages            DirectMessage[]
   participantOneConversations Conversation[] @relation("ConversationParticipantOne")
@@ -165,6 +168,19 @@ model Follow {
   @@id([followerId, followingId])
   @@index([followerId])
   @@index([followingId])
+}
+
+model FollowRequest {
+  requesterId String   @db.Uuid
+  targetId    String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  requester User @relation("FollowRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target    User @relation("FollowRequestTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@id([requesterId, targetId])
+  @@index([requesterId])
+  @@index([targetId])
 }
 
 model CloudMessage {

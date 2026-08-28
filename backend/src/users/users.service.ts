@@ -140,24 +140,11 @@ export class UsersService {
     });
 
     if (!existingFollow) {
-      await this.prisma.follow.create({
-        data: {
-          followerId: current.user.id,
-          followingId: target.id,
-        },
-      });
-
-      // Create notification for the followed user
-      await this.prisma.notification.create({
-        data: {
-          userId: target.id,
-          type: 'follow',
-          entityType: 'follow',
-          entityId: current.user.id,
-          title: 'Novo seguidor',
-          body: `${current.user.profile?.displayName || 'Alguém'} começou a seguir você`,
-        },
-      });
+      if (target.profile?.isPrivate) {
+        await this.createFollowRequest(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
+      } else {
+        await this.createFollow(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
+      }
     }
 
     return {
@@ -183,10 +170,73 @@ export class UsersService {
       },
     });
 
+    await this.cancelFollowRequest(current.user.id, target.id);
+
     return {
       ok: true,
       user: await this.mapPublicProfile(target, current.user.id),
     };
+  }
+
+  async acceptFollowRequest(token: string | null, requesterIdentifier: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    const requester = await this.requireTargetUser(requesterIdentifier);
+
+    if (requester.id === current.user.id) {
+      throw new BadRequestException({
+        message: 'Você não pode aceitar uma solicitação da sua própria conta.',
+      });
+    }
+
+    const request = await this.prisma.followRequest.findUnique({
+      where: {
+        requesterId_targetId: {
+          requesterId: requester.id,
+          targetId: current.user.id,
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException({
+        message: 'Solicitação para seguir não encontrada.',
+      });
+    }
+
+    await this.createFollow(requester.id, current.user.id, requester.profile?.displayName ?? 'Alguém');
+    await this.cancelFollowRequest(requester.id, current.user.id);
+
+    return { ok: true };
+  }
+
+  async declineFollowRequest(token: string | null, requesterIdentifier: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    const requester = await this.requireTargetUser(requesterIdentifier);
+
+    if (requester.id === current.user.id) {
+      throw new BadRequestException({
+        message: 'Você não pode recusar uma solicitação da sua própria conta.',
+      });
+    }
+
+    const request = await this.prisma.followRequest.findUnique({
+      where: {
+        requesterId_targetId: {
+          requesterId: requester.id,
+          targetId: current.user.id,
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException({
+        message: 'Solicitação para seguir não encontrada.',
+      });
+    }
+
+    await this.cancelFollowRequest(requester.id, current.user.id);
+
+    return { ok: true };
   }
 
   async getFollowers(token: string | null, identifierInput: string): Promise<UsersSearchResponse> {
@@ -374,6 +424,98 @@ export class UsersService {
     return byDisplayName?.profile ? byDisplayName : null;
   }
 
+  private async createFollow(followerId: string, followingId: string, followerName: string) {
+    await this.prisma.follow.upsert({
+      where: {
+        followerId_followingId: {
+          followerId,
+          followingId,
+        },
+      },
+      update: {},
+      create: {
+        followerId,
+        followingId,
+      },
+    });
+
+    await this.prisma.followRequest.deleteMany({
+      where: {
+        requesterId: followerId,
+        targetId: followingId,
+      },
+    });
+
+    await this.prisma.notification.deleteMany({
+      where: {
+        userId: followingId,
+        type: 'follow_request',
+        entityId: followerId,
+      },
+    });
+
+    await this.prisma.notification.create({
+      data: {
+        userId: followingId,
+        type: 'follow',
+        entityType: 'follow',
+        entityId: followerId,
+        title: 'Novo seguidor',
+        body: `${followerName} começou a seguir você`,
+      },
+    });
+  }
+
+  private async createFollowRequest(requesterId: string, targetId: string, requesterName: string) {
+    const existing = await this.prisma.followRequest.findUnique({
+      where: {
+        requesterId_targetId: {
+          requesterId,
+          targetId,
+        },
+      },
+    });
+
+    if (existing) {
+      return;
+    }
+
+    await this.prisma.followRequest.create({
+      data: {
+        requesterId,
+        targetId,
+      },
+    });
+
+    await this.prisma.notification.create({
+      data: {
+        userId: targetId,
+        type: 'follow_request',
+        entityType: 'follow',
+        entityId: requesterId,
+        title: 'Solicitação para seguir',
+        body: `${requesterName} quer seguir você`,
+      },
+    });
+  }
+
+  private async cancelFollowRequest(requesterId: string, targetId: string) {
+    await this.prisma.followRequest.deleteMany({
+      where: {
+        requesterId,
+        targetId,
+      },
+    });
+
+    await this.prisma.notification.deleteMany({
+      where: {
+        userId: targetId,
+        type: 'follow_request',
+        entityId: requesterId,
+      },
+    });
+  }
+
   private async mapPublicProfile(user: UserWithProfile, currentUserId: string | null): Promise<PublicUserProfilePayload> {
     const profile = user.profile;
 
@@ -395,12 +537,30 @@ export class UsersService {
           }),
         )
       : false;
+    const isFollowRequested = currentUserId && !isFollowing
+      ? Boolean(
+          await this.prisma.followRequest.findUnique({
+            where: {
+              requesterId_targetId: {
+                requesterId: currentUserId,
+                targetId: user.id,
+              },
+            },
+            select: { requesterId: true },
+          }),
+        )
+      : false;
 
-    const activeClouds = await this.prisma.cloud.findMany({
+    const isSelf = currentUserId === user.id;
+    const canViewContent = isSelf || isFollowing || !profile.isPrivate;
+
+    const activeClouds = canViewContent ? await this.prisma.cloud.findMany({
       where: {
         authorId: user.id,
         deletedAt: null,
         status: CloudStatus.active,
+        // Non-followers can only see public clouds even when profile is public
+        ...((!isSelf && !isFollowing) ? { visibility: 'public' } : {}),
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -411,7 +571,7 @@ export class UsersService {
         createdAt: true,
         visibility: true,
       },
-    });
+    }) : [];
 
     const serializedActiveClouds = activeClouds.map((cloud) => ({
       id: cloud.id,
@@ -440,7 +600,8 @@ export class UsersService {
       followingCount,
       cloudsCount,
       isFollowing,
-      isSelf: currentUserId === user.id,
+      isFollowRequested,
+      isSelf,
       profileUrl: `/users/${profile.username}`,
       activeCloud: serializedActiveClouds[0] ?? null,
       activeClouds: serializedActiveClouds,

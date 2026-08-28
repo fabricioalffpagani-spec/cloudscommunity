@@ -7,6 +7,7 @@ import { io, type Socket } from "socket.io-client";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
+import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -91,6 +92,7 @@ type Msg = {
   readAt: string | null;
   mediaUrl: string | null;
   durationMs: number | null;
+  peaks?: number[] | null;
   linkUrl: string | null;
   linkLabel: string | null;
   pending?: boolean;
@@ -421,6 +423,7 @@ function buildMessage(
     readAt: payload.readAt,
     mediaUrl: payload.mediaAsset?.url ?? null,
     durationMs: payload.mediaAsset?.durationMs ?? null,
+    peaks: (payload.mediaAsset as { peaks?: number[] | null } | undefined)?.peaks ?? null,
     linkUrl,
     linkLabel,
     clientMessageId: payload.clientMessageId,
@@ -429,7 +432,10 @@ function buildMessage(
 
 function mergeMessage(list: Msg[], next: Msg) {
   const index = next.clientMessageId ? list.findIndex((item) => item.clientMessageId === next.clientMessageId) : -1;
-  if (index >= 0) return list.map((item, i) => (i === index ? { ...next, pending: false } : item));
+  if (index >= 0) {
+    const existing = list[index];
+    return list.map((item, i) => (i === index ? { ...next, pending: false, peaks: next.peaks ?? existing.peaks ?? null } : item));
+  }
   if (list.some((item) => item.id === next.id)) return list;
   return [...list, next];
 }
@@ -454,9 +460,27 @@ type RecordedAudio = {
   blob: Blob;
   durationMs: number;
   mimeType: string;
+  peaks?: number[];
 };
 
 type AudioRecorderState = "idle" | "recording" | "paused";
+
+function downsampleWaveform(raw: number[], target: number): number[] {
+  if (raw.length === 0) return [];
+  const max = Math.max(...raw, 0.0001);
+  const normalized = raw.map((v) => Math.max(0.05, v / max));
+  if (normalized.length <= target) return normalized;
+  const out: number[] = [];
+  const chunk = normalized.length / target;
+  for (let i = 0; i < target; i++) {
+    const start = Math.floor(i * chunk);
+    const end = Math.max(start + 1, Math.floor((i + 1) * chunk));
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += normalized[j];
+    out.push(sum / (end - start));
+  }
+  return out;
+}
 
 function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
   const [state, setState] = useState<AudioRecorderState>("idle");
@@ -465,7 +489,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sampleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const secondsRef = useRef(0);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const peaksRef = useRef<number[]>([]);
 
   const stopTimers = useCallback(() => {
     if (timerRef.current) {
@@ -474,12 +503,45 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     }
   }, []);
 
+  const stopSampler = useCallback(() => {
+    if (sampleTimerRef.current) {
+      clearInterval(sampleTimerRef.current);
+      sampleTimerRef.current = null;
+    }
+  }, []);
+
+  const startSampler = useCallback(() => {
+    stopSampler();
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const buf = new Uint8Array(analyser.fftSize);
+    sampleTimerRef.current = setInterval(() => {
+      analyser.getByteTimeDomainData(buf);
+      let max = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const d = Math.abs(buf[i] - 128) / 128;
+        if (d > max) max = d;
+      }
+      peaksRef.current.push(max);
+    }, 80);
+  }, [stopSampler]);
+
   const cleanupStream = useCallback(() => {
+    stopSampler();
+    if (sourceRef.current) {
+      try { sourceRef.current.disconnect(); } catch { /* ignore */ }
+      sourceRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try { void audioCtxRef.current.close(); } catch { /* ignore */ }
+      audioCtxRef.current = null;
+    }
+    analyserRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-  }, []);
+  }, [stopSampler]);
 
   const start = useCallback(async () => {
     if (state !== "idle") {
@@ -500,6 +562,23 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       setSeconds(0);
       setState("recording");
 
+      try {
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = new AC();
+        void audioCtx.resume?.();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioCtxRef.current = audioCtx;
+        sourceRef.current = source;
+        analyserRef.current = analyser;
+        peaksRef.current = [];
+        startSampler();
+      } catch {
+        peaksRef.current = [];
+      }
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
@@ -509,10 +588,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       recorder.onstop = () => {
         stopTimers();
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const rawPeaks = peaksRef.current.length ? peaksRef.current : [0.3];
         onStop({
           blob,
           durationMs: secondsRef.current * 1000,
           mimeType: recorder.mimeType || "audio/webm",
+          peaks: downsampleWaveform(rawPeaks, 40),
         });
         chunksRef.current = [];
         cleanupStream();
@@ -535,7 +616,7 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
       secondsRef.current = 0;
       throw new Error("Permissão de microfone negada.");
     }
-  }, [cleanupStream, onStop, state, stopTimers]);
+  }, [cleanupStream, onStop, state, startSampler, stopTimers]);
 
   const stop = useCallback(() => {
     const recorder = recorderRef.current;
@@ -551,19 +632,21 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     if (!recorder || recorder.state !== "recording") return;
     recorder.pause();
     stopTimers();
+    stopSampler();
     setState("paused");
-  }, [stopTimers]);
+  }, [stopTimers, stopSampler]);
 
   const resume = useCallback(() => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state !== "paused") return;
     recorder.resume();
+    startSampler();
     timerRef.current = setInterval(() => {
       secondsRef.current += 1;
       setSeconds(secondsRef.current);
     }, 1000);
     setState("recording");
-  }, []);
+  }, [startSampler]);
 
   const cancel = useCallback(() => {
     const recorder = recorderRef.current;
@@ -641,64 +724,23 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
 
 function AudioMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return undefined;
-    }
-
-    const stopPlaying = () => setPlaying(false);
-    audio.addEventListener("ended", stopPlaying);
-    audio.addEventListener("pause", stopPlaying);
-
-    return () => {
-      audio.removeEventListener("ended", stopPlaying);
-      audio.removeEventListener("pause", stopPlaying);
-    };
-  }, []);
-
-  const togglePlayback = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) {
-      return;
-    }
-
-    if (audio.paused) {
-      void audio.play();
-      setPlaying(true);
-      return;
-    }
-
-    audio.pause();
-    setPlaying(false);
-  }, []);
-
-  return (
-    <div className={`rounded-2xl border px-4 py-3 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`} style={{ minWidth: "220px", maxWidth: "320px" }}>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-label="Reproduzir áudio"
-          onClick={togglePlayback}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition ${isRight ? "bg-white/20 hover:bg-white/30" : "bg-[#9333EA] hover:bg-[#6D28D9]"}`}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
-        <div className="flex-1">
-          <div className="h-2 rounded-full bg-white/10">
-            <div className="h-2 rounded-full bg-white/50" style={{ width: "42%" }} />
-          </div>
-          <div className="mt-1 flex items-center justify-between text-[11px] text-white/65">
-            <span>Áudio</span>
-            <span>{formatDuration(msg.durationMs) || "0:00"}</span>
-          </div>
-        </div>
+  if (!msg.mediaUrl) {
+    return (
+      <div className={`rounded-2xl border px-4 py-3 text-[12px] text-white/60 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}>
+        Áudio indisponível
       </div>
-      {msg.mediaUrl && <audio ref={audioRef} src={msg.mediaUrl} className="hidden" controls={false} preload="metadata" />}
-      {msg.pending && <div className="mt-2 text-[11px] text-white/70">enviando...</div>}
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <AudioWaveformPlayer
+        src={msg.mediaUrl}
+        peaks={msg.peaks ?? undefined}
+        durationMs={msg.durationMs}
+        isOwn={isRight}
+        roundedCorner={isRight ? "right" : "left"}
+      />
+      {msg.pending && <div className={`text-[11px] ${isRight ? "text-right text-white/50" : "text-white/50"}`}>enviando...</div>}
     </div>
   );
 }
@@ -893,6 +935,16 @@ function DmDotsIcon() {
       <circle cx="12" cy="12" r="2" />
       <circle cx="19" cy="12" r="2" />
     </svg>
+  );
+}
+
+function TypingDots() {
+  return (
+    <span className="typing-ellipsis inline-flex items-end gap-[3px] px-0.5" aria-label="Digitando">
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
+    </span>
   );
 }
 
@@ -1146,6 +1198,7 @@ function MessagesPageContent() {
   const activeConversationIdRef = useRef<string | null>(null);
   const typingConversationIdRef = useRef<string | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const presenceByUserIdRef = useRef<Record<string, Status>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const openedPeerRef = useRef<string | null>(null);
@@ -1154,6 +1207,7 @@ function MessagesPageContent() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Msg[]>>({});
   const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
+  const [isLocallyTyping, setIsLocallyTyping] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
@@ -1169,6 +1223,7 @@ function MessagesPageContent() {
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [editingMsg, setEditingMsg] = useState<Msg | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1200,6 +1255,7 @@ function MessagesPageContent() {
       readAt: null,
       mediaUrl: tempUrl,
       durationMs: recording.durationMs,
+      peaks: recording.peaks ?? null,
       linkUrl: null,
       linkLabel: null,
       pending: true,
@@ -1223,6 +1279,9 @@ function MessagesPageContent() {
       formData.set("file", recording.blob, `audio-${Date.now()}.webm`);
       formData.set("clientMessageId", clientMessageId);
       formData.set("durationMs", String(recording.durationMs));
+      if (recording.peaks && recording.peaks.length) {
+        formData.set("peaks", JSON.stringify(recording.peaks));
+      }
 
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/audio`, {
         method: "POST",
@@ -1510,6 +1569,14 @@ function MessagesPageContent() {
   }, [activeMessages, messageSearch]);
   
   const isActiveConversationTyping = Boolean(activeConversationId && typingByConversation[activeConversationId]);
+  const isTypingLocally = Boolean(activeConversationId && isLocallyTyping);
+  const typingPerson = isActiveConversationTyping
+    ? activeConversation
+      ? { id: activeConversation.peerId, username: activeConversation.peerUsername, name: activeConversation.name, avatarUrl: activeConversation.avatarUrl, label: `${activeConversation.name} está digitando` }
+      : null
+    : isTypingLocally
+      ? { id: user?.id ?? "local-typing", username: user?.username ?? "voce", name: "Você", avatarUrl: user?.avatarUrl ?? null, label: "Você está digitando" }
+      : null;
   const isAudioBusy = audioUploading || imageUploading || linkUploading || audioRecorder.state !== "idle";
 
   const loadConversations = useCallback(async () => {
@@ -1768,7 +1835,20 @@ function MessagesPageContent() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeMessages, activeConversationId]);
+  }, [activeMessages, activeConversationId, isActiveConversationTyping, isTypingLocally]);
+
+  useEffect(() => {
+    if (localTypingPreviewTimerRef.current) clearTimeout(localTypingPreviewTimerRef.current);
+    if (!draft.trim()) {
+      setIsLocallyTyping(false);
+      return;
+    }
+    setIsLocallyTyping(true);
+    localTypingPreviewTimerRef.current = setTimeout(() => setIsLocallyTyping(false), 1000);
+    return () => {
+      if (localTypingPreviewTimerRef.current) clearTimeout(localTypingPreviewTimerRef.current);
+    };
+  }, [draft]);
 
   const selectConversation = useCallback((conversationId: string) => {
     const socket = socketRef.current;
@@ -1812,10 +1892,10 @@ function MessagesPageContent() {
       return undefined;
     }
 
-    if (typingConversationIdRef.current !== currentConversationId) {
-      socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: true });
-      typingConversationIdRef.current = currentConversationId;
-    }
+    // Renovamos o sinal a cada alteração: o servidor o encerra após alguns
+    // segundos sem atividade, por isso um único evento na primeira tecla não basta.
+    socket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: true });
+    typingConversationIdRef.current = currentConversationId;
 
     if (typingTimerRef.current) {
       clearTimeout(typingTimerRef.current);
@@ -1827,7 +1907,7 @@ function MessagesPageContent() {
         activeSocket.emit("conversation:typing", { conversationId: currentConversationId, isTyping: false });
         typingConversationIdRef.current = null;
       }
-    }, 1800);
+    }, 1000);
 
     return () => {
       if (typingTimerRef.current) {
@@ -1922,10 +2002,15 @@ function MessagesPageContent() {
     setForwardMsg(msg);
   }, []);
 
+  const handleReplyMsg = useCallback((msg: Msg) => {
+    setEditingMsg(null);
+    setReplyingTo(msg);
+  }, []);
+
   const sendText = useCallback(() => {
     const socket = socketRef.current;
     const content = draft.trim();
-    if (!socket || !socket.connected || !activeConversationId || !content) return;
+    if (!activeConversationId || !content) return;
 
     if (typingTimerRef.current) {
       clearTimeout(typingTimerRef.current);
@@ -1933,7 +2018,9 @@ function MessagesPageContent() {
     }
 
     if (typingConversationIdRef.current === activeConversationId) {
-      socket.emit("conversation:typing", { conversationId: activeConversationId, isTyping: false });
+      if (socket?.connected) {
+        socket.emit("conversation:typing", { conversationId: activeConversationId, isTyping: false });
+      }
       typingConversationIdRef.current = null;
     }
 
@@ -1971,24 +2058,26 @@ function MessagesPageContent() {
     );
     setDraft("");
 
-    socket.emit(
-      "message:send",
-      { conversationId: activeConversationId, content, clientMessageId },
-      (ack: SocketAck<BackendMessage>) => {
-        if (!ack.ok) {
-          setError(ack.message);
-          setMessagesByConversation((prev) => ({
-            ...prev,
-            [activeConversationId]: (prev[activeConversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
-          }));
-          return;
-        }
-
-        const confirmed = buildMessage(ack.data, user);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(activeConversationId)}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, clientMessageId, replyToMessageId: replyingTo?.id ?? null }),
+        });
+        const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
+        const confirmed = buildMessage(payload.message, user);
         setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], confirmed) }));
-      },
-    );
-  }, [activeConversationId, draft, user]);
+      } catch (sendError) {
+        setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [activeConversationId]: (prev[activeConversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
+        }));
+      }
+    })();
+    setReplyingTo(null);
+  }, [activeConversationId, draft, replyingTo, user]);
 
   const startAudioRecording = useCallback(() => {
     if (!activeConversationId || isAudioBusy) {
@@ -2033,8 +2122,8 @@ function MessagesPageContent() {
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
       <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-[#000000]">
-          <div className="flex flex-col gap-3 border-b border-white/[0.07] px-6 py-5" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-transparent">
+          <div className="flex flex-col gap-3 bg-transparent px-6 py-5">
             <div className="flex items-center gap-4">
               <Link href="/" aria-label="Voltar para home" className="flex h-9 w-9 items-center justify-center rounded-full text-white hover:text-white/80 transition">
                 <ArrowLeftIcon s={20} />
@@ -2068,7 +2157,7 @@ function MessagesPageContent() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-2 py-1">
+          <div className="flex-1 overflow-y-auto scrollbar-purple px-2 py-1">
             {loadingFollowed && followedUsers.length === 0 ? (
               <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando contatos seguidos...</div>
             ) : (
@@ -2212,7 +2301,8 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-4" ref={messagesContainerRef}>
+          <div className="flex-1 overflow-y-auto scrollbar-purple px-8 py-6" ref={messagesContainerRef}>
+            <div className="flex min-h-full flex-col justify-end space-y-4">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
@@ -2245,11 +2335,30 @@ function MessagesPageContent() {
                     );
                   }
 
-                  return <MessageBubble key={entry.id} msg={entry as Msg} onReply={() => {}} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />;
+                  return <MessageBubble key={entry.id} msg={entry as Msg} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />;
                 });
               })()
             )}
+            {typingPerson && (
+              <div className={`flex items-end gap-2 pt-1 ${typingPerson.name === "Você" ? "justify-end" : "justify-start"}`} role="status" aria-live="polite">
+                {typingPerson.name !== "Você" && (
+                  <Link href={`/users/${typingPerson.id}`} aria-label={`Ver perfil de ${typingPerson.name}`}>
+                    <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />
+                  </Link>
+                )}
+                <div key={typingPerson.name === "Você" ? draft : typingPerson.id} className={`relative rounded-[20px] bg-black px-3 py-2.5 ${typingPerson.name === "Você" ? "typing-indicator-fade rounded-br-md" : "rounded-bl-md"}`}>
+                  <TypingDots />
+                </div>
+                {typingPerson.name !== "Você" && <span className="pb-1 text-[12px] text-white/55">{typingPerson.label}</span>}
+                {typingPerson.name === "Você" && (
+                  <Link href={`/users/${typingPerson.id}`} aria-label="Ver seu perfil">
+                    <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />
+                  </Link>
+                )}
+              </div>
+            )}
             <div ref={bottomRef} />
+            </div>
           </div>
 
           {/* ── Edit bar ── */}
@@ -2283,6 +2392,18 @@ function MessagesPageContent() {
                     <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5L20 7"/></svg>
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {replyingTo && !editingMsg && (
+            <div className="border-t border-white/[0.07] bg-[#000000] px-5 py-3">
+              <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-[#A855F7]">Respondendo a {replyingTo.senderDisplayName}</p>
+                  <p className="truncate text-[12px] text-white/60">{replyingTo.content || "Mídia"}</p>
+                </div>
+                <button type="button" aria-label="Cancelar resposta" onClick={() => setReplyingTo(null)} className="text-white/40 transition hover:text-white">×</button>
               </div>
             </div>
           )}

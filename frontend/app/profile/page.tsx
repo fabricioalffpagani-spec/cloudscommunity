@@ -101,6 +101,77 @@ function formatCountdown(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+type FollowListUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+function FollowListModal({
+  title,
+  emptyMessage,
+  loading,
+  users,
+  onClose,
+}: {
+  title: string;
+  emptyMessage: string;
+  loading: boolean;
+  users: FollowListUser[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-[18px] font-bold">{title}</h3>
+          <button type="button" onClick={onClose} className="text-white/50 transition hover:text-white" aria-label="Fechar">
+            <XIcon />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <p className="py-4 text-center text-white/50">Carregando...</p>
+          ) : users.length === 0 ? (
+            <p className="py-4 text-center text-white/50">{emptyMessage}</p>
+          ) : (
+            <div className="space-y-3">
+              {users.map((listedUser) => (
+                <Link
+                  key={listedUser.id}
+                  href={`/users/${listedUser.username}`}
+                  className="flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5"
+                  onClick={onClose}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] font-bold text-white">
+                    {listedUser.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={listedUser.avatarUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      listedUser.displayName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-white">{listedUser.displayName}</p>
+                    <p className="text-sm text-white/50">@{listedUser.username}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatMemberSince(value?: string | null) {
   if (!value) {
     return "agora";
@@ -200,6 +271,12 @@ export default function ProfilePage() {
     bio: "",
     location: "",
   });
+  const [followersModalOpen, setFollowersModalOpen] = useState(false);
+  const [followingModalOpen, setFollowingModalOpen] = useState(false);
+  const [followersList, setFollowersList] = useState<FollowListUser[]>([]);
+  const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
+  const [loadingFollowers, setLoadingFollowers] = useState(false);
+  const [loadingFollowing, setLoadingFollowing] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -258,6 +335,45 @@ export default function ProfilePage() {
     return () => clearInterval(interval);
   }, []);
 
+  const loadFollowList = async (
+    kind: "followers" | "following",
+  ) => {
+    if (!user) {
+      return;
+    }
+
+    const setLoading = kind === "followers" ? setLoadingFollowers : setLoadingFollowing;
+    const setList = kind === "followers" ? setFollowersList : setFollowingList;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.username)}/${kind}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; users?: FollowListUser[] } | null;
+
+      if (response.ok && payload?.ok && Array.isArray(payload.users)) {
+        setList(payload.users);
+      } else {
+        setList([]);
+      }
+    } catch {
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openFollowersModal = () => {
+    setFollowersModalOpen(true);
+    void loadFollowList("followers");
+  };
+
+  const openFollowingModal = () => {
+    setFollowingModalOpen(true);
+    void loadFollowList("following");
+  };
+
   const displayName = getSessionUserDisplayName(user);
   const handle = getSessionUserHandle(user);
   const initials = displayName.charAt(0).toUpperCase();
@@ -273,7 +389,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/[0.06] px-5 py-4 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+        <div className="sticky top-0 z-30 flex items-center justify-between bg-transparent px-5 py-4">
           <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon s={20} />
           </Link>
@@ -293,7 +409,7 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4 backdrop-blur-md" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-4 bg-transparent px-5 py-4">
         <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon s={20} />
         </Link>
@@ -324,15 +440,15 @@ export default function ProfilePage() {
           <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>
 
           <div className="mt-5 flex items-center gap-6 text-center">
-            <div>
+            <button type="button" onClick={openFollowersModal} className="transition hover:opacity-80">
               <p className="text-[20px] font-bold text-white">{followers}</p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Seguidores</p>
-            </div>
+            </button>
             <div className="h-8 w-px bg-white/10" />
-            <div>
+            <button type="button" onClick={openFollowingModal} className="transition hover:opacity-80">
               <p className="text-[20px] font-bold text-white">{following}</p>
-              <p className="text-[11px] uppercase tracking-widest text-white/40">Following</p>
-            </div>
+              <p className="text-[11px] uppercase tracking-widest text-white/40">Seguindo</p>
+            </button>
             <div className="h-8 w-px bg-white/10" />
             <div>
               <p className="text-[20px] font-bold text-white">{cloudsCount}</p>
@@ -364,6 +480,26 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {followersModalOpen && (
+        <FollowListModal
+          title="Seguidores"
+          emptyMessage="Nenhum seguidor ainda"
+          loading={loadingFollowers}
+          users={followersList}
+          onClose={() => setFollowersModalOpen(false)}
+        />
+      )}
+
+      {followingModalOpen && (
+        <FollowListModal
+          title="Seguindo"
+          emptyMessage="Não seguindo ninguém ainda"
+          loading={loadingFollowing}
+          users={followingList}
+          onClose={() => setFollowingModalOpen(false)}
+        />
+      )}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">

@@ -15,6 +15,7 @@ export type PublicUserProfilePayload = {
   followingCount: number;
   cloudsCount: number;
   isFollowing: boolean;
+  isFollowRequested: boolean;
   isSelf: boolean;
   profileUrl: string;
   activeCloud?: {

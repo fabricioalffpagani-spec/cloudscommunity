@@ -52,6 +52,16 @@ export class UsersController {
     return this.usersService.follow(extractSessionToken(req), identifier);
   }
 
+  @Post(':identifier/follow/accept')
+  async acceptFollow(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.acceptFollowRequest(extractSessionToken(req), identifier);
+  }
+
+  @Post(':identifier/follow/decline')
+  async declineFollow(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.declineFollowRequest(extractSessionToken(req), identifier);
+  }
+
   @Delete(':identifier/follow')
   async unfollow(@Req() req: Request, @Param('identifier') identifier: string) {
     return this.usersService.unfollow(extractSessionToken(req), identifier);

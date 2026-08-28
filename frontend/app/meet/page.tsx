@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
+import { NotificationsBell } from "../components/NotificationsPanel";
 
 type PublicUserProfile = {
   id: string;
@@ -23,6 +24,7 @@ type PublicUserProfile = {
   followingCount: number;
   cloudsCount: number;
   isFollowing: boolean;
+  isFollowRequested?: boolean;
   isSelf: boolean;
   profileUrl: string;
 };
@@ -105,7 +107,7 @@ function ProfileRow({
 }) {
   const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
   const avatarColor = user.avatarUrl ? undefined : "#9333EA";
-  const followLabel = user.isFollowing ? "Following" : "Follow";
+  const followLabel = user.isFollowing ? "Following" : user.isFollowRequested ? "Requested" : "Follow";
 
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#120a2e] px-4 py-3.5 transition hover:border-white/[0.12]">
@@ -140,7 +142,7 @@ function ProfileRow({
           onClick={() => onToggleFollow(user)}
           disabled={pending}
           className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
-            user.isFollowing
+            user.isFollowing || user.isFollowRequested
               ? "border border-white/10 bg-transparent text-white/40"
               : "bg-[#9333EA] text-white hover:bg-[#6D28D9]"
           } ${pending ? "opacity-60" : ""}`}
@@ -225,16 +227,14 @@ export default function MeetPage() {
   return (
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
         <div className="mx-auto flex h-[108px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-4">
             <HeaderBrand />
           </Link>
 
           <div className="flex items-center gap-4">
-            <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <BellIcon s={28} />
-            </button>
+            <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]" />
             <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
               <GearIcon s={28} />
             </Link>

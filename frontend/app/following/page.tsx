@@ -7,6 +7,8 @@ import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { CloudCarousel, type CarouselCloud } from "../components/CloudCarousel";
 import { SearchModal } from "../components/SearchModal";
+import { NotificationsBell } from "../components/NotificationsPanel";
+import { CreateCloudModal } from "../page";
 
 type CloudAuthor = {
   id: string;
@@ -74,6 +76,7 @@ export default function FollowingPage() {
   const [clouds, setClouds] = useState<FollowingCloud[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,12 +114,35 @@ export default function FollowingPage() {
   return (
     <div className="min-h-screen text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+      {createOpen && (
+        <CreateCloudModal
+          onClose={() => setCreateOpen(false)}
+          onPublish={async (cloud) => {
+            const response = await fetch("/api/clouds", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: cloud.title,
+                description: cloud.description ?? "",
+                duration: cloud.duration,
+                visibility: cloud.visibility,
+              }),
+            });
+            const payload = (await response.json().catch(() => null)) as { cloud?: { id?: string }; message?: string } | null;
+            const id = payload?.cloud?.id;
+            if (!response.ok || !id) {
+              throw new Error(payload?.message ?? "Não foi possível criar a cloud.");
+            }
+            return { ...cloud, id, createdAt: new Date(), mode: "text" as const, href: `/cloud/${id}`, hypes: 0 };
+          }}
+        />
+      )}
 
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
-          <a href="/" className="flex shrink-0 items-center gap-4 pb-2">
+          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
-          </a>
+          </Link>
 
           <nav aria-label="Navegação principal" className="flex items-end gap-12 pb-2">
             <Link href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
@@ -132,9 +158,7 @@ export default function FollowingPage() {
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
             </button>
-            <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <BellIcon s={28} />
-            </button>
+            <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
             <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
               <GearIcon s={28} />
             </Link>
@@ -152,14 +176,14 @@ export default function FollowingPage() {
           </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <CloudCarousel clouds={carouselClouds} />
+            <CloudCarousel clouds={carouselClouds} onCreateCloud={() => setCreateOpen(true)} />
           </div>
         )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
+          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#A855F7]">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
               <path d="M9 21V12h6v9" />

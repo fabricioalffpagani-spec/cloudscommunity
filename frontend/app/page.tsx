@@ -2,11 +2,22 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import CloudChat from "./cloud/[id]/CloudChat";
+
+const CloudChat = dynamic(() => import("./cloud/[id]/CloudChat"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-1 items-center justify-center text-[14px] text-white/45">
+      Carregando conversa...
+    </div>
+  ),
+});
 import { HeaderBrand } from "./components/HeaderBrand";
 import { FlameIcon } from "./components/FlameIcon";
+import { NotificationsPanel } from "./components/NotificationsPanel";
+import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -31,6 +42,7 @@ type Cloud = {
   hypes?: number;
   hyped?: boolean;
   audioUrl?: string;
+  audioPeaks?: number[];
   authorName?: string;
   authorHandle?: string;
   authorPhoto?: string;
@@ -203,11 +215,11 @@ const CATEGORIES: Category[] = [
   { name: "Memes",     bg: "#F43F5E" },
 ];
 
-const DURATIONS = ["30min", "1h", "2h", "5h", "24h"];
+const DURATIONS = ["10min", "30min", "2h", "5h", "24h"];
 
 const DURATION_SECONDS: Record<string, number> = {
+  "10min": 10 * 60,
   "30min": 30 * 60,
-  "1h": 60 * 60,
   "2h": 2 * 60 * 60,
   "5h": 5 * 60 * 60,
   "24h": 24 * 60 * 60,
@@ -813,7 +825,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
 
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
-function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: number) => void }) {
+function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: number, wasHyped: boolean) => void }) {
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [hypeLoading, setHypeLoading] = useState(false);
@@ -847,7 +859,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
         const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
         const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
         setHypes(newCount);
-        onHypar(newCount);
+        onHypar(newCount, wasHyped);
       } else {
         setHyped(wasHyped);
         setHypes(v => wasHyped ? v + 1 : v - 1);
@@ -891,10 +903,10 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
         </p>
       )}
 
-      {/* Audio player */}
+      {/* Audio player - waveform real */}
       {cloud.mode === "audio" && cloud.audioUrl && (
-        <div className="mt-4 rounded-xl bg-[#1C1730] px-4 py-3">
-          <audio controls src={cloud.audioUrl} className="w-full h-8 accent-[#9333EA]" />
+        <div className="mt-4">
+          <AudioWaveformPlayer src={cloud.audioUrl} peaks={cloud.audioPeaks} isOwn={false} roundedCorner="left" />
         </div>
       )}
 
@@ -964,7 +976,7 @@ function ShareIcon() {
   );
 }
 
-function CreateCloudModal({
+export function CreateCloudModal({
   onClose,
   onPublish,
 }: {
@@ -1316,6 +1328,7 @@ function RecordAudioModal({
   const [status, setStatus] = useState<"idle" | "recording" | "done">("idle");
   const [seconds, setSeconds] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPeaks, setAudioPeaks] = useState<number[] | null>(null);
   const [category, setCategory] = useState(CATEGORIES[1].name);
   const [duration, setDuration] = useState(DURATIONS[0]);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
@@ -1324,6 +1337,11 @@ function RecordAudioModal({
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sampleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const peaksRef = useRef<number[]>([]);
 
   const startRecording = useCallback(async () => {
     setError(null);
@@ -1331,11 +1349,35 @@ function RecordAudioModal({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
+      peaksRef.current = [];
       recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         setAudioUrl(URL.createObjectURL(blob));
         setStatus("done");
+        // build waveform from captured peaks
+        const raw = peaksRef.current.length ? peaksRef.current : [0.3];
+        const max = Math.max(...raw, 0.0001);
+        const normalized = raw.map(v => Math.max(0.05, v / max));
+        if (normalized.length > 40) {
+          const out: number[] = [];
+          const chunk = normalized.length / 40;
+          for (let i = 0; i < 40; i++) {
+            const start = Math.floor(i * chunk);
+            const end = Math.max(start + 1, Math.floor((i + 1) * chunk));
+            let sum = 0;
+            for (let j = start; j < end; j++) sum += normalized[j];
+            out.push(sum / (end - start));
+          }
+          setAudioPeaks(out);
+        } else {
+          setAudioPeaks(normalized);
+        }
+        // cleanup audio graph
+        if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
+        if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch { /* ignore */ } sourceRef.current = null; }
+        if (audioCtxRef.current) { try { void audioCtxRef.current.close(); } catch { /* ignore */ } audioCtxRef.current = null; }
+        analyserRef.current = null;
         stream.getTracks().forEach(t => t.stop());
       };
       recorder.start();
@@ -1343,6 +1385,32 @@ function RecordAudioModal({
       setSeconds(0);
       setStatus("recording");
       timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+
+      // capture waveform live
+      try {
+        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const audioCtx = new AC();
+        void audioCtx.resume?.();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioCtxRef.current = audioCtx;
+        sourceRef.current = source;
+        analyserRef.current = analyser;
+        const buf = new Uint8Array(analyser.fftSize);
+        sampleTimerRef.current = setInterval(() => {
+          analyser.getByteTimeDomainData(buf);
+          let max = 0;
+          for (let i = 0; i < buf.length; i++) {
+            const d = Math.abs(buf[i] - 128) / 128;
+            if (d > max) max = d;
+          }
+          peaksRef.current.push(max);
+        }, 80);
+      } catch {
+        peaksRef.current = [];
+      }
     } catch {
       setError("Permissão de microfone negada. Verifique as configurações do navegador.");
     }
@@ -1354,7 +1422,12 @@ function RecordAudioModal({
   }, []);
 
   // cleanup on unmount
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
+    if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch { /* ignore */ } }
+    if (audioCtxRef.current) { try { void audioCtxRef.current.close(); } catch { /* ignore */ } }
+  }, []);
 
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -1364,7 +1437,7 @@ function RecordAudioModal({
       setError("Selecione uma duração para a cloud.");
       return;
     }
-    onPublish({ title: `Áudio - ${fmt(seconds)}`, category, duration, visibility, audioUrl });
+    onPublish({ title: `Áudio - ${fmt(seconds)}`, category, duration, visibility, audioUrl, audioPeaks: audioPeaks ?? undefined });
     onClose();
   };
 
@@ -1399,9 +1472,9 @@ function RecordAudioModal({
             )}
           </div>
 
-          {/* Audio preview */}
+          {/* Audio preview - waveform real */}
           {audioUrl && (
-            <audio controls src={audioUrl} className="w-full accent-[#9333EA]" />
+            <AudioWaveformPlayer src={audioUrl} peaks={audioPeaks ?? undefined} isOwn={false} roundedCorner="left" />
           )}
 
           {/* Category + Duration when done */}
@@ -1718,9 +1791,34 @@ type SearchResult = {
 function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds: Cloud[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [history, setHistory] = useState<string[]>([]);
   const [results, setResults] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("cloudscommunity:search-history") ?? "[]");
+      if (Array.isArray(stored)) setHistory(stored.filter((item): item is string => typeof item === "string").slice(0, 6));
+    } catch {
+      setHistory([]);
+    }
+  }, []);
+
+  const saveSearch = (value: string) => {
+    const term = value.trim();
+    if (!term) return;
+    setHistory((current) => {
+      const next = [term, ...current.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase())].slice(0, 6);
+      localStorage.setItem("cloudscommunity:search-history", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearHistory = () => {
+    localStorage.removeItem("cloudscommunity:search-history");
+    setHistory([]);
+  };
 
   // ESC to close
   useEffect(() => {
@@ -1792,6 +1890,7 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") saveSearch(query); }}
             placeholder="Buscar clouds, pessoas..."
             className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/40 outline-none"
           />
@@ -1816,7 +1915,7 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
                   <button
                     key={user.id}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
-                    onClick={() => { router.push(`/users/${user.id}`); onClose(); }}
+                    onClick={() => { saveSearch(query); router.push(`/users/${user.id}`); onClose(); }}
                   >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#A855F7] text-[13px] font-bold text-white overflow-hidden">
                       {user.avatarUrl ? (
@@ -1841,6 +1940,7 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
                     key={cloud.id}
                     className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
                     onClick={() => {
+                      saveSearch(query);
                       const params = new URLSearchParams({
                         title: cloud.title,
                         duration: cloud.duration,
@@ -1874,31 +1974,24 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
         )}
 
         {!query && (
-          <p className="mt-3 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+          <div className="mt-3">
+            {history.length > 0 ? (
+              <>
+                <div className="mb-2 flex items-center justify-between px-1"><p className="text-[11px] font-semibold uppercase tracking-wider text-white/35">Pesquisas recentes</p><button type="button" onClick={clearHistory} className="text-[11px] font-medium text-[#C084FC] transition hover:text-white">Limpar</button></div>
+                <div className="flex flex-wrap gap-2">
+                  {history.map((term) => <button key={term} type="button" onClick={() => setQuery(term)} className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/65 transition hover:border-[#A855F7]/45 hover:bg-[#A855F7]/10 hover:text-white"><svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>{term}</button>)}
+                </div>
+              </>
+            ) : <p className="px-1 text-[12px] text-white/30">Suas pesquisas recentes aparecerão aqui.</p>}
+            <p className="mt-4 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function NotificationsPanel({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[100]" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/30" />
-      <div className="absolute right-4 top-[96px] w-[340px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07]">
-          <span className="text-[15px] font-bold text-white">Notificações</span>
-          <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
-        </div>
-        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-          <BellIcon s={32} />
-          <p className="mt-3 text-[14px] font-semibold text-white">Nenhuma notificação</p>
-          <p className="mt-1 text-[12px] text-white/40">Você está em dia com tudo.</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
   const { user } = useSessionUser();
@@ -1955,7 +2048,7 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
-function TopicHypeButton({ cloud }: { cloud: Cloud }) {
+function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount: number, wasHyped: boolean) => void }) {
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [loading, setLoading] = useState(false);
@@ -1972,7 +2065,9 @@ function TopicHypeButton({ cloud }: { cloud: Cloud }) {
       });
       if (res.ok) {
         const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
-        if (data?.hypesCount !== undefined) setHypes(data.hypesCount);
+        const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
+        setHypes(newCount);
+        onHypar?.(newCount, wasHyped);
       } else {
         setHyped(wasHyped);
         setHypes(v => wasHyped ? v + 1 : v - 1);
@@ -2195,12 +2290,40 @@ function TopicFeedStage({
 
 // ─── Live Card Action Buttons ────────────────────────────────────────────────
 
-function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; initialHypes: number }) {
-  const [hyped, setHyped] = useState(false);
+function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: { cloudId: string; initialHypes: number; initialHyped?: boolean; onHypar?: (newCount: number, wasHyped: boolean) => void }) {
+  const [hyped, setHyped] = useState(initialHyped ?? false);
   const [hypes, setHypes] = useState(initialHypes);
+  const [loading, setLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const siteOrigin = useSiteOrigin();
   const fullUrl = `${siteOrigin}/cloud/${cloudId}`;
+
+  const handleHype = async () => {
+    if (loading) return;
+    setLoading(true);
+    const wasHyped = hyped;
+    setHyped(!wasHyped);
+    setHypes(v => wasHyped ? v - 1 : v + 1);
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/hype`, {
+        method: wasHyped ? "DELETE" : "POST",
+      });
+      if (res.ok) {
+        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
+        setHypes(newCount);
+        onHypar?.(newCount, wasHyped);
+      } else {
+        setHyped(wasHyped);
+        setHypes(v => wasHyped ? v + 1 : v - 1);
+      }
+    } catch {
+      setHyped(wasHyped);
+      setHypes(v => wasHyped ? v + 1 : v - 1);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -2216,8 +2339,9 @@ function LiveCardActionButton({ cloudId, initialHypes }: { cloudId: string; init
       <button
         type="button"
         aria-label="Hypar"
-        onClick={() => { setHyped(v => !v); setHypes(v => hyped ? v - 1 : v + 1); }}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition ${hyped ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 bg-white/5 text-white/60 hover:border-orange-500/40 hover:text-orange-400"}`}
+        disabled={loading}
+        onClick={handleHype}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-60 ${hyped ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 bg-white/5 text-white/60 hover:border-orange-500/40 hover:text-orange-400"}`}
       >
         <FireIcon s={14} />
         {hypes > 0 ? hypes : "Hypar"}
@@ -2266,13 +2390,25 @@ function PageContent() {
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
 
   // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
+  // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
   // e o card visível respeitem o filtro selecionado.
   const orderedClouds = useMemo(() => {
-    let sorted = [...clouds].sort((a, b) => {
-      if (feedOrder === "recent") return b.createdAt.getTime() - a.createdAt.getTime();
-      return (b.liveParticipants ?? 0) - (a.liveParticipants ?? 0)
-        || b.createdAt.getTime() - a.createdAt.getTime();
-    });
+    let sorted: Cloud[];
+    if (feedOrder === "recent") {
+      // Recentes: ordena por data de criação
+      sorted = [...clouds].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    } else {
+      // Default: respeita a ordem do servidor (já ordenada por hype score + recência)
+      // mas reordena localmente pelo score de hypes para refletir hypes feitos na sessão
+      const now = Date.now();
+      sorted = [...clouds].sort((a, b) => {
+        const ageA = (now - a.createdAt.getTime()) / 3_600_000;
+        const ageB = (now - b.createdAt.getTime()) / 3_600_000;
+        const scoreA = (a.hypes ?? 0) * 3 + Math.max(0, 1 - ageA / 72) * 10;
+        const scoreB = (b.hypes ?? 0) * 3 + Math.max(0, 1 - ageB / 72) * 10;
+        return scoreB - scoreA;
+      });
+    }
     // Se veio do Trending com ?q=palavra, coloca as clouds com essa palavra primeiro
     if (trendingQuery) {
       sorted = [
@@ -2447,8 +2583,8 @@ function PageContent() {
     return cloud;
   };
 
-  const hyparCloud = (cloudId: string, newCount: number) => {
-    setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: newCount } : c));
+  const hyparCloud = (cloudId: string, newCount: number, wasHyped: boolean) => {
+    setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: newCount, hyped: !wasHyped } : c));
   };
 
   const publishPoll = (data: Omit<Poll, "id" | "createdAt" | "votedOptionId">) => {
@@ -2504,20 +2640,20 @@ function PageContent() {
       {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
 
       {/* ── Header — fundo gradiente escuro ── */}
-      <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <header className="flex-none bg-transparent">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
 
           {/* Logo */}
-          <a href="/" className="flex shrink-0 items-center gap-4 pb-2">
+          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
-          </a>
+          </Link>
 
           {/* Nav */}
           <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
-            <a href="/" className="relative inline-flex h-12 items-center text-[22px] font-semibold text-white">
+            <Link href="/" className="relative inline-flex h-12 items-center text-[22px] font-semibold text-white">
               For You
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
-            </a>
+            </Link>
             <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Seguindo
             </Link>
@@ -2556,7 +2692,7 @@ function PageContent() {
                 </svg>
                 <span className="text-[#C084FC]">#{trendingQuery.charAt(0).toUpperCase() + trendingQuery.slice(1)}</span>
                 <span className="text-white/50">em alta</span>
-                <a href="/" className="ml-1 text-white/30 hover:text-white transition">×</a>
+                <Link href="/" className="ml-1 text-white/30 hover:text-white transition">×</Link>
               </div>
             ) : (
               <button
@@ -2570,7 +2706,9 @@ function PageContent() {
                 Recentes
               </button>
             )}
-            {/* Left arrow — próximo ao card */}
+            {currentCloud ? (
+            <>
+            {/* Left arrow */}
             <button
               onClick={() => navigateCloud(-1)}
               aria-label="Cloud anterior"
@@ -2592,86 +2730,84 @@ function PageContent() {
                 opacity: slideAnim ? 0.15 : 1,
               }}
             >
-          {/* Card header */}
-          <div className="flex items-center justify-between px-10 pt-8 pb-5">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <img
-                  src={currentCloud?.authorPhoto ?? `https://i.pravatar.cc/80?img=${(hashString(currentCloud?.id ?? "0") % 70) + 1}`}
-                  alt="author"
-                  className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
-                  referrerPolicy="no-referrer"
-                />
-                <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
-              </div>
-              <div>
-                <p className="flex items-center gap-2 text-[18px] font-semibold text-white">
-                  {currentCloud?.authorName ?? "Autor"}
-                  <svg viewBox="0 0 24 24" width={18} height={18} fill="#A855F7" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </p>
-                <p className="text-[14px] text-white/45">@{currentCloud?.authorHandle ?? "user"}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-5">
-              {/* Timer — destaque maior */}
-              <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
-                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/>
-                </svg>
-                <span className="text-[19px] font-bold tabular-nums text-white">
-                  {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
-                </span>
-              </div>
-              {/* Participants */}
-              <div className="flex items-center gap-2 text-[16px] font-semibold text-white">
-                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-                {formatParticipantCount(participants)}
-              </div>
-              <div className="relative flex items-center">
-                <button type="button" aria-label="Mais opções da Cloud" onClick={() => setCloudOptionsOpen((open) => !open)} className="flex items-center text-white hover:text-white/70 transition">
-                  <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                </button>
-                {cloudOptionsOpen && currentCloud && (
-                  <div className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
-                    <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudInfoOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Informações da Cloud</button>
-                    <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudDescriptionOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ler descrição</button>
-                    <button type="button" onClick={() => { setCloudOptionsOpen(false); window.alert("Denúncia registrada. Nossa equipe analisará esta Cloud."); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>
+              {/* Card header */}
+              <div className="flex items-center justify-between px-10 pt-8 pb-5">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <img
+                      src={currentCloud.authorPhoto ?? `https://i.pravatar.cc/80?img=${(hashString(currentCloud.id) % 70) + 1}`}
+                      alt="author"
+                      className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
                   </div>
-                )}
+                  <div>
+                    <p className="flex items-center gap-2 text-[18px] font-semibold text-white">
+                      {currentCloud.authorName ?? "Autor"}
+                      <svg viewBox="0 0 24 24" width={18} height={18} fill="#A855F7" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </p>
+                    <p className="text-[14px] text-white/45">@{currentCloud.authorHandle ?? "user"}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-5">
+                  {/* Timer */}
+                  <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
+                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/>
+                    </svg>
+                    <span className="text-[19px] font-bold tabular-nums text-white">
+                      {formatCountdown(currentCountdown)}
+                    </span>
+                  </div>
+                  {/* Participants */}
+                  <div className="flex items-center gap-2 text-[16px] font-semibold text-white">
+                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    {formatParticipantCount(participants)}
+                  </div>
+                  <div className="relative flex items-center">
+                    <button type="button" aria-label="Mais opções da Cloud" onClick={() => setCloudOptionsOpen((open) => !open)} className="flex items-center text-white hover:text-white/70 transition">
+                      <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                    </button>
+                    {cloudOptionsOpen && (
+                      <div className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
+                        <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudInfoOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Informações da Cloud</button>
+                        <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudDescriptionOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ler descrição</button>
+                        <button type="button" onClick={() => { setCloudOptionsOpen(false); window.alert("Denúncia registrada. Nossa equipe analisará esta Cloud."); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Big title */}
+              <div className="px-12 py-12 text-center">
+                <h2
+                  className="text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[72px]"
+                  style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
+                >
+                  {currentCloud.title}
+                </h2>
+              </div>
+
+              {/* Enter button */}
+              <div className="flex justify-center px-12 pb-12">
+                <button
+                  type="button"
+                  onClick={() => enterConversation(currentCloud)}
+                  className="rounded-full border border-[#A855F7]/70 bg-transparent px-24 py-5 text-[18px] font-semibold text-white transition hover:bg-[#A855F7]/20"
+                >
+                  Entrar na Cloud
+                </button>
               </div>
             </div>
-          </div>
-
-          {/* Big title */}
-          <div className="px-12 py-12 text-center">
-            <h2
-              className="text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[72px]"
-              style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
-            >
-              {currentCloud?.title ?? "Nenhuma Cloud ativa no momento"}
-            </h2>
-          </div>
-
-          {/* Enter button */}
-          <div className="flex justify-center px-12 pb-12">
-            <button
-              type="button"
-              onClick={() => currentCloud && enterConversation(currentCloud)}
-              disabled={!currentCloud}
-              className="rounded-full border border-[#A855F7]/70 bg-transparent px-24 py-5 text-[18px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Entrar na Cloud
-            </button>
-          </div>
-
-        </div>
 
           {/* Dot indicators */}
           {activeClouds.length > 1 && (
@@ -2691,7 +2827,7 @@ function PageContent() {
           )}
             </div>
 
-        {/* Right arrow — próximo ao card */}
+        {/* Right arrow */}
         <button
           onClick={() => navigateCloud(1)}
           aria-label="Próxima Cloud"
@@ -2699,6 +2835,30 @@ function PageContent() {
         >
           <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
         </button>
+            </>
+            ) : (
+            /* Empty state — sem cards, sem setas */
+            <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/empty-clouds-sad.png"
+                alt="Sem clouds ativas"
+                className="h-72 w-72 select-none"
+                style={{ mixBlendMode: "lighten" }}
+                draggable={false}
+              />
+              <p className="text-[18px] font-semibold text-white/80">
+                Sem clouds ativas no momento, que tal começar alguma?
+              </p>
+              <button
+                type="button"
+                onClick={() => setModal("create")}
+                className="rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
+              >
+                Criar uma Cloud
+              </button>
+            </div>
+            )}
 
         {/* FAB + */}
         <button
@@ -2748,13 +2908,13 @@ function PageContent() {
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
 
           {/* Home */}
-          <a href="/" className="flex flex-col items-center gap-2 text-[#A855F7]">
+          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7]">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
               <path d="M9 21V12h6v9"/>
             </svg>
             <span className="text-[13px] font-semibold">Home</span>
-          </a>
+          </Link>
 
           {/* Messages */}
           <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">

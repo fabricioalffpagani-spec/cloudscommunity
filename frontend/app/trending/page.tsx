@@ -6,6 +6,7 @@ import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { SearchModal } from "../components/SearchModal";
+import { NotificationsBell } from "../components/NotificationsPanel";
 
 type TrendingTopic = {
   word: string;
@@ -113,28 +114,26 @@ export default function TrendingPage() {
     >
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {/* ── Header ── */}
-      <header className="flex-none border-b border-white/[0.07]" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(20,5,40,0.40) 0%, rgba(8,3,20,0.85) 45%, #030208 100%)" }}>
+      <header className="flex-none bg-transparent">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
-          <a href="/" className="flex shrink-0 items-center gap-4 pb-2">
+          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
-          </a>
+          </Link>
           <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
-            <a href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">For You</a>
-            <a href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Seguindo</a>
+            <Link href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">For You</Link>
+            <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
           </nav>
           <div className="flex items-center gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
             </button>
-            <button type="button" aria-label="Notificações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <BellIcon s={28} />
-            </button>
-            <a href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+            <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
+            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
               <GearIcon s={28} />
-            </a>
-            <a href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
+            </Link>
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
               <SessionUserAvatar user={sessionUser} size={56} />
-            </a>
+            </Link>
           </div>
         </div>
       </header>
@@ -232,23 +231,23 @@ export default function TrendingPage() {
       {/* ── Bottom Navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <a href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
+          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
               <path d="M9 21V12h6v9"/>
             </svg>
             <span className="text-[13px] font-semibold">Home</span>
-          </a>
-          <a href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
+          </Link>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
             <span className="text-[13px] font-semibold">Messages</span>
-          </a>
-          <a href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
+          </Link>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
             <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
-          </a>
+          </Link>
         </div>
       </nav>
     </div>

@@ -24,8 +24,8 @@ export type FeedCloud = {
 
 function parseDurationSeconds(duration: string) {
   const map: Record<string, number> = {
+    "10min": 10 * 60,
     "30min": 30 * 60,
-    "1h": 60 * 60,
     "2h": 2 * 60 * 60,
     "5h": 5 * 60 * 60,
     "24h": 24 * 60 * 60,

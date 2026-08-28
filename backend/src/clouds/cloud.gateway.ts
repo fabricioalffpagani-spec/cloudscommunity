@@ -226,7 +226,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
 
     const timer = setTimeout(() => {
       void this.stopTyping(socket, cloudId);
-    }, 2500);
+    }, 1000);
 
     this.typingTimers.set(key, timer);
   }

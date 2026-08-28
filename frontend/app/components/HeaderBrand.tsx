@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export function HeaderBrand() {
   return (
-    <span className="inline-flex items-center gap-4" aria-label="Clouds Community">
+    <span className="inline-flex items-center gap-4 border-0" aria-label="Clouds Community">
       <Image
         src="/logo_clouds.png"
         alt="Clouds Community"

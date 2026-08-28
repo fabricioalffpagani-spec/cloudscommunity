@@ -11,4 +11,4 @@ COPY . .
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm run dev -- --webpack --hostname 0.0.0.0 --port ${UI_HTTP_PORT:-3000}"]
+CMD ["sh", "-c", "node_modules/.bin/next dev --turbopack --hostname 0.0.0.0 --port ${UI_HTTP_PORT:-3000}"]
