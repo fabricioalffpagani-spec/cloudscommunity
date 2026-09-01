@@ -80,7 +80,7 @@ type CloudMessagePayload = {
   id: string;
   cloudId: string;
   senderId: string;
-  type: "text" | "audio" | "image" | "link";
+  type: "text" | "audio" | "image" | "link" | "system";
   content: string | null;
   mediaUrl: string | null;
   clientMessageId: string | null;
@@ -141,7 +141,7 @@ type ChatMessage = {
   senderName: string;
   senderAvatarUrl: string | null;
   side: "left" | "right";
-  kind: "text" | "audio" | "image" | "link";
+  kind: "text" | "audio" | "image" | "link" | "system";
   content: string;
   mediaUrl: string | null;
   replyTo: {
@@ -350,6 +350,7 @@ function mergeMessage(list: ChatMessage[], next: ChatMessage) {
 
 function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string | null): ChatMessage {
   const isOwn = Boolean(currentUserId && payload.senderId === currentUserId);
+  const isSystem = payload.type === 'system';
 
   return {
     id: payload.id,
@@ -357,7 +358,7 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     senderId: payload.senderId,
     senderName: payload.sender.displayName || payload.sender.username || "Usuário",
     senderAvatarUrl: payload.sender.avatarUrl,
-    side: isOwn ? "right" : "left",
+    side: isSystem ? "left" : isOwn ? "right" : "left",
     kind: payload.type,
     content: payload.content || "",
     mediaUrl: payload.mediaUrl,
@@ -964,10 +965,10 @@ function CloudMsgMenu({
 
 function TypingDots() {
   return (
-    <span className="typing-ellipsis inline-flex items-center gap-[5px]" aria-hidden="true">
-      <span className="h-[8px] w-[8px] rounded-full bg-white" />
-      <span className="h-[8px] w-[8px] rounded-full bg-white" />
-      <span className="h-[8px] w-[8px] rounded-full bg-white" />
+    <span className="typing-ellipsis inline-flex items-end gap-[3px] px-0.5" aria-label="Digitando">
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
+      <span className="h-[5px] w-[5px] rounded-full bg-[#A855F7]" />
     </span>
   );
 }
@@ -986,10 +987,9 @@ function TypingBubble({ avatars, exiting }: { avatars: Array<{ id: string; name:
           />
         ))}
       </div>
-      {/* Balão azul com bolinhas */}
+      {/* Balão preto com bolinhas */}
       <div
-        className="flex items-center gap-1 rounded-[18px] rounded-bl-[4px] px-4 py-[10px]"
-        style={{ background: "#2B6BFF" }}
+        className="flex items-center gap-1 rounded-[18px] rounded-bl-[4px] px-4 py-[10px] bg-black"
       >
         <TypingDots />
       </div>
@@ -1025,6 +1025,34 @@ function ImageBubble({ msg }: { msg: ChatMessage }) {
         <div className="px-4 py-8 text-[14px] text-white/50">Imagem indisponível</div>
       )}
     </a>
+  );
+}
+
+function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
+  return (
+    <div className="flex justify-center py-1.5 w-full">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.05]">
+        {msg.senderAvatarUrl && (
+          <UserAvatar
+            user={{
+              id: msg.senderId,
+              username: msg.senderId,
+              displayName: msg.senderName,
+              avatarUrl: msg.senderAvatarUrl,
+            }}
+            size={20}
+          />
+        )}
+        {!msg.senderAvatarUrl && (
+          <div className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-[#7C3AED]">
+            {msg.senderName.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <span className="text-[12px] text-white/60 font-medium">
+          {msg.content}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -1603,6 +1631,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
       if (socket.connected) {
         socket.emit("cloud:join", { cloudId });
       }
+      // HTTP join so the backend creates the system message and broadcasts it to all members
+      fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
+        method: "POST",
+        credentials: "include",
+      }).catch(() => {
+        // ignore — system message is best-effort
+      });
     }, 450);
 
     return () => clearTimeout(timer);
@@ -2137,7 +2172,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
                 );
               }
 
-              return <CloudMessageBubble key={entry.id} msg={entry as ChatMessage} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === (entry as ChatMessage).id} />;
+              const msg = entry as ChatMessage;
+              if (msg.kind === "system") {
+                return <SystemMessageBubble key={msg.id} msg={msg} />;
+              }
+
+              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
             });
           })()
         )}

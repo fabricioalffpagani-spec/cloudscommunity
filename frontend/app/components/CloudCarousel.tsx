@@ -128,7 +128,7 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           draggable={false}
         />
         <p className="mt-4 text-[18px] font-semibold text-white/80">
-          Sem clouds de seus seguidores, que tal acordar o pessoal?
+          Sem clouds ativas no momento
         </p>
         {onCreateCloud && (
           <button

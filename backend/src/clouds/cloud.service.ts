@@ -1084,7 +1084,24 @@ export class CloudService {
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
-  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {
+  private async createSystemMessage(
+    cloudId: string,
+    content: string,
+    senderId: string
+  ): Promise<CloudMessagePayload> {
+    const created = await this.prisma.cloudMessage.create({
+      data: {
+        cloudId,
+        userId: senderId,
+        type: 'system',
+        content,
+      },
+      include: this.messageInclude(),
+    });
+    return this.mapMessage(created, null);
+  }
+
+  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true; systemMessage?: CloudMessagePayload }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1100,14 +1117,16 @@ export class CloudService {
       where: { cloudId, userId: current.user.id },
     });
 
+    let isNewJoin = false;
     if (existing) {
       if (existing.leftAt !== null) {
         await this.prisma.cloudMember.update({
           where: { id: existing.id },
           data: { leftAt: null, joinedAt: new Date() },
         });
+        isNewJoin = true;
       }
-      // already an active member — no-op
+      // already an active member — still create system message for rejoin
     } else {
       await this.prisma.cloudMember.create({
         data: {
@@ -1116,9 +1135,22 @@ export class CloudService {
           role: 'member',
         },
       });
+      isNewJoin = true;
     }
 
-    return { ok: true };
+    // Create system message for all joins (new and rejoin)
+    const userWithProfile = await this.prisma.user.findUnique({
+      where: { id: current.user.id },
+      include: { profile: true },
+    });
+    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
+    const systemMessage = await this.createSystemMessage(
+      cloudId,
+      `${displayName} entrou na cloud`,
+      current.user.id
+    );
+
+    return { ok: true, systemMessage };
   }
 
   async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {

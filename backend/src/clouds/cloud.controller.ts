@@ -1,4 +1,4 @@
-import {
+﻿import {
   Body,
   Controller,
   Delete,
@@ -86,7 +86,19 @@ export class CloudController {
 
   @Post(':id/join')
   async joinCloud(@Param('id') id: string, @Req() req: Request) {
-    return this.cloudService.joinCloud(extractSessionToken(req), id);
+    const token = extractSessionToken(req);
+    const session = await this.authService.resolveSession(token);
+    const result = await this.cloudService.joinCloud(token, id);
+    
+    if (result.systemMessage) {
+      // Pass null so the gateway broadcasts to ALL room members including the joining user
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        id,
+        result.systemMessage
+      );
+    }
+    return result;
   }
 
   @Post(':id/leave')

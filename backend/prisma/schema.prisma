@@ -34,6 +34,7 @@ enum MessageType {
   audio
   image
   link
+  system
 }
 
 enum CloudMemberRole {

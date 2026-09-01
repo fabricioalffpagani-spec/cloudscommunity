@@ -1574,9 +1574,7 @@ function MessagesPageContent() {
     ? activeConversation
       ? { id: activeConversation.peerId, username: activeConversation.peerUsername, name: activeConversation.name, avatarUrl: activeConversation.avatarUrl, label: `${activeConversation.name} está digitando` }
       : null
-    : isTypingLocally
-      ? { id: user?.id ?? "local-typing", username: user?.username ?? "voce", name: "Você", avatarUrl: user?.avatarUrl ?? null, label: "Você está digitando" }
-      : null;
+    : null;
   const isAudioBusy = audioUploading || imageUploading || linkUploading || audioRecorder.state !== "idle";
 
   const loadConversations = useCallback(async () => {
@@ -2340,21 +2338,14 @@ function MessagesPageContent() {
               })()
             )}
             {typingPerson && (
-              <div className={`flex items-end gap-2 pt-1 ${typingPerson.name === "Você" ? "justify-end" : "justify-start"}`} role="status" aria-live="polite">
-                {typingPerson.name !== "Você" && (
-                  <Link href={`/users/${typingPerson.id}`} aria-label={`Ver perfil de ${typingPerson.name}`}>
-                    <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />
-                  </Link>
-                )}
-                <div key={typingPerson.name === "Você" ? draft : typingPerson.id} className={`relative rounded-[20px] bg-black px-3 py-2.5 ${typingPerson.name === "Você" ? "typing-indicator-fade rounded-br-md" : "rounded-bl-md"}`}>
+              <div className="flex items-end gap-2 pt-1 justify-start" role="status" aria-live="polite">
+                <Link href={`/users/${typingPerson.id}`} aria-label={`Ver perfil de ${typingPerson.name}`}>
+                  <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />
+                </Link>
+                <div key={typingPerson.id} className="relative rounded-[20px] bg-black px-3 py-2.5 rounded-bl-md">
                   <TypingDots />
                 </div>
-                {typingPerson.name !== "Você" && <span className="pb-1 text-[12px] text-white/55">{typingPerson.label}</span>}
-                {typingPerson.name === "Você" && (
-                  <Link href={`/users/${typingPerson.id}`} aria-label="Ver seu perfil">
-                    <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />
-                  </Link>
-                )}
+                <span className="pb-1 text-[12px] text-white/55">{typingPerson.label}</span>
               </div>
             )}
             <div ref={bottomRef} />

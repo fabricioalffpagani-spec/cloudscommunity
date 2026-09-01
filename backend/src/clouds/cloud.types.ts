@@ -50,7 +50,7 @@ export type CloudMessagePayload = {
   id: string;
   cloudId: string;
   senderId: string;
-  type: 'text' | 'audio' | 'image' | 'link';
+  type: 'text' | 'audio' | 'image' | 'link' | 'system';
   content: string | null;
   mediaUrl: string | null;
   clientMessageId: string | null;
