@@ -86,9 +86,7 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
     ? Math.max(parseDurationSeconds(currentCloud.duration) - Math.floor((now - currentCloud.createdAt.getTime()) / 1000), 0)
     : 0;
 
-  const participants = currentCloud
-    ? Math.max(1, (currentCloud.liveParticipants ?? 12 + ((currentCloud.id.charCodeAt(0) ?? 0) % 40)) + ((Math.floor(now / 4000) % 3) - 1))
-    : 0;
+  const participants = currentCloud?.liveParticipants ?? 0;
 
   const navigateCloud = (direction: number) => {
     if (activeClouds.length <= 1) return;
@@ -111,7 +109,6 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
       title: cloud.title,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
-      participants: String(cloud.liveParticipants ?? 1),
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };

@@ -107,7 +107,6 @@ type CloudChatProps = {
   title?: string;
   duration?: string;
   createdAt?: string;
-  participants?: number;
   visibility?: string;
 };
 
@@ -1229,12 +1228,13 @@ function CloudMessageBubble({
   );
 }
 
-export default function CloudChat({ cloudId, title, duration, createdAt, participants, visibility }: CloudChatProps) {
+export default function CloudChat({ cloudId, title, duration, createdAt, visibility }: CloudChatProps) {
   const { user, status } = useSessionUser();
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const hasJoinedRef = useRef(false);
   const audioRecorder = useAudioRecorder((recording) => {
     void handleAudioRecordingStop(recording);
   });
@@ -1480,6 +1480,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
     setError(null);
 
     try {
+      // Remove the live socket first so the backend count is already current
+      // when the persisted membership endpoint is called.
+      socketRef.current?.emit("cloud:leave", { cloudId });
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/leave`, {
         method: "POST",
         credentials: "include",
@@ -1512,7 +1515,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
           ? {
               ...current,
               members: current.members?.filter((member) => member.userId !== memberId) ?? [],
-              membersCount: Math.max(0, current.membersCount - 1),
             }
           : current,
       );
@@ -1612,6 +1614,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
       }, 1000);
     });
 
+    socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number }) => {
+      if (payload.cloudId !== cloudId) return;
+      setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount } : prev);
+    });
+
     return () => {
       Object.values(incomingTypingTimersRef.current).forEach(clearTimeout);
       incomingTypingTimersRef.current = {};
@@ -1627,20 +1634,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
       return;
     }
 
-    const timer = setTimeout(() => {
-      if (socket.connected) {
-        socket.emit("cloud:join", { cloudId });
-      }
-      // HTTP join so the backend creates the system message and broadcasts it to all members
+    // Emit socket join on every reconnection so the socket room stays correct
+    socket.emit("cloud:join", { cloudId });
+
+    // HTTP join only once per component mount — creates the system message + broadcasts membersCount
+    if (!hasJoinedRef.current) {
+      hasJoinedRef.current = true;
       fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
         method: "POST",
         credentials: "include",
       }).catch(() => {
         // ignore — system message is best-effort
       });
-    }, 450);
-
-    return () => clearTimeout(timer);
+    }
   }, [cloudId, connectionState, status, user]);
 
   useEffect(() => {
@@ -1958,7 +1964,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, partici
 
   const isAudioBusy = audioUploading || imageUploading || audioRecorder.state !== "idle";
   const resolvedTitle = cloud?.title || title || "Cloud";
-  const resolvedParticipants = cloud?.membersCount ?? participants ?? 0;
+  const resolvedParticipants = cloud?.membersCount ?? 0;
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const shareLink = typeof window !== "undefined" ? `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}` : `/cloud/${encodeURIComponent(cloudId)}`;
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");

@@ -9,6 +9,7 @@ import { CloudCarousel, type CarouselCloud } from "../components/CloudCarousel";
 import { SearchModal } from "../components/SearchModal";
 import { NotificationsBell } from "../components/NotificationsPanel";
 import { CreateCloudModal } from "../page";
+import { subscribeToCloudPresence } from "../lib/cloud-presence";
 
 type CloudAuthor = {
   id: string;
@@ -63,7 +64,7 @@ function mapFollowingCloudToCarouselCloud(cloud: FollowingCloud): CarouselCloud 
     title: cloud.title,
     duration: cloud.duration,
     createdAt: new Date(cloud.createdAt),
-    liveParticipants: Math.max(1, cloud.membersCount),
+    liveParticipants: cloud.membersCount,
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     authorName: cloud.author.name,
     authorHandle: cloud.author.username,
@@ -108,6 +109,10 @@ export default function FollowingPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => subscribeToCloudPresence(({ cloudId, membersCount }) => {
+    setClouds((prev) => prev.map((cloud) => cloud.id === cloudId ? { ...cloud, membersCount } : cloud));
+  }), []);
 
   const carouselClouds = clouds.map(mapFollowingCloudToCarouselCloud);
 

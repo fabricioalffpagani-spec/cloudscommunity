@@ -22,10 +22,20 @@ type CloudWithRelations = Prisma.CloudGetPayload<{
         profile: true;
       };
     };
+    members: {
+      where: { leftAt: null };
+      include: {
+        user: {
+          include: {
+            profile: true;
+          };
+        };
+      };
+    };
     _count: {
       select: {
         hypes: true;
-        members: true;
+        members: { where: { leftAt: null } };
       };
     };
   };
@@ -1101,7 +1111,16 @@ export class CloudService {
     return this.mapMessage(created, null);
   }
 
-  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true; systemMessage?: CloudMessagePayload }> {
+  async createJoinNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
+    const userWithProfile = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
+    return this.createSystemMessage(cloudId, `${displayName} entrou na cloud`, userId);
+  }
+
+  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1117,16 +1136,13 @@ export class CloudService {
       where: { cloudId, userId: current.user.id },
     });
 
-    let isNewJoin = false;
     if (existing) {
       if (existing.leftAt !== null) {
         await this.prisma.cloudMember.update({
           where: { id: existing.id },
           data: { leftAt: null, joinedAt: new Date() },
         });
-        isNewJoin = true;
       }
-      // already an active member — still create system message for rejoin
     } else {
       await this.prisma.cloudMember.create({
         data: {
@@ -1135,22 +1151,9 @@ export class CloudService {
           role: 'member',
         },
       });
-      isNewJoin = true;
     }
 
-    // Create system message for all joins (new and rejoin)
-    const userWithProfile = await this.prisma.user.findUnique({
-      where: { id: current.user.id },
-      include: { profile: true },
-    });
-    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
-    const systemMessage = await this.createSystemMessage(
-      cloudId,
-      `${displayName} entrou na cloud`,
-      current.user.id
-    );
-
-    return { ok: true, systemMessage };
+    return { ok: true };
   }
 
   async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {
@@ -1192,6 +1195,7 @@ export class CloudService {
         },
       },
       members: {
+        where: { leftAt: null as Date | null },
         include: {
           user: {
             include: {
@@ -1203,7 +1207,7 @@ export class CloudService {
       _count: {
         select: {
           hypes: true,
-          members: true,
+          members: { where: { leftAt: null as Date | null } },
         },
       },
     };
@@ -1268,7 +1272,8 @@ export class CloudService {
         avatarUrl: profile.avatarUrl,
       },
       hypesCount: cloud._count.hypes,
-      membersCount: Math.max(1, cloud._count.members),
+      // CloudMember is membership/history data, not real-time presence.
+      membersCount: 0,
       href: `/cloud/${cloud.id}`,
       status: cloud.status === CloudStatus.active ? 'active' : 'inactive',
     };

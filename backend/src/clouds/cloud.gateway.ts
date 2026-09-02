@@ -94,6 +94,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     }
 
     await this.clearTypingStatesForUser(userId, joinedCloudIds);
+    await Promise.all(Array.from(joinedCloudIds, (cloudId) => this.broadcastMembersUpdated(cloudId)));
   }
 
   @SubscribeMessage('cloud:join')
@@ -114,8 +115,17 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     }
 
     const cloud = await this.cloudService.requireCloudAccess(cloudId);
+    const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
+    const isNewSocketRoomJoin = !joinedCloudIds.has(cloudId);
     await socket.join(this.cloudRoom(cloudId));
-    (socket.data as CloudSocketData).joinedCloudIds?.add(cloudId);
+    joinedCloudIds.add(cloudId);
+
+    if (isNewSocketRoomJoin) {
+      const systemMessage = await this.cloudService.createJoinNotification(cloudId, userId);
+      await this.broadcastMessageCreated(null, cloudId, systemMessage);
+    }
+
+    await this.broadcastMembersUpdated(cloudId);
 
     return { ok: true as const, data: { cloudId, cloud } };
   }
@@ -134,6 +144,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     await socket.leave(this.cloudRoom(cloudId));
     (socket.data as CloudSocketData).joinedCloudIds?.delete(cloudId);
     await this.stopTyping(socket, cloudId);
+    await this.broadcastMembersUpdated(cloudId);
     return { ok: true as const, data: { cloudId } };
   }
 
@@ -167,6 +178,17 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     this.scheduleTypingTimeout(socket, cloudId);
 
     return { ok: true as const, data: payload };
+  }
+
+  async getConnectedMemberCount(cloudId: string): Promise<number> {
+    const sockets = await this.server.in(this.cloudRoom(cloudId)).fetchSockets();
+    return sockets.length;
+  }
+
+  async broadcastMembersUpdated(cloudId: string) {
+    const membersCount = await this.getConnectedMemberCount(cloudId);
+    this.server.emit('cloud:members_updated', { cloudId, membersCount });
+    return membersCount;
   }
 
   async broadcastMessageCreated(userId: string | null, cloudId: string, message: CloudMessagePayload) {

@@ -46,17 +46,20 @@ export class CloudController {
 
   @Get()
   async feed(@Req() req: Request) {
-    return this.cloudService.listFeed(extractSessionToken(req));
+    const result = await this.cloudService.listFeed(extractSessionToken(req));
+    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
   }
 
   @Get('mine')
   async mine(@Req() req: Request) {
-    return this.cloudService.listMine(extractSessionToken(req));
+    const result = await this.cloudService.listMine(extractSessionToken(req));
+    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
   }
 
   @Get('following')
   async following(@Req() req: Request) {
-    return this.cloudService.listFollowing(extractSessionToken(req));
+    const result = await this.cloudService.listFollowing(extractSessionToken(req));
+    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
   }
 
   @Get('invite/:token')
@@ -66,17 +69,21 @@ export class CloudController {
 
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
-    return this.cloudService.findById(extractSessionToken(req), id);
+    const result = await this.cloudService.findById(extractSessionToken(req), id);
+    return { ...result, cloud: await this.withLiveCount(result.cloud) };
   }
 
   @Post()
   async create(@Body() body: Record<string, unknown>, @Req() req: Request) {
-    return this.cloudService.create(extractSessionToken(req), {
+    const result = await this.cloudService.create(extractSessionToken(req), {
       title: typeof body.title === 'string' ? body.title : undefined,
       description: typeof body.description === 'string' ? body.description : undefined,
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
     } satisfies CreateCloudInput);
+    // Creation is independent from Socket.IO presence. The creator is not in
+    // the room yet, so the service response correctly starts at zero.
+    return result;
   }
 
   @Post(':id/invite')
@@ -87,23 +94,17 @@ export class CloudController {
   @Post(':id/join')
   async joinCloud(@Param('id') id: string, @Req() req: Request) {
     const token = extractSessionToken(req);
-    const session = await this.authService.resolveSession(token);
     const result = await this.cloudService.joinCloud(token, id);
     
-    if (result.systemMessage) {
-      // Pass null so the gateway broadcasts to ALL room members including the joining user
-      await this.cloudMessagesGateway.broadcastMessageCreated(
-        null,
-        id,
-        result.systemMessage
-      );
-    }
-    return result;
+    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    return { ...result, membersCount };
   }
 
   @Post(':id/leave')
   async leaveCloud(@Param('id') id: string, @Req() req: Request) {
-    return this.cloudService.leaveCloud(extractSessionToken(req), id);
+    const result = await this.cloudService.leaveCloud(extractSessionToken(req), id);
+    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    return { ...result, membersCount };
   }
 
   @Post(':id/hype')
@@ -123,7 +124,9 @@ export class CloudController {
 
   @Delete(':id/members/:userId')
   async removeMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
-    return this.cloudService.removeMember(extractSessionToken(req), id, userId);
+    const result = await this.cloudService.removeMember(extractSessionToken(req), id, userId);
+    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    return { ...result, membersCount };
   }
 
   @Patch(':id/messages/:messageId/pin')
@@ -250,5 +253,13 @@ export class CloudController {
   @Get(':id/messages/:messageId/reactions')
   async getMessageReactions(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
     return this.cloudService.getMessageReactions(extractSessionToken(req), id, messageId);
+  }
+
+  private async withLiveCount<T extends { id: string; membersCount: number }>(cloud: T): Promise<T> {
+    return { ...cloud, membersCount: await this.cloudMessagesGateway.getConnectedMemberCount(cloud.id) };
+  }
+
+  private async withLiveCounts<T extends { id: string; membersCount: number }>(clouds: T[]): Promise<T[]> {
+    return Promise.all(clouds.map((cloud) => this.withLiveCount(cloud)));
   }
 }

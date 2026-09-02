@@ -107,7 +107,7 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
-  const participantCount = cloud.liveParticipants ?? Math.max(18, (cloud.hypes ?? 0) + 24);
+  const participantCount = cloud.liveParticipants ?? 0;
   const participantAvatars = [
     cloud.authorPhoto ?? `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-author`) % 70) + 1}`,
     `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
@@ -203,7 +203,7 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
 
       <div className="mt-4 flex justify-end">
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility)}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&visibility=${encodeURIComponent(cloud.visibility)}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa

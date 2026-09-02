@@ -2,7 +2,7 @@ import CloudChat from "./CloudChat";
 
 type CloudPageProps = {
   params?: Promise<{ id?: string }>;
-  searchParams?: Promise<{ title?: string; duration?: string; createdAt?: string; participants?: string; visibility?: string }>;
+  searchParams?: Promise<{ title?: string; duration?: string; createdAt?: string; visibility?: string }>;
 };
 
 export default async function CloudPage({ params, searchParams }: CloudPageProps) {
@@ -13,7 +13,6 @@ export default async function CloudPage({ params, searchParams }: CloudPageProps
   const title = sp.title ? decodeURIComponent(sp.title) : undefined;
   const duration = sp.duration ? decodeURIComponent(sp.duration) : undefined;
   const createdAt = sp.createdAt ? decodeURIComponent(sp.createdAt) : undefined;
-  const participants = sp.participants ? Number(sp.participants) : undefined;
   const visibility = sp.visibility ? decodeURIComponent(sp.visibility) : undefined;
 
   return (
@@ -23,7 +22,6 @@ export default async function CloudPage({ params, searchParams }: CloudPageProps
         title={title}
         duration={duration}
         createdAt={createdAt}
-        participants={participants}
         visibility={visibility}
       />
     </div>

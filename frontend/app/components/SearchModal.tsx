@@ -196,7 +196,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 {clouds.map(cloud => (
                   <button key={cloud.id} className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
                     onClick={() => {
-                      const params = new URLSearchParams({ title: cloud.title, duration: cloud.duration, createdAt: cloud.createdAt, participants: String(cloud.membersCount ?? 1) });
+                      const params = new URLSearchParams({ title: cloud.title, duration: cloud.duration, createdAt: cloud.createdAt });
                       router.push(`/cloud/${cloud.id}?${params.toString()}`);
                       onClose();
                     }}>
