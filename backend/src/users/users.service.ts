@@ -607,4 +607,41 @@ export class UsersService {
       activeClouds: serializedActiveClouds,
     };
   }
+
+  async getInviteContacts(token: string | null): Promise<{
+    ok: true;
+    contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }>;
+  }> {
+    const current = await this.requireSession(token);
+    const profile = await this.prisma.profile.findUnique({ where: { userId: current.user.id } });
+
+    const contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }> = [];
+
+    if (current.user.email) {
+      contacts.push({
+        identifier: current.user.email,
+        displayName: current.user.email,
+        type: 'email',
+      });
+    }
+
+    if (profile?.phone) {
+      contacts.push({
+        identifier: profile.phone,
+        displayName: profile.phone,
+        type: 'phone',
+      });
+    }
+
+    return { ok: true, contacts };
+  }
+
+  async sendInvite(token: string | null, identifier: string): Promise<{ ok: true; inviteUrl: string }> {
+    await this.requireSession(token);
+
+    const appUrl = process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const inviteUrl = `${appUrl}/entrenoclouds`;
+
+    return { ok: true, inviteUrl };
+  }
 }

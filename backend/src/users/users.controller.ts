@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { UsersService } from './users.service';
 
@@ -30,6 +30,16 @@ export class UsersController {
   @Get('following')
   async following(@Req() req: Request) {
     return this.usersService.following(extractSessionToken(req));
+  }
+
+  @Get('invite-contacts')
+  async inviteContacts(@Req() req: Request) {
+    return this.usersService.getInviteContacts(extractSessionToken(req));
+  }
+
+  @Post('send-invite')
+  async sendInvite(@Req() req: Request, @Body() body: { identifier: string }) {
+    return this.usersService.sendInvite(extractSessionToken(req), body.identifier);
   }
 
   @Get(':identifier')

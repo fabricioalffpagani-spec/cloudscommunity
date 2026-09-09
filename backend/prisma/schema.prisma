@@ -92,6 +92,11 @@ model User {
   mediaAssets               MediaAsset[]
   sessions                  Session[]
   cloudMessageReactions     CloudMessageReaction[]
+  cloudBans                 CloudBan[]             @relation("CloudBanUser")
+  cloudBansGiven            CloudBan[]             @relation("CloudBanBannedBy")
+  cloudReports              CloudReport[]          @relation("CloudReportReported")
+  cloudReportsGiven         CloudReport[]          @relation("CloudReportReporter")
+  sharePopup                SharePopup?
 
   @@index([status])
   @@index([createdAt])
@@ -107,11 +112,13 @@ model Profile {
   coverUrl    String?  @db.Text
   location    String?  @db.VarChar(120)
   website     String?  @db.VarChar(255)
+  phone       String?  @db.VarChar(20)
   isPrivate   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts    Contact[]
 
   @@index([displayName])
 }
@@ -139,6 +146,8 @@ model Cloud {
   messages     CloudMessage[]
   members      CloudMember[]
   invites      CloudInvite[]
+  bans         CloudBan[]
+  reports      CloudReport[]
 
   @@index([authorId, createdAt])
   @@index([category])
@@ -282,6 +291,39 @@ model CloudInvite {
   @@index([token])
 }
 
+model CloudBan {
+  id         String   @id @default(uuid()) @db.Uuid
+  cloudId    String   @db.Uuid
+  userId     String   @db.Uuid
+  bannedById String   @db.Uuid
+  createdAt  DateTime @default(now())
+
+  cloud      Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user       User     @relation("CloudBanUser", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy   User     @relation("CloudBanBannedBy", fields: [bannedById], references: [id], onDelete: Cascade)
+
+  @@unique([cloudId, userId])
+  @@index([cloudId])
+  @@index([userId])
+}
+
+model CloudReport {
+  id           String   @id @default(uuid()) @db.Uuid
+  cloudId      String   @db.Uuid
+  reportedId   String   @db.Uuid
+  reporterId   String   @db.Uuid
+  messageId    String?  @db.Uuid
+  reasons      String[] @db.Text
+  createdAt    DateTime @default(now())
+
+  cloud        Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  reported     User     @relation("CloudReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
+  reporter     User     @relation("CloudReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([cloudId, reportedId])
+  @@index([reporterId])
+}
+
 model ConversationMember {
   id              String       @id @default(uuid()) @db.Uuid
   conversationId  String       @db.Uuid
@@ -378,4 +420,38 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Contact {
+  id          String   @id @default(uuid()) @db.Uuid
+  profileId   String   @db.Uuid
+  name        String   @db.VarChar(120)
+  email       String?  @db.VarChar(255)
+  phone       String?  @db.VarChar(20)
+  invited     Boolean  @default(false)
+  invitedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile     Profile  @relation(fields: [profileId], references: [userId], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([email])
+  @@index([phone])
+}
+
+model SharePopup {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  firstShownAt    DateTime @default(now())
+  lastShownAt     DateTime?
+  shownCount      Int      @default(1)
+  dismissedCount  Int      @default(0)
+  sentCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
 }

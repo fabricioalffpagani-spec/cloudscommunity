@@ -218,7 +218,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
   const isPublic = cloud.visibility === "public";
 
   return (
-    <article className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6">
+    <article className="cloud-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
@@ -242,7 +242,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
         </div>
       </div>
 
-      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white">{cloud.title}</h3>
+      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
       {cloud.description && (
         <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
           {cloud.description}
@@ -456,7 +456,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3 text-[12px] text-white/30">
+          <div className="mt-4 flex items-center gap-3 text-[12px] text-white">
             <span>{region}</span>
             <span>·</span>
             <span>Desde {memberSince}</span>
@@ -464,7 +464,6 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-10">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds ativas</p>
           {cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...

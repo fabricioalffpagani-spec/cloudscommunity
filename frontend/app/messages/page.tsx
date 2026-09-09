@@ -783,11 +783,13 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   
   // Check if this is a Cloud invitation (from our custom format)
   let cloudInviteData = null;
+  let isPrivateCloudInvite = false;
   try {
     if (msg.linkLabel) {
       const parsed = JSON.parse(msg.linkLabel);
       if (parsed.type === "cloud_invitation") {
         cloudInviteData = parsed;
+        isPrivateCloudInvite = parsed.cloudVisibility === "private";
       }
     }
   } catch {
@@ -1002,6 +1004,7 @@ function DmMsgMenu({
   msg,
   isRight,
   textContent,
+  openUpward,
   onEdit,
   onDelete,
   onForward,
@@ -1010,6 +1013,7 @@ function DmMsgMenu({
   msg: Msg;
   isRight: boolean;
   textContent: string | null;
+  openUpward: boolean;
   onEdit?: (m: Msg) => void;
   onDelete?: (m: Msg) => void;
   onForward?: (m: Msg) => void;
@@ -1056,6 +1060,19 @@ function DmMsgMenu({
     }
   };
 
+  // Check if this is a private cloud invitation
+  let isPrivateCloudInvite = false;
+  try {
+    if (msg.linkLabel) {
+      const parsed = JSON.parse(msg.linkLabel);
+      if (parsed.type === "cloud_invitation" && parsed.cloudVisibility === "private") {
+        isPrivateCloudInvite = true;
+      }
+    }
+  } catch {
+    // Not JSON
+  }
+
   const copyable = !!textContent || !!msg.linkUrl;
   const isOwn = isRight;
 
@@ -1089,7 +1106,7 @@ function DmMsgMenu({
       label: "Encaminhar",
       icon: <DmMenuForwardIcon />,
       action: () => { onForward?.(msg); onClose(); },
-      show: true,
+      show: !isPrivateCloudInvite, // Hide forward for private cloud invitations
     },
   ];
 
@@ -1097,7 +1114,7 @@ function DmMsgMenu({
     <div
       ref={menuRef}
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
-      style={{ bottom: "calc(100% + 4px)" }}
+      style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
     >
       {translated && (
         <div className="border-b border-white/[0.06] px-4 py-2.5">
@@ -1123,13 +1140,25 @@ function DmMsgMenu({
 function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; searchQuery?: string }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const textContent = msg.kind === "text" ? msg.content : null;
   const highlightedContent = searchQuery && textContent ? highlightText(textContent, searchQuery) : textContent;
 
+  function handleToggleMenu() {
+    if (!menuOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // Open upward if less than 220px below the button
+      setOpenUpward(window.innerHeight - rect.bottom < 220);
+    }
+    setMenuOpen((o) => !o);
+  }
+
   return (
     <div className={`group flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="w-9 shrink-0">
+      {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
+      <div className="w-9 shrink-0 mb-7">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderDisplayName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
@@ -1165,8 +1194,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
             </button>
             <div className="relative">
               <button
+                ref={triggerRef}
                 type="button"
-                onClick={() => setMenuOpen((o) => !o)}
+                onClick={handleToggleMenu}
                 title="Mais opções"
                 className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-white/70"
               >
@@ -1177,6 +1207,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
                   msg={msg}
                   isRight={isRight}
                   textContent={textContent}
+                  openUpward={openUpward}
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onForward={onForward}

@@ -128,11 +128,11 @@ export default function TrendingPage() {
               <SearchIcon s={28} />
             </button>
             <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
-            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <GearIcon s={28} />
-            </Link>
             <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
               <SessionUserAvatar user={sessionUser} size={56} />
+            </Link>
+            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <GearIcon s={28} />
             </Link>
           </div>
         </div>

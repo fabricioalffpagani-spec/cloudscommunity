@@ -167,7 +167,7 @@ export default function InvitePage() {
           <p className="text-[12px] font-semibold uppercase tracking-wider text-white/40 mb-2">
             Você foi convidado para
           </p>
-          <h1 className="text-[22px] font-bold leading-snug text-white">{cloud.title}</h1>
+          <h1 className="text-[22px] font-bold leading-snug text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h1>
           <div className="mt-3 flex items-center justify-center gap-2 text-[13px] text-white/50">
             <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="9" />

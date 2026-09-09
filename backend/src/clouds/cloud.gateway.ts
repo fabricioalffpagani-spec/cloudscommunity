@@ -114,9 +114,13 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
+<<<<<<< Updated upstream
     const cloud = await this.cloudService.requireCloudAccess(cloudId);
     const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
     const isNewSocketRoomJoin = !joinedCloudIds.has(cloudId);
+=======
+    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
+>>>>>>> Stashed changes
     await socket.join(this.cloudRoom(cloudId));
     joinedCloudIds.add(cloudId);
 
@@ -166,7 +170,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
-    await this.cloudService.requireCloudAccess(cloudId);
+    await this.cloudService.requireCloudAccess(cloudId, userId);
 
     if (!isTyping) {
       await this.stopTyping(socket, cloudId);
@@ -193,7 +197,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
 
   async broadcastMessageCreated(userId: string | null, cloudId: string, message: CloudMessagePayload) {
     if (userId) {
-      await this.cloudService.requireCloudAccess(cloudId);
+      await this.cloudService.requireCloudAccess(cloudId, userId);
     }
 
     const broadcaster = this.server.to(this.cloudRoom(cloudId));
@@ -205,6 +209,33 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     broadcaster.emit('cloud:message:new', message);
   }
 
+  async broadcastMemberBanned(cloudId: string, bannedUserId: string, deletedMessageIds: string[] = []) {
+    // Notify all room members to remove the deleted messages
+    if (deletedMessageIds.length > 0) {
+      this.server.to(this.cloudRoom(cloudId)).emit('cloud:messages:deleted', { cloudId, messageIds: deletedMessageIds });
+    }
+    // Small delay so the system message is processed by the banned user before redirect
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Notify the banned user to force redirect
+    this.server.to(this.userRoom(bannedUserId)).emit('cloud:banned', { cloudId });
+  }
+
+  async broadcastReport(
+    authorId: string,
+    payload: {
+      cloudId: string;
+      reportedId: string;
+      reportedName: string;
+      reportedUsername: string;
+      reportedAvatarUrl: string | null;
+      messageId: string | null;
+      messageContent: string | null;
+      reasons: string[];
+    },
+  ) {
+    this.server.to(this.userRoom(authorId)).emit('cloud:report', payload);
+  }
+
   async broadcastReactionChange(
     userId: string | null,
     cloudId: string,
@@ -213,7 +244,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     removed = false,
   ) {
     if (userId) {
-      await this.cloudService.requireCloudAccess(cloudId);
+      await this.cloudService.requireCloudAccess(cloudId, userId);
     }
 
     const broadcaster = this.server.to(this.cloudRoom(cloudId));

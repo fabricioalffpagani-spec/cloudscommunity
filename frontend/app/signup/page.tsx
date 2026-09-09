@@ -30,10 +30,24 @@ type SignupDraft = {
   birthDate: string;
   username: string;
   password: string;
+  phone: string;
+};
+
+type DeviceContact = {
+  identifier: string;
+  displayName: string;
+  type: "phone";
+};
+
+type ContactsManager = {
+  select: (
+    properties: Array<"name" | "tel">,
+    options?: { multiple?: boolean },
+  ) => Promise<Array<{ name?: string[]; tel?: string[] }>>;
 };
 
 function EyeIcon({ open }: { open: boolean }) {
-  return open ? (
+  return !open ? (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 3l18 18" />
       <path d="M10.58 10.58A1.5 1.5 0 0 0 12 12a1.5 1.5 0 0 0 1.42-.92" />
@@ -53,14 +67,14 @@ function FieldStatus({ state }: { state: FieldState }) {
     state === "checking"
       ? "Verificando disponibilidade..."
       : state === "available"
-        ? "Nome de usuario disponivel."
+        ? "Nome de usuário disponível."
         : state === "taken"
-          ? "Esse nome de usuario ja existe."
+          ? "Esse nome de usuário já existe."
           : state === "invalid"
             ? "Use 3 a 20 caracteres com letras, numeros ou _."
             : state === "error"
-              ? "Nao foi possivel verificar agora."
-              : "Digite um nome de usuario.";
+              ? "Não foi possível verificar agora."
+              : "Digite um nome de usuário.";
 
   const color =
     state === "available"
@@ -79,11 +93,11 @@ function EmailStatus({ state }: { state: FieldState }) {
       : state === "available"
         ? "Email disponivel."
         : state === "taken"
-          ? "Esse email ja esta em uso."
+          ? "Esse e-mail já está em uso."
           : state === "invalid"
             ? "Digite um email valido."
             : state === "error"
-              ? "Nao foi possivel verificar agora."
+              ? "Não foi possível verificar agora."
               : "Digite um email valido.";
 
   const color =
@@ -108,6 +122,18 @@ function getPasswordError(password: string) {
   return null;
 }
 
+function hasMinimumAge(birthDate: string, minimumAge = 16) {
+  const [year, month, day] = birthDate.split("-").map(Number);
+  const today = new Date();
+  let age = today.getFullYear() - year;
+
+  if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) {
+    age -= 1;
+  }
+
+  return age >= minimumAge;
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const { refresh } = useSessionUser();
@@ -119,6 +145,7 @@ export default function SignupPage() {
     username: "",
     password: "",
     confirmPassword: "",
+    phone: "",
   });
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(60);
@@ -128,6 +155,7 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailState, setEmailState] = useState<FieldState>("idle");
   const [usernameState, setUsernameState] = useState<FieldState>("idle");
+  const [contactPermissionState, setContactPermissionState] = useState<"idle" | "granted" | "unsupported">("idle");
   const signupDraftRef = useRef<SignupDraft | null>(null);
   const finalizeAttemptRef = useRef(false);
 
@@ -284,6 +312,7 @@ export default function SignupPage() {
             username: draft.username,
             birthDate: draft.birthDate,
             password: draft.password,
+            phone: draft.phone || undefined,
           }),
         });
 
@@ -292,7 +321,7 @@ export default function SignupPage() {
         if (!response.ok) {
           setErrors({
             ...(payload?.fieldErrors ?? {}),
-            form: payload?.message ?? "Nao foi possivel criar a conta.",
+            form: payload?.message ?? "Não foi possível criar a conta.",
           });
           return;
         }
@@ -353,6 +382,37 @@ export default function SignupPage() {
     setResendCountdown(60);
   };
 
+  const handleAllowContacts = async () => {
+    const contactsApi = (navigator as Navigator & { contacts?: ContactsManager }).contacts;
+
+    if (!contactsApi) {
+      setContactPermissionState("unsupported");
+      return;
+    }
+
+    window.alert("O Clouds precisa da sua permissão para acessar os contatos escolhidos e convidá-los pelo WhatsApp.");
+
+    try {
+      const selectedContacts = await contactsApi.select(["name", "tel"], { multiple: true });
+      const contacts: DeviceContact[] = selectedContacts.flatMap((contact) => {
+        const identifier = contact.tel?.find((phone) => phone.trim().length > 0)?.trim();
+        if (!identifier) return [];
+        return [{
+          identifier,
+          displayName: contact.name?.find((name) => name.trim().length > 0)?.trim() || identifier,
+          type: "phone" as const,
+        }];
+      });
+
+      if (contacts.length > 0) {
+        localStorage.setItem("clouds_device_invite_contacts", JSON.stringify(contacts));
+        setContactPermissionState("granted");
+      }
+    } catch {
+      setContactPermissionState("idle");
+    }
+  };
+
   const canSubmit =
     form.email.trim().length > 0 &&
     form.name.trim().length > 0 &&
@@ -376,11 +436,11 @@ export default function SignupPage() {
       if (!normalizedEmail || !EMAIL_PATTERN.test(normalizedEmail)) {
         nextErrors.email = "Digite um email valido.";
       } else if (emailState === "taken") {
-        nextErrors.email = "Este email ja esta em uso.";
+        nextErrors.email = "Este e-mail já está em uso.";
       } else if (emailState === "invalid") {
         nextErrors.email = "Digite um email valido.";
       } else if (emailState === "error") {
-        nextErrors.email = "Nao foi possivel validar este email agora.";
+        nextErrors.email = "Não foi possível validar este e-mail agora.";
       }
 
       if (!form.name.trim()) {
@@ -389,18 +449,20 @@ export default function SignupPage() {
 
       if (!form.birthDate.trim()) {
         nextErrors.birthDate = "Informe sua data de nascimento.";
+      } else if (!hasMinimumAge(form.birthDate)) {
+        nextErrors.birthDate = "Você precisa ter pelo menos 16 anos completos para participar do Clouds.";
       }
 
       if (!normalizedUsername) {
-        nextErrors.username = "Informe um nome de usuario.";
+        nextErrors.username = "Informe um nome de usuário.";
       } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
         nextErrors.username = "Use 3 a 20 caracteres com letras, numeros ou _.";
       } else if (usernameState === "taken") {
-        nextErrors.username = "Este nome de usuario ja esta em uso.";
+        nextErrors.username = "Este nome de usuário já está em uso.";
       } else if (usernameState === "invalid") {
         nextErrors.username = "Use 3 a 20 caracteres com letras, numeros ou _.";
       } else if (usernameState === "error") {
-        nextErrors.username = "Nao foi possivel validar este nome de usuario agora.";
+        nextErrors.username = "Não foi possível validar este nome de usuário agora.";
       }
 
       const passwordError = getPasswordError(form.password);
@@ -418,12 +480,17 @@ export default function SignupPage() {
         return;
       }
 
+      if (form.phone.trim() && contactPermissionState !== "granted") {
+        await handleAllowContacts();
+      }
+
       signupDraftRef.current = {
         email: normalizedEmail,
         name: form.name.trim(),
         username: normalizedUsername,
         birthDate: form.birthDate,
         password: form.password,
+        phone: form.phone.trim(),
       };
 
       finalizeAttemptRef.current = false;
@@ -502,8 +569,36 @@ export default function SignupPage() {
                   </div>
 
                   <div>
+                    <label htmlFor="phone" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
+                      Telefone <span className="text-white/30 normal-case font-normal">(opcional)</span>
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      autoComplete="tel"
+                      value={form.phone}
+                      onChange={(event) => updateField("phone", event.target.value)}
+                      placeholder="+55 11 90000-0000"
+                      className="w-full rounded-2xl border border-white/[0.08] bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7]"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[12px] text-white/30">Para convidar contatos da sua agenda para o Clouds.</p>
+                      <button
+                        type="button"
+                        onClick={() => void handleAllowContacts()}
+                        className="text-left text-[12px] font-semibold text-[#C084FC] hover:underline"
+                      >
+                        {contactPermissionState === "granted" ? "Contatos selecionados" : "Permitir acesso aos contatos"}
+                      </button>
+                    </div>
+                    {contactPermissionState === "unsupported" && (
+                      <p className="mt-2 text-[12px] text-amber-200">Seu navegador não permite acesso à agenda. Tente no Chrome para Android.</p>
+                    )}
+                  </div>
+
+                  <div>
                     <label htmlFor="birthDate" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
-                      Aniversario
+                      Aniversário
                     </label>
                     <input
                       id="birthDate"
@@ -519,7 +614,7 @@ export default function SignupPage() {
 
                   <div>
                     <label htmlFor="username" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
-                      Nome de usuario
+                      Nome de usuário
                     </label>
                     <input
                       id="username"

@@ -80,10 +80,14 @@ export class CloudController {
       description: typeof body.description === 'string' ? body.description : undefined,
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
+<<<<<<< Updated upstream
     } satisfies CreateCloudInput);
     // Creation is independent from Socket.IO presence. The creator is not in
     // the room yet, so the service response correctly starts at zero.
     return result;
+=======
+    } satisfies CreateCloudInput, Array.isArray(body.invitedUserIds) ? body.invitedUserIds as string[] : undefined);
+>>>>>>> Stashed changes
   }
 
   @Post(':id/invite')
@@ -117,6 +121,11 @@ export class CloudController {
     return this.cloudService.unhype(extractSessionToken(req), id);
   }
 
+  @Get(':id/hypes')
+  async getHypes(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.getHypes(extractSessionToken(req), id);
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.delete(extractSessionToken(req), id);
@@ -127,6 +136,41 @@ export class CloudController {
     const result = await this.cloudService.removeMember(extractSessionToken(req), id, userId);
     const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
     return { ...result, membersCount };
+  }
+
+  @Post(':id/members/:userId/ban')
+  async banMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
+    const token = extractSessionToken(req);
+    const result = await this.cloudService.banMember(token, id, userId);
+    // Send system message first so all clients (including the one being banned) see it
+    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, result.systemMessage);
+    // Then delete reported messages for all clients
+    await this.cloudMessagesGateway.broadcastMemberBanned(id, userId, result.deletedMessageIds);
+    return { ok: true };
+  }
+
+  @Post(':id/reports')
+  async reportUser(
+    @Param('id') id: string,
+    @Body() body: { reportedId: string; messageId?: string; messageContent?: string; reasons: string[] },
+    @Req() req: Request,
+  ) {
+    const result = await this.cloudService.reportUser(
+      extractSessionToken(req),
+      id,
+      body.reportedId,
+      body.messageId ?? null,
+      body.messageContent ?? null,
+      body.reasons ?? [],
+    );
+    // Push real-time notification to cloud author
+    await this.cloudMessagesGateway.broadcastReport(result.authorId, result.reportPayload);
+    return { ok: true };
+  }
+
+  @Get(':id/reports')
+  async getReports(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.getReports(extractSessionToken(req), id);
   }
 
   @Patch(':id/messages/:messageId/pin')

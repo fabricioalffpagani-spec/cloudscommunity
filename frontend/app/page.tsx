@@ -16,7 +16,7 @@ const CloudChat = dynamic(() => import("./cloud/[id]/CloudChat"), {
 });
 import { HeaderBrand } from "./components/HeaderBrand";
 import { FlameIcon } from "./components/FlameIcon";
-import { NotificationsPanel } from "./components/NotificationsPanel";
+import { NotificationsBell } from "./components/NotificationsPanel";
 import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import {
   SessionUserAvatar,
@@ -278,60 +278,57 @@ function getTopicProfile(cloud: Cloud, index: number) {
     name: string;
     handle: string;
     description: string;
-    avatar: string;
     participants: number;
   }> = {
     Tech: {
       name: "pedro.dev",
       handle: "pedro.dev",
       description: "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
-      avatar: "https://i.pravatar.cc/120?img=12",
       participants: 54,
     },
     Music: {
       name: "lais_moraes",
       handle: "lais_moraes",
       description: "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
-      avatar: "https://i.pravatar.cc/120?img=32",
       participants: 112,
     },
     Gaming: {
       name: "lucasx7",
       handle: "lucasx7",
       description: "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
-      avatar: "https://i.pravatar.cc/120?img=8",
       participants: 91,
     },
     Drama: {
       name: "mariana_rib",
       handle: "mariana_rib",
       description: "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
-      avatar: "https://i.pravatar.cc/120?img=47",
       participants: 417,
     },
     Sports: {
       name: "gabriel_souza",
       handle: "gabriel_souza",
       description: "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
-      avatar: "https://i.pravatar.cc/120?img=14",
       participants: 326,
     },
     Memes: {
       name: "ana_santos",
       handle: "ana_santos",
       description: "Memes, cortes e o caos leve da internet, tudo organizado em uma conversa ao vivo.",
-      avatar: "https://i.pravatar.cc/120?img=45",
       participants: 78,
     },
   };
 
-  const fallbackAvatar = `https://i.pravatar.cc/120?img=${(hashString(cloud.id) % 70) + 1}`;
   return {
     name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
     handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
     description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
+<<<<<<< Updated upstream
     avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
     participants: cloud.liveParticipants ?? 0,
+=======
+    avatar: cloud.authorPhoto ?? null,
+    participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
+>>>>>>> Stashed changes
   };
 }
 
@@ -831,16 +828,24 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [hypeLoading, setHypeLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const siteOrigin = useSiteOrigin();
 
+  // Countdown updates every second
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
-  const fullShareUrl = `${siteOrigin}${shareUrl}`;  const durationSeconds = parseDurationSeconds(cloud.duration);
-  const elapsedSeconds = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
+  const fullShareUrl = `${siteOrigin}${shareUrl}`;
+  const durationSeconds = parseDurationSeconds(cloud.duration);
+  const elapsedSeconds = Math.floor((now - cloud.createdAt.getTime()) / 1000);
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
   const timeAgo = (() => {
-    const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
+    const diff = Math.floor((now - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
     if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
     return `${Math.floor(diff / 3600)}h atrás`;
@@ -874,7 +879,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
   };
 
   return (
-    <article className="w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
+    <article className="cloud-card w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
 
       {/* Top row: live indicator + countdown */}
       <div className="flex items-center justify-between gap-4">
@@ -995,6 +1000,7 @@ export function CreateCloudModal({
   const [selectedFollowers, setSelectedFollowers] = useState<Set<string>>(new Set());
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [followersError, setFollowersError] = useState<string | null>(null);
+  const isPrivateVisibility = visibility === "private";
 
   const fetchFollowers = async () => {
     setLoadingFollowers(true);
@@ -1034,6 +1040,50 @@ export function CreateCloudModal({
     });
   };
 
+  const handlePublishPrivate = async () => {
+    if (!title.trim()) {
+      setError("Por favor, forneça um título para a cloud.");
+      return;
+    }
+
+    if (!duration) {
+      setError("Selecione uma duração para a cloud.");
+      return;
+    }
+
+    if (selectedFollowers.size === 0) {
+      setError("Selecione ao menos um contato para a cloud privada.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const invitedUserIds = Array.from(selectedFollowers);
+      const cloudData = {
+        title: title.trim(),
+        category: "general",
+        description: description.trim() || undefined,
+        duration: duration.trim(),
+        visibility: "private" as const,
+        invitedUserIds,
+      };
+
+      // Criar cloud privada com os usuários convidados como membros
+      const publishedCloud = await onPublish(cloudData);
+      
+      // Enviar convites para os seguidores selecionados
+      await sendCloudInvitations(cloudData, publishedCloud.id);
+      
+      onClose();
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Não foi possível criar a cloud privada.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handlePublish = async () => {
     const normalizedTitle = title.trim();
     const normalizedDescription = description.trim();
@@ -1045,6 +1095,11 @@ export function CreateCloudModal({
 
     if (!duration) {
       setError("Selecione uma duração para a cloud.");
+      return;
+    }
+
+    if (visibility === "private") {
+      setError("Para clouds privadas, clique em 'Confirmar convidados' para criar.");
       return;
     }
 
@@ -1061,12 +1116,6 @@ export function CreateCloudModal({
       };
 
       const publishedCloud = await onPublish(cloudData);
-
-      // A Cloud só existe após a publicação; os convites são enviados agora.
-      if (selectedFollowers.size > 0) {
-        await sendCloudInvitations(cloudData, publishedCloud.id);
-      }
-
       onClose();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : "Nao foi possivel criar a cloud.");
@@ -1170,7 +1219,7 @@ export function CreateCloudModal({
               type="text"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handlePublish()}
+              onKeyDown={e => e.key === "Enter" && !isPrivateVisibility && handlePublish()}
               placeholder="Título da sua Cloud..."
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
@@ -1229,10 +1278,14 @@ export function CreateCloudModal({
           </div>
           <button
             onClick={handlePublish}
-            disabled={!title.trim() || !duration || submitting}
-            className="w-full rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition mt-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={isPrivateVisibility || !title.trim() || !duration || submitting}
+            className={`w-full rounded-full py-3 text-[15px] font-semibold transition mt-2 ${
+              isPrivateVisibility
+                ? "bg-[#3B3048] text-white/40 cursor-not-allowed opacity-70"
+                : "bg-[#9333EA] text-white hover:bg-[#7C3AED] disabled:opacity-40 disabled:cursor-not-allowed"
+            }`}
           >
-            {submitting ? "Publicando..." : "Publicar Cloud"}
+            {isPrivateVisibility ? "Cloud privada - confirme convidados" : (submitting ? "Publicando..." : "Publicar Cloud")}
           </button>
           {error && <p className="text-[12px] text-red-300">{error}</p>}
         </div>
@@ -1255,14 +1308,22 @@ export function CreateCloudModal({
             <span className="text-[13px] text-white/60">Participantes: {selectedFollowers.size}</span>
             <button
               onClick={async () => {
-                if (selectedFollowers.size === 0) return;
-                
+                if (selectedFollowers.size === 0 || submitting) return;
+
                 setShowFollowersPopup(false);
+                onClose();
+                
+                // Para clouds privadas, não publicar no feed, apenas criar
+                if (visibility === "private") {
+                  await handlePublishPrivate();
+                } else {
+                  await handlePublish();
+                }
               }}
-              disabled={selectedFollowers.size === 0}
+              disabled={selectedFollowers.size === 0 || submitting}
               className="px-4 py-2 rounded-full bg-[#9333EA] text-white text-[13px] font-medium hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Confirmar convidados
+              {submitting ? "Criando..." : "Confirmar convidados"}
             </button>
           </div>
 
@@ -2099,12 +2160,14 @@ function TopicFeedStage({
   onToggleExpand,
   onEnterConversation,
   onCreateCloud,
+  currentUserId,
 }: {
   clouds: Cloud[];
   expandedTopicId: string | null;
   onToggleExpand: (cloudId: string) => void;
   onEnterConversation: (cloud: Cloud) => void;
   onCreateCloud: () => void;
+  currentUserId?: string;
 }) {
   const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
   const siteOrigin = useSiteOrigin();
@@ -2168,11 +2231,7 @@ function TopicFeedStage({
               const minutes = Math.floor((remaining % 3600) / 60);
               const seconds = remaining % 60;
               const createdLabel = "há pouco";
-              const participantAvatars = [
-                profile.avatar,
-                `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
-                `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-2`) % 70) + 1}`,
-              ];
+              const participantAvatars = profile.avatar ? [profile.avatar] : [];
               const participantLabel = profile.participants >= 1000
                 ? `${(profile.participants / 1000).toFixed(1).replace(".0", "")}K participantes`
                 : `${profile.participants} participantes`;
@@ -2180,17 +2239,23 @@ function TopicFeedStage({
               return (
                 <article
                   key={cloud.id}
-                  className="rounded-[22px] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition md:px-7 md:py-5"
+                  className="cloud-card rounded-[22px] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition md:px-7 md:py-5"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
                       <Link href={`/users/${profile.handle.replace(/^@/, "")}`} className="shrink-0">
-                        <img
-                          src={profile.avatar}
-                          alt={profile.name}
-                          className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-white/15 md:h-14 md:w-14"
-                          referrerPolicy="no-referrer"
-                        />
+                        {profile.avatar ? (
+                          <img
+                            src={profile.avatar}
+                            alt={profile.name}
+                            className="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-white/15 md:h-14 md:w-14"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#7C3AED] text-lg font-bold text-white ring-1 ring-white/15 md:h-14 md:w-14">
+                            {profile.name.slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
                       </Link>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -2256,19 +2321,30 @@ function TopicFeedStage({
                   <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:mt-5 md:flex-row md:items-center">
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
                       <TopicHypeButton cloud={cloud} />
-                      <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
-                        <PaperPlaneIcon s={25} className="text-white/65" />
-                        <span>Compartilhar</span>
-                      </button>
+                      {(cloud.visibility !== "private" || cloud.authorId === currentUserId) && (
+                        <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
+                          <PaperPlaneIcon s={25} className="text-white/65" />
+                          <span>Compartilhar</span>
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 self-start md:self-auto">
                       <div className="flex -space-x-3">
                         {participantAvatars.map(avatar => (
                           <img key={avatar} src={avatar} alt="Participante" className="h-10 w-10 rounded-full border-2 border-[#0B0C12] object-cover md:h-12 md:w-12" referrerPolicy="no-referrer" />
                         ))}
+                        {!profile.avatar && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#7C3AED] text-[12px] font-bold text-white md:h-12 md:w-12">{profile.name.slice(0, 1).toUpperCase()}</span>}
                         {profile.participants > 3 && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">+{profile.participants >= 1000 ? "1K" : profile.participants - 3}</span>}
                       </div>
-                      <span className="text-[14px] text-white md:text-[17px]">{participantLabel}</span>
+                      <div className="flex items-center gap-2">
+                        {cloud.visibility === "private" && (
+                          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
+                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        )}
+                        <span className="text-[14px] text-white md:text-[17px]">{participantLabel}</span>
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -2366,7 +2442,7 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function PageContent() {
-  const { user, refresh } = useSessionUser();
+  const { user, refresh, incrementCloudCount } = useSessionUser();
   const router = useRouter();
   const searchParams = useSearchParams();
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
@@ -2474,7 +2550,13 @@ function PageContent() {
 
         const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: CloudApiPayload[] } | null;
         const serverClouds = response.ok && Array.isArray(payload?.clouds)
-          ? payload.clouds.map(mapApiCloudToCloud)
+          ? payload.clouds.map(mapApiCloudToCloud).filter(cloud => {
+              // Clouds privadas só aparecem para o criador
+              if (cloud.visibility === "private") {
+                return cloud.authorId === user?.id;
+              }
+              return true;
+            })
           : [];
 
         if (!cancelled) {
@@ -2510,7 +2592,7 @@ function PageContent() {
 
   const closeModal = () => setModal(null);
 
-  const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string }) => {
+  const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string; invitedUserIds?: string[] }) => {
     if (data.audioUrl) {
       const id = crypto.randomUUID();
       const cloud = {
@@ -2522,6 +2604,7 @@ function PageContent() {
         hypes: 0,
       };
       setClouds((prev) => mergeClouds([cloud], prev));
+      incrementCloudCount();
       return cloud;
     }
 
@@ -2535,6 +2618,7 @@ function PageContent() {
         description: data.description ?? "",
         duration: data.duration,
         visibility: data.visibility,
+        invitedUserIds: data.invitedUserIds,
       }),
     });
 
@@ -2609,7 +2693,6 @@ function PageContent() {
       {modal === "search"        && <SearchModal onClose={closeModal} feedClouds={clouds} />}
       {modal === "create"        && <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />}
       {modal === "poll"          && <CreatePollModal onClose={closeModal} onPublish={publishPoll} />}
-      {modal === "notifications" && <NotificationsPanel onClose={closeModal} />}
       {modal === "profile"       && <ProfileMenu onClose={closeModal} />}
       {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
 
@@ -2639,17 +2722,14 @@ function PageContent() {
               className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
             </button>
-            <button type="button" aria-label="Notificações" onClick={() => setModal("notifications")}
-              className="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <BellIcon s={28} />
-            </button>
-            <Link href="/settings" aria-label="Configurações"
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
-              <GearIcon s={28} />
-            </Link>
+            <NotificationsBell buttonClassName="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
             <Link href="/profile" aria-label="Meu perfil"
               className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
               <SessionUserAvatar user={user} size={56} className="rounded-full" />
+            </Link>
+            <Link href="/settings" aria-label="Configurações"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+              <GearIcon s={28} />
             </Link>
           </div>
         </div>
@@ -2694,7 +2774,7 @@ function PageContent() {
             {/* Cloud card + dot indicators */}
             <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4">
             <div
-              className="relative w-full overflow-hidden rounded-3xl"
+              className="cloud-card relative w-full overflow-hidden rounded-3xl"
               style={{
                 background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
                 border: "1px solid rgba(168,85,247,0.22)",
@@ -2708,12 +2788,18 @@ function PageContent() {
               <div className="flex items-center justify-between px-10 pt-8 pb-5">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <img
-                      src={currentCloud.authorPhoto ?? `https://i.pravatar.cc/80?img=${(hashString(currentCloud.id) % 70) + 1}`}
-                      alt="author"
-                      className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
-                      referrerPolicy="no-referrer"
-                    />
+                    {currentCloud.authorPhoto ? (
+                      <img
+                        src={currentCloud.authorPhoto}
+                        alt={currentCloud.authorName ?? "Autor"}
+                        className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#7C3AED] text-xl font-bold text-white ring-2 ring-white/10">
+                        {(currentCloud.authorName ?? "A").slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
                     <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
                   </div>
                   <div>
@@ -2740,6 +2826,12 @@ function PageContent() {
                   </div>
                   {/* Participants */}
                   <div className="flex items-center gap-2 text-[16px] font-semibold text-white">
+                    {currentCloud.visibility === "private" && (
+                      <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
+                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    )}
                     <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                       <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
@@ -2815,10 +2907,10 @@ function PageContent() {
             <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/empty-clouds-sad.png"
+                src="/empty-clouds-available.png"
                 alt="Sem clouds ativas"
-                className="h-72 w-72 select-none"
-                style={{ mixBlendMode: "lighten" }}
+                className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
+                style={{ mixBlendMode: "normal", aspectRatio: "1536 / 1024" }}
                 draggable={false}
               />
               <p className="text-[18px] font-semibold text-white/80">

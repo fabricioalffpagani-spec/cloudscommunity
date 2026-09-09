@@ -73,6 +73,17 @@ export class NotificationsService {
     };
   }
 
+  async markAllAsRead(token: string | null): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+
+    await this.prisma.notification.updateMany({
+      where: { userId: current.user.id, isRead: false },
+      data: { isRead: true },
+    });
+
+    return { ok: true };
+  }
+
   async acceptFollowRequest(token: string | null, notificationId: string) {
     const notification = await this.requireFollowRequestNotification(token, notificationId);
     return this.usersService.acceptFollowRequest(token, notification.entityId);

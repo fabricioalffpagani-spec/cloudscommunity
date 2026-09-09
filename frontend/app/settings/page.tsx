@@ -157,12 +157,53 @@ function PanelConta() {
 
 const BR_STATES = ["Acre","Alagoas","Amapá","Amazonas","Bahia","Ceará","Distrito Federal","Espírito Santo","Goiás","Maranhão","Mato Grosso","Mato Grosso do Sul","Minas Gerais","Pará","Paraíba","Paraná","Pernambuco","Piauí","Rio de Janeiro","Rio Grande do Norte","Rio Grande do Sul","Rondônia","Roraima","Santa Catarina","São Paulo","Sergipe","Tocantins"];
 
+const COUNTRIES = [
+  ["Brasil", "🇧🇷"], ["Argentina", "🇦🇷"], ["Chile", "🇨🇱"], ["Colômbia", "🇨🇴"], ["México", "🇲🇽"], ["Peru", "🇵🇪"], ["Uruguai", "🇺🇾"], ["Venezuela", "🇻🇪"],
+  ["Estados Unidos", "🇺🇸"], ["Canadá", "🇨🇦"], ["Portugal", "🇵🇹"], ["Espanha", "🇪🇸"], ["França", "🇫🇷"], ["Itália", "🇮🇹"], ["Alemanha", "🇩🇪"], ["Reino Unido", "🇬🇧"],
+  ["Irlanda", "🇮🇪"], ["Países Baixos", "🇳🇱"], ["Suíça", "🇨🇭"], ["Suécia", "🇸🇪"], ["Noruega", "🇳🇴"], ["Dinamarca", "🇩🇰"], ["Finlândia", "🇫🇮"], ["Grécia", "🇬🇷"],
+  ["Austrália", "🇦🇺"], ["Nova Zelândia", "🇳🇿"], ["China", "🇨🇳"], ["Japão", "🇯🇵"], ["Coreia do Sul", "🇰🇷"], ["Índia", "🇮🇳"], ["Indonésia", "🇮🇩"], ["Israel", "🇮🇱"],
+  ["África do Sul", "🇿🇦"], ["Egito", "🇪🇬"], ["Marrocos", "🇲🇦"], ["Nigéria", "🇳🇬"], ["Angola", "🇦🇴"], ["Moçambique", "🇲🇿"], ["Outro país", "🌍"],
+] as const;
+
+function getCountry(value: string) {
+  return COUNTRIES.find(([name]) => name === value) ?? null;
+}
+
+const COUNTRY_CODES: Record<string, string> = {
+  Brasil: "br", Argentina: "ar", Chile: "cl", Colômbia: "co", México: "mx", Peru: "pe", Uruguai: "uy", Venezuela: "ve",
+  "Estados Unidos": "us", Canadá: "ca", Portugal: "pt", Espanha: "es", França: "fr", Itália: "it", Alemanha: "de", "Reino Unido": "gb",
+  Irlanda: "ie", "Países Baixos": "nl", Suíça: "ch", Suécia: "se", Noruega: "no", Dinamarca: "dk", Finlândia: "fi", Grécia: "gr",
+  Austrália: "au", "Nova Zelândia": "nz", China: "cn", Japão: "jp", "Coreia do Sul": "kr", Índia: "in", Indonésia: "id", Israel: "il",
+  "África do Sul": "za", Egito: "eg", Marrocos: "ma", Nigéria: "ng", Angola: "ao", Moçambique: "mz",
+};
+
+function CountryFlag({ country, fallback }: { country: string; fallback: string }) {
+  const code = COUNTRY_CODES[country];
+
+  return code ? (
+    <span
+      className="h-6 w-6 shrink-0 rounded-full bg-cover bg-center bg-no-repeat shadow-sm ring-1 ring-white/10"
+      style={{ backgroundImage: `url(https://flagcdn.com/w80/${code}.png)` }}
+      role="img"
+      aria-label={`Bandeira de ${country}`}
+    />
+  ) : (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-[16px] leading-none" aria-hidden="true">{fallback}</span>
+  );
+}
+
+function normalizeCountry(value: string | null | undefined) {
+  if (!value) return "";
+  return BR_STATES.includes(value) ? "Brasil" : value;
+}
+
 function PanelPerfil() {
   const { user, refresh } = useSessionUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(user?.displayName || user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
-  const [regiao, setRegiao] = useState(user?.location || "");
+  const [pais, setPais] = useState(normalizeCountry(user?.location));
+  const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
@@ -176,14 +217,14 @@ function PanelPerfil() {
 
     setName(user.displayName || user.name || "");
     setBio(user.bio || "");
-    setRegiao(user.location || "");
+    setPais(normalizeCountry(user.location));
     setAvatarUrl(user.avatarUrl ?? null);
   }, [user]);
 
   const save = async () => {
     setSaving(true); setError("");
     try {
-      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, location: regiao, avatarUrl }) });
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, location: pais, avatarUrl }) });
       if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Não foi possível salvar o perfil.");
       await refresh(); setSaved(true); setTimeout(()=>setSaved(false),2000);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível salvar o perfil."); }
@@ -215,11 +256,37 @@ function PanelPerfil() {
             <span className="text-right text-[11px] text-white/50">{bio.length}/500</span>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Região</label>
-            <select value={regiao} onChange={e=>setRegiao(e.target.value)} className="w-full rounded-xl bg-[#1a0e3d] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]">
-              <option value="">Selecione seu estado</option>
-              {BR_STATES.map(s=><option key={s} value={s}>{s}</option>)}
-            </select>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">País</label>
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={countryMenuOpen}
+                onClick={() => setCountryMenuOpen((open) => !open)}
+                className="flex w-full items-center justify-between rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-left text-[14px] text-white outline-none transition hover:border-white/20 focus:border-[#A855F7]"
+              >
+                <span className="flex items-center gap-3">
+                  {getCountry(pais) ? (
+                    <CountryFlag country={pais} fallback={getCountry(pais)?.[1] ?? "🌍"} />
+                  ) : (
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/35" aria-hidden="true">🌍</span>
+                  )}
+                  <span className={pais ? "text-white" : "text-white/40"}>{pais || "Selecione seu país"}</span>
+                </span>
+                <ChevronRightIcon />
+              </button>
+              {countryMenuOpen && (
+                <div role="listbox" aria-label="País" className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 max-h-64 overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a0e3d] p-1 shadow-2xl shadow-black/40">
+                  <button type="button" role="option" aria-selected={!pais} onClick={() => { setPais(""); setCountryMenuOpen(false); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] text-white/50 transition hover:bg-white/[0.08]">Selecione seu país</button>
+                  {COUNTRIES.map(([countryName, flag]) => (
+                    <button key={countryName} type="button" role="option" aria-selected={pais === countryName} onClick={() => { setPais(countryName); setCountryMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition hover:bg-white/[0.08] ${pais === countryName ? "bg-[#A855F7]/15 text-white" : "text-white/75"}`}>
+                      <CountryFlag country={countryName} fallback={flag} />
+                      {countryName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           {error && <p className="text-[12px] text-red-400">{error}</p>}
           <div className="flex justify-end"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition disabled:opacity-60">{saved?<><CheckIcon/>Salvo!</>:saving?"Salvando...":"Salvar perfil"}</button></div>
@@ -294,9 +361,23 @@ function PanelNotificacoes() {
 
 
 function PanelAcessibilidade() {
-  const [hc,setHc]=useState(false);const [ra,setRa]=useState(false);const [fs,setFs]=useState<"S"|"M"|"L">("M");
+  const [preferences] = useState(() => {
+    if (typeof window === "undefined") return { highContrast: false, reduceMotion: false, fontSize: "M" as const };
+    try {
+      const saved = window.localStorage.getItem("clouds-accessibility");
+      const parsed = saved ? JSON.parse(saved) as { highContrast?: boolean; reduceMotion?: boolean; fontSize?: "S" | "M" | "L" } : {};
+      return { highContrast: Boolean(parsed.highContrast), reduceMotion: Boolean(parsed.reduceMotion), fontSize: parsed.fontSize && ["S", "M", "L"].includes(parsed.fontSize) ? parsed.fontSize : "M" as const };
+    } catch {
+      return { highContrast: false, reduceMotion: false, fontSize: "M" as const };
+    }
+  });
+  const [hc,setHc]=useState(preferences.highContrast);const [ra,setRa]=useState(preferences.reduceMotion);const [fs,setFs]=useState<"S"|"M"|"L">(preferences.fontSize);
+  useEffect(() => {
+    window.localStorage.setItem("clouds-accessibility", JSON.stringify({ highContrast: hc, reduceMotion: ra, fontSize: fs }));
+    window.dispatchEvent(new Event("clouds-accessibility-change"));
+  }, [hc, ra, fs]);
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Acessibilidade</h2>
-    <Card><Sub>Exibição</Sub><TRow label="Alto contraste" checked={hc} onChange={setHc}/><TRow label="Reduzir animações" checked={ra} onChange={setRa}/></Card>
+    <Card><Sub>Exibição</Sub><TRow label="Alto contraste" desc="Aumenta a diferença entre texto e fundo." checked={hc} onChange={setHc}/><TRow label="Reduzir animações" desc="Desativa transições e animações decorativas." checked={ra} onChange={setRa}/></Card>
     <Card><Sub>Tamanho de fonte</Sub><div className="flex gap-3">{(["S","M","L"] as const).map(s=>(
       <button key={s} onClick={()=>setFs(s)} className={`flex h-10 w-14 items-center justify-center rounded-full text-[13px] font-semibold transition ${fs===s?"bg-[#A855F7] text-white":"bg-[#1a0e3d] border border-white/[0.08] text-white/70 hover:text-white"}`}>{s}</button>
     ))}</div></Card>
@@ -359,12 +440,58 @@ function PanelSeguranca() {
 }
 
 function PanelDados() {
+  const { user } = useSessionUser();
   const [confirm,setConfirm]=useState(false);const [inp,setInp]=useState("");
+  const [exporting, setExporting] = useState(false);
+  const exportData = () => {
+    if (!user || exporting) return;
+    setExporting(true);
+    const lines = [
+      "CLOUDS COMMUNITY - DADOS DA CONTA",
+      "",
+      `Nome: ${user.displayName || user.name || "-"}`,
+      `Nome de usuário: ${user.username || "-"}`,
+      `E-mail: ${user.email || "-"}`,
+      `ID da conta: ${user.id}`,
+      `Data de nascimento: ${user.birthDate || "-"}`,
+      `Biografia: ${user.bio || "-"}`,
+      `Localização: ${user.location || "-"}`,
+      `Website: ${user.website || "-"}`,
+      `Perfil privado: ${user.isPrivate ? "Sim" : "Não"}`,
+      `Status: ${user.status || "-"}`,
+      `Membro desde: ${user.createdAt ? new Date(user.createdAt).toLocaleDateString("pt-BR") : "-"}`,
+      `Clouds criadas: ${user.cloudsCount ?? 0}`,
+      `Seguidores: ${user.followersCount ?? 0}`,
+      `Seguindo: ${user.followingCount ?? 0}`,
+    ];
+    const escapePdfText = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+    const content = ["BT", "/F1 16 Tf", "50 790 Td", `(${escapePdfText(lines[0])}) Tj`, "/F1 10 Tf", ...lines.slice(1).map((line) => `0 -20 Td (${escapePdfText(line)}) Tj`), "ET"].join("\\n");
+    const objects = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+      `<< /Length ${content.length} >>\\nstream\\n${content}\\nendstream`,
+    ];
+    let pdf = "%PDF-1.4\\n";
+    const offsets = [0];
+    objects.forEach((object, index) => { offsets.push(pdf.length); pdf += `${index + 1} 0 obj\\n${object}\\nendobj\\n`; });
+    const xref = pdf.length;
+    pdf += `xref\\n0 ${objects.length + 1}\\n0000000000 65535 f \\n`;
+    offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \\n`; });
+    pdf += `trailer\\n<< /Size ${objects.length + 1} /Root 1 0 R >>\\nstartxref\\n${xref}\\n%%EOF`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    link.download = "clouds-community-dados-da-conta.pdf";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setExporting(false);
+  };
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Dados</h2>
     <Card><Sub>Exportar</Sub>
       <div className="flex items-center justify-between">
         <div><p className="text-[14px] font-medium text-white">Exportar meus dados</p><p className="text-[12px] text-white/60">Baixe uma cópia de todas suas informações.</p></div>
-        <button className="inline-flex items-center gap-2 rounded-full border border-white/[0.15] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-white/[0.05] transition"><DownloadIcon s={15}/>Exportar</button>
+        <button onClick={exportData} disabled={!user || exporting} className="inline-flex items-center gap-2 rounded-full border border-white/[0.15] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-white/[0.05] transition disabled:cursor-not-allowed disabled:opacity-50"><DownloadIcon s={15}/>{exporting ? "Gerando..." : "Exportar PDF"}</button>
       </div>
     </Card>
     <Card className="border-red-500/20"><Sub>Zona de perigo</Sub>
@@ -396,6 +523,7 @@ function PanelSobre() {
         <a key={l} href="#" className="flex items-center justify-between py-3.5 text-[14px] text-white/80 hover:text-white transition">{l}<ChevronRightIcon/></a>
       ))}
     </div></Card>
+    <Card><Sub>Sugestões e suporte</Sub><p className="text-[13px] leading-6 text-white/70">Envie sugestões, melhorias ou reclamações sobre o site e a plataforma:</p><div className="mt-3 flex flex-col gap-2 text-[14px] text-white"><a href="mailto:cloudscomunidade@gmail.com" className="hover:text-[#C084FC] transition">cloudscomunidade@gmail.com</a><a href="https://wa.me/554999225972" target="_blank" rel="noreferrer" className="hover:text-[#C084FC] transition">WhatsApp: +55 49 9922-5972</a></div></Card>
     <p className="text-center text-[12px] text-white/50">Feito com ☁️ pela equipe Clouds Community</p>
   </div>);
 }
@@ -416,18 +544,18 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header({ onSearchOpen }: { onSearchOpen: () => void }) {
   const { user } = useSessionUser();
   return (
-    <header className="relative z-50 shrink-0 bg-[#030208]">
-      <div className="mx-auto flex h-[108px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
+    <header className="relative z-50 shrink-0 bg-transparent">
+      <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-3 pb-4 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-4">
           <HeaderBrand />
         </Link>
         <div className="flex items-center gap-4">
           <button type="button" aria-label="Buscar" onClick={onSearchOpen} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white hover:bg-white/[0.20]"><SearchIcon s={28}/></button>
           <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white hover:bg-[#28282C]" />
-          <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] text-white hover:bg-[#6D28D9]"><GearIcon s={28}/></Link>
           <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[20px] font-bold text-white hover:bg-[#6D28D9]">
             <SessionUserAvatar user={user} size={56} />
           </Link>
+          <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#9333EA] text-white hover:bg-[#6D28D9]"><GearIcon s={28}/></Link>
         </div>
       </div>
     </header>

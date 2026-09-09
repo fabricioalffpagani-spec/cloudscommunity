@@ -12,6 +12,8 @@ export type CarouselCloud = {
   authorPhoto?: string;
   authorName?: string;
   authorHandle?: string;
+  authorId?: string;
+  visibility?: "public" | "private";
   href?: string;
 };
 
@@ -44,14 +46,6 @@ function formatParticipantCount(value: number) {
     return `${(value / 1000).toFixed(1).replace(".0", "")}K`;
   }
   return `${value}`;
-}
-
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
 }
 
 function PlusIcon({ s = 22 }: { s?: number }) {
@@ -118,10 +112,10 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
       <div className="flex h-full flex-col items-center justify-center text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/empty-clouds-sad.png"
+          src="/empty-clouds-available.png"
           alt="Sem clouds ativas"
-          className="h-72 w-72 select-none"
-          style={{ mixBlendMode: "lighten" }}
+          className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
+          style={{ mixBlendMode: "normal", aspectRatio: "1536 / 1024" }}
           draggable={false}
         />
         <p className="mt-4 text-[18px] font-semibold text-white/80">
@@ -153,7 +147,7 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
       </button>
 
       <div
-        className="relative w-full max-w-[1100px] overflow-hidden rounded-3xl"
+        className="cloud-card relative w-full max-w-[1100px] overflow-hidden rounded-3xl"
         style={{
           background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
           border: "1px solid rgba(168,85,247,0.22)",
@@ -166,12 +160,18 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
         <div className="flex items-center justify-between px-10 pt-8 pb-5">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <img
-                src={currentCloud?.authorPhoto ?? `https://i.pravatar.cc/80?img=${(hashString(currentCloud?.id ?? "0") % 70) + 1}`}
-                alt="author"
-                className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
-                referrerPolicy="no-referrer"
-              />
+              {currentCloud?.authorPhoto ? (
+                <img
+                  src={currentCloud.authorPhoto}
+                  alt={currentCloud.authorName ?? "Autor"}
+                  className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#7C3AED] text-xl font-bold text-white ring-2 ring-white/10">
+                  {(currentCloud?.authorName ?? "A").slice(0, 1).toUpperCase()}
+                </span>
+              )}
               <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
             </div>
             <div>

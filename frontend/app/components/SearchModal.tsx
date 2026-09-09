@@ -204,7 +204,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                       <CloudIcon />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold text-white">{cloud.title}</p>
+                      <p className="truncate text-[14px] font-semibold text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</p>
                       {cloud.authorUsername && <p className="truncate text-[12px] text-white/40">@{cloud.authorUsername}</p>}
                     </div>
                   </button>

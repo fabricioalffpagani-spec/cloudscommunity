@@ -20,6 +20,7 @@ import {
   normalizeOptionalText,
   normalizeUsername,
   parseBirthDate,
+  validateMinimumAge,
   formatDateOnly,
   validateEmail,
   validatePassword,
@@ -43,6 +44,7 @@ type SignupInput = {
   bio?: string;
   location?: string;
   region?: string;
+  phone?: string;
 };
 
 type SessionBundle = {
@@ -73,6 +75,7 @@ export class AuthService {
     const username = validateUsername(input.username ?? '');
     const password = input.password ?? '';
     const birthDate = parseBirthDate(input.birthDate ?? '');
+    validateMinimumAge(birthDate);
 
     if (!name) {
       throw new BadRequestException({
@@ -104,6 +107,7 @@ export class AuthService {
     const passwordHash = createPasswordHash(password);
     const displayLocation = normalizeOptionalText(input.location ?? input.region);
     const bio = normalizeOptionalText(input.bio);
+    const phone = input.phone?.trim() || null;
     const sessionExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
     const token = createSessionToken();
     const refreshTokenHash = hashSessionToken(token);
@@ -123,6 +127,7 @@ export class AuthService {
               birthDate,
               bio,
               location: displayLocation,
+              phone,
             },
           },
         },

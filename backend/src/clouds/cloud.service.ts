@@ -105,10 +105,18 @@ export class CloudService {
   ) {}
 
   async findById(token: string | null, cloudId: string): Promise<{ ok: true; cloud: CloudPayload }> {
-    await this.requireSession(token);
+    const session = await this.requireSession(token);
 
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_RE.test(cloudId)) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    // Block banned users from accessing the cloud
+    const ban = await this.prisma.cloudBan.findUnique({
+      where: { cloudId_userId: { cloudId, userId: session.user.id } },
+    });
+    if (ban) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
@@ -123,6 +131,8 @@ export class CloudService {
     if (!cloud) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
+
+    await this.requireCloudVisibility(cloud, session.user.id);
 
     return {
       ok: true,
@@ -139,6 +149,8 @@ export class CloudService {
         deletedAt: null,
         status: CloudStatus.active,
         visibility: CloudVisibility.public,
+        // Clouds públicas aparecem para todos, independente do tipo de perfil do criador
+        // Clouds privadas só aparecem para o criador ou para quem foi convidado
       },
       include: this.cloudInclude(),
     });
@@ -194,6 +206,7 @@ export class CloudService {
       where: {
         deletedAt: null,
         status: CloudStatus.active,
+        visibility: CloudVisibility.public,
         authorId: { in: followingIds },
       },
       include: this.cloudInclude(),
@@ -226,7 +239,7 @@ export class CloudService {
     };
   }
 
-  async create(token: string | null, input: CreateCloudInput): Promise<{ ok: true; cloud: CloudPayload }> {
+  async create(token: string | null, input: CreateCloudInput, invitedUserIds?: string[]): Promise<{ ok: true; cloud: CloudPayload }> {
     const current = await this.requireSession(token);
     const title = (input.title ?? '').trim();
     const description = (input.description ?? '').trim();
@@ -294,6 +307,24 @@ export class CloudService {
         },
       });
 
+      // Add invited users as members for private clouds
+      if (visibility === CloudVisibility.private && invitedUserIds && invitedUserIds.length > 0) {
+        const validUserIds = [...new Set(invitedUserIds)]; // Remove duplicates
+        for (const userId of validUserIds) {
+          if (userId !== current.user.id) { // Don't add the author again
+            await tx.cloudMember.create({
+              data: {
+                cloudId: cloud.id,
+                userId,
+                role: 'member',
+              },
+            }).catch(() => {
+              // Ignore errors if user doesn't exist or is already a member
+            });
+          }
+        }
+      }
+
       return cloud;
     });
 
@@ -333,6 +364,30 @@ export class CloudService {
 
     const hypesCount = await this.prisma.cloudHype.count({ where: { cloudId } });
     return { ok: true, hypesCount };
+  }
+
+  async getHypes(token: string | null, cloudId: string): Promise<{ ok: true; users: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }> }> {
+    await this.requireSession(token);
+
+    const hypes = await this.prisma.cloudHype.findMany({
+      where: { cloudId },
+      include: {
+        user: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+    });
+
+    const users: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }> = hypes.map((hype) => ({
+      id: hype.user.id,
+      username: hype.user.profile?.username || hype.user.email.split('@')[0],
+      displayName: hype.user.profile?.displayName || hype.user.profile?.username || hype.user.email.split('@')[0],
+      avatarUrl: hype.user.profile?.avatarUrl ?? null,
+    }));
+
+    return { ok: true, users };
   }
 
   async delete(token: string | null, cloudId: string): Promise<{ ok: true }> {
@@ -413,6 +468,248 @@ export class CloudService {
     });
 
     return { ok: true };
+  }
+
+  async banMember(
+    token: string | null,
+    cloudId: string,
+    userId: string,
+  ): Promise<{ ok: true; systemMessage: CloudMessagePayload; deletedMessageIds: string[] }> {
+    const current = await this.requireSession(token);
+
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.authorId !== current.user.id) {
+      throw new UnauthorizedException({ message: 'Apenas o criador pode banir membros.' });
+    }
+
+    if (userId === current.user.id) {
+      throw new BadRequestException({ message: 'Você não pode se banir.' });
+    }
+
+    // Upsert ban (idempotent)
+    await this.prisma.cloudBan.upsert({
+      where: { cloudId_userId: { cloudId, userId } },
+      create: { cloudId, userId, bannedById: current.user.id },
+      update: { bannedById: current.user.id, createdAt: new Date() },
+    });
+
+    // Also kick from active members
+    await this.prisma.cloudMember.updateMany({
+      where: { cloudId, userId, leftAt: null },
+      data: { leftAt: new Date() },
+    });
+
+    // Soft-delete reported messages from this user in this cloud
+    const reportedMessages = await this.prisma.cloudReport.findMany({
+      where: { cloudId, reportedId: userId, messageId: { not: null } },
+      select: { messageId: true },
+    });
+    const reportedMessageIds = [...new Set(
+      reportedMessages.map((r) => r.messageId).filter((id): id is string => id !== null)
+    )];
+
+    if (reportedMessageIds.length > 0) {
+      await this.prisma.cloudMessage.updateMany({
+        where: { id: { in: reportedMessageIds }, cloudId },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    const bannedUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+    const displayName =
+      bannedUser?.profile?.displayName ||
+      bannedUser?.profile?.username ||
+      'Usuário';
+
+    const systemMessage = await this.createSystemMessage(
+      cloudId,
+      `@${bannedUser?.profile?.username ?? displayName} foi banido da Cloud`,
+      current.user.id,
+    );
+
+    return { ok: true, systemMessage, deletedMessageIds: reportedMessageIds };
+  }
+
+  async reportUser(
+    token: string | null,
+    cloudId: string,
+    reportedId: string,
+    messageId: string | null,
+    messageContentOverride: string | null,
+    reasons: string[],
+  ): Promise<{
+    ok: true;
+    authorId: string;
+    reportPayload: {
+      cloudId: string;
+      reportedId: string;
+      reportedName: string;
+      reportedUsername: string;
+      reportedAvatarUrl: string | null;
+      messageId: string | null;
+      messageContent: string | null;
+      reasons: string[];
+    };
+  }> {
+    const current = await this.requireSession(token);
+
+    await this.requireCloudMembership(cloudId, current.user.id);
+
+    if (reportedId === current.user.id) {
+      throw new BadRequestException({ message: 'Você não pode denunciar a si mesmo.' });
+    }
+
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (messageId) {
+      const message = await this.prisma.cloudMessage.findFirst({
+        where: { id: messageId, cloudId, deletedAt: null },
+        select: { id: true, userId: true },
+      });
+
+      if (!message) {
+        throw new NotFoundException({ message: 'Mensagem não encontrada nesta cloud.' });
+      }
+    }
+
+    const reportedMembership = await this.prisma.cloudMember.findFirst({
+      where: { cloudId, userId: reportedId, leftAt: null },
+      select: { userId: true },
+    });
+
+    if (!reportedMembership && reportedId !== cloud.authorId) {
+      throw new BadRequestException({ message: 'O usuário informado não faz parte desta cloud.' });
+    }
+
+    await this.prisma.cloudReport.create({
+      data: {
+        cloudId,
+        reportedId,
+        reporterId: current.user.id,
+        messageId: messageId ?? null,
+        reasons,
+      },
+    });
+
+    const reportedUser = await this.prisma.user.findUnique({
+      where: { id: reportedId },
+      include: { profile: true },
+    });
+
+    let messageContent: string | null = messageContentOverride ?? null;
+    if (!messageContent && messageId) {
+      const msg = await this.prisma.cloudMessage.findUnique({ where: { id: messageId } });
+      messageContent = msg?.content ?? null;
+    }
+
+    const reportedName = reportedUser?.profile?.displayName || reportedUser?.profile?.username || 'Usuário';
+    const reportedUsername = reportedUser?.profile?.username || '';
+    const reportedAvatarUrl = reportedUser?.profile?.avatarUrl ?? null;
+
+    const reportPayload = {
+      cloudId,
+      reportedId,
+      reportedName,
+      reportedUsername,
+      reportedAvatarUrl,
+      messageId,
+      messageContent,
+      reasons,
+    };
+
+    // Persist notification for the cloud author
+    if (cloud.authorId !== current.user.id) {
+      await this.prisma.notification.create({
+        data: {
+          userId: cloud.authorId,
+          type: 'system',
+          entityType: 'cloud',
+          entityId: cloudId,
+          title: `Denúncia em "${cloud.title}"`,
+          body: `Um membro denunciou @${reportedUsername || reportedName}: ${reasons.join(', ')}`,
+        },
+      });
+    }
+
+    return { ok: true, authorId: cloud.authorId, reportPayload };
+  }
+
+  async getReports(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; reports: Array<{ id: string; reportedId: string; reportedName: string; reportedUsername: string; reportedAvatarUrl: string | null; messageId: string | null; messageContent: string | null; reasons: string[]; count: number; createdAt: string }> }> {
+    const current = await this.requireSession(token);
+
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.authorId !== current.user.id) {
+      throw new UnauthorizedException({ message: 'Apenas o criador pode ver denúncias.' });
+    }
+
+    const raw = await this.prisma.cloudReport.findMany({
+      where: { cloudId },
+      include: {
+        reported: { include: { profile: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Group by reportedId
+    const grouped = new Map<string, typeof raw>();
+    for (const r of raw) {
+      const arr = grouped.get(r.reportedId) ?? [];
+      arr.push(r);
+      grouped.set(r.reportedId, arr);
+    }
+
+    const messageIds: string[] = [...new Set(raw.flatMap((report) => report.messageId ? [report.messageId as string] : []))];
+    const messages = await this.prisma.cloudMessage.findMany({
+      where: { id: { in: messageIds } },
+      select: { id: true, content: true },
+    });
+    const messageContentById = new Map(messages.map((message) => [message.id, message.content]));
+
+    const reports = Array.from(grouped.entries()).map(([reportedId, items]) => {
+      const user = items[0].reported;
+      const allReasons: string[] = [...new Set(items.flatMap((i) => i.reasons as string[]))];
+      const reportWithMessage = items.find((item) => item.messageId) ?? items[0];
+      return {
+        id: items[0].id,
+        reportedId,
+        reportedName: user.profile?.displayName || user.profile?.username || 'Usuário',
+        reportedUsername: user.profile?.username || '',
+        reportedAvatarUrl: user.profile?.avatarUrl ?? null,
+        messageId: reportWithMessage.messageId,
+        messageContent: reportWithMessage.messageId ? (messageContentById.get(reportWithMessage.messageId) ?? null) : null,
+        reasons: allReasons,
+        count: items.length,
+        createdAt: items[0].createdAt.toISOString(),
+      };
+    });
+
+    return { ok: true, reports };
   }
 
   async pinMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
@@ -518,7 +815,8 @@ export class CloudService {
     body: CreateCloudMessageInput,
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const messageType = body.type === 'audio' || body.type === 'image' || body.type === 'link' ? body.type : 'text';
 
@@ -541,7 +839,8 @@ export class CloudService {
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     if (!file) {
       throw new BadRequestException({ message: 'Envie um arquivo de áudio.' });
@@ -573,7 +872,8 @@ export class CloudService {
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     if (!file) {
       throw new BadRequestException({ message: 'Envie um arquivo de imagem.' });
@@ -600,7 +900,8 @@ export class CloudService {
 
   async editMessage(token: string | null, cloudId: string, messageId: string, content: string): Promise<{ ok: true; message: { id: string; content: string } }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: { id: messageId, cloudId, deletedAt: null },
@@ -625,7 +926,8 @@ export class CloudService {
 
   async deleteMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null } });
     if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
@@ -653,8 +955,9 @@ export class CloudService {
     cloudId: string,
     query: ListCloudMessagesQuery = {},
   ): Promise<{ ok: true; messages: CloudMessagePayload[] }> {
-    await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const take = this.normalizeTake(query.take);
     const before = query.before ? new Date(query.before) : null;
@@ -687,7 +990,8 @@ export class CloudService {
     emoji: string,
   ): Promise<{ ok: true; reaction: CloudMessageReactionPayload; removed: boolean }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: {
@@ -771,8 +1075,9 @@ export class CloudService {
   }
 
   async getMessageReactions(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true; reactions: CloudMessageReactionPayload[] }> {
-    await this.requireSession(token);
-    await this.requireCloudAccess(cloudId);
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: {
@@ -819,11 +1124,16 @@ export class CloudService {
     };
   }
 
-  async requireCloudAccess(cloudId: string) {
+  async requireCloudAccess(cloudId: string, viewerId?: string) {
     const cloud = await this.prisma.cloud.findFirst({
       where: {
         id: cloudId,
         deletedAt: null,
+      },
+      include: {
+        author: {
+          include: { profile: true },
+        },
       },
     });
 
@@ -831,7 +1141,67 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
+    if (viewerId) {
+      await this.requireCloudVisibility(cloud, viewerId);
+    }
+
     return cloud;
+  }
+
+  private async requireCloudMembership(cloudId: string, userId: string) {
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+      select: { authorId: true },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.authorId === userId) {
+      return;
+    }
+
+    const member = await this.prisma.cloudMember.findFirst({
+      where: { cloudId, userId, leftAt: null },
+      select: { id: true },
+    });
+
+    if (!member) {
+      throw new UnauthorizedException({ message: 'Você precisa ser membro desta cloud para realizar esta ação.' });
+    }
+  }
+
+  private async requireCloudVisibility(
+    cloud: { id: string; authorId: string; author?: { profile: { isPrivate: boolean } | null } },
+    viewerId: string,
+  ) {
+    if (cloud.authorId === viewerId || !cloud.author?.profile?.isPrivate) {
+      return;
+    }
+
+    const member = await this.prisma.cloudMember.findFirst({
+      where: { cloudId: cloud.id, userId: viewerId, leftAt: null },
+      select: { id: true },
+    });
+
+    if (member) {
+      return;
+    }
+
+    const followsAuthor = await this.prisma.follow.findUnique({
+      where: {
+        followerId_followingId: {
+          followerId: viewerId,
+          followingId: cloud.authorId,
+        },
+      },
+      select: { followerId: true },
+    });
+
+    if (!followsAuthor) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
   }
 
   private normalizeTake(rawTake?: number): number {
@@ -847,7 +1217,7 @@ export class CloudService {
     cloudId: string,
     input: CreateCloudMessageInput,
   ): Promise<CloudMessagePayload> {
-    await this.requireCloudAccess(cloudId);
+    await this.requireCloudAccess(cloudId, userId);
     const replyToMessageId = input.replyToMessageId?.trim() || null;
     const type = input.type === 'audio' || input.type === 'image' || input.type === 'link' ? input.type : 'text';
 
@@ -1129,6 +1499,14 @@ export class CloudService {
 
     if (!cloud) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    // Block banned users
+    const ban = await this.prisma.cloudBan.findUnique({
+      where: { cloudId_userId: { cloudId, userId: current.user.id } },
+    });
+    if (ban) {
+      throw new UnauthorizedException({ message: 'Você foi banido desta cloud.' });
     }
 
     // Upsert: rejoin if previously left, or create fresh membership

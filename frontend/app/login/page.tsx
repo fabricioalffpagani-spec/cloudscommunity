@@ -14,7 +14,7 @@ type LoginResponse = {
 };
 
 function EyeIcon({ open }: { open: boolean }) {
-  return open ? (
+  return !open ? (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 3l18 18" />
       <path d="M10.58 10.58A1.5 1.5 0 0 0 12 12a1.5 1.5 0 0 0 1.42-.92" />
@@ -91,7 +91,7 @@ export default function LoginPage() {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
                 <label htmlFor="identifier" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
-                  Email ou usuario
+                  E-mail ou usuário
                 </label>
                 <input
                   id="identifier"
@@ -103,7 +103,7 @@ export default function LoginPage() {
                     }
                   }}
                   autoComplete="username"
-                  placeholder="seu@email.com ou @usuario"
+                  placeholder="seu@email.com ou @usuário"
                   className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7] ${
                     errors.identifier ? "border-red-500/70" : "border-white/[0.08]"
                   }`}

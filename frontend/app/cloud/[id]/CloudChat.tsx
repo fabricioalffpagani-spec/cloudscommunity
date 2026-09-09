@@ -830,20 +830,24 @@ function CloudMsgMenu({
   isRight,
   isCloudAuthor,
   isPinned,
+  openUpward,
   onPin,
   onForward,
   onEdit,
   onDelete,
+  onReport,
   onClose,
 }: {
   msg: ChatMessage;
   isRight: boolean;
   isCloudAuthor: boolean;
   isPinned: boolean;
+  openUpward: boolean;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
   onEdit: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
+  onReport: (msg: ChatMessage) => void;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -932,13 +936,21 @@ function CloudMsgMenu({
       show: !isOwn && isCloudAuthor,
       icon: <CloudPinIcon pinned={isPinned} />,
     },
+    {
+      key: "report",
+      label: "Denunciar",
+      action: () => { onReport(msg); onClose(); },
+      danger: true,
+      show: !isOwn,
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
+    },
   ];
 
   return (
     <div
       ref={menuRef}
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
-      style={{ bottom: "calc(100% + 4px)" }}
+      style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
     >
       {translated && (
         <div className="border-b border-white/[0.06] px-4 py-2.5">
@@ -1055,6 +1067,228 @@ function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
+type ReportNotifPayload = {
+  cloudId: string;
+  reportedId: string;
+  reportedName: string;
+  reportedUsername: string;
+  reportedAvatarUrl: string | null;
+  messageId: string | null;
+  messageContent: string | null;
+  reasons: string[];
+};
+
+function ReportNotificationModal({
+  cloudId,
+  report,
+  onBan,
+  onClose,
+}: {
+  cloudId: string;
+  report: ReportNotifPayload;
+  onBan: (userId: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [confirmBan, setConfirmBan] = useState(false);
+  const [banning, setBanning] = useState(false);
+
+  const handleBan = async () => {
+    setBanning(true);
+    await onBan(report.reportedId);
+    setBanning(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-end p-6 pointer-events-none">
+      <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-red-500/30 bg-[#15161C] shadow-2xl shadow-black/70 overflow-hidden animate-in slide-in-from-right-4 duration-300">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] bg-red-500/[0.08] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="#F87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>
+            </svg>
+            <span className="text-[13px] font-semibold text-red-400">Nova denúncia recebida</span>
+          </div>
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white text-lg leading-none">×</button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* Perfil denunciado */}
+          <div className="flex items-center gap-3">
+            <UserAvatar
+              user={{ id: report.reportedId, username: report.reportedUsername, displayName: report.reportedName, avatarUrl: report.reportedAvatarUrl }}
+              size={40}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-semibold text-white">{report.reportedName}</p>
+              <p className="truncate text-[12px] text-white/40">@{report.reportedUsername}</p>
+            </div>
+          </div>
+
+          {/* Mensagem denunciada */}
+          {report.messageContent && (
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/30 mb-1">Mensagem denunciada</p>
+              <p className="text-[13px] text-white/80 leading-snug line-clamp-3">{report.messageContent}</p>
+            </div>
+          )}
+
+          {/* Motivos */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/30 mb-1.5">Motivos</p>
+            <div className="flex flex-wrap gap-1.5">
+              {report.reasons.map((r) => (
+                <span key={r} className="rounded-full bg-red-500/15 px-2.5 py-1 text-[11px] font-medium text-red-400">{r}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Confirmação de ban */}
+          {confirmBan ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/[0.06] p-3 space-y-3">
+              <p className="text-[13px] text-white/80 leading-snug">
+                Deseja banir <span className="font-semibold text-white">@{report.reportedUsername || report.reportedName}</span> da Cloud? Após o banimento, o usuário não poderá mais acessar esta Cloud.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmBan(false)}
+                  className="flex-1 rounded-full bg-white/[0.06] py-2 text-[13px] text-white/70 transition hover:bg-white/[0.12]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleBan()}
+                  disabled={banning}
+                  className="flex-1 rounded-full bg-red-500 py-2 text-[13px] font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
+                >
+                  {banning ? "Banindo…" : "Confirmar"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmBan(true)}
+              className="w-full rounded-full bg-red-500/20 py-2.5 text-[13px] font-semibold text-red-400 transition hover:bg-red-500/30 hover:text-red-300"
+            >
+              Banir usuário
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportModal({
+  cloudId,
+  msg,
+  onClose,
+}: {
+  cloudId: string;
+  msg: { id: string; senderId: string; senderName: string; senderAvatarUrl: string | null; content: string | null };
+  onClose: () => void;
+}) {
+  const REASONS = [
+    "Spam ou publicidade",
+    "Discurso de ódio",
+    "Assédio ou bullying",
+    "Conteúdo violento ou perturbador",
+    "Informação falsa",
+    "Conteúdo sexual inapropriado",
+    "Ameaças",
+    "Outro",
+  ];
+
+  const [selected, setSelected] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const toggle = (reason: string) => {
+    setSelected((prev) =>
+      prev.includes(reason) ? prev.filter((r) => r !== reason) : [...prev, reason],
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (selected.length === 0 || sending) return;
+    setSending(true);
+    try {
+      await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reportedId: msg.senderId, messageId: msg.id, messageContent: msg.content, reasons: selected }),
+      });
+      setDone(true);
+      setTimeout(onClose, 1800);
+    } catch {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">
+        {done ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/20">
+              <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <p className="text-[15px] font-semibold text-white">Denúncia enviada</p>
+            <p className="text-center text-[13px] text-white/50">Sua denúncia é anônima e será revisada pelo criador da Cloud.</p>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-[17px] font-bold text-white">Denunciar mensagem</h3>
+                <p className="text-[12px] text-white/40 mt-0.5">de {msg.senderName} · anônimo</p>
+              </div>
+              <button type="button" onClick={onClose} className="text-white/40 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <p className="mb-3 text-[13px] text-white/60">Selecione os motivos:</p>
+            <div className="space-y-2 mb-5">
+              {REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  onClick={() => toggle(reason)}
+                  className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] transition ${
+                    selected.includes(reason)
+                      ? "border-[#A855F7] bg-[#A855F7]/10 text-white"
+                      : "border-white/[0.08] bg-white/[0.03] text-white/70 hover:border-white/20 hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected.includes(reason) ? "border-[#A855F7] bg-[#A855F7]" : "border-white/30"}`}>
+                    {selected.includes(reason) && (
+                      <svg viewBox="0 0 12 12" width={9} height={9} fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="10 3 5 9 2 6"/></svg>
+                    )}
+                  </span>
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={selected.length === 0 || sending}
+              className="w-full rounded-full bg-red-500 py-2.5 text-[14px] font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sending ? "Enviando…" : "Enviar denúncia"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CloudMessageBubble({
   msg,
   onReact,
@@ -1063,6 +1297,7 @@ function CloudMessageBubble({
   onForward,
   onEdit,
   onDelete,
+  onReport,
   isCloudAuthor,
   isPinned,
 }: {
@@ -1073,12 +1308,15 @@ function CloudMessageBubble({
   onForward: (msg: ChatMessage) => void;
   onEdit: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
+  onReport: (msg: ChatMessage) => void;
   isCloudAuthor: boolean;
   isPinned: boolean;
 }) {
   const own = msg.side === "right";
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [msgMenuOpen, setMsgMenuOpen] = useState(false);
+  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
+  const dotsButtonRef = useRef<HTMLButtonElement>(null);
   const groupedReactions = useMemo(() => {
     return msg.reactions.reduce((acc, reaction) => {
       if (!acc[reaction.emoji]) {
@@ -1089,16 +1327,25 @@ function CloudMessageBubble({
     }, {} as Record<string, ReactionPayload[]>);
   }, [msg.reactions]);
 
+  function handleToggleMsgMenu() {
+    if (!msgMenuOpen && dotsButtonRef.current) {
+      const rect = dotsButtonRef.current.getBoundingClientRect();
+      setMenuOpenUpward(window.innerHeight - rect.bottom < 220);
+    }
+    setMsgMenuOpen((v) => !v);
+  }
+
   return (
     <div className={`group flex items-end gap-2.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
-      <div className="w-9 shrink-0 pt-0.5">
+      {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
+      <div className="w-9 shrink-0 mb-6">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
         />
       </div>
 
-      <div className={`flex items-center gap-2 ${own ? "flex-row-reverse" : "flex-row"}`} style={{ maxWidth: "74%" }}>
+      <div className={`flex items-end gap-2 ${own ? "flex-row-reverse" : "flex-row"}`} style={{ maxWidth: "74%" }}>
         <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
           <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
             <span className="text-[12px] font-semibold text-white/40">{own ? "Você" : msg.senderName}</span>
@@ -1155,7 +1402,7 @@ function CloudMessageBubble({
         </div>
 
         {/* Action icons aligned to the side of message box */}
-        <div className={`flex items-start gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${own ? "ml-2" : "mr-2"}`}>
+        <div className={`flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 self-center ${own ? "ml-2" : "mr-2"}`}>
           {isCloudAuthor && (
             <button
               type="button"
@@ -1201,9 +1448,10 @@ function CloudMessageBubble({
           </button>
           <div className="relative">
             <button
+              ref={dotsButtonRef}
               type="button"
               title="Mais opções"
-              onClick={() => setMsgMenuOpen((v) => !v)}
+              onClick={handleToggleMsgMenu}
               className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
             >
               <CloudDotsIcon />
@@ -1214,10 +1462,12 @@ function CloudMessageBubble({
                 isRight={own}
                 isCloudAuthor={isCloudAuthor}
                 isPinned={isPinned}
+                openUpward={menuOpenUpward}
                 onPin={onPin}
                 onForward={onForward}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onReport={onReport}
                 onClose={() => setMsgMenuOpen(false)}
               />
             )}
@@ -1249,6 +1499,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [emojiCategory, setEmojiCategory] = useState(0);
   const [hyped, setHyped] = useState(false);
   const [hypesCount, setHypesCount] = useState(0);
+  const [hypeUsers, setHypeUsers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
+  const [hypeListOpen, setHypeListOpen] = useState(false);
   const [audioUploading, setAudioUploading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(true);
@@ -1272,6 +1524,22 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [isDeletingCloud, setIsDeletingCloud] = useState(false);
   const [isLeavingCloud, setIsLeavingCloud] = useState(false);
   const [isManagingMemberId, setIsManagingMemberId] = useState<string | null>(null);
+  const [isBanningMemberId, setIsBanningMemberId] = useState<string | null>(null);
+  const [reportingMsg, setReportingMsg] = useState<ChatMessage | null>(null);
+  const [cloudReports, setCloudReports] = useState<Array<{ id: string; reportedId: string; reportedName: string; reportedUsername: string; reportedAvatarUrl: string | null; messageId: string | null; messageContent: string | null; reasons: string[]; count: number }>>([]);
+  const [reportNotifCount, setReportNotifCount] = useState(0);
+  const [incomingReport, setIncomingReport] = useState<{
+    cloudId: string;
+    reportedId: string;
+    reportedName: string;
+    reportedUsername: string;
+    reportedAvatarUrl: string | null;
+    messageId: string | null;
+    messageContent: string | null;
+    reasons: string[];
+  } | null>(null);
+  const [banConfirmOpen, setBanConfirmOpen] = useState(false);
+  const [banConfirmUsername, setBanConfirmUsername] = useState("");
   const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
@@ -1351,13 +1619,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const loadMessages = useCallback(async () => {
     setLoadingMessages(true);
-    setError(null);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
       const payload = await readJson<{ ok: true; messages: CloudMessagePayload[] }>(response);
       setMessages(payload.messages.map((message) => normalizeMessage(message, user?.id)));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar as mensagens.");
+    } catch {
+      // silently ignore message load errors — cloud still functional
     } finally {
       setLoadingMessages(false);
     }
@@ -1438,6 +1705,18 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setIsUpdatingHype(false);
     }
   }, [cloud, cloudId, hypesCount, hyped, isUpdatingHype, user]);
+
+  const fetchHypeUsers = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/hypes`, {
+        credentials: "include",
+      });
+      const payload = await readJson<{ ok: true; users: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }> }>(response);
+      setHypeUsers(payload.users || []);
+    } catch (error) {
+      console.error("Failed to fetch hype users:", error);
+    }
+  }, [cloudId]);
 
   const handleCopyShareLink = useCallback(async () => {
     try {
@@ -1614,9 +1893,38 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       }, 1000);
     });
 
+<<<<<<< Updated upstream
     socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number }) => {
       if (payload.cloudId !== cloudId) return;
       setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount } : prev);
+=======
+    socket.on("cloud:banned", (payload: { cloudId: string }) => {
+      if (payload.cloudId === cloudId) {
+        router.replace("/");
+      }
+    });
+
+    socket.on("cloud:messages:deleted", (payload: { cloudId: string; messageIds: string[] }) => {
+      if (payload.cloudId === cloudId) {
+        setMessages((prev) => prev.filter((m) => !payload.messageIds.includes(m.id)));
+      }
+    });
+
+    socket.on("cloud:report", (payload: {
+      cloudId: string;
+      reportedId: string;
+      reportedName: string;
+      reportedUsername: string;
+      reportedAvatarUrl: string | null;
+      messageId: string | null;
+      messageContent: string | null;
+      reasons: string[];
+    }) => {
+      if (payload.cloudId === cloudId) {
+        setIncomingReport(payload);
+        setReportNotifCount((prev) => prev + 1);
+      }
+>>>>>>> Stashed changes
     });
 
     return () => {
@@ -1630,24 +1938,43 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (status !== "authenticated" || !user || connectionState !== "connected" || !socket?.connected) {
+    if (status !== "authenticated" || !user) {
       return;
     }
 
+<<<<<<< Updated upstream
     // Emit socket join on every reconnection so the socket room stays correct
     socket.emit("cloud:join", { cloudId });
 
     // HTTP join only once per component mount — creates the system message + broadcasts membersCount
     if (!hasJoinedRef.current) {
       hasJoinedRef.current = true;
+=======
+    const timer = setTimeout(() => {
+      if (socket?.connected) {
+        socket.emit("cloud:join", { cloudId });
+      }
+      // HTTP join so the backend creates the system message and broadcasts it to all members
+>>>>>>> Stashed changes
       fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
         method: "POST",
         credentials: "include",
+      }).then((response) => {
+        if (response.ok) {
+          void loadMessages();
+        }
       }).catch(() => {
         // ignore — system message is best-effort
       });
+<<<<<<< Updated upstream
     }
   }, [cloudId, connectionState, status, user]);
+=======
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [cloudId, loadMessages, status, user]);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -1962,6 +2289,71 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [cloudId, pinnedMessageId]);
 
+  const handleReportMsg = useCallback((msg: ChatMessage) => {
+    setReportingMsg(msg);
+  }, []);
+
+  const canReportCloud = Boolean(
+    user &&
+    cloud &&
+    user.id !== cloud.authorId,
+  );
+
+  const handleBanMember = useCallback(async (userId: string) => {
+    if (isBanningMemberId === userId) return;
+    setIsBanningMemberId(userId);
+    try {
+      const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/members/${encodeURIComponent(userId)}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => null) as { message?: string } | null;
+        throw new Error(errBody?.message ?? "Não foi possível banir o membro.");
+      }
+      // Remove from members list and reports
+      setCloud((current) =>
+        current ? { ...current, members: current.members?.filter((m) => m.userId !== userId) ?? [] } : current,
+      );
+      setCloudReports((prev) => prev.filter((r) => r.reportedId !== userId));
+      setReportNotifCount((prev) => Math.max(0, prev - 1));
+      // Close the incoming report pop-up if it's for this user
+      setIncomingReport((prev) => (prev?.reportedId === userId ? null : prev));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível banir o membro.");
+    } finally {
+      setIsBanningMemberId(null);
+    }
+  }, [cloudId, isBanningMemberId]);
+
+  // Load reports on mount when cloud author (to populate badge and list)
+  useEffect(() => {
+    if (!isCloudAuthor) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/reports`, { credentials: "include" });
+        const data = await readJson<{ ok: true; reports: typeof cloudReports }>(res);
+        setCloudReports(data.reports);
+        // Only set badge count from DB if socket hasn't already added counts
+        setReportNotifCount((prev) => Math.max(prev, data.reports.length));
+      } catch { /* silent */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCloudAuthor]);
+
+  // Reload reports list when manage members modal opens
+  useEffect(() => {
+    if (!manageMembersOpen || !isCloudAuthor) return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/reports`, { credentials: "include" });
+        const data = await readJson<{ ok: true; reports: typeof cloudReports }>(res);
+        setCloudReports(data.reports);
+      } catch { /* silent */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageMembersOpen]);
+
   const isAudioBusy = audioUploading || imageUploading || audioRecorder.state !== "idle";
   const resolvedTitle = cloud?.title || title || "Cloud";
   const resolvedParticipants = cloud?.membersCount ?? 0;
@@ -2002,7 +2394,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           </h1>
           <div className="flex items-center gap-3 text-[16px] text-white/50">
             <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded-full bg-[#A855F7]" />
+              <span className="inline-block h-3 w-3 rounded-full bg-[#A855F7] animate-pulse" />
               {resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa
             </span>
             <span className="text-white/20">|</span>
@@ -2019,11 +2411,23 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               <button
                 type="button"
                 aria-label="Hype"
-                onClick={() => void handleToggleHype()}
+                onClick={() => {
+                  if (hypesCount > 0) {
+                    setHypeListOpen(true);
+                    fetchHypeUsers();
+                  } else {
+                    void handleToggleHype();
+                  }
+                }}
                 disabled={isUpdatingHype}
-                className={`group flex h-10 w-10 items-center justify-center transition ${hyped ? "text-[#F97316]" : "text-white hover:text-[#F97316]"}`}
+                className={`group relative flex h-10 w-10 items-center justify-center transition ${hyped ? "text-[#F97316]" : "text-white hover:text-[#F97316]"}`}
               >
                 <HeaderFireIcon active={hyped} />
+                {hypesCount > 0 && (
+                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#F97316] text-[10px] font-bold text-white">
+                    {hypesCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -2042,9 +2446,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 type="button"
                 aria-label="Gerenciar membros"
                 onClick={() => setManageMembersOpen(true)}
-                className="group flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
+                className="group relative flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
               >
                 <HeaderMembersIcon />
+                {reportNotifCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                    {reportNotifCount > 9 ? "9+" : reportNotifCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
@@ -2097,17 +2506,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">D</span>
                   Ler descrição
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionMenuOpen(false);
-                    setReportOpen(true);
-                  }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-red-400"
-                >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">!</span>
-                  Denunciar Cloud
-                </button>
+                {canReportCloud && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setReportOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-red-400"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">!</span>
+                    Denunciar Cloud
+                  </button>
+                )}
                 {!isCloudAuthor && (
                   <button
                     type="button"
@@ -2183,7 +2594,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 return <SystemMessageBubble key={msg.id} msg={msg} />;
               }
 
-              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
+              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
             });
           })()
         )}
@@ -2462,12 +2873,65 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               <h3 className="text-[18px] font-bold">Denunciar Cloud</h3>
               <button type="button" onClick={() => setReportOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
-            <p className="text-[14px] leading-relaxed text-white/70">
-              Esta ação ainda não envia a denúncia para um fluxo separado. O botão foi mantido para preservar a interface definida no commit de referência.
-            </p>
-            <div className="mt-5 flex justify-end">
+            <div className="space-y-3">
+              <p className="text-[14px] leading-relaxed text-white/70">
+                Selecione o motivo da denúncia e envie para o criador da Cloud revisar.
+              </p>
+              {[
+                "Spam ou publicidade",
+                "Discurso de ódio",
+                "Assédio ou bullying",
+                "Conteúdo violento ou perturbador",
+                "Informação falsa",
+                "Conteúdo sexual inapropriado",
+                "Ameaças",
+                "Outro",
+              ].map((reason) => (
+                <label key={reason} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] text-white/75">
+                  <input type="checkbox" value={reason} data-cloud-report-reason="true" className="h-4 w-4 accent-[#A855F7]" />
+                  <span>{reason}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-3">
               <button type="button" onClick={() => setReportOpen(false)} className="rounded-full bg-white/[0.06] px-4 py-2 text-[13px] text-white/80 transition hover:bg-white/[0.12] hover:text-white">
-                Fechar
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const checked = Array.from(document.querySelectorAll('[data-cloud-report-reason="true"]:checked')).length;
+                  if (!cloud || checked === 0) return;
+
+                  const reasons = Array.from(document.querySelectorAll('[data-cloud-report-reason="true"]:checked')).map((input) => (input as HTMLInputElement).value);
+
+                  try {
+                    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/reports`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({
+                        reportedId: cloud.authorId,
+                        messageId: null,
+                        messageContent: cloud.title,
+                        reasons,
+                      }),
+                    });
+
+                    if (!response.ok) {
+                      const errBody = await response.json().catch(() => null) as { message?: string } | null;
+                      throw new Error(errBody?.message ?? "Não foi possível enviar a denúncia.");
+                    }
+
+                    setReportOpen(false);
+                    setError(null);
+                  } catch (reportError) {
+                    setError(reportError instanceof Error ? reportError.message : "Não foi possível enviar a denúncia.");
+                  }
+                }}
+                className="rounded-full bg-red-500 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-red-600"
+              >
+                Enviar denúncia
               </button>
             </div>
           </div>
@@ -2518,39 +2982,151 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </div>
       )}
 
-      {manageMembersOpen && isCloudAuthor && cloud && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#15161C] p-6">
+      {hypeListOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setHypeListOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[18px] font-bold">Gerenciar membros</h3>
-              <button type="button" onClick={() => setManageMembersOpen(false)} className="text-white/50 hover:text-white">×</button>
+              <h3 className="text-[18px] font-bold">Pessoas que deram Hype</h3>
+              <button type="button" onClick={() => setHypeListOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
-            <div className="space-y-3">
-              {(cloud.members ?? []).length === 0 ? (
-                <p className="text-[14px] text-white/55">Nenhum membro adicional carregado para esta cloud.</p>
+            <div className="max-h-64 overflow-y-auto space-y-3">
+              {hypeUsers.length === 0 ? (
+                <p className="text-[14px] text-white/50 text-center py-4">Ninguém deu hype ainda</p>
               ) : (
-                (cloud.members ?? []).map((member) => (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold text-white">{member.user.displayName}</p>
-                      <p className="truncate text-[12px] text-white/45">@{member.user.username}</p>
+                hypeUsers.map((hypeUser) => (
+                  <div key={hypeUser.id} className="flex items-center gap-3">
+                    <UserAvatar user={hypeUser} size={40} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] font-semibold text-white truncate">{hypeUser.displayName}</p>
+                      <p className="text-[12px] text-white/50">@{hypeUser.username}</p>
                     </div>
-                    {member.userId !== user?.id && (
-                      <button
-                        type="button"
-                        onClick={() => void handleRemoveMember(member.userId)}
-                        disabled={isManagingMemberId === member.userId}
-                        className="rounded-full bg-white/[0.06] px-3 py-2 text-[12px] text-white/70 transition hover:bg-white/[0.12] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isManagingMemberId === member.userId ? "Removendo..." : "Remover"}
-                      </button>
-                    )}
                   </div>
                 ))
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {manageMembersOpen && isCloudAuthor && cloud && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#15161C] p-6 max-h-[85vh] flex flex-col">
+            <div className="mb-4 flex items-center justify-between shrink-0">
+              <h3 className="text-[18px] font-bold">Gerenciar membros</h3>
+              <button type="button" onClick={() => { setManageMembersOpen(false); setReportNotifCount(0); }} className="text-white/50 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            {/* Denúncias */}
+            {cloudReports.length > 0 && (
+              <div className="mb-4 shrink-0">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-red-400">
+                  ⚑ Denúncias recebidas ({cloudReports.length})
+                </p>
+                <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-purple pr-1">
+                  {cloudReports.map((report) => (
+                    <div key={report.reportedId} className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-3 py-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar
+                          user={{ id: report.reportedId, username: report.reportedUsername, displayName: report.reportedName, avatarUrl: report.reportedAvatarUrl }}
+                          size={32}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-white">{report.reportedName}</p>
+                          <p className="truncate text-[11px] text-white/40">@{report.reportedUsername}</p>
+                          {report.messageContent && (
+                            <p className="mt-0.5 truncate text-[11px] text-white/65" title={report.messageContent}>
+                              “{report.messageContent}”
+                            </p>
+                          )}
+                          <p className="truncate text-[11px] text-red-400 mt-0.5">{report.reasons.join(" · ")} {report.count > 1 && <span className="text-white/30">({report.count}×)</span>}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleBanMember(report.reportedId)}
+                        disabled={isBanningMemberId === report.reportedId}
+                        className="shrink-0 rounded-full bg-red-500/20 px-3 py-1.5 text-[12px] font-semibold text-red-400 transition hover:bg-red-500/30 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isBanningMemberId === report.reportedId ? "Banindo…" : "Banir"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 border-t border-white/[0.07]" />
+              </div>
+            )}
+
+            {/* Lista de membros */}
+            <div className="space-y-2 overflow-y-auto scrollbar-purple flex-1 pr-1">
+              {(cloud.members ?? []).length === 0 ? (
+                <p className="text-[14px] text-white/55">Nenhum membro adicional carregado para esta cloud.</p>
+              ) : (
+                (cloud.members ?? []).map((member) => {
+                  const hasReport = cloudReports.some((r) => r.reportedId === member.userId);
+                  return (
+                    <div key={member.id} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${hasReport ? "border-red-500/20 bg-red-500/[0.04]" : "border-white/10 bg-white/[0.04]"}`}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <UserAvatar
+                          user={{ id: member.userId, username: member.user.username, displayName: member.user.displayName, avatarUrl: member.user.avatarUrl }}
+                          size={32}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-white">{member.user.displayName}</p>
+                          <p className="truncate text-[11px] text-white/45">@{member.user.username}</p>
+                        </div>
+                      </div>
+                      {member.userId !== user?.id && (
+                        <div className="flex items-center gap-2 shrink-0">
+                          {hasReport && (
+                            <button
+                              type="button"
+                              onClick={() => void handleBanMember(member.userId)}
+                              disabled={isBanningMemberId === member.userId}
+                              className="rounded-full bg-red-500/20 px-3 py-1.5 text-[12px] font-semibold text-red-400 transition hover:bg-red-500/30 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isBanningMemberId === member.userId ? "Banindo…" : "Banir"}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveMember(member.userId)}
+                            disabled={isManagingMemberId === member.userId}
+                            className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-white/70 transition hover:bg-white/[0.12] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isManagingMemberId === member.userId ? "Removendo…" : "Remover"}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportingMsg && (
+        <ReportModal
+          cloudId={cloudId}
+          msg={{
+            id: reportingMsg.id,
+            senderId: reportingMsg.senderId,
+            senderName: reportingMsg.senderName,
+            senderAvatarUrl: reportingMsg.senderAvatarUrl,
+            content: reportingMsg.kind === "text" ? reportingMsg.content : null,
+          }}
+          onClose={() => setReportingMsg(null)}
+        />
+      )}
+
+      {incomingReport && (
+        <ReportNotificationModal
+          cloudId={cloudId}
+          report={incomingReport}
+          onBan={handleBanMember}
+          onClose={() => setIncomingReport(null)}
+        />
       )}
 
     </div>

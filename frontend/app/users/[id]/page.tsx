@@ -139,15 +139,12 @@ function parseDurationSeconds(duration: string) {
   return map[duration] ?? 30 * 60;
 }
 
-function ActiveCloudCard({ cloud }: { cloud: PublicUserProfile["activeClouds"][number] }) {
-  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((Date.now() - new Date(cloud.createdAt).getTime()) / 1000), 0);
+function ActiveCloudCard({ cloud, now }: { cloud: PublicUserProfile["activeClouds"][number]; now: number }) {
+  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000), 0);
   const live = remainingSeconds > 0;
 
   return (
-    <Link
-      href={cloud.href}
-      className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#111116] p-6 transition hover:border-white/[0.14] hover:bg-[#16161c]"
-    >
+    <article className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6 transition hover:border-[#A855F7]/50 hover:bg-[#22104f]">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
@@ -157,7 +154,7 @@ function ActiveCloudCard({ cloud }: { cloud: PublicUserProfile["activeClouds"][n
         </span>
       </div>
 
-      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white">{cloud.title}</h3>
+      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
       {cloud.description && (
         <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
           {cloud.description}
@@ -170,7 +167,10 @@ function ActiveCloudCard({ cloud }: { cloud: PublicUserProfile["activeClouds"][n
           {formatCountdown(remainingSeconds)}
         </span>
       </div>
-    </Link>
+      <Link href={cloud.href} className="mt-5 inline-flex items-center justify-center rounded-full bg-[#7C3AED] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#6D28D9]">
+        Acessar cloud
+      </Link>
+    </article>
   );
 }
 
@@ -191,6 +191,7 @@ export default function UserProfilePage() {
   const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     let cancelled = false;
@@ -234,6 +235,11 @@ export default function UserProfilePage() {
       controller.abort();
     };
   }, [identifier]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const profileUrl = useMemo(() => {
     if (!profile) {
@@ -383,7 +389,7 @@ export default function UserProfilePage() {
         <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
           <BackIcon />
         </Link>
-        <span className="truncate text-[14px] font-semibold text-white">{displayName}</span>
+          <span aria-hidden="true" />
         <div className="flex items-center gap-2">
           <NotificationsBell buttonClassName="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
           <button
@@ -457,17 +463,6 @@ export default function UserProfilePage() {
             <span>Desde {memberSince}</span>
           </div>
 
-          {activeClouds.length > 0 && (
-            <div className="mt-10 w-full text-left">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Clouds Ativas</p>
-              <div className="grid gap-3">
-                {activeClouds.map((cloud) => (
-                  <ActiveCloudCard key={cloud.id} cloud={cloud} />
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             {isOwnProfile ? (
               <Link
@@ -502,6 +497,22 @@ export default function UserProfilePage() {
                   </Link>
                 )}
               </>
+            )}
+          </div>
+
+          <div className="mt-10 w-full text-left">
+            {activeClouds.length > 0 ? (
+              <>
+                <div className="grid gap-3">
+                  {activeClouds.map((cloud) => (
+                    <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-[14px] text-white">
+                Sem clouds ativas no momento
+              </p>
             )}
           </div>
         </div>

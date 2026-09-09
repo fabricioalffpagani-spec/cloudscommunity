@@ -37,6 +37,54 @@ body {
   color: var(--text-primary);
 }
 
+.cloud-card {
+  font-family: Arial, sans-serif;
+}
+
+html.a11y-high-contrast body {
+  background: #000;
+  filter: contrast(1.18);
+}
+
+html.a11y-high-contrast body,
+html.a11y-high-contrast body * {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+html.a11y-high-contrast body [class*="text-white/"] {
+  color: #fff !important;
+}
+
+html.a11y-high-contrast body a,
+html.a11y-high-contrast body button,
+html.a11y-high-contrast body input,
+html.a11y-high-contrast body textarea,
+html.a11y-high-contrast body select {
+  color: #fff !important;
+}
+
+html.a11y-high-contrast body input,
+html.a11y-high-contrast body textarea,
+html.a11y-high-contrast body select,
+html.a11y-high-contrast body button {
+  outline-color: #fff !important;
+}
+
+html.a11y-font-small { font-size: 90%; }
+html.a11y-font-large { font-size: 112.5%; }
+
+html.a11y-font-small body { zoom: 0.9; }
+html.a11y-font-large body { zoom: 1.125; }
+
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
 *::-webkit-scrollbar {
   width: 6px !important;
   height: 6px !important;

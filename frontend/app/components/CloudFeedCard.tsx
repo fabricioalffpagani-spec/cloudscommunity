@@ -40,14 +40,6 @@ function formatCountdown(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
 function useSiteOrigin() {
   return useSyncExternalStore(
     () => () => {},
@@ -93,7 +85,7 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
   );
 }
 
-export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: () => void }) {
+export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCloud; onHypar: () => void; currentUserId?: string }) {
   const [hyped, setHyped] = useState(false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [shareOpen, setShareOpen] = useState(false);
@@ -107,12 +99,19 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
+<<<<<<< Updated upstream
   const participantCount = cloud.liveParticipants ?? 0;
   const participantAvatars = [
     cloud.authorPhoto ?? `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-author`) % 70) + 1}`,
     `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
     `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-2`) % 70) + 1}`,
   ];
+=======
+  const participantCount = cloud.liveParticipants ?? Math.max(18, (cloud.hypes ?? 0) + 24);
+  const isCloudOwner = currentUserId === cloud.authorId;
+  const canShare = cloud.visibility === "public" || isCloudOwner;
+  const participantAvatars = cloud.authorPhoto ? [cloud.authorPhoto] : [];
+>>>>>>> Stashed changes
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -126,7 +125,7 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
   };
 
   return (
-    <article className="w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
+    <article className="cloud-card w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-[12px]">
           <span className="relative flex h-2 w-2">
@@ -169,13 +168,15 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
             <FlameIcon s={24} className="text-[#FF632D]" />
             <span>{hypes}</span>
           </button>
-          <button type="button" onClick={() => setShareOpen(true)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
-            <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M22 2 11 13" />
-              <path d="m22 2-7 20-4-9-9-4 20-7Z" />
-            </svg>
-            <span>Compartilhar</span>
-          </button>
+          {canShare && (
+            <button type="button" onClick={() => setShareOpen(true)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
+              <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 2 11 13" />
+                <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+              </svg>
+              <span>Compartilhar</span>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-3 self-start md:self-auto">
           <div className="flex -space-x-3">
@@ -189,15 +190,28 @@ export function CloudFeedCard({ cloud, onHypar }: { cloud: FeedCloud; onHypar: (
                 referrerPolicy="no-referrer"
               />
             ))}
+            {!cloud.authorPhoto && (
+              <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#7C3AED] text-[12px] font-bold text-white md:h-12 md:w-12">
+                {(cloud.authorName ?? "A").slice(0, 1).toUpperCase()}
+              </span>
+            )}
             {participantCount > 3 && (
               <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">
                 +{participantCount >= 1000 ? "1K" : participantCount - 3}
               </span>
             )}
           </div>
-          <span className="text-[14px] text-white md:text-[17px]">
-            {participantCount >= 1000 ? `${(participantCount / 1000).toFixed(1).replace(".0", "")}K participantes` : `${participantCount} participantes`}
-          </span>
+          <div className="flex items-center gap-2">
+            {cloud.visibility === "private" && (
+              <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            )}
+            <span className="text-[14px] text-white md:text-[17px]">
+              {participantCount >= 1000 ? `${(participantCount / 1000).toFixed(1).replace(".0", "")}K participantes` : `${participantCount} participantes`}
+            </span>
+          </div>
         </div>
       </div>
 

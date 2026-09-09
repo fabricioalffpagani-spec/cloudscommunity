@@ -28,6 +28,7 @@ type SessionContextValue = {
   user: SessionUser | null;
   status: "loading" | "authenticated" | "anonymous" | "error";
   refresh: () => Promise<void>;
+  incrementCloudCount: () => void;
 };
 
 const SessionUserContext = createContext<SessionContextValue | null>(null);
@@ -40,6 +41,9 @@ type SessionPayload = {
 export function SessionUserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
+  const incrementCloudCount = useCallback(() => {
+    setUser((current) => current ? { ...current, cloudsCount: (current.cloudsCount ?? 0) + 1 } : current);
+  }, []);
 
   const refresh = useCallback(async () => {
     setStatus((current) =>
@@ -74,8 +78,24 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const revalidateSession = () => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+
+    window.addEventListener("focus", revalidateSession);
+    document.addEventListener("visibilitychange", revalidateSession);
+
+    return () => {
+      window.removeEventListener("focus", revalidateSession);
+      document.removeEventListener("visibilitychange", revalidateSession);
+    };
+  }, [refresh]);
+
   return (
-    <SessionUserContext.Provider value={{ user, status, refresh }}>
+    <SessionUserContext.Provider value={{ user, status, refresh, incrementCloudCount }}>
       {children}
     </SessionUserContext.Provider>
   );
@@ -150,13 +170,10 @@ export function UserAvatar({
           src={user?.avatarUrl || ""}
           alt={getSessionUserDisplayName(user)}
           referrerPolicy="no-referrer"
-          className="h-full w-full rounded-full object-cover"
-          style={{ 
-            filter: 'none',
-            imageRendering: 'auto',
-            backfaceVisibility: 'hidden',
-            transform: 'translateZ(0)'
-          }}
+          width={size}
+          height={size}
+          decoding="async"
+          className="block h-full w-full object-cover"
           onError={() => setImageError(true)}
         />
       </div>

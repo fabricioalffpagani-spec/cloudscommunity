@@ -84,6 +84,27 @@ export function parseBirthDate(value: string): Date {
   return parsed;
 }
 
+export function validateMinimumAge(birthDate: Date, minimumAge = 16): void {
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+
+  if (
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1;
+  }
+
+  if (age < minimumAge) {
+    throw new BadRequestException({
+      message: 'Idade mínima não atendida.',
+      fieldErrors: {
+        birthDate: 'Você precisa ter pelo menos 16 anos completos para participar do Clouds.',
+      },
+    });
+  }
+}
+
 export function formatDateOnly(value: Date): string {
   const year = value.getFullYear();
   const month = String(value.getMonth() + 1).padStart(2, '0');

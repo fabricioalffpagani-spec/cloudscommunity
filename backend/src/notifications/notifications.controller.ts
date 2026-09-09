@@ -26,6 +26,11 @@ export class NotificationsController {
     return this.notificationsService.list(extractSessionToken(req), all === 'true');
   }
 
+  @Post('read')
+  async markAllAsRead(@Req() req: Request) {
+    return this.notificationsService.markAllAsRead(extractSessionToken(req));
+  }
+
   @Post(':id/accept')
   async accept(@Req() req: Request, @Param('id') id: string) {
     return this.notificationsService.acceptFollowRequest(extractSessionToken(req), id);
