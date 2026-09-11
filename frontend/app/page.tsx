@@ -322,13 +322,8 @@ function getTopicProfile(cloud: Cloud, index: number) {
     name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
     handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
     description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
-<<<<<<< Updated upstream
     avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
     participants: cloud.liveParticipants ?? 0,
-=======
-    avatar: cloud.authorPhoto ?? null,
-    participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
->>>>>>> Stashed changes
   };
 }
 

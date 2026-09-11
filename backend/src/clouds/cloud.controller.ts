@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -80,14 +80,10 @@ export class CloudController {
       description: typeof body.description === 'string' ? body.description : undefined,
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
-<<<<<<< Updated upstream
     } satisfies CreateCloudInput);
     // Creation is independent from Socket.IO presence. The creator is not in
     // the room yet, so the service response correctly starts at zero.
     return result;
-=======
-    } satisfies CreateCloudInput, Array.isArray(body.invitedUserIds) ? body.invitedUserIds as string[] : undefined);
->>>>>>> Stashed changes
   }
 
   @Post(':id/invite')

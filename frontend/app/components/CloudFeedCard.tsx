@@ -99,19 +99,14 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
-<<<<<<< Updated upstream
   const participantCount = cloud.liveParticipants ?? 0;
+  const isCloudOwner = currentUserId === cloud.authorId;
+  const canShare = cloud.visibility === "public" || isCloudOwner;
   const participantAvatars = [
     cloud.authorPhoto ?? `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-author`) % 70) + 1}`,
     `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
     `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-2`) % 70) + 1}`,
   ];
-=======
-  const participantCount = cloud.liveParticipants ?? Math.max(18, (cloud.hypes ?? 0) + 24);
-  const isCloudOwner = currentUserId === cloud.authorId;
-  const canShare = cloud.visibility === "public" || isCloudOwner;
-  const participantAvatars = cloud.authorPhoto ? [cloud.authorPhoto] : [];
->>>>>>> Stashed changes
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);

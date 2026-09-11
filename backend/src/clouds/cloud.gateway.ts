@@ -114,13 +114,9 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
-<<<<<<< Updated upstream
-    const cloud = await this.cloudService.requireCloudAccess(cloudId);
+    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
     const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
     const isNewSocketRoomJoin = !joinedCloudIds.has(cloudId);
-=======
-    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
->>>>>>> Stashed changes
     await socket.join(this.cloudRoom(cloudId));
     joinedCloudIds.add(cloudId);
 
