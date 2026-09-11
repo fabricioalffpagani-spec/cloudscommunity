@@ -1893,11 +1893,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       }, 1000);
     });
 
-<<<<<<< Updated upstream
     socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number }) => {
       if (payload.cloudId !== cloudId) return;
       setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount } : prev);
-=======
+    });
+
     socket.on("cloud:banned", (payload: { cloudId: string }) => {
       if (payload.cloudId === cloudId) {
         router.replace("/");
@@ -1924,7 +1924,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         setIncomingReport(payload);
         setReportNotifCount((prev) => prev + 1);
       }
->>>>>>> Stashed changes
     });
 
     return () => {
@@ -1942,20 +1941,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       return;
     }
 
-<<<<<<< Updated upstream
     // Emit socket join on every reconnection so the socket room stays correct
     socket.emit("cloud:join", { cloudId });
 
     // HTTP join only once per component mount — creates the system message + broadcasts membersCount
     if (!hasJoinedRef.current) {
       hasJoinedRef.current = true;
-=======
-    const timer = setTimeout(() => {
-      if (socket?.connected) {
-        socket.emit("cloud:join", { cloudId });
-      }
-      // HTTP join so the backend creates the system message and broadcasts it to all members
->>>>>>> Stashed changes
       fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
         method: "POST",
         credentials: "include",
@@ -1966,15 +1957,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       }).catch(() => {
         // ignore — system message is best-effort
       });
-<<<<<<< Updated upstream
     }
   }, [cloudId, connectionState, status, user]);
-=======
-    }, 450);
-
-    return () => clearTimeout(timer);
-  }, [cloudId, loadMessages, status, user]);
->>>>>>> Stashed changes
 
   useEffect(() => {
     if (messages.length > 0) {
