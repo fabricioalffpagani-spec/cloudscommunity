@@ -99,14 +99,10 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
-  const participantCount = cloud.liveParticipants ?? 0;
+  const participantCount = cloud.liveParticipants ?? Math.max(18, (cloud.hypes ?? 0) + 24);
   const isCloudOwner = currentUserId === cloud.authorId;
   const canShare = cloud.visibility === "public" || isCloudOwner;
-  const participantAvatars = [
-    cloud.authorPhoto ?? `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-author`) % 70) + 1}`,
-    `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-1`) % 70) + 1}`,
-    `https://i.pravatar.cc/96?img=${(hashString(`${cloud.id}-participant-2`) % 70) + 1}`,
-  ];
+  const participantAvatars = cloud.authorPhoto ? [cloud.authorPhoto] : [];
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -212,7 +208,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
 
       <div className="mt-4 flex justify-end">
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&visibility=${encodeURIComponent(cloud.visibility)}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility)}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa

@@ -518,9 +518,15 @@ function PanelSobre() {
       <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain"/>
       <div className="text-center"><p className="text-[20px] font-bold text-white">Clouds Community</p><p className="text-[13px] text-white/60 mt-1">Versão 1.0.0 · Build 2026.06</p></div>
     </div></Card>
-    <Card><Sub>Legal &amp; Suporte</Sub><div className="divide-y divide-white/[0.06]">
-      {["Termos de uso","Política de privacidade","Suporte"].map(l=>(
-        <a key={l} href="#" className="flex items-center justify-between py-3.5 text-[14px] text-white/80 hover:text-white transition">{l}<ChevronRightIcon/></a>
+    <Card><Sub>Legal</Sub><div className="divide-y divide-white/[0.06]">
+      {[
+        { label: "Termos de Uso",                    href: "/legal/termos-de-uso.pdf" },
+        { label: "Política de Privacidade",          href: "/legal/politica-de-privacidade.pdf" },
+        { label: "Política de Cookies",              href: "/legal/politica-de-cookies.pdf" },
+        { label: "Política de Denúncia e Moderação", href: "/legal/politica-de-denuncia-e-moderacao.pdf" },
+        { label: "Regras da Comunidade",             href: "/legal/regras-da-comunidade.pdf" },
+      ].map(({ label, href }) => (
+        <a key={label} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between py-3.5 text-[14px] text-white/80 hover:text-white transition">{label}<ChevronRightIcon/></a>
       ))}
     </div></Card>
     <Card><Sub>Sugestões e suporte</Sub><p className="text-[13px] leading-6 text-white/70">Envie sugestões, melhorias ou reclamações sobre o site e a plataforma:</p><div className="mt-3 flex flex-col gap-2 text-[14px] text-white"><a href="mailto:cloudscomunidade@gmail.com" className="hover:text-[#C084FC] transition">cloudscomunidade@gmail.com</a><a href="https://wa.me/554999225972" target="_blank" rel="noreferrer" className="hover:text-[#C084FC] transition">WhatsApp: +55 49 9922-5972</a></div></Card>

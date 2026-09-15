@@ -23,10 +23,18 @@ type PublicUserProfile = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
+  hypesCount: number;
   isFollowing: boolean;
   isFollowRequested?: boolean;
   isSelf: boolean;
   profileUrl: string;
+};
+
+type MeetPayload = {
+  ok: boolean;
+  popularRecent: Array<PublicUserProfile & { hypes: number }>;
+  popularAllTime: Array<PublicUserProfile & { hypes: number }>;
+  nearby: Array<PublicUserProfile & { mutualFollowersCount: number }>;
 };
 
 function SearchIcon({ s = 23 }: { s?: number }) {
@@ -100,23 +108,25 @@ function ProfileRow({
   user,
   onToggleFollow,
   pending,
+  detail,
 }: {
   user: PublicUserProfile;
   onToggleFollow: (user: PublicUserProfile) => void;
   pending: boolean;
+  detail?: string;
 }) {
   const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
   const avatarColor = user.avatarUrl ? undefined : "#9333EA";
   const followLabel = user.isFollowing ? "Following" : user.isFollowRequested ? "Requested" : "Follow";
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-[#120a2e] px-4 py-3.5 transition hover:border-white/[0.12]">
+    <div className="flex min-h-[88px] items-center gap-4 rounded-2xl border border-[#37337b] bg-[#09082a]/70 px-5 py-3 transition hover:border-[#5953a6]">
       <Link href={user.profileUrl} className="shrink-0">
         {user.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.avatarUrl} alt={user.displayName} className="h-10 w-10 rounded-full object-cover" />
+          <img src={user.avatarUrl} alt={user.displayName} className="h-14 w-14 rounded-full object-cover" />
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full text-[14px] font-bold text-white" style={{ backgroundColor: avatarColor }}>
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#b03cff] to-[#7622d5] text-[20px] font-bold text-white">
             {initials}
           </div>
         )}
@@ -124,7 +134,7 @@ function ProfileRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <Link href={user.profileUrl} className="truncate text-[14px] font-semibold text-white hover:underline">
+          <Link href={user.profileUrl} className="truncate text-[17px] font-bold text-white hover:underline">
             {user.displayName}
           </Link>
           {user.isSelf && (
@@ -133,7 +143,7 @@ function ProfileRow({
             </span>
           )}
         </div>
-        <p className="truncate text-[12px] text-white/40">@{user.username}</p>
+        <p className="truncate text-[13px] text-[#9b98ed]">@{user.username}{detail ? ` · ${detail}` : ""}</p>
       </div>
 
       {!user.isSelf && (
@@ -141,7 +151,7 @@ function ProfileRow({
           type="button"
           onClick={() => onToggleFollow(user)}
           disabled={pending}
-          className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition ${
+          className={`shrink-0 rounded-full px-5 py-2 text-[13px] font-semibold transition ${
             user.isFollowing || user.isFollowRequested
               ? "border border-white/10 bg-transparent text-white/40"
               : "bg-[#9333EA] text-white hover:bg-[#6D28D9]"
@@ -160,6 +170,10 @@ export default function MeetPage() {
   const [results, setResults] = useState<PublicUserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState<string | null>(null);
+  const [meetData, setMeetData] = useState<MeetPayload | null>(null);
+  const [meetLoading, setMeetLoading] = useState(true);
+  const [hypePeriod, setHypePeriod] = useState<"recent" | "all">("recent");
+  const [meetCategory, setMeetCategory] = useState<"popular" | "nearby">("popular");
 
   const normalizedQuery = useMemo(() => normalize(searchQuery), [searchQuery]);
 
@@ -197,6 +211,26 @@ export default function MeetPage() {
     };
   }, [normalizedQuery]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMeet = async () => {
+      setMeetLoading(true);
+      try {
+        const response = await fetch("/api/users/meet", { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as MeetPayload | null;
+        if (!cancelled && response.ok && payload?.ok) {
+          setMeetData(payload);
+        }
+      } finally {
+        if (!cancelled) setMeetLoading(false);
+      }
+    };
+
+    void loadMeet();
+    return () => { cancelled = true; };
+  }, []);
+
   const toggleFollow = async (target: PublicUserProfile) => {
     if (target.isSelf) {
       return;
@@ -217,6 +251,12 @@ export default function MeetPage() {
       }
 
       setResults((current) => current.map((item) => (item.id === payload.user!.id ? payload.user! : item)));
+      setMeetData((current) => current && {
+        ...current,
+        popularRecent: current.popularRecent.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
+        popularAllTime: current.popularAllTime.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
+        nearby: current.nearby.map((item) => item.id === payload.user!.id ? { ...payload.user!, mutualFollowersCount: item.mutualFollowersCount } : item),
+      });
     } catch {
       // mantém silencioso para não interromper a navegação
     } finally {
@@ -225,40 +265,37 @@ export default function MeetPage() {
   };
 
   return (
-    <div className="min-h-screen text-white"
+    <div className="flex h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
-        <div className="mx-auto flex h-[108px] max-w-[1280px] items-center justify-between gap-4 px-3 lg:px-6">
-          <Link href="/" className="flex shrink-0 items-center gap-4">
-            <HeaderBrand />
-          </Link>
-
-          <div className="flex items-center gap-4">
-            <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]" />
-            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1C1C1F] text-white transition hover:bg-[#28282C]">
-              <GearIcon s={28} />
-            </Link>
-            <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-[#9333EA] text-[20px] font-bold text-white transition hover:bg-[#6D28D9]">
-              <SessionUserAvatar user={user} size={56} />
-            </Link>
+      <header className="flex-none bg-transparent">
+        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
+          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2"><HeaderBrand /></Link>
+          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
+            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">For You</Link>
+            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+            <Link href="/meet" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">Meet<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
+          </nav>
+          <div className="flex items-center gap-4 pb-2">
+            <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
+            <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white"><SessionUserAvatar user={user} size={56} /></Link>
+            <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"><GearIcon s={28} /></Link>
           </div>
         </div>
       </header>
-
-      <main className="mx-auto max-w-[640px] px-5 pb-28 pt-[128px]">
+      <main className="mx-auto w-full max-w-[860px] flex-1 overflow-y-auto px-6 pb-28 pt-8">
         <div className="mb-6">
-          <h1 className="text-[28px] font-bold tracking-tight text-white">Meet</h1>
-          <p className="mt-1 text-[14px] text-white/40">Search by username or profile name.</p>
+          <h1 className="text-[42px] font-bold tracking-tight text-white">Meet</h1>
+          <p className="mt-1 text-[16px] text-[#9b98ed]">Encontre pessoas para conhecer e acompanhar.</p>
         </div>
 
-        <div className="mb-5 flex h-11 items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#120a2e] px-4">
-          <SearchIcon />
+        <div className="mb-7 flex h-14 items-center gap-4 rounded-full border border-[#37337b] bg-[#09082a]/60 px-5">
+          <SearchIcon s={24} />
           <input
             type="text"
             placeholder="Search profile..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            className="w-full bg-transparent text-[14px] text-white placeholder:text-white/30 outline-none"
+            className="w-full bg-transparent text-[17px] text-white placeholder:text-[#7773bb] outline-none"
           />
           {searchQuery && (
             <button
@@ -274,46 +311,46 @@ export default function MeetPage() {
           )}
         </div>
 
-        <div className="mb-3 text-[12px] text-white/35">
-          {loading ? "Buscando perfis..." : `${results.length} resultado${results.length === 1 ? "" : "s"} encontrados`}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {results.map((item) => (
-            <ProfileRow
-              key={item.id}
-              user={item}
-              onToggleFollow={toggleFollow}
-              pending={mutating === item.id}
-            />
-          ))}
-          {!loading && results.length === 0 && (
-            <p className="py-12 text-center text-[14px] text-white/30">No profile found.</p>
-          )}
-        </div>
+        {searchQuery ? (
+          <>
+            <div className="mb-3 text-[12px] text-white/35">
+              {loading ? "Buscando perfis..." : `${results.length} resultado${results.length === 1 ? "" : "s"} encontrados`}
+            </div>
+            <div className="flex flex-col gap-2">
+              {results.map((item) => <ProfileRow key={item.id} user={item} onToggleFollow={toggleFollow} pending={mutating === item.id} />)}
+              {!loading && results.length === 0 && <p className="py-12 text-center text-[14px] text-white/30">Nenhum perfil encontrado.</p>}
+            </div>
+          </>
+        ) : (
+          <div>
+            <div className="mb-7 flex w-full max-w-[520px] rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1">
+              <button type="button" onClick={() => setMeetCategory("popular")} className={`flex-1 rounded-full py-2 text-[16px] font-bold transition ${meetCategory === "popular" ? "bg-gradient-to-r from-[#9d31f6] to-[#b13bfa] text-white shadow-[0_8px_24px_rgba(147,51,234,0.38)]" : "text-[#aaa6ef] hover:text-white"}`}>Quem seguir</button>
+              <button type="button" onClick={() => setMeetCategory("nearby")} className={`flex-1 rounded-full py-2 text-[16px] font-bold transition ${meetCategory === "nearby" ? "bg-gradient-to-r from-[#9d31f6] to-[#b13bfa] text-white shadow-[0_8px_24px_rgba(147,51,234,0.38)]" : "text-[#aaa6ef] hover:text-white"}`}>Próximos a você</button>
+            </div>
+            <section>
+              <div className="mb-7 flex items-center justify-between gap-5">
+                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes." : "Perfis que seus seguidores também acompanham."}</h2>
+                {meetCategory === "popular" && <div className="flex shrink-0 rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1 text-[15px] font-semibold"><button type="button" onClick={() => setHypePeriod("recent")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "recent" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>24h</button><button type="button" onClick={() => setHypePeriod("all")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "all" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>Geral</button></div>}
+              </div>
+              <div className="flex flex-col gap-4">
+                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetData?.nearby)?.map((item) => <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? `${item.hypes} hype${item.hypes === 1 ? "" : "s"}` : `${item.mutualFollowersCount} seguidor${item.mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />)}
+                {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
+                {!meetLoading && meetCategory === "popular" && (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime)?.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
+                {!meetLoading && meetCategory === "nearby" && meetData?.nearby.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Suas conexões ainda não geraram sugestões.</p>}
+              </div>
+            </section>
+          </div>
+        )}
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
-              <path d="M9 21V12h6v9"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Home</span>
-          </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Messages</span>
-          </Link>
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <FlameIcon s={30} />
-            <span className="text-[13px] font-semibold">Trending</span>
-          </Link>
+          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><MessageIcon s={32} /><span className="text-[13px] font-semibold">Messages</span></Link>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
+
     </div>
   );
 }

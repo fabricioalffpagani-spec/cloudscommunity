@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 import { NotificationsBell } from "../../components/NotificationsPanel";
+import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
 
 type FollowListUser = {
   id: string;
@@ -31,6 +32,7 @@ type PublicUserProfile = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
+  hypesCount: number;
   isFollowing: boolean;
   isFollowRequested?: boolean;
   isSelf: boolean;
@@ -106,11 +108,12 @@ function formatMemberSince(value?: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
-function FieldStat({ value, label, onClick }: { value: string | number; label: string; onClick?: () => void }) {
+function FieldStat({ value, label, description, onClick }: { value: string | number; label: string; description: string; onClick?: () => void }) {
   return (
-    <div onClick={onClick} className={onClick ? "cursor-pointer hover:opacity-80 transition" : ""}>
+    <div onClick={onClick} className={`group relative ${onClick ? "cursor-pointer hover:opacity-80 transition" : ""}`}>
       <p className="text-[20px] font-bold text-white">{value}</p>
       <p className="text-[11px] uppercase tracking-widest text-white/40">{label}</p>
+      <p role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-40 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a0e3d] px-2 py-1.5 text-center text-[11px] leading-snug text-white/80 opacity-0 shadow-xl transition group-hover:opacity-100">{description}</p>
     </div>
   );
 }
@@ -185,6 +188,9 @@ export default function UserProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [forwardOpen, setForwardOpen] = useState(false);
+  const [contacts, setContacts] = useState<ForwardContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const [followingModalOpen, setFollowingModalOpen] = useState(false);
   const [followersList, setFollowersList] = useState<FollowListUser[]>([]);
@@ -235,6 +241,28 @@ export default function UserProfilePage() {
       controller.abort();
     };
   }, [identifier]);
+
+  useEffect(() => {
+    const refreshStats = () => fetch(`/api/users/${encodeURIComponent(identifier)}`, { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { user?: PublicUserProfile }) => {
+        if (payload.user) setProfile((current) => current ? { ...current, ...payload.user } : payload.user);
+      })
+      .catch(() => {});
+    const interval = window.setInterval(refreshStats, 10_000);
+    return () => window.clearInterval(interval);
+  }, [identifier]);
+
+  useEffect(() => {
+    if (!forwardOpen) return;
+    const controller = new AbortController();
+    fetch("/api/users/following", { cache: "no-store", signal: controller.signal })
+      .then((response) => response.json())
+      .then((payload: { users?: ForwardContact[] }) => setContacts((payload.users ?? []).filter((contact) => contact.id !== sessionUser?.id)))
+      .catch(() => setContacts([]))
+      .finally(() => setLoadingContacts(false));
+    return () => controller.abort();
+  }, [forwardOpen, sessionUser?.id]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -329,6 +357,7 @@ export default function UserProfilePage() {
   const followers = profile?.followersCount ?? 0;
   const following = profile?.followingCount ?? 0;
   const cloudsCount = profile?.cloudsCount ?? 0;
+  const hypesCount = profile?.hypesCount ?? 0;
   const memberSince = formatMemberSince(profile?.createdAt);
   const bio = profile?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
   const isOwnProfile = Boolean(profile?.isSelf || sessionUser?.id === profile?.id);
@@ -337,7 +366,6 @@ export default function UserProfilePage() {
   const waText = profile
     ? encodeURIComponent(`Veja o perfil de ${displayName} no Clouds Community: ${profileUrl}`)
     : "";
-  const messagesHref = profile ? `/messages?share=profile&id=${profile.id}&name=${encodeURIComponent(displayName)}` : "/messages";
 
   if (loading) {
     return (
@@ -409,13 +437,14 @@ export default function UserProfilePage() {
             <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" />
             <p className="mb-4 text-[13px] font-semibold text-white/50">Compartilhar perfil de {displayName}</p>
             <div className="flex flex-col gap-2">
-              <a
-                href={messagesHref}
+              <button
+                type="button"
+                onClick={() => { setShareOpen(false); setLoadingContacts(true); setForwardOpen(true); }}
                 className="flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-[#111116] px-4 py-3.5 text-[14px] font-medium text-white transition hover:bg-white/[0.06]"
               >
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED]/20 text-[#A78BFA]"><MessageIcon /></span>
                 Enviar pelo Messages
-              </a>
+              </button>
               <a
                 href={`https://wa.me/?text=${waText}`}
                 target="_blank"
@@ -434,6 +463,10 @@ export default function UserProfilePage() {
         </div>
       )}
 
+      {forwardOpen && profile && (
+        <ForwardToContactModal title="Encaminhar perfil" preview={`Perfil de ${displayName}`} url={profileUrl} label={JSON.stringify({ type: "profile_share", name: displayName, avatarUrl: profile.avatarUrl })} contacts={contacts} loading={loadingContacts} onClose={() => setForwardOpen(false)} />
+      )}
+
       <div className="mx-auto max-w-[680px] px-5 pb-32">
         <div className="mt-10 flex flex-col items-center text-center">
           <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#7C3AED] text-[32px] font-bold text-white ring-4 ring-white/10">
@@ -450,11 +483,13 @@ export default function UserProfilePage() {
           {bio && <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>}
 
           <div className="mt-5 flex items-center gap-6">
-            <FieldStat value={followers} label="Followers" onClick={openFollowersModal} />
+            <FieldStat value={followers} label="Followers" description="Pessoas que seguem este perfil." onClick={openFollowersModal} />
             <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={following} label="Following" onClick={openFollowingModal} />
+            <FieldStat value={following} label="Following" description="Perfis que esta pessoa segue." onClick={openFollowingModal} />
             <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={cloudsCount} label="Clouds" />
+            <FieldStat value={cloudsCount} label="Clouds" description="Clouds publicadas por este perfil." />
+            <div className="h-8 w-px bg-white/10" />
+            <FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." />
           </div>
 
           <div className="mt-3 flex items-center gap-3 text-[12px] text-white/30">

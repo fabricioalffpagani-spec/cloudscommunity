@@ -22,6 +22,7 @@ export type SessionUser = {
   followersCount?: number;
   followingCount?: number;
   cloudsCount?: number;
+  hypesCount?: number;
 };
 
 type SessionContextValue = {

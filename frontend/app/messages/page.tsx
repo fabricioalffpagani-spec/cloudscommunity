@@ -8,6 +8,7 @@ import { io, type Socket } from "socket.io-client";
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
+import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -779,7 +780,9 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
 function LinkMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
   const host = msg.linkUrl ? new URL(msg.linkUrl).hostname.replace(/^www\./, "") : "Link";
-  const label = msg.linkLabel || host;
+  let label = msg.linkLabel || host;
+  let sharedProfile: { name?: string; avatarUrl?: string | null; external?: boolean } | null = null;
+  let isExternal = false;
   
   // Check if this is a Cloud invitation (from our custom format)
   let cloudInviteData = null;
@@ -787,6 +790,14 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   try {
     if (msg.linkLabel) {
       const parsed = JSON.parse(msg.linkLabel);
+      if (parsed.type === "profile_share") {
+        sharedProfile = parsed;
+        label = parsed.name || "Perfil compartilhado";
+        isExternal = Boolean(parsed.external);
+      } else if (parsed.type === "forwarded_link") {
+        label = parsed.label || "Link compartilhado";
+        isExternal = Boolean(parsed.external);
+      }
       if (parsed.type === "cloud_invitation") {
         cloudInviteData = parsed;
         isPrivateCloudInvite = parsed.cloudVisibility === "private";
@@ -797,6 +808,19 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   }
 
   const isCloudInvite = cloudInviteData !== null;
+
+  if (sharedProfile) {
+    return (
+      <a href={msg.linkUrl || "#"} className={`block overflow-hidden rounded-2xl border px-4 py-3 text-left transition hover:brightness-110 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`} style={{ maxWidth: "320px" }}>
+        {isExternal && <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-white/65">↗ Conteúdo encaminhado</p>}
+        <div className="flex items-center gap-3">
+          {sharedProfile.avatarUrl ? <img src={sharedProfile.avatarUrl} alt="" className="h-11 w-11 rounded-full object-cover ring-2 ring-white/20" /> : <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-[16px] font-bold">{label.slice(0, 1).toUpperCase()}</span>}
+          <div className="min-w-0"><p className="text-[11px] font-semibold text-white/65">Perfil compartilhado</p><p className="truncate text-[14px] font-bold text-white">{label}</p></div>
+        </div>
+        {msg.pending && <div className="mt-2 text-[11px] text-white/70">enviando...</div>}
+      </a>
+    );
+  }
 
   if (isCloudInvite) {
     const inviteUrl = cloudInviteData.inviteToken
@@ -895,6 +919,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
           <p className="mt-1 truncate text-[12px] text-white/65">{msg.linkUrl || "Link compartilhado"}</p>
         </div>
       </div>
+      {isExternal && <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-white/65">↗ Conteúdo encaminhado</p>}
       {msg.pending && <div className="mt-2 text-[11px] text-white/70">enviando...</div>}
     </a>
   );
@@ -1585,6 +1610,13 @@ function MessagesPageContent() {
       .filter((followedUser) => matchesContactQuery(followedUser, query))
       .map((followedUser) => conversationByPeerId.get(followedUser.id) ?? followedUser);
   }, [conversationSearch, conversations, followedUsers]);
+
+  const forwardContacts = useMemo<ForwardContact[]>(() => {
+    const byId = new Map<string, ForwardContact>();
+    conversations.forEach((conversation) => byId.set(conversation.peerId, { id: conversation.peerId, username: conversation.peerUsername, displayName: conversation.name, avatarUrl: conversation.avatarUrl }));
+    followedUsers.forEach((contact) => byId.set(contact.id, { id: contact.id, username: contact.username, displayName: contact.displayName, avatarUrl: contact.avatarUrl }));
+    return [...byId.values()];
+  }, [conversations, followedUsers]);
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
   const activeMessages = activeConversationId ? messagesByConversation[activeConversationId] || [] : [];
@@ -2580,53 +2612,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setForwardMsg(null)}>
-          <div className="relative w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[15px] font-bold text-white">Encaminhar mensagem</h3>
-              <button type="button" onClick={() => setForwardMsg(null)} className="text-white/40 hover:text-white transition">
-                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>
-              </button>
-            </div>
-            <div className="mb-4 rounded-xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Mensagem</p>
-              <p className="text-[13px] text-white/80 line-clamp-3">
-                {forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "🎵 Mensagem de áudio" : forwardMsg.kind === "image" ? "📷 Imagem" : "🔗 Link"}
-              </p>
-            </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  onClick={() => {
-                    const text = forwardMsg.kind === "text"
-                      ? forwardMsg.content
-                      : forwardMsg.kind === "audio" ? "[Áudio]"
-                      : forwardMsg.kind === "image" ? "[Imagem]"
-                      : forwardMsg.linkUrl ?? "[Link]";
-                    const params = new URLSearchParams({
-                      id: conv.peerId,
-                      share: "cloud",
-                      url: forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""),
-                      title: text,
-                      autosend: "true",
-                    });
-                    setForwardMsg(null);
-                    window.location.assign(`/messages?${params.toString()}`);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.05]"
-                >
-                  <UserAvatar user={{ id: conv.peerId, username: conv.peerUsername, displayName: conv.name, avatarUrl: conv.avatarUrl }} size={36} />
-                  <span className="text-[14px] font-medium text-white truncate">{conv.name}</span>
-                </button>
-              ))}
-              {conversations.length === 0 && (
-                <p className="py-4 text-center text-[13px] text-white/40">Nenhuma conversa disponível</p>
-              )}
-            </div>
-          </div>
-        </div>
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
       )}
     </div>
   );

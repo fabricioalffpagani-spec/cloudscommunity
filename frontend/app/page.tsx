@@ -24,7 +24,6 @@ import {
   getSessionUserHandle,
   useSessionUser,
 } from "./components/session-user";
-import { subscribeToCloudPresence } from "./lib/cloud-presence";
 
 // ─── Types
 
@@ -124,7 +123,7 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     authorHandle: cloud.author.username,
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     description: cloud.description ?? undefined,
-    liveParticipants: cloud.membersCount,
+    liveParticipants: Math.max(1, cloud.membersCount),
     authorId: cloud.authorId,
   };
 }
@@ -140,7 +139,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 8 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-1?title=Tendências%20da%20semana%20em%20Tech&duration=1h&createdAt=" + new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-1?title=Tendências%20da%20semana%20em%20Tech&duration=1h&createdAt=" + new Date(Date.now() - 8 * 60 * 1000).toISOString() + "&participants=42",
     hypes: 42,
   },
   {
@@ -151,7 +150,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 14 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString() + "&participants=87",
     hypes: 87,
   },
   {
@@ -162,7 +161,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 3 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-3?title=Gaming%3A%20o%20melhor%20lançamento%20de%202025&duration=1h&createdAt=" + new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-3?title=Gaming%3A%20o%20melhor%20lançamento%20de%202025&duration=1h&createdAt=" + new Date(Date.now() - 3 * 60 * 1000).toISOString() + "&participants=31",
     hypes: 31,
   },
   {
@@ -173,7 +172,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 30 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-4?title=Drama%20das%20redes%3A%20o%20que%20você%20acha%3F&duration=24h&createdAt=" + new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-4?title=Drama%20das%20redes%3A%20o%20que%20você%20acha%3F&duration=24h&createdAt=" + new Date(Date.now() - 30 * 60 * 1000).toISOString() + "&participants=113",
     hypes: 113,
   },
   {
@@ -184,7 +183,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 2 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString() + "&participants=58",
     hypes: 58,
   },
   {
@@ -195,7 +194,7 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 1 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=30min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=30min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString() + "&participants=204",
     hypes: 204,
   },
 ];
@@ -322,8 +321,8 @@ function getTopicProfile(cloud: Cloud, index: number) {
     name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
     handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
     description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
-    avatar: cloud.authorPhoto ?? categoryProfiles[cloud.category]?.avatar ?? fallbackAvatar,
-    participants: cloud.liveParticipants ?? 0,
+    avatar: cloud.authorPhoto ?? null,
+    participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
   };
 }
 
@@ -823,24 +822,16 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [hypeLoading, setHypeLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const siteOrigin = useSiteOrigin();
 
-  // Countdown updates every second
-  useEffect(() => {
-    const iv = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(iv);
-  }, []);
-
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
-  const fullShareUrl = `${siteOrigin}${shareUrl}`;
-  const durationSeconds = parseDurationSeconds(cloud.duration);
-  const elapsedSeconds = Math.floor((now - cloud.createdAt.getTime()) / 1000);
+  const fullShareUrl = `${siteOrigin}${shareUrl}`;  const durationSeconds = parseDurationSeconds(cloud.duration);
+  const elapsedSeconds = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
   const isLive = remainingSeconds > 0;
   const countdownLabel = formatCountdown(remainingSeconds);
   const timeAgo = (() => {
-    const diff = Math.floor((now - cloud.createdAt.getTime()) / 1000);
+    const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
     if (diff < 3600) return `${Math.floor(diff / 60)} min atrás`;
     return `${Math.floor(diff / 3600)}h atrás`;
@@ -955,7 +946,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
         {/* Right — enter */}
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa
@@ -2002,6 +1993,7 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
                         title: cloud.title,
                         duration: cloud.duration,
                         createdAt: cloud.createdAt.toISOString(),
+                        participants: String(cloud.liveParticipants ?? 1),
                       });
                       router.push(`/cloud/${cloud.id}?${params.toString()}`);
                       onClose();
@@ -2454,6 +2446,9 @@ function PageContent() {
   const [cloudOptionsOpen, setCloudOptionsOpen] = useState(false);
   const [cloudInfoOpen, setCloudInfoOpen] = useState(false);
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
+  // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
+  const [participants, setParticipants] = useState<number>(0);
+
   // Slide animation: "left" = next, "right" = prev, null = settled
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
 
@@ -2514,6 +2509,7 @@ function PageContent() {
       title: cloud.title,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
+      participants: String(cloud.liveParticipants ?? 1),
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
@@ -2584,6 +2580,33 @@ function PageContent() {
     const interval = setInterval(() => setTick((value) => value + 1), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const activeClouds = orderedClouds.filter(isCloudActive);
+    if (activeClouds.length === 0) {
+      setParticipants(0);
+      return;
+    }
+
+    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
+    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
+    setParticipants(base);
+  }, [currentCloudIndex, orderedClouds]);
+
+  useEffect(() => {
+    const activeClouds = orderedClouds.filter(isCloudActive);
+    if (activeClouds.length === 0) return;
+
+    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
+    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
+
+    const iv = window.setInterval(() => {
+      const delta = Math.floor(Math.random() * 3) - 1;
+      setParticipants(() => Math.max(1, base + delta));
+    }, 4000);
+
+    return () => window.clearInterval(iv);
+  }, [currentCloudIndex, orderedClouds]);
 
   const closeModal = () => setModal(null);
 
@@ -2663,11 +2686,6 @@ function PageContent() {
   const activeClouds = orderedClouds.filter(isCloudActive);
   const currentCloud = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? null;
   const currentCountdown = currentCloud ? getTopicCountdown(currentCloud) : 0;
-  const currentParticipants = currentCloud?.liveParticipants ?? 0;
-
-  useEffect(() => subscribeToCloudPresence(({ cloudId, membersCount }) => {
-    setClouds((prev) => prev.map((cloud) => cloud.id === cloudId ? { ...cloud, liveParticipants: membersCount } : cloud));
-  }), []);
 
   useEffect(() => {
     if (homeStage === "live" && !currentCloud) {
@@ -2831,7 +2849,7 @@ function PageContent() {
                       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                       <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                     </svg>
-                    {formatParticipantCount(currentParticipants)}
+                    {formatParticipantCount(participants)}
                   </div>
                   <div className="relative flex items-center">
                     <button type="button" aria-label="Mais opções da Cloud" onClick={() => setCloudOptionsOpen((open) => !open)} className="flex items-center text-white hover:text-white/70 transition">
@@ -2954,13 +2972,14 @@ function PageContent() {
                 title={currentCloud.title}
                 duration={currentCloud.duration}
                 createdAt={currentCloud.createdAt.toISOString()}
+                participants={currentCloud.liveParticipants ?? 1}
               />
             )}
           </div>
         )}
       </main>
 
-      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(currentParticipants)}</p></div></div></div>}
+      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(participants)}</p></div></div></div>}
       {cloudDescriptionOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Descrição da Cloud</h3><button onClick={() => setCloudDescriptionOpen(false)} className="text-white/50 hover:text-white">×</button></div><p className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/75">{currentCloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p></div></div>}
 
       {/* ── Bottom navigation ── */}

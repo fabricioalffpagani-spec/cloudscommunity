@@ -563,7 +563,10 @@ export class CloudService {
   }> {
     const current = await this.requireSession(token);
 
-    await this.requireCloudMembership(cloudId, current.user.id);
+    // Allow reporting cloud from feed without membership, but require membership for reporting specific messages
+    if (messageId) {
+      await this.requireCloudMembership(cloudId, current.user.id);
+    }
 
     if (reportedId === current.user.id) {
       throw new BadRequestException({ message: 'Você não pode denunciar a si mesmo.' });
@@ -593,6 +596,8 @@ export class CloudService {
       select: { userId: true },
     });
 
+    // Allow reporting cloud author or cloud members even if reporter is not a member
+    // This enables reporting from the feed before joining the cloud
     if (!reportedMembership && reportedId !== cloud.authorId) {
       throw new BadRequestException({ message: 'O usuário informado não faz parte desta cloud.' });
     }
@@ -635,14 +640,18 @@ export class CloudService {
 
     // Persist notification for the cloud author
     if (cloud.authorId !== current.user.id) {
+      const notificationBody = messageId 
+        ? `Mensagem de @${reportedUsername || reportedName} foi denunciada: ${reasons.join(', ')}. A plataforma irá analisar o caso e retornará uma resposta em breve.`
+        : `Sua Cloud foi denunciada. A plataforma irá analisar o caso e retornará uma resposta em breve.`;
+
       await this.prisma.notification.create({
         data: {
           userId: cloud.authorId,
           type: 'system',
           entityType: 'cloud',
           entityId: cloudId,
-          title: `Denúncia em "${cloud.title}"`,
-          body: `Um membro denunciou @${reportedUsername || reportedName}: ${reasons.join(', ')}`,
+          title: messageId ? 'Denúncia de mensagem' : 'Denúncia de Cloud',
+          body: notificationBody,
         },
       });
     }

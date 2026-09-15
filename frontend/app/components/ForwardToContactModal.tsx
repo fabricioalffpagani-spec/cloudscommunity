@@ -1,0 +1,112 @@
+"use client";
+
+import { useState } from "react";
+
+export type ForwardContact = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+type Props = {
+  title: string;
+  preview?: string;
+  url: string;
+  label: string;
+  messageContent?: string;
+  forwarded?: boolean;
+  contacts: ForwardContact[];
+  loading?: boolean;
+  onClose: () => void;
+};
+
+export function ForwardToContactModal({ title, preview, url, label, messageContent, forwarded = true, contacts, loading = false, onClose }: Props) {
+  const [note, setNote] = useState("");
+  const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const forward = async (contact: ForwardContact) => {
+    setSendingTo(contact.id);
+    setError(null);
+    try {
+      const conversationResponse = await fetch("/api/direct-messages/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ peerUserId: contact.id }),
+      });
+      const conversationPayload = await conversationResponse.json().catch(() => null);
+      if (!conversationResponse.ok || !conversationPayload?.conversation?.id) throw new Error(conversationPayload?.message || "Não foi possível abrir a conversa.");
+      const conversationId = conversationPayload.conversation.id as string;
+      const clientMessageId = `forward-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      let forwardedLabel = label;
+      if (forwarded && !messageContent) {
+        try {
+          forwardedLabel = JSON.stringify({ ...JSON.parse(label), external: true });
+        } catch {
+          forwardedLabel = JSON.stringify({ type: "forwarded_link", label, external: true });
+        }
+      }
+      const endpoint = `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}${messageContent ? "/messages" : "/link"}`;
+      const body = JSON.stringify(messageContent
+        ? { content: `${forwarded ? "↗ Mensagem encaminhada\n" : ""}${messageContent}`, clientMessageId }
+        : { url, label: forwardedLabel, clientMessageId });
+      const send = () => fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      let forwardedResponse = await send();
+      // A conversa pode ser criada enquanto o backend conclui um reinício. Uma única
+      // nova tentativa evita falhas transitórias sem duplicar a mensagem (idempotência).
+      if (forwardedResponse.status === 404) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        forwardedResponse = await send();
+      }
+      const forwardedPayload = await forwardedResponse.json().catch(() => null);
+      if (!forwardedResponse.ok || forwardedPayload?.ok === false) throw new Error(forwardedPayload?.message || "Não foi possível encaminhar.");
+      const text = note.trim();
+      if (text) {
+        const noteResponse = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: text, clientMessageId: `${clientMessageId}-note` }),
+        });
+        const notePayload = await noteResponse.json().catch(() => null);
+        if (!noteResponse.ok || notePayload?.ok === false) throw new Error(notePayload?.message || "O item foi encaminhado, mas não foi possível enviar o recado.");
+      }
+      setSentTo((previous) => [...previous, contact.id]);
+    } catch (forwardError) {
+      setError(forwardError instanceof Error ? forwardError.message : "Não foi possível encaminhar.");
+    } finally {
+      setSendingTo(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(event) => event.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-[16px] font-bold text-white">{title}</h3>
+          <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
+        </div>
+        {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{preview}</p>}
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Contatos do Messages</p>
+        <div className="max-h-56 space-y-2 overflow-y-auto">
+          {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : contacts.map((contact) => {
+            const sent = sentTo.includes(contact.id);
+            return <div key={contact.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.05]">
+              {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-[13px] font-bold">{contact.displayName.slice(0, 1).toUpperCase()}</span>}
+              <div className="min-w-0 flex-1"><p className="truncate text-[14px] font-semibold text-white">{contact.displayName}</p><p className="truncate text-[12px] text-white/45">@{contact.username}</p></div>
+              <button type="button" disabled={Boolean(sendingTo) || sent} onClick={() => void forward(contact)} className="rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50">{sent ? "Enviado" : sendingTo === contact.id ? "Enviando..." : "Encaminhar"}</button>
+            </div>;
+          })}
+        </div>
+        <label className="mt-4 block text-[11px] font-semibold uppercase tracking-wider text-white/40" htmlFor="forward-note">Recado opcional</label>
+        <textarea id="forward-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={1000} rows={2} placeholder="Escreva algo sobre este encaminhamento..." className="mt-2 w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white outline-none placeholder:text-white/30 focus:border-[#9333EA]" />
+        {error && <p className="mt-2 text-[12px] text-red-300">{error}</p>}
+      </div>
+    </div>
+  );
+}

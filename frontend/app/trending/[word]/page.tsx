@@ -9,7 +9,6 @@ import { SessionUserAvatar, useSessionUser } from "../../components/session-user
 import { useRouter } from "next/navigation";
 import { SearchModal } from "../../components/SearchModal";
 import { NotificationsBell } from "../../components/NotificationsPanel";
-import { subscribeToCloudPresence } from "../../lib/cloud-presence";
 
 type CloudApiPayload = {
   id: string;
@@ -113,6 +112,7 @@ function CloudCard({ cloud }: { cloud: Cloud }) {
       title: cloud.title,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
+      participants: String(cloud.membersCount),
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
@@ -201,7 +201,7 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
             visibility: c.visibility,
             href: c.href,
             hypes: c.hypesCount,
-            membersCount: c.membersCount,
+            membersCount: Math.max(1, c.membersCount),
             authorName: c.author.name,
             authorHandle: c.author.username,
             authorPhoto: c.author.avatarUrl ?? undefined,
@@ -226,10 +226,6 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
   useEffect(() => {
     void load();
   }, [load]);
-
-  useEffect(() => subscribeToCloudPresence(({ cloudId, membersCount }) => {
-    setClouds((prev) => prev.map((cloud) => cloud.id === cloudId ? { ...cloud, membersCount } : cloud));
-  }), []);
 
   return (
     <div

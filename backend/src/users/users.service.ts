@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { PublicUserProfilePayload, UserProfileResponse, UsersSearchResponse } from './users.types';
+import { MeetResponse, PublicUserProfilePayload, UserProfileResponse, UsersSearchResponse } from './users.types';
 
 type SessionUser = Awaited<ReturnType<AuthService['resolveSession']>> extends infer T
   ? T extends { user: infer U } ? U : never
@@ -307,7 +307,7 @@ export class UsersService {
     };
   }
 
-  async following(token: string | null): Promise<UsersSearchResponse> {
+  async following(token: string | null, sort?: string, limit?: string): Promise<UsersSearchResponse> {
     const current = await this.requireSession(token);
 
     const following = await this.prisma.follow.findMany({
@@ -325,6 +325,161 @@ export class UsersService {
     const users: PublicUserProfilePayload[] = [];
 
     for (const entry of following) {
+      const user = entry.following;
+
+      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+        continue;
+      }
+
+      users.push(await this.mapPublicProfile(user, current.user.id));
+    }
+
+    return {
+      ok: true,
+      users,
+    };
+  }
+
+  async meet(token: string | null): Promise<MeetResponse> {
+    const current = await this.requireSession(token);
+    const now = new Date();
+    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const [allHypes, recentHypes, followers] = await Promise.all([
+      this.prisma.cloudHype.findMany({
+        where: { cloud: { deletedAt: null } },
+        select: { cloud: { select: { authorId: true } } },
+      }),
+      this.prisma.cloudHype.findMany({
+        where: { createdAt: { gte: last24Hours }, cloud: { deletedAt: null } },
+        select: { cloud: { select: { authorId: true } } },
+      }),
+      this.prisma.follow.findMany({
+        where: { followingId: current.user.id },
+        select: { followerId: true },
+      }),
+    ]);
+
+    const countAuthors = (entries: Array<{ cloud: { authorId: string } }>) => {
+      const counts = new Map<string, number>();
+      for (const entry of entries) {
+        if (entry.cloud.authorId !== current.user.id) {
+          counts.set(entry.cloud.authorId, (counts.get(entry.cloud.authorId) ?? 0) + 1);
+        }
+      }
+      return counts;
+    };
+
+    const popularRecentCounts = countAuthors(recentHypes);
+    const popularAllTimeCounts = countAuthors(allHypes);
+    const followerIds = followers.map((follower) => follower.followerId);
+    const nearbyCounts = new Map<string, number>();
+
+    if (followerIds.length > 0) {
+      const followedByFollowers = await this.prisma.follow.findMany({
+        where: {
+          followerId: { in: followerIds },
+          followingId: { not: current.user.id },
+        },
+        select: { followingId: true },
+      });
+
+      for (const entry of followedByFollowers) {
+        nearbyCounts.set(entry.followingId, (nearbyCounts.get(entry.followingId) ?? 0) + 1);
+      }
+    }
+
+    const rankProfiles = async (counts: Map<string, number>) => {
+      const rankedIds = [...counts.entries()]
+        .sort(([, left], [, right]) => right - left)
+        .slice(0, 10)
+        .map(([id]) => id);
+
+      if (rankedIds.length === 0) return [];
+
+      const candidates = await this.prisma.user.findMany({
+        where: { id: { in: rankedIds }, status: UserStatus.active, deletedAt: null },
+        include: { profile: true },
+      });
+      const byId = new Map(candidates.filter((candidate) => candidate.profile).map((candidate) => [candidate.id, candidate]));
+
+      return Promise.all(rankedIds.flatMap(async (id) => {
+        const candidate = byId.get(id);
+        if (!candidate) return [];
+        return [{ ...(await this.mapPublicProfile(candidate, current.user.id)), score: counts.get(id) ?? 0 }];
+      }));
+    };
+
+    const [recentRanked, allTimeRanked, nearbyRanked] = await Promise.all([
+      rankProfiles(popularRecentCounts),
+      rankProfiles(popularAllTimeCounts),
+      rankProfiles(nearbyCounts),
+    ]);
+
+    return {
+      ok: true,
+      popularRecent: recentRanked.flat().map(({ score, ...user }) => ({ ...user, hypes: score })),
+      popularAllTime: allTimeRanked.flat().map(({ score, ...user }) => ({ ...user, hypes: score })),
+      nearby: nearbyRanked.flat().map(({ score, ...user }) => ({ ...user, mutualFollowersCount: score })),
+    };
+  }
+
+  async getNearbyUsers(token: string | null): Promise<UsersSearchResponse> {
+    const current = await this.requireSession(token);
+
+    // Get users that the current user's followers also follow
+    const followers = await this.prisma.follow.findMany({
+      where: { followingId: current.user.id },
+      select: { followerId: true },
+    });
+
+    if (followers.length === 0) {
+      return { ok: true, users: [] };
+    }
+
+    const followerIds = followers.map(f => f.followerId);
+
+    // Get follows of those followers
+    const followsOfFollowers = await this.prisma.follow.findMany({
+      where: {
+        followerId: { in: followerIds },
+        followingId: { not: current.user.id },
+      },
+      include: {
+        following: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+    });
+
+    // Count how many followers also follow each user
+    const userFollowCount = new Map<string, number>();
+    for (const follow of followsOfFollowers) {
+      const userId = follow.followingId;
+      userFollowCount.set(userId, (userFollowCount.get(userId) || 0) + 1);
+    }
+
+    // Get unique users and sort by follower overlap count
+    const uniqueUsers = new Map<string, typeof followsOfFollowers[0]>();
+    for (const follow of followsOfFollowers) {
+      if (!uniqueUsers.has(follow.followingId)) {
+        uniqueUsers.set(follow.followingId, follow);
+      }
+    }
+
+    const sortedUsers = Array.from(uniqueUsers.values())
+      .sort((a, b) => {
+        const countA = userFollowCount.get(a.followingId) || 0;
+        const countB = userFollowCount.get(b.followingId) || 0;
+        return countB - countA;
+      })
+      .slice(0, 20);
+
+    const users: PublicUserProfilePayload[] = [];
+
+    for (const entry of sortedUsers) {
       const user = entry.following;
 
       if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
@@ -523,9 +678,12 @@ export class UsersService {
       throw new Error('User profile is required.');
     }
 
-    const followersCount = await this.prisma.follow.count({ where: { followingId: user.id } });
-    const followingCount = await this.prisma.follow.count({ where: { followerId: user.id } });
-    const cloudsCount = await this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } });
+    const [followersCount, followingCount, cloudsCount, hypesCount] = await Promise.all([
+      this.prisma.follow.count({ where: { followingId: user.id } }),
+      this.prisma.follow.count({ where: { followerId: user.id } }),
+      this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } }),
+      this.prisma.cloudHype.count({ where: { cloud: { authorId: user.id, deletedAt: null } } }),
+    ]);
     const isFollowing = currentUserId
       ? Boolean(
           await this.prisma.follow.findFirst({
@@ -599,6 +757,7 @@ export class UsersService {
       followersCount,
       followingCount,
       cloudsCount,
+      hypesCount,
       isFollowing,
       isFollowRequested,
       isSelf,

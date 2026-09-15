@@ -9,6 +9,7 @@ import { FlameIcon } from "../../components/FlameIcon";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
+import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 
 type CloudPayload = {
   id: string;
@@ -2757,66 +2758,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       </div>
 
       {shareOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[18px] font-bold">Enviar convite</h3>
-              <button type="button" onClick={() => setShareOpen(false)} className="text-white/50 hover:text-white">×</button>
-            </div>
-            <div className="mb-4 rounded-xl border border-white/[0.07] bg-white/[0.04] px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">
-                {isPrivateCloud ? "Convite privado" : "Link da cloud"}
-              </p>
-              <p className="text-[13px] text-white/70">
-                {isPrivateCloud
-                  ? "Copie o link abaixo ou envie diretamente para um contato do mensageiro."
-                  : "Copie o link abaixo ou envie diretamente para um contato do mensageiro."}
-              </p>
-              <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-2">
-                <input readOnly value={shareLink} className="min-w-0 flex-1 bg-transparent text-[13px] text-white/80 outline-none" />
-                <button type="button" onClick={() => void handleCopyShareLink()} className="rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-[#6D28D9]">
-                  Copiar
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40">Contatos do mensageiro</p>
-              <div className="max-h-72 space-y-2 overflow-y-auto">
-                {loadingContacts && contacts.length === 0 ? (
-                  <p className="py-6 text-center text-[13px] text-white/40">Carregando contatos...</p>
-                ) : contacts.length === 0 ? (
-                  <p className="py-6 text-center text-[13px] text-white/40">Nenhum contato disponível.</p>
-                ) : (
-                  contacts.map((contact) => (
-                    <button
-                      key={contact.id}
-                      type="button"
-                      onClick={() => {
-                        const params = new URLSearchParams({
-                          id: contact.id,
-                          share: "cloud",
-                          url: shareLink,
-                          title: cloud?.title || "Cloud",
-                          autosend: "true",
-                        });
-                        setShareOpen(false);
-                        window.location.assign(`/messages?${params.toString()}`);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/[0.05]"
-                    >
-                      <UserAvatar user={{ id: contact.id, username: contact.username, displayName: contact.displayName, avatarUrl: contact.avatarUrl }} size={36} />
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-semibold text-white">{contact.displayName}</p>
-                        <p className="truncate text-[12px] text-white/45">@{contact.username}</p>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} onClose={() => setShareOpen(false)} />
       )}
 
       {infoOpen && cloud && (

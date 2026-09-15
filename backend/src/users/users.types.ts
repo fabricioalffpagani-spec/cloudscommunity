@@ -14,6 +14,7 @@ export type PublicUserProfilePayload = {
   followersCount: number;
   followingCount: number;
   cloudsCount: number;
+  hypesCount: number;
   isFollowing: boolean;
   isFollowRequested: boolean;
   isSelf: boolean;
@@ -39,6 +40,13 @@ export type PublicUserProfilePayload = {
 export type UsersSearchResponse = {
   ok: true;
   users: PublicUserProfilePayload[];
+};
+
+export type MeetResponse = {
+  ok: true;
+  popularRecent: Array<PublicUserProfilePayload & { hypes: number }>;
+  popularAllTime: Array<PublicUserProfilePayload & { hypes: number }>;
+  nearby: Array<PublicUserProfilePayload & { mutualFollowersCount: number }>;
 };
 
 export type UserProfileResponse = {

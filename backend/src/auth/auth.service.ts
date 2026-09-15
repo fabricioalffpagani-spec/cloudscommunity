@@ -484,7 +484,7 @@ export class AuthService {
       this.prisma.follow.count({ where: { followingId: userId } }),
       this.prisma.follow.count({ where: { followerId: userId } }),
       this.prisma.cloud.count({ where: { authorId: userId, deletedAt: null } }),
-      this.prisma.cloudHype.count({ where: { userId } }),
+      this.prisma.cloudHype.count({ where: { cloud: { authorId: userId, deletedAt: null } } }),
     ]);
 
     return {

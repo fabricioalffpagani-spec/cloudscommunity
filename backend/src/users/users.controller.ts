@@ -28,8 +28,18 @@ export class UsersController {
   }
 
   @Get('following')
-  async following(@Req() req: Request) {
-    return this.usersService.following(extractSessionToken(req));
+  async following(@Req() req: Request, @Query('sort') sort?: string, @Query('limit') limit?: string) {
+    return this.usersService.following(extractSessionToken(req), sort, limit);
+  }
+
+  @Get('nearby')
+  async nearby(@Req() req: Request) {
+    return this.usersService.getNearbyUsers(extractSessionToken(req));
+  }
+
+  @Get('meet')
+  async meet(@Req() req: Request) {
+    return this.usersService.meet(extractSessionToken(req));
   }
 
   @Get('invite-contacts')
