@@ -92,6 +92,7 @@ type Msg = {
   isoTime: string;
   readAt: string | null;
   mediaUrl: string | null;
+  mediaFileName?: string | null;
   durationMs: number | null;
   peaks?: number[] | null;
   linkUrl: string | null;
@@ -423,6 +424,7 @@ function buildMessage(
     isoTime: payload.createdAt,
     readAt: payload.readAt,
     mediaUrl: payload.mediaAsset?.url ?? null,
+    mediaFileName: payload.mediaAsset?.originalFileName ?? null,
     durationMs: payload.mediaAsset?.durationMs ?? null,
     peaks: (payload.mediaAsset as { peaks?: number[] | null } | undefined)?.peaks ?? null,
     linkUrl,
@@ -725,6 +727,7 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
 
 function AudioMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
+  const isForwarded = /^(?:↗\s*)?(?:Encaminhada|Mensagem encaminhada)$/i.test(msg.content.trim());
   if (!msg.mediaUrl) {
     return (
       <div className={`rounded-2xl border px-4 py-3 text-[12px] text-white/60 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}>
@@ -733,13 +736,19 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
     );
   }
   return (
-    <div className="flex flex-col gap-1">
+    <div className={`flex flex-col ${isForwarded ? "gap-0" : "gap-1"}`}>
+      {isForwarded && (
+        <div className={`w-[248px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
+          ↗ Encaminhada
+        </div>
+      )}
       <AudioWaveformPlayer
         src={msg.mediaUrl}
         peaks={msg.peaks ?? undefined}
         durationMs={msg.durationMs}
         isOwn={isRight}
         roundedCorner={isRight ? "right" : "left"}
+        flatTop={isForwarded}
       />
       {msg.pending && <div className={`text-[11px] ${isRight ? "text-right text-white/50" : "text-white/50"}`}>enviando...</div>}
     </div>
@@ -748,6 +757,7 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
 
 function ImageMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
+  const isForwarded = /^(?:↗\s*)?(?:Encaminhada|Mensagem encaminhada)$/i.test(msg.content.trim());
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -757,6 +767,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
       className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
       style={{ maxWidth: "320px" }}
     >
+      {isForwarded && <div className="px-3 pb-2 pt-2 text-[9px] font-medium uppercase tracking-[0.12em] text-white/60">↗ Encaminhada</div>}
       {msg.mediaUrl ? (
         <img
           src={msg.mediaUrl}
@@ -1169,7 +1180,10 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const textContent = msg.kind === "text" ? msg.content : null;
-  const highlightedContent = searchQuery && textContent ? highlightText(textContent, searchQuery) : textContent;
+  const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
+  const isForwardedMessage = Boolean(forwardedMarkerMatch);
+  const visibleTextContent = forwardedMarkerMatch ? textContent?.slice(forwardedMarkerMatch[0].length) ?? "" : textContent;
+  const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
 
   function handleToggleMenu() {
     if (!menuOpen && triggerRef.current) {
@@ -1198,8 +1212,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
         ) : msg.kind === "link" ? (
           <LinkMessageBubble msg={msg} />
         ) : (
-          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            <span dangerouslySetInnerHTML={{ __html: highlightedContent || msg.content }} />
+          <div className={`relative rounded-2xl px-4 ${isForwardedMessage ? "min-w-[112px] pb-3 pt-6" : "py-3"} text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ Encaminhada</span>}
+            <span dangerouslySetInnerHTML={{ __html: highlightedContent || visibleTextContent || "" }} />
             {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
         )}
@@ -1252,6 +1267,7 @@ function MessagesPageContent() {
   const searchParams = useSearchParams();
   const socketRef = useRef<Socket | null>(null);
   const activeConversationIdRef = useRef<string | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
   const typingConversationIdRef = useRef<string | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1288,6 +1304,11 @@ function MessagesPageContent() {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [followedUsers, setFollowedUsers] = useState<PublicUserProfile[]>([]);
   const [loadingFollowed, setLoadingFollowed] = useState(false);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
   const handleAudioRecordingStop = useCallback(async (recording: RecordedAudio) => {
     if (!activeConversationIdRef.current || !user?.id) {
       return;
@@ -1653,9 +1674,14 @@ function MessagesPageContent() {
           status: presenceByUserIdRef.current[built.peerId] ?? built.status,
         };
       });
+      conversationsRef.current = mapped;
       setConversations(mapped);
-      if (!activeConversationIdRef.current && mapped.length > 0) {
-        setActiveConversationId(mapped[0].id);
+      const currentActiveId = activeConversationIdRef.current;
+      const activeConversationStillExists = currentActiveId ? mapped.some((conversation) => conversation.id === currentActiveId) : false;
+      if (!activeConversationStillExists) {
+        const nextConversationId = mapped[0]?.id ?? null;
+        activeConversationIdRef.current = nextConversationId;
+        setActiveConversationId(nextConversationId);
       }
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
@@ -1685,6 +1711,17 @@ function MessagesPageContent() {
     setError(null);
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
+      if (response.status === 404) {
+        if (activeConversationIdRef.current === conversationId) {
+          const remainingConversations = conversationsRef.current.filter((conversation) => conversation.id !== conversationId);
+          const nextConversationId = remainingConversations[0]?.id ?? null;
+          activeConversationIdRef.current = nextConversationId;
+          conversationsRef.current = remainingConversations;
+          setConversations(remainingConversations);
+          setActiveConversationId(nextConversationId);
+        }
+        return;
+      }
       const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user)) }));
     } catch (fetchError) {
@@ -2612,7 +2649,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
       )}
     </div>
   );

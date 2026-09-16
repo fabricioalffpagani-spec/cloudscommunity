@@ -73,9 +73,10 @@ type Props = {
   durationMs?: number | null;
   isOwn?: boolean;
   roundedCorner?: "left" | "right";
+  flatTop?: boolean;
 };
 
-export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isOwn = false, roundedCorner = "right" }: Props) {
+export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isOwn = false, roundedCorner = "right", flatTop = false }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [decodedPeaks, setDecodedPeaks] = useState<number[]>(() => Array.from({ length: BAR_COUNT }, () => 0.3));
   const [playing, setPlaying] = useState(false);
@@ -168,8 +169,8 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
     ? "bg-[#9333EA]"
     : "bg-[#1c1530] border border-white/[0.08]";
 
-  const pillRadius = isOwn
-    ? (roundedCorner === "right" ? "rounded-2xl rounded-br-[4px]" : "rounded-2xl rounded-bl-[4px]")
+  const pillRadius = flatTop
+    ? (roundedCorner === "right" ? "rounded-b-2xl rounded-br-[4px]" : "rounded-b-2xl rounded-bl-[4px]")
     : (roundedCorner === "right" ? "rounded-2xl rounded-br-[4px]" : "rounded-2xl rounded-bl-[4px]");
 
   const playButtonClass = isOwn

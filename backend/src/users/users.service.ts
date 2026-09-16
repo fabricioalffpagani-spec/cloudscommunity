@@ -772,8 +772,6 @@ export class UsersService {
     contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }>;
   }> {
     const current = await this.requireSession(token);
-    const profile = await this.prisma.profile.findUnique({ where: { userId: current.user.id } });
-
     const contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }> = [];
 
     if (current.user.email) {
@@ -781,14 +779,6 @@ export class UsersService {
         identifier: current.user.email,
         displayName: current.user.email,
         type: 'email',
-      });
-    }
-
-    if (profile?.phone) {
-      contacts.push({
-        identifier: profile.phone,
-        displayName: profile.phone,
-        type: 'phone',
       });
     }
 

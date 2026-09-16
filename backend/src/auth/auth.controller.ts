@@ -43,7 +43,6 @@ export class AuthController {
         bio: typeof body.bio === 'string' ? body.bio : undefined,
         location: typeof body.location === 'string' ? body.location : undefined,
         region: typeof body.region === 'string' ? body.region : undefined,
-        phone: typeof body.phone === 'string' ? body.phone : undefined,
       },
       {
         ipAddress: req.ip ?? null,

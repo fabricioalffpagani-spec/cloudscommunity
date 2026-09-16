@@ -91,12 +91,14 @@ export type SendAudioMessageInput = {
   clientMessageId?: string;
   replyToMessageId?: string;
   durationMs?: number | null;
+  forwarded?: boolean;
 };
 
 export type SendImageMessageInput = {
   conversationId: string;
   clientMessageId?: string;
   replyToMessageId?: string;
+  forwarded?: boolean;
 };
 
 export type SendLinkMessageInput = {

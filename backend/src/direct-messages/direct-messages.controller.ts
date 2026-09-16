@@ -151,6 +151,7 @@ export class DirectMessagesController {
         durationMs: typeof body.durationMs === 'string' && body.durationMs.trim() !== ''
           ? Number(body.durationMs)
           : undefined,
+        forwarded: body.forwarded === true || body.forwarded === 'true',
       },
       file as MulterFile,
     );
@@ -188,6 +189,7 @@ export class DirectMessagesController {
         conversationId,
         clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : undefined,
         replyToMessageId: typeof body.replyToMessageId === 'string' ? body.replyToMessageId : undefined,
+        forwarded: body.forwarded === true || body.forwarded === 'true',
       },
       file as MulterFile,
     );

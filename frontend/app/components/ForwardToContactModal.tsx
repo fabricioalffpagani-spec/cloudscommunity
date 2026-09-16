@@ -15,13 +15,17 @@ type Props = {
   url: string;
   label: string;
   messageContent?: string;
+  mediaKind?: "audio" | "image";
+  mediaUrl?: string | null;
+  mediaDurationMs?: number | null;
+  mediaFileName?: string | null;
   forwarded?: boolean;
   contacts: ForwardContact[];
   loading?: boolean;
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, forwarded = true, contacts, loading = false, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
@@ -40,21 +44,47 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       if (!conversationResponse.ok || !conversationPayload?.conversation?.id) throw new Error(conversationPayload?.message || "Não foi possível abrir a conversa.");
       const conversationId = conversationPayload.conversation.id as string;
       const clientMessageId = `forward-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const cleanMessageContent = messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/, "");
+      const isTextMessage = messageContent !== undefined;
       let forwardedLabel = label;
-      if (forwarded && !messageContent) {
+      if (forwarded && !isTextMessage) {
         try {
           forwardedLabel = JSON.stringify({ ...JSON.parse(label), external: true });
         } catch {
           forwardedLabel = JSON.stringify({ type: "forwarded_link", label, external: true });
         }
       }
-      const endpoint = `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}${messageContent ? "/messages" : "/link"}`;
-      const body = JSON.stringify(messageContent
-        ? { content: `${forwarded ? "↗ Mensagem encaminhada\n" : ""}${messageContent}`, clientMessageId }
-        : { url, label: forwardedLabel, clientMessageId });
+      const isMedia = Boolean(mediaKind);
+      let endpoint = `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}`;
+      let body: BodyInit;
+
+      if (isMedia) {
+        if (!mediaUrl) throw new Error("A mídia original não está disponível para encaminhamento.");
+        const mediaResponse = await fetch(mediaUrl as string);
+        if (!mediaResponse.ok) throw new Error("Não foi possível carregar a mídia original.");
+        const downloadedBlob = await mediaResponse.blob();
+        const expectedMimePrefix = mediaKind === "audio" ? "audio/" : "image/";
+        const mediaBlob = downloadedBlob.type.startsWith(expectedMimePrefix)
+          ? downloadedBlob
+          : new Blob([downloadedBlob], { type: mediaKind === "audio" ? "audio/webm" : "image/jpeg" });
+        const formData = new FormData();
+        const extension = mediaKind === "audio" ? "webm" : "jpg";
+        formData.set("file", mediaBlob, mediaFileName || `encaminhada-${Date.now()}.${extension}`);
+        formData.set("clientMessageId", clientMessageId);
+        formData.set("forwarded", String(forwarded));
+        if (mediaKind === "audio" && mediaDurationMs) formData.set("durationMs", String(mediaDurationMs));
+        endpoint += mediaKind === "audio" ? "/audio" : "/image";
+        body = formData;
+      } else {
+        endpoint += isTextMessage ? "/messages" : "/link";
+        body = JSON.stringify(isTextMessage
+          ? { content: `${forwarded ? "↗ Encaminhada\n" : ""}${cleanMessageContent ?? ""}`, clientMessageId }
+          : { url, label: forwardedLabel, clientMessageId });
+      }
+
       const send = () => fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        ...(body instanceof FormData ? {} : { headers: { "Content-Type": "application/json" } }),
         body,
       });
       let forwardedResponse = await send();
