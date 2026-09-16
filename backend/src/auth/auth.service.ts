@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import type { Prisma, Session } from '@prisma/client';
+import { createHash, randomBytes } from 'node:crypto';
+import { Resend } from 'resend';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
   AuthResponse,
@@ -7,6 +9,7 @@ import {
   AuthSessionPayload,
   AuthUserPayload,
   EmailAvailabilityResponse,
+  SignupPendingResponse,
   UsernameAvailabilityResponse,
 } from './auth.types';
 import {
@@ -51,6 +54,9 @@ type SessionBundle = {
   token: string;
 };
 
+const EMAIL_VERIFICATION_TTL_MS = 30 * 60 * 1000;
+const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
+
 type UserWithProfile = Prisma.UserGetPayload<{
   include: {
     profile: true;
@@ -66,9 +72,14 @@ type UserStats = {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly resend: Resend | null;
 
-  async signup(input: SignupInput, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
+  constructor(private readonly prisma: PrismaService) {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    this.resend = apiKey ? new Resend(apiKey) : null;
+  }
+
+  async signup(input: SignupInput, _meta: { ipAddress: string | null; userAgent: string | null }): Promise<SignupPendingResponse> {
     const email = validateEmail(input.email ?? '');
     const name = normalizeName(input.name ?? '');
     const username = validateUsername(input.username ?? '');
@@ -106,18 +117,12 @@ export class AuthService {
     const passwordHash = createPasswordHash(password);
     const displayLocation = normalizeOptionalText(input.location ?? input.region);
     const bio = normalizeOptionalText(input.bio);
-    const sessionExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-    const token = createSessionToken();
-    const refreshTokenHash = hashSessionToken(token);
-
     const created = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
           passwordHash,
-          status: 'active',
-          emailVerifiedAt: new Date(),
-          lastLoginAt: new Date(),
+          status: 'pending',
           profile: {
             create: {
               username,
@@ -133,26 +138,67 @@ export class AuthService {
         },
       });
 
-      const session = await tx.session.create({
-        data: {
-          userId: user.id,
-          refreshTokenHash,
-          deviceName: this.resolveDeviceName(meta.userAgent),
-          ipAddress: meta.ipAddress,
-          userAgent: meta.userAgent,
-          expiresAt: sessionExpiresAt,
-        },
-      });
-
-      return { user, session };
+      return user;
     });
 
-    return {
-      ok: true,
-      user: this.mapUser(created.user),
-      session: this.mapSession(created.session),
-      token,
-    };
+    await this.sendVerificationEmail(created.id, email, name);
+    return { ok: true, pendingVerification: true, email };
+  }
+
+  async resendEmailVerification(emailInput: string): Promise<{ ok: true; message: string; retryAfterSeconds?: number }> {
+    const email = validateEmail(emailInput);
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { profile: true } });
+
+    if (!user || user.status !== 'pending' || !user.profile) {
+      return { ok: true, message: 'Se existir uma conta pendente para este email, enviaremos um novo link.' };
+    }
+
+    const latestToken = await this.prisma.emailVerificationToken.findFirst({
+      where: { userId: user.id, usedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    const elapsed = latestToken ? Date.now() - latestToken.createdAt.getTime() : EMAIL_RESEND_COOLDOWN_MS;
+
+    if (elapsed < EMAIL_RESEND_COOLDOWN_MS) {
+      return {
+        ok: true,
+        message: 'Aguarde antes de solicitar outro email.',
+        retryAfterSeconds: Math.ceil((EMAIL_RESEND_COOLDOWN_MS - elapsed) / 1000),
+      };
+    }
+
+    await this.sendVerificationEmail(user.id, user.email, user.profile.displayName);
+    return { ok: true, message: 'Um novo link de validação foi enviado.' };
+  }
+
+  async verifyEmail(token: string, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
+    const rawToken = token.trim();
+    if (!rawToken) throw new BadRequestException({ message: 'Link de validação inválido.' });
+
+    const verification = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash: this.hashVerificationToken(rawToken) },
+      include: { user: { include: { profile: true } } },
+    });
+
+    if (!verification || verification.usedAt || verification.expiresAt.getTime() <= Date.now() || !verification.user.profile) {
+      throw new BadRequestException({ message: 'Este link de validação é inválido ou expirou.' });
+    }
+
+    const claimed = await this.prisma.emailVerificationToken.updateMany({
+      where: { id: verification.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count !== 1) throw new BadRequestException({ message: 'Este link de validação já foi utilizado.' });
+
+    const user = await this.prisma.user.update({
+      where: { id: verification.user.id },
+      data: { status: 'active', emailVerifiedAt: new Date() },
+      include: { profile: true },
+    });
+    const session = await this.createSession(user.id, meta);
+
+    return { ok: true, user: this.mapUser(user), session: this.mapSession(session.session), token: session.token };
   }
 
   async login(input: LoginInput, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
@@ -207,6 +253,13 @@ export class AuthService {
     }
 
     const authenticatedUser = user as NonNullable<typeof user>;
+
+    if (authenticatedUser.status === 'pending') {
+      throw new BadRequestException({
+        message: 'Valide seu email antes de entrar.',
+        fieldErrors: { identifier: 'Verifique seu email para ativar a conta.' },
+      });
+    }
 
     if (authenticatedUser.status !== 'active') {
       throw new BadRequestException({
@@ -377,6 +430,43 @@ export class AuthService {
     });
 
     return { session, token };
+  }
+
+  private async sendVerificationEmail(userId: string, email: string, displayName: string): Promise<void> {
+    if (!this.resend) {
+      throw new Error('RESEND_API_KEY não configurada.');
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashVerificationToken(rawToken);
+    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim().replace(/\/+$/, '');
+    const verificationUrl = `${webOrigin}/verify-email?token=${encodeURIComponent(rawToken)}`;
+    const safeDisplayName = this.escapeHtml(displayName);
+
+    await this.prisma.emailVerificationToken.deleteMany({ where: { userId, usedAt: null } });
+    await this.prisma.emailVerificationToken.create({ data: { userId, tokenHash, expiresAt } });
+
+    const { error } = await this.resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      to: [email],
+      subject: 'Valide seu email no Clouds',
+      text: `Olá, ${displayName}! Valide seu email acessando: ${verificationUrl}. Este link expira em 30 minutos.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>Valide seu email</h1><p>Olá, ${safeDisplayName}!</p><p>Clique no botão abaixo para concluir seu cadastro no Clouds.</p><p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#9333ea;color:#fff;text-decoration:none;border-radius:999px">Validar meu email</a></p><p>Este link expira em 30 minutos.</p></div>`,
+    });
+
+    if (error) {
+      await this.prisma.emailVerificationToken.deleteMany({ where: { tokenHash } });
+      throw new BadRequestException({ message: 'Não foi possível enviar o email de validação agora.' });
+    }
+  }
+
+  private hashVerificationToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private escapeHtml(value: string): string {
+    return value.replace(/[&<>'\"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
   }
 
   async resolveSession(token: string | null): Promise<{ session: Session; user: UserWithProfile } | null> {

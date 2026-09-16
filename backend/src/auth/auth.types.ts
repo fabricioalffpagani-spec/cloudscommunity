@@ -37,6 +37,12 @@ export type AuthResult = AuthResponse & {
   token: string;
 };
 
+export type SignupPendingResponse = {
+  ok: true;
+  pendingVerification: true;
+  email: string;
+};
+
 export type UsernameAvailabilityResponse = {
   ok: true;
   available: boolean;

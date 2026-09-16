@@ -50,8 +50,23 @@ export class AuthController {
       },
     );
 
-    const { token, ...payload } = result;
-    setSessionCookie(res, token, new Date(payload.session.expiresAt));
+    return result;
+  }
+
+  @Post('email-verification/resend')
+  async resendEmailVerification(@Body() body: Record<string, unknown>) {
+    return this.authService.resendEmailVerification(typeof body.email === 'string' ? body.email : '');
+  }
+
+  @Get('verify-email')
+  async verifyEmail(@Query('token') token: string, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
+    const result = await this.authService.verifyEmail(token ?? '', {
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    const { token: sessionToken, ...payload } = result;
+    setSessionCookie(res, sessionToken, new Date(payload.session.expiresAt));
     return payload;
   }
 

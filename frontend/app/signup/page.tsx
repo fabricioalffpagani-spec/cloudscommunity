@@ -2,8 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSessionUser } from "../components/session-user";
 
 type SignupErrors = Partial<
   Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "form", string>
@@ -121,8 +119,6 @@ function hasMinimumAge(birthDate: string, minimumAge = 16) {
 }
 
 export default function SignupPage() {
-  const router = useRouter();
-  const { refresh } = useSessionUser();
   const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState({
     email: "",
@@ -132,8 +128,8 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   });
-  const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
   const [resendCountdown, setResendCountdown] = useState(60);
+  const [resendMessage, setResendMessage] = useState("");
   const [errors, setErrors] = useState<SignupErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -141,7 +137,6 @@ export default function SignupPage() {
   const [emailState, setEmailState] = useState<FieldState>("idle");
   const [usernameState, setUsernameState] = useState<FieldState>("idle");
   const signupDraftRef = useRef<SignupDraft | null>(null);
-  const finalizeAttemptRef = useRef(false);
 
   const normalizedEmail = useMemo(() => form.email.trim().toLowerCase(), [form.email]);
   const normalizedUsername = useMemo(
@@ -256,70 +251,6 @@ export default function SignupPage() {
     return () => window.clearInterval(timer);
   }, [step, resendCountdown]);
 
-  useEffect(() => {
-    const finalizeSignup = async () => {
-      if (step !== 2 || submitting) {
-        return;
-      }
-
-      if (finalizeAttemptRef.current) {
-        return;
-      }
-
-      if (!verificationCode.every((digit) => digit.trim().length > 0)) {
-        // In production require the 6-digit verification code, but allow
-        // completion in development for easier testing when email delivery
-        // isn't configured.
-        if (process.env.NODE_ENV === "production") {
-          return;
-        }
-      }
-
-      const draft = signupDraftRef.current;
-      if (!draft) {
-        return;
-      }
-
-      finalizeAttemptRef.current = true;
-      setSubmitting(true);
-      setErrors({});
-
-      try {
-        const response = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: draft.email,
-            name: draft.name,
-            username: draft.username,
-            birthDate: draft.birthDate,
-            password: draft.password,
-          }),
-        });
-
-        const payload = (await response.json().catch(() => null)) as ApiResponse | null;
-
-        if (!response.ok) {
-          setErrors({
-            ...(payload?.fieldErrors ?? {}),
-            form: payload?.message ?? "Não foi possível criar a conta.",
-          });
-          return;
-        }
-
-        signupDraftRef.current = null;
-        await refresh();
-        router.replace("/");
-      } finally {
-        setSubmitting(false);
-      }
-    };
-
-    void finalizeSignup();
-  }, [router, step, submitting, verificationCode]);
-
   const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
     if (key in errors || errors.form) {
@@ -327,42 +258,27 @@ export default function SignupPage() {
     }
   };
 
-  const updateVerificationDigit = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, "").slice(0, 1);
-    finalizeAttemptRef.current = false;
-    setVerificationCode((current) => {
-      const next = [...current];
-      next[index] = digit;
-      return next;
-    });
-  };
-
-  const handleVerificationPaste = (event: React.ClipboardEvent<HTMLInputElement>) => {
-    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-
-    if (!pasted) {
-      return;
-    }
-
-    event.preventDefault();
-    finalizeAttemptRef.current = false;
-    setVerificationCode((current) => {
-      const next = [...current];
-
-      for (let index = 0; index < 6; index += 1) {
-        next[index] = pasted[index] ?? current[index] ?? "";
+  const handleResendEmail = async () => {
+    const draft = signupDraftRef.current;
+    if (!draft || resendCountdown > 0 || submitting) return;
+    setSubmitting(true);
+    setResendMessage("");
+    try {
+      const response = await fetch("/api/auth/email-verification/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: draft.email }),
+      });
+      const payload = await response.json().catch(() => null) as ApiResponse & { retryAfterSeconds?: number } | null;
+      if (!response.ok) {
+        setResendMessage(payload?.message ?? "Não foi possível reenviar o email.");
+        return;
       }
-
-      return next;
-    });
-  };
-
-  const handleResendCode = () => {
-    if (resendCountdown > 0) {
-      return;
+      setResendCountdown(payload?.retryAfterSeconds ?? 60);
+      setResendMessage(payload?.message ?? "Novo email enviado.");
+    } finally {
+      setSubmitting(false);
     }
-
-    setResendCountdown(60);
   };
 
   const canSubmit =
@@ -432,7 +348,7 @@ export default function SignupPage() {
         return;
       }
 
-      signupDraftRef.current = {
+      const draft = {
         email: normalizedEmail,
         name: form.name.trim(),
         username: normalizedUsername,
@@ -440,10 +356,23 @@ export default function SignupPage() {
         password: form.password,
       };
 
-      finalizeAttemptRef.current = false;
+      signupDraftRef.current = draft;
+      setSubmitting(true);
+      setErrors({});
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const payload = await response.json().catch(() => null) as ApiResponse | null;
+      if (!response.ok) {
+        setErrors({ ...(payload?.fieldErrors ?? {}), form: payload?.message ?? "Não foi possível criar a conta." });
+        setSubmitting(false);
+        return;
+      }
       setStep(2);
-      setVerificationCode(["", "", "", "", "", ""]);
       setResendCountdown(60);
+      setResendMessage("");
       setSubmitting(false);
       setErrors({});
       return;
@@ -464,8 +393,7 @@ export default function SignupPage() {
                 </>
               ) : (
                 <>
-                  Confirme
-                  seu email.
+                  Quase lá! ☁️
                 </>
               )}
             </h1>
@@ -631,53 +559,35 @@ export default function SignupPage() {
                 </p>
               </>
             ) : (
-              <form onSubmit={handleSubmit} className="grid gap-5">
+              <div className="grid gap-5">
                 <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-[12px] uppercase tracking-[0.22em] text-white/45">
                   <span>1 Cadastro</span>
                   <span className="font-semibold text-white">2 Verificacao</span>
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-[12px] font-bold uppercase tracking-[0.24em] text-[#FF5C3C]">Verificacao de email</p>
-                  <h2 className="text-[28px] font-semibold tracking-[-0.03em] text-white">Insira o codigo de verificacao que mandamos no seu email</h2>
+                  <p className="text-[12px] font-bold uppercase tracking-[0.24em] text-[#FF5C3C]">Verificação de email</p>
+                  <h2 className="text-[28px] font-semibold tracking-[-0.03em] text-white">Enviamos um link de confirmação para o seu e-mail</h2>
                 </div>
 
-                <div className="grid gap-3">
-                  <div className="grid grid-cols-6 gap-2">
-                    {verificationCode.map((digit, index) => (
-                      <input
-                        key={`verification-digit-${index}`}
-                        aria-label={`Digito ${index + 1}`}
-                        inputMode="numeric"
-                        type="text"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(event) => updateVerificationDigit(index, event.target.value)}
-                        onPaste={handleVerificationPaste}
-                        className="h-14 rounded-2xl border border-white/[0.08] bg-[#17171C] text-center text-[18px] font-semibold text-white outline-none transition placeholder:text-white/20 focus:border-[#A855F7]"
-                      />
-                    ))}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-[13px]">
-                    <button type="button" className="text-white/55 transition hover:text-white">
-                      Nao recebi o codigo
-                    </button>
+                <div className="grid gap-4">
+                  <p className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-4 text-[14px] leading-6 text-white/65">
+                    Acesse sua caixa de entrada e clique no link para validar seu endereço de e-mail. Não encontrou? Verifique também a pasta de <strong className="font-semibold text-white">spam ou lixo eletrônico</strong>.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 text-[13px]">
                     <button
                       type="button"
-                      onClick={handleResendCode}
+                      onClick={handleResendEmail}
                       disabled={resendCountdown > 0}
                       className="font-semibold text-[#A855F7] transition hover:underline disabled:cursor-not-allowed disabled:text-white/30"
                     >
-                      {resendCountdown > 0 ? `Reenviar em ${String(Math.floor(resendCountdown / 60)).padStart(2, "0")}:${String(resendCountdown % 60).padStart(2, "0")}` : "Reenviar"}
+                      Reenviar email
                     </button>
+                    {resendCountdown > 0 && <span className="text-white/45">disponível em {String(Math.floor(resendCountdown / 60)).padStart(2, "0")}:{String(resendCountdown % 60).padStart(2, "0")}</span>}
                   </div>
+                  {resendMessage && <p className="text-[13px] text-white/60">{resendMessage}</p>}
                 </div>
-
-                <p className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[13px] text-white/60">
-                  {submitting ? "Finalizando seu cadastro..." : "Ao preencher os 6 digitos, o cadastro sera concluido automaticamente."}
-                </p>
-              </form>
+              </div>
             )}
           </div>
         </section>
