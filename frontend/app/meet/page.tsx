@@ -92,9 +92,7 @@ function MeetIcon({ s = 24, className = "" }: { s?: number; className?: string }
   );
 }
 
-function TrendingIcon({ s = 24, className = "" }: { s?: number; className?: string }) {
-  return <FlameIcon s={s} className={className} />;
-}
+
 
 function normalize(value: string) {
   return value
@@ -333,7 +331,11 @@ export default function MeetPage() {
                 {meetCategory === "popular" && <div className="flex shrink-0 rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1 text-[15px] font-semibold"><button type="button" onClick={() => setHypePeriod("recent")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "recent" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>24h</button><button type="button" onClick={() => setHypePeriod("all")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "all" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>Geral</button></div>}
               </div>
               <div className="flex flex-col gap-4">
-                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetData?.nearby)?.map((item) => <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? `${item.hypes} hype${item.hypes === 1 ? "" : "s"}` : `${item.mutualFollowersCount} seguidor${item.mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />)}
+                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetData?.nearby)?.map((item) => {
+                  const hypes = "hypes" in item ? item.hypes : 0;
+                  const mutualFollowersCount = "mutualFollowersCount" in item ? item.mutualFollowersCount : 0;
+                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? `${hypes} hype${hypes === 1 ? "" : "s"}` : `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
+                })}
                 {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
                 {!meetLoading && meetCategory === "popular" && (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime)?.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
                 {!meetLoading && meetCategory === "nearby" && meetData?.nearby.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Suas conexões ainda não geraram sugestões.</p>}
@@ -343,7 +345,7 @@ export default function MeetPage() {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]">
+      <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
           <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><MessageIcon s={32} /><span className="text-[13px] font-semibold">Messages</span></Link>

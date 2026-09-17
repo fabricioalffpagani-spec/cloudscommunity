@@ -43,6 +43,8 @@ export class AuthController {
         bio: typeof body.bio === 'string' ? body.bio : undefined,
         location: typeof body.location === 'string' ? body.location : undefined,
         region: typeof body.region === 'string' ? body.region : undefined,
+        acceptedTerms: body.acceptedTerms === true,
+        acceptedCommunityRules: body.acceptedCommunityRules === true,
       },
       {
         ipAddress: req.ip ?? null,
@@ -56,6 +58,19 @@ export class AuthController {
   @Post('email-verification/resend')
   async resendEmailVerification(@Body() body: Record<string, unknown>) {
     return this.authService.resendEmailVerification(typeof body.email === 'string' ? body.email : '');
+  }
+
+  @Post('password-reset/request')
+  async requestPasswordReset(@Body() body: Record<string, unknown>) {
+    return this.authService.requestPasswordReset(typeof body.email === 'string' ? body.email : '');
+  }
+
+  @Post('password-reset/confirm')
+  async resetPassword(@Body() body: Record<string, unknown>) {
+    return this.authService.resetPassword(
+      typeof body.token === 'string' ? body.token : '',
+      typeof body.password === 'string' ? body.password : '',
+    );
   }
 
   @Get('verify-email')
@@ -85,6 +100,7 @@ export class AuthController {
         email: typeof body.email === 'string' ? body.email : undefined,
         username: typeof body.username === 'string' ? body.username : undefined,
         password: typeof body.password === 'string' ? body.password : undefined,
+        rememberDevice: body.rememberDevice === true,
       },
       {
         ipAddress: req.ip ?? null,
@@ -127,6 +143,14 @@ export class AuthController {
       currentPassword: typeof body.currentPassword === 'string' ? body.currentPassword : undefined,
       newPassword: typeof body.newPassword === 'string' ? body.newPassword : undefined,
     });
+  }
+
+  @Post('feedback')
+  async sendFeedback(@Body() body: Record<string, unknown>, @Req() req: Request) {
+    return this.authService.sendFeedback(
+      extractSessionToken(req),
+      typeof body.message === 'string' ? body.message : '',
+    );
   }
 
   @Get('session')

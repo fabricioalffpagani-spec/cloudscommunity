@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SignupErrors = Partial<
-  Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "form", string>
+  Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "terms" | "form", string>
 >;
 
 type FieldState = "idle" | "checking" | "available" | "taken" | "invalid" | "error";
@@ -18,7 +18,7 @@ type ApiResponse = {
   email?: string;
 };
 
-const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const USERNAME_PATTERN = /^[a-z0-9_]{4,15}$/;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MIN_LENGTH = 8;
 
@@ -28,6 +28,8 @@ type SignupDraft = {
   birthDate: string;
   username: string;
   password: string;
+  acceptedTerms: boolean;
+  acceptedCommunityRules: boolean;
 };
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -55,7 +57,7 @@ function FieldStatus({ state }: { state: FieldState }) {
         : state === "taken"
           ? "Esse nome de usuário já existe."
           : state === "invalid"
-            ? "Use 3 a 20 caracteres com letras, numeros ou _."
+            ? "Use 4 a 15 caracteres com letras, números ou _."
             : state === "error"
               ? "Não foi possível verificar agora."
               : "Digite um nome de usuário.";
@@ -99,14 +101,14 @@ function getPasswordError(password: string) {
     return `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres.`;
   }
 
-  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return "A senha deve conter letras e numeros.";
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password) || !/[^a-zA-Z\s0-9]/.test(password)) {
+    return "A senha deve conter letras, números e um caractere especial.";
   }
 
   return null;
 }
 
-function hasMinimumAge(birthDate: string, minimumAge = 16) {
+function getAge(birthDate: string) {
   const [year, month, day] = birthDate.split("-").map(Number);
   const today = new Date();
   let age = today.getFullYear() - year;
@@ -115,7 +117,7 @@ function hasMinimumAge(birthDate: string, minimumAge = 16) {
     age -= 1;
   }
 
-  return age >= minimumAge;
+  return age;
 }
 
 export default function SignupPage() {
@@ -127,6 +129,8 @@ export default function SignupPage() {
     username: "",
     password: "",
     confirmPassword: "",
+    acceptedTerms: false,
+    acceptedCommunityRules: false,
   });
   const [resendCountdown, setResendCountdown] = useState(60);
   const [resendMessage, setResendMessage] = useState("");
@@ -285,16 +289,23 @@ export default function SignupPage() {
     form.email.trim().length > 0 &&
     form.name.trim().length > 0 &&
     form.birthDate.trim().length > 0 &&
+    getAge(form.birthDate) >= 16 && getAge(form.birthDate) <= 100 &&
     normalizedUsername.length > 0 &&
     USERNAME_PATTERN.test(normalizedUsername) &&
-    form.password.length >= PASSWORD_MIN_LENGTH &&
+    !getPasswordError(form.password) &&
     form.password === form.confirmPassword &&
+    form.acceptedTerms && form.acceptedCommunityRules &&
     emailState === "available" &&
     usernameState !== "checking" &&
     usernameState !== "taken" &&
     usernameState !== "invalid" &&
     usernameState !== "error" &&
     !submitting;
+
+  const passwordValidationError = form.password ? getPasswordError(form.password) : null;
+  const passwordMessage = errors.password ?? passwordValidationError;
+  const confirmPasswordMessage = errors.confirmPassword ?? (form.confirmPassword && form.password !== form.confirmPassword ? "As senhas não coincidem." : null);
+  const birthDateMessage = errors.birthDate ?? (form.birthDate && getAge(form.birthDate) < 16 ? "Você não tem idade suficiente para se cadastrar. O Clouds é destinado a pessoas com 16 anos ou mais." : form.birthDate && getAge(form.birthDate) > 100 ? "A idade máxima permitida é de 100 anos." : null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -317,18 +328,20 @@ export default function SignupPage() {
 
       if (!form.birthDate.trim()) {
         nextErrors.birthDate = "Informe sua data de nascimento.";
-      } else if (!hasMinimumAge(form.birthDate)) {
+      } else if (getAge(form.birthDate) < 16) {
         nextErrors.birthDate = "Você precisa ter pelo menos 16 anos completos para participar do Clouds.";
+      } else if (getAge(form.birthDate) > 100) {
+        nextErrors.birthDate = "A idade máxima permitida é de 100 anos.";
       }
 
       if (!normalizedUsername) {
         nextErrors.username = "Informe um nome de usuário.";
       } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
-        nextErrors.username = "Use 3 a 20 caracteres com letras, numeros ou _.";
+        nextErrors.username = "Use 4 a 15 caracteres com letras, números ou _.";
       } else if (usernameState === "taken") {
         nextErrors.username = "Este nome de usuário já está em uso.";
       } else if (usernameState === "invalid") {
-        nextErrors.username = "Use 3 a 20 caracteres com letras, numeros ou _.";
+        nextErrors.username = "Use 4 a 15 caracteres com letras, números ou _.";
       } else if (usernameState === "error") {
         nextErrors.username = "Não foi possível validar este nome de usuário agora.";
       }
@@ -340,6 +353,10 @@ export default function SignupPage() {
 
       if (form.password !== form.confirmPassword) {
         nextErrors.confirmPassword = "As senhas nao coincidem.";
+      }
+
+      if (!form.acceptedTerms || !form.acceptedCommunityRules) {
+        nextErrors.terms = "Aceite os Termos de Uso e as Regras da Comunidade para continuar.";
       }
 
       setErrors(nextErrors);
@@ -354,6 +371,8 @@ export default function SignupPage() {
         username: normalizedUsername,
         birthDate: form.birthDate,
         password: form.password,
+        acceptedTerms: form.acceptedTerms,
+        acceptedCommunityRules: form.acceptedCommunityRules,
       };
 
       signupDraftRef.current = draft;
@@ -385,7 +404,7 @@ export default function SignupPage() {
       <main className="mx-auto flex min-h-screen max-w-[1180px] items-center px-5 py-12 lg:px-8">
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
-            <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">{step === 1 ? "Cadastro" : "Verificacao"}</p>
+            <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">{step === 1 ? "Cadastro" : "Verificação"}</p>
             <h1 className="mt-4 max-w-[20ch] text-[40px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[52px]">
               {step === 1 ? (
                 <>
@@ -405,7 +424,7 @@ export default function SignupPage() {
                 <form onSubmit={handleSubmit} className="grid gap-4">
                   <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-[12px] uppercase tracking-[0.22em] text-white/45">
                     <span className="font-semibold text-white">1 Cadastro</span>
-                    <span>2 Verificacao</span>
+                    <span>2 Verificação</span>
                   </div>
 
                   <div>
@@ -450,13 +469,14 @@ export default function SignupPage() {
                     <input
                       id="birthDate"
                       type="date"
+                      min="1925-01-01"
                       value={form.birthDate}
                       onChange={(event) => updateField("birthDate", event.target.value)}
                       className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition focus:border-[#A855F7] ${
-                        errors.birthDate ? "border-red-500/70" : "border-white/[0.08]"
+                        birthDateMessage ? "border-red-500/70" : "border-white/[0.08]"
                       }`}
                     />
-                    {errors.birthDate && <p className="mt-2 text-[12px] text-red-300">{errors.birthDate}</p>}
+                    {birthDateMessage && <p className="mt-2 text-[12px] text-red-300">{birthDateMessage}</p>}
                   </div>
 
                   <div>
@@ -466,6 +486,7 @@ export default function SignupPage() {
                     <input
                       id="username"
                       value={form.username}
+                      maxLength={15}
                       onChange={(event) => updateField("username", event.target.value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                       placeholder="seu_usuario"
                       autoComplete="username"
@@ -493,7 +514,7 @@ export default function SignupPage() {
                         autoComplete="new-password"
                         placeholder="Minimo 8 caracteres"
                         className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 pr-12 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7] ${
-                          errors.password ? "border-red-500/70" : "border-white/[0.08]"
+                          passwordMessage ? "border-red-500/70" : "border-white/[0.08]"
                         }`}
                       />
                       <button
@@ -505,7 +526,7 @@ export default function SignupPage() {
                         <EyeIcon open={showPassword} />
                       </button>
                     </div>
-                    {errors.password && <p className="mt-2 text-[12px] text-red-300">{errors.password}</p>}
+                    {passwordMessage ? <p className="mt-2 text-[12px] text-red-300">{passwordMessage}</p> : <p className="mt-2 text-[12px] text-white/45">Mínimo de 8 caracteres, com letras, números e caractere especial.</p>}
                   </div>
 
                   <div>
@@ -521,7 +542,7 @@ export default function SignupPage() {
                         autoComplete="new-password"
                         placeholder="Repita a senha"
                         className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 pr-12 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7] ${
-                          errors.confirmPassword ? "border-red-500/70" : "border-white/[0.08]"
+                          confirmPasswordMessage ? "border-red-500/70" : "border-white/[0.08]"
                         }`}
                       />
                       <button
@@ -533,7 +554,12 @@ export default function SignupPage() {
                         <EyeIcon open={showConfirmPassword} />
                       </button>
                     </div>
-                    {errors.confirmPassword && <p className="mt-2 text-[12px] text-red-300">{errors.confirmPassword}</p>}
+                    {confirmPasswordMessage && <p className="mt-2 text-[12px] text-red-300">{confirmPasswordMessage}</p>}
+                  </div>
+
+                  <div className={`rounded-2xl border p-4 text-[12px] leading-relaxed ${errors.terms ? "border-red-500/70 bg-red-500/5" : "border-white/[0.08] bg-white/[0.03]"}`}>
+                    <label className="flex cursor-pointer items-start gap-3 text-white/70"><input type="checkbox" checked={form.acceptedTerms && form.acceptedCommunityRules} onChange={(event) => { const accepted = event.target.checked; setForm((current) => ({ ...current, acceptedTerms: accepted, acceptedCommunityRules: accepted })); setErrors((current) => ({ ...current, terms: undefined, form: undefined })); }} className="mt-0.5 h-4 w-4 accent-[#A855F7]" /><span>Li e aceito os <a href="/legal/documentos-da-plataforma.pdf" target="_blank" rel="noreferrer" className="font-semibold text-[#C084FC] hover:underline">Documentos da Plataforma</a> (Termos de Uso, Regras da Comunidade e políticas).</span></label>
+                    {errors.terms && <p className="mt-3 text-red-300">{errors.terms}</p>}
                   </div>
 
                   {errors.form && (
@@ -562,7 +588,7 @@ export default function SignupPage() {
               <div className="grid gap-5">
                 <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-[12px] uppercase tracking-[0.22em] text-white/45">
                   <span>1 Cadastro</span>
-                  <span className="font-semibold text-white">2 Verificacao</span>
+                  <span className="font-semibold text-white">2 Verificação</span>
                 </div>
 
                 <div className="space-y-2">

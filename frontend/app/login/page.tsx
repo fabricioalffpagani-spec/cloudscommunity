@@ -35,8 +35,13 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<LoginErrors>({});
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetState, setResetState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [resetMessage, setResetMessage] = useState("");
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -52,6 +57,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           identifier,
           password,
+          rememberDevice,
         }),
       });
 
@@ -74,6 +80,33 @@ export default function LoginPage() {
   };
 
   const canSubmit = identifier.trim().length > 0 && password.length > 0 && !submitting;
+
+  const openResetModal = () => {
+    setResetEmail(identifier.includes("@") ? identifier : "");
+    setResetState("idle");
+    setResetMessage("");
+    setResetOpen(true);
+  };
+
+  const requestPasswordReset = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setResetState("sending");
+    setResetMessage("");
+    try {
+      const response = await fetch("/api/auth/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) throw new Error(payload?.message ?? "Não foi possível solicitar a redefinição.");
+      setResetState("sent");
+      setResetMessage(payload?.message ?? "Enviamos as instruções para o seu email.");
+    } catch (error) {
+      setResetState("error");
+      setResetMessage(error instanceof Error ? error.message : "Não foi possível solicitar a redefinição.");
+    }
+  };
 
   return (
     <div className="min-h-screen text-white"
@@ -142,7 +175,15 @@ export default function LoginPage() {
                   </button>
                 </div>
                 {errors.password && <p className="mt-2 text-[12px] text-red-300">{errors.password}</p>}
+                <button type="button" onClick={openResetModal} className="mt-2 text-[13px] font-semibold text-[#C084FC] transition hover:text-white hover:underline">
+                  Esqueci minha senha
+                </button>
               </div>
+
+              <label className="-mt-1 flex cursor-pointer items-center gap-2.5 text-[13px] text-white/65">
+                <input type="checkbox" checked={rememberDevice} onChange={(event) => setRememberDevice(event.target.checked)} className="h-4 w-4 accent-[#A855F7]" />
+                Lembrar deste dispositivo por 30 dias
+              </label>
 
               {errors.form && (
                 <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[13px] text-red-200">
@@ -168,6 +209,30 @@ export default function LoginPage() {
           </div>
         </section>
       </main>
+
+      {resetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm" onClick={() => setResetOpen(false)}>
+          <section className="w-full max-w-md rounded-[28px] border border-white/[0.1] bg-[#1a0e3d] p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-[#C084FC]">Redefinir senha</p>
+                <h2 className="mt-2 text-xl font-semibold">Vamos enviar um link para você</h2>
+              </div>
+              <button type="button" onClick={() => setResetOpen(false)} className="text-xl text-white/50 hover:text-white" aria-label="Fechar">×</button>
+            </div>
+            <p className="mt-4 text-[14px] leading-relaxed text-white/65">Informe o email usado no login. A plataforma enviará um link seguro para redefinir sua senha.</p>
+            {resetState === "sent" ? (
+              <div className="mt-5 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-[13px] text-emerald-100">{resetMessage}</div>
+            ) : (
+              <form onSubmit={requestPasswordReset} className="mt-5 space-y-4">
+                <input type="email" value={resetEmail} onChange={(event) => setResetEmail(event.target.value)} autoComplete="email" placeholder="seu@email.com" required className="w-full rounded-2xl border border-white/[0.1] bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none focus:border-[#A855F7]" />
+                {resetState === "error" && <p className="text-[13px] text-red-300">{resetMessage}</p>}
+                <button type="submit" disabled={resetState === "sending"} className="inline-flex w-full justify-center rounded-full bg-[#9333EA] px-5 py-3 text-[14px] font-semibold transition hover:bg-[#6D28D9] disabled:opacity-50">{resetState === "sending" ? "Enviando..." : "Enviar link de redefinição"}</button>
+              </form>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

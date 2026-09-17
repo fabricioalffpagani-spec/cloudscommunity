@@ -1,0 +1,11 @@
+import { proxyJsonRequest } from "@/app/api/_lib/nest-proxy";
+
+export const runtime = "nodejs";
+
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  return proxyJsonRequest(req, `/clouds/${encodeURIComponent(id)}/exit`);
+}

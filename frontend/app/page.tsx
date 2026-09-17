@@ -49,6 +49,7 @@ type Cloud = {
   description?: string;
   liveParticipants?: number;
   authorId?: string;
+  participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
 };
 
 type PollOption = { id: string; text: string; votes: number };
@@ -97,6 +98,7 @@ type CloudApiPayload = {
   hypesCount: number;
   hyped?: boolean;
   membersCount: number;
+  participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
   href: string;
 };
 
@@ -136,6 +138,7 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     description: cloud.description ?? undefined,
     liveParticipants: Math.max(1, cloud.membersCount),
     authorId: cloud.authorId,
+    participantProfiles: cloud.participantProfiles,
   };
 }
 
@@ -888,7 +891,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
           <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
             {isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
           </span>
-          <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">
+          <span className="rounded-full bg-white/5 px-2 py-1 text-[13px] font-semibold tabular-nums text-white/70">
             {isLive ? countdownLabel : "00:00"}
           </span>
         </div>
@@ -957,7 +960,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
         {/* Right — enter */}
         <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}`}
+          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}&join=1`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa
@@ -2005,6 +2008,7 @@ function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds:
                         duration: cloud.duration,
                         createdAt: cloud.createdAt.toISOString(),
                         participants: String(cloud.liveParticipants ?? 1),
+                        join: "1",
                       });
                       router.push(`/cloud/${cloud.id}?${params.toString()}`);
                       onClose();
@@ -2522,6 +2526,7 @@ function PageContent() {
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
       participants: String(cloud.liveParticipants ?? 1),
+      join: "1",
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
@@ -2731,13 +2736,16 @@ function PageContent() {
           </Link>
 
           {/* Nav */}
-          <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
-            <Link href="/" className="relative inline-flex h-12 items-center text-[22px] font-semibold text-white">
+          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
+            <Link href="/" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">
               For You
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
+            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
               Seguindo
+            </Link>
+            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+              Meet
             </Link>
           </nav>
 
@@ -2799,6 +2807,7 @@ function PageContent() {
             {/* Cloud card + dot indicators */}
             <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4">
             <div
+              onClick={() => setCloudOptionsOpen(false)}
               className="cloud-card relative w-full overflow-hidden rounded-3xl"
               style={{
                 background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
@@ -2840,6 +2849,13 @@ function PageContent() {
                 </div>
 
                 <div className="flex items-center gap-5">
+                  <div className="flex -space-x-3" aria-label="Participantes da Cloud">
+                    {currentCloud.participantProfiles?.slice(0, 7).map((participant) => participant.avatarUrl ? (
+                      <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <span key={participant.id} title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>
+                    ))}
+                  </div>
                   {/* Timer */}
                   <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
                     <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -2864,11 +2880,11 @@ function PageContent() {
                     {formatParticipantCount(participants)}
                   </div>
                   <div className="relative flex items-center">
-                    <button type="button" aria-label="Mais opções da Cloud" onClick={() => setCloudOptionsOpen((open) => !open)} className="flex items-center text-white hover:text-white/70 transition">
+                    <button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setCloudOptionsOpen((open) => !open); }} className="flex items-center text-white hover:text-white/70 transition">
                       <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
                     </button>
                     {cloudOptionsOpen && (
-                      <div className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
+                      <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
                         <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudInfoOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Informações da Cloud</button>
                         <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudDescriptionOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ler descrição</button>
                         <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudReportOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>
@@ -3002,33 +3018,11 @@ function PageContent() {
         />
       )}
 
-      {/* ── Bottom navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-
-          {/* Home */}
-          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
-              <path d="M9 21V12h6v9"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Home</span>
-          </Link>
-
-          {/* Messages */}
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Messages</span>
-          </Link>
-
-          {/* Trending */}
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <FlameIcon s={30} />
-            <span className="text-[13px] font-semibold">Trending</span>
-          </Link>
-
+          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><MessageIcon s={32} /><span className="text-[13px] font-semibold">Messages</span></Link>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
 

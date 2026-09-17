@@ -134,9 +134,17 @@ export class CloudService {
 
     await this.requireCloudVisibility(cloud, session.user.id);
 
+    const currentUserHype = await this.prisma.cloudHype.findUnique({
+      where: { cloudId_userId: { cloudId, userId: session.user.id } },
+      select: { cloudId: true },
+    });
+
     return {
       ok: true,
-      cloud: this.mapCloud(cloud),
+      cloud: {
+        ...this.mapCloud(cloud),
+        hyped: currentUserHype !== null,
+      },
     };
   }
 
@@ -1499,7 +1507,13 @@ export class CloudService {
     return this.createSystemMessage(cloudId, `${displayName} entrou na cloud`, userId);
   }
 
-  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {
+  async createLeaveNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
+    const userWithProfile = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
+    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
+    return this.createSystemMessage(cloudId, `${displayName} saiu da cloud`, userId);
+  }
+
+  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; entered: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1523,12 +1537,14 @@ export class CloudService {
       where: { cloudId, userId: current.user.id },
     });
 
+    let entered = false;
     if (existing) {
       if (existing.leftAt !== null) {
         await this.prisma.cloudMember.update({
           where: { id: existing.id },
           data: { leftAt: null, joinedAt: new Date() },
         });
+        entered = true;
       }
     } else {
       await this.prisma.cloudMember.create({
@@ -1538,12 +1554,13 @@ export class CloudService {
           role: 'member',
         },
       });
+      entered = true;
     }
 
-    return { ok: true };
+    return { ok: true, userId: current.user.id, entered };
   }
 
-  async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true }> {
+  async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1552,10 +1569,6 @@ export class CloudService {
 
     if (!cloud) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
-    }
-
-    if (cloud.authorId === current.user.id) {
-      throw new BadRequestException({ message: 'O criador não pode sair da própria cloud.' });
     }
 
     const member = await this.prisma.cloudMember.findFirst({
@@ -1571,7 +1584,14 @@ export class CloudService {
       data: { leftAt: new Date() },
     });
 
-    return { ok: true };
+    return { ok: true, userId: current.user.id };
+  }
+
+  /** Records that the author left the conversation without relinquishing
+   * ownership. Keeping the same membership transition makes a later entry
+   * from the feed observable just like any other member re-entry. */
+  async exitCloudConversation(token: string | null, cloudId: string): Promise<{ ok: true; userId: string }> {
+    return this.leaveCloud(token, cloudId);
   }
 
   private cloudInclude() {
@@ -1657,10 +1677,20 @@ export class CloudService {
         name: profile.displayName,
         username: profile.username,
         avatarUrl: profile.avatarUrl,
+        location: profile.location,
       },
       hypesCount: cloud._count.hypes,
       // CloudMember is membership/history data, not real-time presence.
       membersCount: 0,
+      participantProfiles: cloud.members
+        .filter((member) => member.userId !== cloud.authorId && member.user.profile)
+        .slice(0, 7)
+        .map((member) => ({
+          id: member.user.id,
+          name: member.user.profile!.displayName,
+          username: member.user.profile!.username,
+          avatarUrl: member.user.profile!.avatarUrl,
+        })),
       href: `/cloud/${cloud.id}`,
       status: cloud.status === CloudStatus.active ? 'active' : 'inactive',
     };

@@ -67,6 +67,11 @@ export class UsersController {
     return this.usersService.getUserFollowing(extractSessionToken(req), identifier);
   }
 
+  @Get(':identifier/hypes')
+  async receivedHypes(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.getReceivedHypes(extractSessionToken(req), identifier);
+  }
+
   @Post(':identifier/follow')
   async follow(@Req() req: Request, @Param('identifier') identifier: string) {
     return this.usersService.follow(extractSessionToken(req), identifier);
@@ -85,5 +90,10 @@ export class UsersController {
   @Delete(':identifier/follow')
   async unfollow(@Req() req: Request, @Param('identifier') identifier: string) {
     return this.usersService.unfollow(extractSessionToken(req), identifier);
+  }
+
+  @Delete(':identifier/followers/:followerId')
+  async removeFollower(@Req() req: Request, @Param('identifier') identifier: string, @Param('followerId') followerId: string) {
+    return this.usersService.removeFollower(extractSessionToken(req), identifier, followerId);
   }
 }

@@ -23,6 +23,7 @@ type CloudApiPayload = {
   visibility: string;
   status: string;
   createdAt: string;
+  author?: { location?: string | null };
 };
 
 const DURATION_SECONDS: Record<string, number> = {
@@ -58,6 +59,7 @@ export type TrendingTopic = {
 
 export async function GET(req: Request) {
   try {
+    const scope = new URL(req.url).searchParams.get("scope") === "nearby" ? "nearby" : "world";
     const backendOrigin = process.env.CLOUDS_BRIDGE_URL?.replace(/\/+$/, "") ?? "http://localhost:3001";
     const response = await fetch(`${backendOrigin}/clouds`, {
       headers: { cookie: req.headers.get("cookie") ?? "" },
@@ -72,9 +74,25 @@ export async function GET(req: Request) {
     const clouds = Array.isArray(payload?.clouds) ? payload.clouds : [];
 
     // Filtra apenas clouds ativas e públicas
-    const activeClouds = clouds.filter(
+    let activeClouds = clouds.filter(
       (c) => c.visibility === "public" && isCloudActive(c),
     );
+
+    let nearbyUnavailable = false;
+    if (scope === "nearby") {
+      const profileResponse = await fetch(`${backendOrigin}/auth/me`, {
+        headers: { cookie: req.headers.get("cookie") ?? "" },
+        cache: "no-store",
+      });
+      const profilePayload = await profileResponse.json().catch(() => null) as { user?: { location?: string | null } } | null;
+      const location = profilePayload?.user?.location?.trim().toLocaleLowerCase("pt-BR");
+      if (!location) {
+        nearbyUnavailable = true;
+        activeClouds = [];
+      } else {
+        activeClouds = activeClouds.filter((cloud) => cloud.author?.location?.trim().toLocaleLowerCase("pt-BR") === location);
+      }
+    }
 
     // Conta quantas clouds distintas contêm cada palavra (uma ocorrência por cloud)
     const wordMap = new Map<string, { count: number; cloudIds: Set<string> }>();
@@ -102,7 +120,7 @@ export async function GET(req: Request) {
         cloudIds: Array.from(cloudIds),
       }));
 
-    return NextResponse.json({ ok: true, topics, totalActiveClouds: activeClouds.length });
+    return NextResponse.json({ ok: true, topics, totalActiveClouds: activeClouds.length, nearbyUnavailable });
   } catch {
     return NextResponse.json({ ok: false, topics: [] }, { status: 200 });
   }

@@ -110,7 +110,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-[100]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30" />
       <div
-        className="absolute right-4 top-[96px] w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#1C1F2E] shadow-2xl"
+        className="absolute right-4 top-[96px] flex max-h-[calc(100dvh-7rem)] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1C1F2E] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
@@ -120,7 +120,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className={showAll ? "max-h-[calc(100vh-160px)] overflow-y-auto" : "max-h-[420px] overflow-y-auto"}>
+        <div className={showAll ? "min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1" : "max-h-[420px] overflow-y-auto scrollbar-purple pr-1"}>
           {loading ? (
             <p className="px-5 py-10 text-center text-[13px] text-white/45">Carregando...</p>
           ) : notifications.length === 0 ? (

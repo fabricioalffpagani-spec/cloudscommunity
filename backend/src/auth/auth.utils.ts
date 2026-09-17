@@ -84,7 +84,7 @@ export function parseBirthDate(value: string): Date {
   return parsed;
 }
 
-export function validateMinimumAge(birthDate: Date, minimumAge = 16): void {
+export function validateMinimumAge(birthDate: Date, minimumAge = 16, maximumAge = 100): void {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
 
@@ -101,6 +101,13 @@ export function validateMinimumAge(birthDate: Date, minimumAge = 16): void {
       fieldErrors: {
         birthDate: 'Você precisa ter pelo menos 16 anos completos para participar do Clouds.',
       },
+    });
+  }
+
+  if (age > maximumAge) {
+    throw new BadRequestException({
+      message: 'Idade máxima excedida.',
+      fieldErrors: { birthDate: `A idade máxima permitida é de ${maximumAge} anos.` },
     });
   }
 }
@@ -124,11 +131,11 @@ export function validatePassword(password: string): void {
     });
   }
 
-  if (!/[a-zA-Z]/.test(trimmed) || !/[0-9]/.test(trimmed)) {
+  if (!/[a-zA-Z]/.test(trimmed) || !/[0-9]/.test(trimmed) || !/[^a-zA-Z0-9\s]/.test(trimmed)) {
     throw new BadRequestException({
       message: 'Senha fraca.',
       fieldErrors: {
-        password: 'A senha deve conter letras e números.',
+        password: 'A senha deve conter letras, números e um caractere especial.',
       },
     });
   }
@@ -141,7 +148,7 @@ export function validateUsername(username: string): string {
     throw new BadRequestException({
       message: 'Nome de usuário inválido.',
       fieldErrors: {
-        username: 'Use de 3 a 20 caracteres com letras, números ou _.',
+        username: 'Use de 4 a 15 caracteres com letras, números ou _.',
       },
     });
   }

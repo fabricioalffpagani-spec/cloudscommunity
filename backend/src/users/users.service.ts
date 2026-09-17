@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, UnauthorizedExcepti
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { MeetResponse, PublicUserProfilePayload, UserProfileResponse, UsersSearchResponse } from './users.types';
+import { MeetResponse, PublicUserProfilePayload, ReceivedHypesResponse, UserProfileResponse, UsersSearchResponse } from './users.types';
 
 type SessionUser = Awaited<ReturnType<AuthService['resolveSession']>> extends infer T
   ? T extends { user: infer U } ? U : never
@@ -178,6 +178,19 @@ export class UsersService {
     };
   }
 
+  async removeFollower(token: string | null, identifierInput: string, followerId: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+
+    if (target.id !== current.user.id) {
+      throw new UnauthorizedException({ message: 'Você só pode remover seguidores do seu próprio perfil.' });
+    }
+
+    await this.prisma.follow.deleteMany({ where: { followerId, followingId: current.user.id } });
+    await this.cancelFollowRequest(followerId, current.user.id);
+    return { ok: true };
+  }
+
   async acceptFollowRequest(token: string | null, requesterIdentifier: string): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const requester = await this.requireTargetUser(requesterIdentifier);
@@ -305,6 +318,35 @@ export class UsersService {
       ok: true,
       users,
     };
+  }
+
+  async getReceivedHypes(token: string | null, identifierInput: string): Promise<ReceivedHypesResponse> {
+    await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+    const hypes = await this.prisma.cloudHype.findMany({
+      where: { cloud: { authorId: target.id, deletedAt: null } },
+      include: { user: { include: { profile: true } } },
+    });
+
+    const grouped = new Map<string, ReceivedHypesResponse['users'][number]>();
+    for (const hype of hypes) {
+      const profile = hype.user.profile;
+      if (!profile || hype.user.status !== UserStatus.active || hype.user.deletedAt !== null) continue;
+      const existing = grouped.get(hype.userId);
+      if (existing) {
+        existing.hypesCount += 1;
+      } else {
+        grouped.set(hype.userId, {
+          id: hype.userId,
+          username: profile.username,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          hypesCount: 1,
+        });
+      }
+    }
+
+    return { ok: true, users: [...grouped.values()].sort((a, b) => b.hypesCount - a.hypesCount || a.displayName.localeCompare(b.displayName, 'pt-BR')) };
   }
 
   async following(token: string | null, sort?: string, limit?: string): Promise<UsersSearchResponse> {

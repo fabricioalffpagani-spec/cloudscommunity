@@ -28,6 +28,7 @@ type FollowingCloud = {
   authorId: string;
   author: CloudAuthor;
   membersCount: number;
+  participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
   href: string;
 };
 
@@ -68,6 +69,7 @@ function mapFollowingCloudToCarouselCloud(cloud: FollowingCloud): CarouselCloud 
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     authorName: cloud.author.name,
     authorHandle: cloud.author.username,
+    participantProfiles: cloud.participantProfiles,
     href: cloud.href,
   };
 }
@@ -149,13 +151,16 @@ export default function FollowingPage() {
             <HeaderBrand />
           </Link>
 
-          <nav aria-label="Navegação principal" className="flex items-end gap-12 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
+          <nav aria-label="Navegação principal" className="flex items-end gap-8 pb-2">
+            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
               For You
             </Link>
-            <Link href="/following" className="relative inline-flex h-12 items-center text-[22px] font-semibold text-white">
+            <Link href="/following" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">
               Seguindo
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
+            </Link>
+            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+              Meet
             </Link>
           </nav>
 

@@ -99,7 +99,7 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
 
   @SubscribeMessage('cloud:join')
   async joinCloud(
-    @MessageBody() body: { cloudId?: string },
+    @MessageBody() body: { cloudId?: string; announce?: boolean },
     @ConnectedSocket() socket: Socket,
   ) {
     const userId = await this.resolveOrHydrateUserId(socket);
@@ -116,14 +116,12 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
 
     const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
     const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
-    const isNewSocketRoomJoin = !joinedCloudIds.has(cloudId);
     await socket.join(this.cloudRoom(cloudId));
     joinedCloudIds.add(cloudId);
 
-    if (isNewSocketRoomJoin) {
-      const systemMessage = await this.cloudService.createJoinNotification(cloudId, userId);
-      await this.broadcastMessageCreated(null, cloudId, systemMessage);
-    }
+    // Socket reconnections only manage room presence. Entry messages are
+    // created by the persisted join endpoint, which can distinguish a true
+    // re-entry from a browser refresh.
 
     await this.broadcastMembersUpdated(cloudId);
 

@@ -14,6 +14,7 @@ type FollowListUser = {
   displayName: string;
   avatarUrl: string | null;
   isFollowing: boolean;
+  hypesCount?: number;
 };
 
 type PublicUserProfile = {
@@ -118,6 +119,17 @@ function FieldStat({ value, label, description, onClick }: { value: string | num
   );
 }
 
+function ProfileListRow({ user, actionLabel, onAction, actioning }: { user: FollowListUser; actionLabel?: string; onAction?: () => void; actioning?: boolean }) {
+  return <div className="flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5">
+    <Link href={`/users/${user.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] font-bold text-white">{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : user.displayName.charAt(0).toUpperCase()}</div>
+      <div className="min-w-0"><p className="truncate font-semibold text-white">{user.displayName}</p><p className="truncate text-sm text-white/50">@{user.username}</p></div>
+    </Link>
+    {user.hypesCount !== undefined && <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[#FF7A18]"><FlameIcon s={22} filled /><span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7C3AED] px-1 text-[9px] font-extrabold leading-none text-white">{user.hypesCount}</span></span>}
+    {actionLabel && onAction && <button type="button" disabled={actioning} onClick={onAction} className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/80 transition hover:border-red-400/60 hover:text-red-300 disabled:opacity-50">{actioning ? "..." : actionLabel}</button>}
+  </div>;
+}
+
 function formatCountdown(seconds: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -197,6 +209,10 @@ export default function UserProfilePage() {
   const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  const [hypesModalOpen, setHypesModalOpen] = useState(false);
+  const [hypesList, setHypesList] = useState<FollowListUser[]>([]);
+  const [loadingHypes, setLoadingHypes] = useState(false);
+  const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -246,7 +262,7 @@ export default function UserProfilePage() {
     const refreshStats = () => fetch(`/api/users/${encodeURIComponent(identifier)}`, { cache: "no-store" })
       .then((response) => response.json())
       .then((payload: { user?: PublicUserProfile }) => {
-        if (payload.user) setProfile((current) => current ? { ...current, ...payload.user } : payload.user);
+        if (payload.user) setProfile((current) => current ? { ...current, ...payload.user } : payload.user ?? null);
       })
       .catch(() => {});
     const interval = window.setInterval(refreshStats, 10_000);
@@ -349,6 +365,38 @@ export default function UserProfilePage() {
   const openFollowingModal = () => {
     setFollowingModalOpen(true);
     loadFollowing();
+  };
+
+  const openHypesModal = async () => {
+    if (!profile) return;
+    setHypesModalOpen(true);
+    setLoadingHypes(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/hypes`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; users?: FollowListUser[] } | null;
+      setHypesList(response.ok && payload?.ok && Array.isArray(payload.users) ? payload.users : []);
+    } finally { setLoadingHypes(false); }
+  };
+
+  const removeFollower = async (listedUser: FollowListUser) => {
+    if (!profile) return;
+    setActioningUserId(listedUser.id);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/followers/${encodeURIComponent(listedUser.id)}`, { method: "DELETE" });
+      if (!response.ok) return;
+      setFollowersList((current) => current.filter((item) => item.id !== listedUser.id));
+      setProfile((current) => current ? { ...current, followersCount: Math.max(0, current.followersCount - 1) } : current);
+    } finally { setActioningUserId(null); }
+  };
+
+  const unfollowListedUser = async (listedUser: FollowListUser) => {
+    setActioningUserId(listedUser.id);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(listedUser.username)}/follow`, { method: "DELETE" });
+      if (!response.ok) return;
+      setFollowingList((current) => current.filter((item) => item.id !== listedUser.id));
+      setProfile((current) => current ? { ...current, followingCount: Math.max(0, current.followingCount - 1) } : current);
+    } finally { setActioningUserId(null); }
   };
 
   const displayName = profile?.displayName ?? profile?.name ?? "Perfil";
@@ -489,10 +537,10 @@ export default function UserProfilePage() {
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={cloudsCount} label="Clouds" description="Clouds publicadas por este perfil." />
             <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." />
+            <FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." onClick={openHypesModal} />
           </div>
 
-          <div className="mt-3 flex items-center gap-3 text-[12px] text-white/30">
+          <div className="mt-3 flex items-center gap-3 text-[13px] text-white/30">
             {profile.location && <span>{profile.location}</span>}
             {profile.location && <span>·</span>}
             <span>Desde {memberSince}</span>
@@ -556,38 +604,19 @@ export default function UserProfilePage() {
       {/* Followers Modal */}
       {followersModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setFollowersModalOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[18px] font-bold">Seguidores</h3>
               <button onClick={() => setFollowersModalOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
               {loadingFollowers ? (
                 <p className="text-center text-white/50 py-4">Carregando...</p>
               ) : followersList.length === 0 ? (
                 <p className="text-center text-white/50 py-4">Nenhum seguidor ainda</p>
               ) : (
                 <div className="space-y-3">
-                  {followersList.map((user) => (
-                    <Link
-                      key={user.id}
-                      href={`/users/${user.username}`}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition"
-                      onClick={() => setFollowersModalOpen(false)}
-                    >
-                      <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center text-white font-bold overflow-hidden">
-                        {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          user.displayName.charAt(0).toUpperCase()
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-white">{user.displayName}</p>
-                        <p className="text-sm text-white/50">@{user.username}</p>
-                      </div>
-                    </Link>
-                  ))}
+                  {followersList.map((user) => <ProfileListRow key={user.id} user={user} actionLabel={isOwnProfile ? "Remover seguidor" : undefined} onAction={isOwnProfile ? () => removeFollower(user) : undefined} actioning={actioningUserId === user.id} />)}
                 </div>
               )}
             </div>
@@ -598,41 +627,31 @@ export default function UserProfilePage() {
       {/* Following Modal */}
       {followingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setFollowingModalOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6 max-h-[80vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[18px] font-bold">Seguindo</h3>
               <button onClick={() => setFollowingModalOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
               {loadingFollowing ? (
                 <p className="text-center text-white/50 py-4">Carregando...</p>
               ) : followingList.length === 0 ? (
                 <p className="text-center text-white/50 py-4">Não seguindo ninguém ainda</p>
               ) : (
                 <div className="space-y-3">
-                  {followingList.map((user) => (
-                    <Link
-                      key={user.id}
-                      href={`/users/${user.username}`}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition"
-                      onClick={() => setFollowingModalOpen(false)}
-                    >
-                      <div className="h-10 w-10 rounded-full bg-[#7C3AED] flex items-center justify-center text-white font-bold overflow-hidden">
-                        {user.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          user.displayName.charAt(0).toUpperCase()
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-white">{user.displayName}</p>
-                        <p className="text-sm text-white/50">@{user.username}</p>
-                      </div>
-                    </Link>
-                  ))}
+                  {followingList.map((user) => <ProfileListRow key={user.id} user={user} actionLabel={isOwnProfile ? "Deixar de seguir" : undefined} onAction={isOwnProfile ? () => unfollowListedUser(user) : undefined} actioning={actioningUserId === user.id} />)}
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {hypesModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setHypesModalOpen(false)}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Hypes recebidos</h3><button type="button" onClick={() => setHypesModalOpen(false)} className="text-white/50 hover:text-white">×</button></div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">{loadingHypes ? <p className="py-4 text-center text-white/50">Carregando...</p> : hypesList.length === 0 ? <p className="py-4 text-center text-white/50">Nenhum hype recebido ainda</p> : <div className="space-y-3">{hypesList.map((user) => <ProfileListRow key={user.id} user={user} />)}</div>}</div>
           </div>
         </div>
       )}

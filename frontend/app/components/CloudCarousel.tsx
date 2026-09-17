@@ -15,6 +15,7 @@ export type CarouselCloud = {
   authorId?: string;
   visibility?: "public" | "private";
   href?: string;
+  participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
 };
 
 function parseDurationSeconds(duration: string) {
@@ -106,6 +107,7 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
       participants: String(cloud.liveParticipants ?? 1),
+      join: "1",
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
@@ -190,12 +192,20 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div className="flex -space-x-3" aria-label="Participantes da Cloud">
+              {currentCloud?.participantProfiles?.slice(0, 7).map((participant) => participant.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <span key={participant.id} title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>
+              ))}
+            </div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.07)", borderRadius: "9999px", padding: "10px 20px" }}>
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 6v6l4 2" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
-              <span style={{ fontSize: "19px", fontWeight: 700, color: "#ffffff", fontVariantNumeric: "tabular-nums" }}>
+              <span style={{ fontSize: "21px", fontWeight: 700, color: "#ffffff", fontVariantNumeric: "tabular-nums" }}>
                 {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
               </span>
             </div>

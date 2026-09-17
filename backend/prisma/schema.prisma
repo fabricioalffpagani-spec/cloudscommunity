@@ -70,6 +70,8 @@ model User {
   passwordHash  String      @db.Text
   status        UserStatus  @default(active)
   emailVerifiedAt DateTime?
+  termsAcceptedAt DateTime?
+  communityRulesAcceptedAt DateTime?
   lastLoginAt     DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -92,6 +94,7 @@ model User {
   mediaAssets               MediaAsset[]
   sessions                  Session[]
   emailVerificationTokens   EmailVerificationToken[]
+  passwordResetTokens       PasswordResetToken[]
   cloudMessageReactions     CloudMessageReaction[]
   cloudBans                 CloudBan[]             @relation("CloudBanUser")
   cloudBansGiven            CloudBan[]             @relation("CloudBanBannedBy")
@@ -104,6 +107,20 @@ model User {
 }
 
 model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique @db.VarChar(128)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid
   tokenHash String   @unique @db.VarChar(128)

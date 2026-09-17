@@ -2,7 +2,7 @@ import CloudChat from "./CloudChat";
 
 type CloudPageProps = {
   params?: Promise<{ id?: string }>;
-  searchParams?: Promise<{ title?: string; duration?: string; createdAt?: string; visibility?: string }>;
+  searchParams?: Promise<{ title?: string; duration?: string; createdAt?: string; visibility?: string; join?: string }>;
 };
 
 export default async function CloudPage({ params, searchParams }: CloudPageProps) {
@@ -23,6 +23,7 @@ export default async function CloudPage({ params, searchParams }: CloudPageProps
         duration={duration}
         createdAt={createdAt}
         visibility={visibility}
+        joinOnEntry={sp.join === '1'}
       />
     </div>
   );

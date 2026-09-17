@@ -95,16 +95,32 @@ export class CloudController {
   async joinCloud(@Param('id') id: string, @Req() req: Request) {
     const token = extractSessionToken(req);
     const result = await this.cloudService.joinCloud(token, id);
-    
+    // A message is emitted only when membership actually changes from outside
+    // to inside. Refreshes and tab restores can repeat requests, but cannot
+    // be represented as another entry.
+    if (result.entered) {
+      const systemMessage = await this.cloudService.createJoinNotification(id, result.userId);
+      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+    }
     const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
-    return { ...result, membersCount };
+    return { ok: true, membersCount };
   }
 
   @Post(':id/leave')
   async leaveCloud(@Param('id') id: string, @Req() req: Request) {
     const result = await this.cloudService.leaveCloud(extractSessionToken(req), id);
+    const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
+    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
     const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
-    return { ...result, membersCount };
+    return { ok: true, membersCount };
+  }
+
+  @Post(':id/exit')
+  async exitCloudConversation(@Param('id') id: string, @Req() req: Request) {
+    const result = await this.cloudService.exitCloudConversation(extractSessionToken(req), id);
+    const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
+    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+    return { ok: true };
   }
 
   @Post(':id/hype')

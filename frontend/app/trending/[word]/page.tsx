@@ -239,9 +239,10 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
           </Link>
-          <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">For You</Link>
-            <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
+            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">For You</Link>
+            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Meet</Link>
           </nav>
           <div className="flex items-center gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
@@ -309,27 +310,11 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           )}
         </div>
       </main>
-
-      {/* ── Bottom Navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
-              <path d="M9 21V12h6v9"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Home</span>
-          </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Messages</span>
-          </Link>
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <FlameIcon s={30} />
-            <span className="text-[13px] font-semibold">Trending</span>
-          </Link>
+          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M9 21V12h6v9"/></svg><span className="text-[13px] font-semibold">Home</span></Link>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span className="text-[13px] font-semibold">Messages</span></Link>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
     </div>

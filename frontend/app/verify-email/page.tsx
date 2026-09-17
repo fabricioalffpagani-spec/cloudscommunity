@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUser } from "../components/session-user";
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh } = useSessionUser();
@@ -45,4 +45,8 @@ export default function VerifyEmailPage() {
       </section>
     </main>
   );
+}
+
+export default function VerifyEmailPage() {
+  return <Suspense fallback={<main className="min-h-screen bg-[#030208]" />}><VerifyEmailContent /></Suspense>;
 }

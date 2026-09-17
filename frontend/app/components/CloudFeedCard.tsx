@@ -132,7 +132,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
           <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
             {isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
           </span>
-          <span className="rounded-full bg-white/5 px-2 py-1 text-[11px] font-semibold text-white/60">
+          <span className="rounded-full bg-white/5 px-2 py-1 text-[13px] font-semibold tabular-nums text-white/70">
             {isLive ? countdownLabel : "00:00"}
           </span>
         </div>

@@ -3,6 +3,7 @@ import type { Prisma, Session } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { Resend } from 'resend';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { SESSION_TTL_MS } from './auth.constants';
 import {
   AuthResponse,
   AuthResult,
@@ -36,6 +37,7 @@ type LoginInput = {
   email?: string;
   username?: string;
   password?: string;
+  rememberDevice?: boolean;
 };
 
 type SignupInput = {
@@ -47,6 +49,8 @@ type SignupInput = {
   bio?: string;
   location?: string;
   region?: string;
+  acceptedTerms?: boolean;
+  acceptedCommunityRules?: boolean;
 };
 
 type SessionBundle = {
@@ -56,6 +60,7 @@ type SessionBundle = {
 
 const EMAIL_VERIFICATION_TTL_MS = 30 * 60 * 1000;
 const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
+const PASSWORD_RESET_TTL_MS = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES ?? 30) * 60 * 1000;
 
 type UserWithProfile = Prisma.UserGetPayload<{
   include: {
@@ -86,6 +91,13 @@ export class AuthService {
     const password = input.password ?? '';
     const birthDate = parseBirthDate(input.birthDate ?? '');
     validateMinimumAge(birthDate);
+
+    if (!input.acceptedTerms || !input.acceptedCommunityRules) {
+      throw new BadRequestException({
+        message: 'Aceite obrigatório.',
+        fieldErrors: { form: 'Aceite os Termos de Uso e as Regras da Comunidade para concluir o cadastro.' },
+      });
+    }
 
     if (!name) {
       throw new BadRequestException({
@@ -122,6 +134,8 @@ export class AuthService {
         data: {
           email,
           passwordHash,
+          termsAcceptedAt: new Date(),
+          communityRulesAcceptedAt: new Date(),
           status: 'pending',
           profile: {
             create: {
@@ -199,6 +213,53 @@ export class AuthService {
     const session = await this.createSession(user.id, meta);
 
     return { ok: true, user: this.mapUser(user), session: this.mapSession(session.session), token: session.token };
+  }
+
+  async requestPasswordReset(emailInput: string): Promise<{ ok: true; message: string }> {
+    const email = validateEmail(emailInput);
+    const user = await this.prisma.user.findUnique({ where: { email }, include: { profile: true } });
+    const message = 'Se houver uma conta com este email, enviaremos um link para redefinir a senha.';
+
+    if (!user || user.status !== 'active' || !user.profile) {
+      return { ok: true, message };
+    }
+
+    await this.sendPasswordResetEmail(user.id, user.email, user.profile.displayName);
+    return { ok: true, message };
+  }
+
+  async resetPassword(tokenInput: string, passwordInput: string): Promise<{ ok: true; message: string }> {
+    const rawToken = tokenInput.trim();
+    if (!rawToken) throw new BadRequestException({ message: 'Link de redefinição inválido.' });
+
+    validatePassword(passwordInput);
+
+    const resetToken = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashVerificationToken(rawToken) },
+      include: { user: { include: { profile: true } } },
+    });
+
+    if (!resetToken || resetToken.usedAt || resetToken.expiresAt.getTime() <= Date.now() || !resetToken.user.profile) {
+      throw new BadRequestException({ message: 'Este link de redefinição é inválido ou expirou.' });
+    }
+
+    const passwordHash = createPasswordHash(passwordInput);
+    const changedAt = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: resetToken.id, usedAt: null },
+        data: { usedAt: changedAt },
+      });
+      if (claimed.count !== 1) throw new BadRequestException({ message: 'Este link de redefinição já foi utilizado.' });
+
+      await tx.user.update({ where: { id: resetToken.userId }, data: { passwordHash } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: resetToken.userId, usedAt: null } });
+      await tx.session.updateMany({ where: { userId: resetToken.userId, revokedAt: null }, data: { revokedAt: changedAt } });
+      return { email: resetToken.user.email, displayName: resetToken.user.profile!.displayName };
+    });
+
+    await this.sendPasswordResetConfirmationEmail(result.email, result.displayName);
+    return { ok: true, message: 'Senha redefinida com sucesso. Você já pode entrar com a nova senha.' };
   }
 
   async login(input: LoginInput, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
@@ -280,7 +341,7 @@ export class AuthService {
       );
     }
 
-    const session = await this.createSession(authenticatedUser.id, meta);
+    const session = await this.createSession(authenticatedUser.id, meta, input.rememberDevice === true);
 
     await this.prisma.user.update({
       where: { id: authenticatedUser.id },
@@ -366,6 +427,38 @@ export class AuthService {
     return { ok: true };
   }
 
+  async sendFeedback(token: string | null, messageInput: string): Promise<{ ok: true }> {
+    const current = await this.resolveSession(token);
+    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+
+    const message = messageInput.trim();
+    if (message.length < 10) {
+      throw new BadRequestException({ message: 'Escreva uma mensagem com pelo menos 10 caracteres.' });
+    }
+    if (message.length > 4_000) {
+      throw new BadRequestException({ message: 'A mensagem pode ter no máximo 4.000 caracteres.' });
+    }
+    if (!this.resend) {
+      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+    }
+
+    const username = current.user.profile?.username ?? 'usuário';
+    const displayName = current.user.profile?.displayName ?? username;
+    const { error } = await this.resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      to: ['cloudscomunidade@gmail.com'],
+      subject: `SUGESTÃO/RECLAMAÇÃO do usuário @${username}`,
+      text: `SUGESTÃO/RECLAMAÇÃO do usuário @${username}\n\nNome: ${displayName}\nE-mail: ${current.user.email}\n\nMensagem:\n${message}`,
+      html: `<h1>SUGESTÃO/RECLAMAÇÃO do usuário @${this.escapeHtml(username)}</h1><p><strong>Nome:</strong> ${this.escapeHtml(displayName)}<br/><strong>E-mail:</strong> ${this.escapeHtml(current.user.email)}</p><p><strong>Mensagem:</strong></p><p>${this.escapeHtml(message).replace(/\n/g, '<br/>')}</p>`,
+    });
+
+    if (error) {
+      throw new BadRequestException({ message: 'Não foi possível enviar sua mensagem agora. Tente novamente mais tarde.' });
+    }
+
+    return { ok: true };
+  }
+
   async logout(token: string | null): Promise<{ ok: true }> {
     if (!token) {
       return { ok: true };
@@ -413,10 +506,10 @@ export class AuthService {
     };
   }
 
-  async createSession(userId: string, meta: { ipAddress: string | null; userAgent: string | null }): Promise<SessionBundle> {
+  async createSession(userId: string, meta: { ipAddress: string | null; userAgent: string | null }, rememberDevice = true): Promise<SessionBundle> {
     const token = createSessionToken();
     const refreshTokenHash = hashSessionToken(token);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
+    const expiresAt = new Date(Date.now() + (rememberDevice ? SESSION_TTL_MS : 1000 * 60 * 60 * 24));
 
     const session = await this.prisma.session.create({
       data: {
@@ -459,6 +552,49 @@ export class AuthService {
       await this.prisma.emailVerificationToken.deleteMany({ where: { tokenHash } });
       throw new BadRequestException({ message: 'Não foi possível enviar o email de validação agora.' });
     }
+  }
+
+  private async sendPasswordResetEmail(userId: string, email: string, displayName: string): Promise<void> {
+    if (!this.resend) {
+      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashVerificationToken(rawToken);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim().replace(/\/+$/, '');
+    const resetUrl = `${webOrigin}/reset-password?token=${encodeURIComponent(rawToken)}`;
+    const safeDisplayName = this.escapeHtml(displayName);
+
+    await this.prisma.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
+    await this.prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt } });
+
+    const { error } = await this.resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      to: [email],
+      subject: 'Redefina sua senha do Clouds',
+      text: `Olá, ${displayName}! Recebemos um pedido para redefinir sua senha. Use este link: ${resetUrl}. Ele expira em 30 minutos. Se não foi você, ignore este email.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>Redefinição de senha</h1><p>Olá, ${safeDisplayName}!</p><p>Recebemos um pedido para redefinir sua senha no Clouds.</p><p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#9333ea;color:#fff;text-decoration:none;border-radius:999px">Redefinir minha senha</a></p><p>Este link expira em 30 minutos. Se não foi você, ignore este email.</p></div>`,
+    });
+    if (error) {
+      await this.prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
+      throw new BadRequestException({ message: 'Não foi possível enviar o email de redefinição agora.' });
+    }
+  }
+
+  private async sendPasswordResetConfirmationEmail(email: string, displayName: string): Promise<void> {
+    if (!this.resend) {
+      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+    }
+    const safeDisplayName = this.escapeHtml(displayName);
+    const { error } = await this.resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      to: [email],
+      subject: '✅ Senha alterada com sucesso — Clouds',
+      text: `✅ Olá, ${displayName}! Sua senha foi alterada com sucesso. 🔒 Está tudo certo com a sua conta Clouds. Se não foi você, entre em contato com o suporte imediatamente.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>✅ Senha alterada!</h1><p>Olá, ${safeDisplayName}!</p><p>🔒 Sua senha foi redefinida com sucesso e está tudo certo com a sua conta Clouds.</p><p>Se você não fez essa alteração, entre em contato com o suporte imediatamente.</p></div>`,
+    });
+    if (error) throw new BadRequestException({ message: 'Senha alterada, mas não foi possível enviar o email de confirmação.' });
   }
 
   private hashVerificationToken(token: string): string {

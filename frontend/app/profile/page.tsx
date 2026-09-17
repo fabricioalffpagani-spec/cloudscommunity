@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { FlameIcon } from "../components/FlameIcon";
 import {
   SessionUserAvatar,
   SessionUserLink,
@@ -106,6 +107,7 @@ type FollowListUser = {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  hypesCount?: number;
 };
 
 function FollowListModal({
@@ -114,12 +116,20 @@ function FollowListModal({
   loading,
   users,
   onClose,
+  actionLabel,
+  onAction,
+  actioningId,
+  showHypes,
 }: {
   title: string;
   emptyMessage: string;
   loading: boolean;
   users: FollowListUser[];
   onClose: () => void;
+  actionLabel?: string;
+  onAction?: (user: FollowListUser) => void;
+  actioningId?: string | null;
+  showHypes?: boolean;
 }) {
   return (
     <div
@@ -127,7 +137,7 @@ function FollowListModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] p-6"
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -136,7 +146,7 @@ function FollowListModal({
             <XIcon />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
           {loading ? (
             <p className="py-4 text-center text-white/50">Carregando...</p>
           ) : users.length === 0 ? (
@@ -144,13 +154,12 @@ function FollowListModal({
           ) : (
             <div className="space-y-3">
               {users.map((listedUser) => (
-                <Link
+                <div
                   key={listedUser.id}
-                  href={`/users/${listedUser.username}`}
                   className="flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5"
-                  onClick={onClose}
                 >
-                  <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] font-bold text-white">
+                  <Link href={`/users/${listedUser.username}`} className="flex min-w-0 flex-1 items-center gap-3" onClick={onClose}>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] font-bold text-white">
                     {listedUser.avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={listedUser.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -162,7 +171,10 @@ function FollowListModal({
                     <p className="font-semibold text-white">{listedUser.displayName}</p>
                     <p className="text-sm text-white/50">@{listedUser.username}</p>
                   </div>
-                </Link>
+                  </Link>
+                  {showHypes && <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[#FF7A18]"><FlameIcon s={22} filled /><span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7C3AED] px-1 text-[9px] font-extrabold leading-none text-white">{listedUser.hypesCount}</span></span>}
+                  {actionLabel && onAction && <button type="button" disabled={actioningId === listedUser.id} onClick={() => onAction(listedUser)} className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/80 transition hover:border-red-400/60 hover:text-red-300 disabled:opacity-50">{actioningId === listedUser.id ? "..." : actionLabel}</button>}
+                </div>
               ))}
             </div>
           )}
@@ -277,6 +289,10 @@ export default function ProfilePage() {
   const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
+  const [hypesModalOpen, setHypesModalOpen] = useState(false);
+  const [hypesList, setHypesList] = useState<FollowListUser[]>([]);
+  const [loadingHypes, setLoadingHypes] = useState(false);
+  const [actioningUserId, setActioningUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -374,12 +390,45 @@ export default function ProfilePage() {
     void loadFollowList("following");
   };
 
+  const openHypesModal = async () => {
+    if (!user) return;
+    setHypesModalOpen(true);
+    setLoadingHypes(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.username)}/hypes`, { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; users?: FollowListUser[] } | null;
+      setHypesList(response.ok && payload?.ok && Array.isArray(payload.users) ? payload.users : []);
+    } finally { setLoadingHypes(false); }
+  };
+
+  const removeFollower = async (listedUser: FollowListUser) => {
+    if (!user) return;
+    setActioningUserId(listedUser.id);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(user.username)}/followers/${encodeURIComponent(listedUser.id)}`, { method: "DELETE" });
+      if (!response.ok) return;
+      setFollowersList((current) => current.filter((item) => item.id !== listedUser.id));
+      await refresh();
+    } finally { setActioningUserId(null); }
+  };
+
+  const unfollowUser = async (listedUser: FollowListUser) => {
+    setActioningUserId(listedUser.id);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(listedUser.username)}/follow`, { method: "DELETE" });
+      if (!response.ok) return;
+      setFollowingList((current) => current.filter((item) => item.id !== listedUser.id));
+      await refresh();
+    } finally { setActioningUserId(null); }
+  };
+
   const displayName = getSessionUserDisplayName(user);
   const handle = getSessionUserHandle(user);
   const initials = displayName.charAt(0).toUpperCase();
   const followers = user?.followersCount ?? 0;
   const following = user?.followingCount ?? 0;
   const cloudsCount = user?.cloudsCount ?? 0;
+  const hypesCount = user?.hypesCount ?? 0;
   const memberSince = formatMemberSince(user?.createdAt);
   const region = user?.location || "Sem região informada";
   const bio = user?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
@@ -454,9 +503,14 @@ export default function ProfilePage() {
               <p className="text-[20px] font-bold text-white">{cloudsCount}</p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Clouds</p>
             </div>
+            <div className="h-8 w-px bg-white/10" />
+            <button type="button" onClick={openHypesModal} className="transition hover:opacity-80">
+              <p className="text-[20px] font-bold text-white">{hypesCount}</p>
+              <p className="text-[11px] uppercase tracking-widest text-white/40">Hypes</p>
+            </button>
           </div>
 
-          <div className="mt-4 flex items-center gap-3 text-[12px] text-white">
+          <div className="mt-4 flex items-center gap-3 text-[13px] text-white">
             <span>{region}</span>
             <span>·</span>
             <span>Desde {memberSince}</span>
@@ -487,6 +541,9 @@ export default function ProfilePage() {
           loading={loadingFollowers}
           users={followersList}
           onClose={() => setFollowersModalOpen(false)}
+          actionLabel="Remover seguidor"
+          onAction={removeFollower}
+          actioningId={actioningUserId}
         />
       )}
 
@@ -497,8 +554,13 @@ export default function ProfilePage() {
           loading={loadingFollowing}
           users={followingList}
           onClose={() => setFollowingModalOpen(false)}
+          actionLabel="Deixar de seguir"
+          onAction={unfollowUser}
+          actioningId={actioningUserId}
         />
       )}
+
+      {hypesModalOpen && <FollowListModal title="Hypes recebidos" emptyMessage="Nenhum hype recebido ainda" loading={loadingHypes} users={hypesList} onClose={() => setHypesModalOpen(false)} showHypes />}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">

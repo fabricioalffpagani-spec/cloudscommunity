@@ -108,7 +108,9 @@ type CloudChatProps = {
   title?: string;
   duration?: string;
   createdAt?: string;
+  participants?: number;
   visibility?: string;
+  joinOnEntry?: boolean;
 };
 
 type CloudMeta = {
@@ -1293,6 +1295,7 @@ function ReportModal({
 function CloudMessageBubble({
   msg,
   onReact,
+  onShowReactions,
   onReply,
   onPin,
   onForward,
@@ -1304,6 +1307,7 @@ function CloudMessageBubble({
 }: {
   msg: ChatMessage;
   onReact: (messageId: string, emoji: string) => void;
+  onShowReactions: (msg: ChatMessage) => void;
   onReply: (msg: ChatMessage) => void;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
@@ -1382,7 +1386,7 @@ function CloudMessageBubble({
                 <button
                   key={emoji}
                   type="button"
-                  onClick={() => onReact(msg.id, emoji)}
+                  onClick={() => onShowReactions(msg)}
                   className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20"
                   title={`${reactions.length} reação(ões) com ${emoji}`}
                 >
@@ -1420,7 +1424,8 @@ function CloudMessageBubble({
               type="button"
               title="Reagir"
               onClick={() => setEmojiPickerOpen((v) => !v)}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15 hover:text-white"
+              disabled={msg.pending}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               <CloudEmojiIcon />
             </button>
@@ -1479,7 +1484,7 @@ function CloudMessageBubble({
   );
 }
 
-export default function CloudChat({ cloudId, title, duration, createdAt, visibility }: CloudChatProps) {
+export default function CloudChat({ cloudId, title, duration, createdAt, visibility, joinOnEntry = false }: CloudChatProps) {
   const { user, status } = useSessionUser();
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
@@ -1502,6 +1507,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [hypesCount, setHypesCount] = useState(0);
   const [hypeUsers, setHypeUsers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
   const [hypeListOpen, setHypeListOpen] = useState(false);
+  const [reactionDetailsMessage, setReactionDetailsMessage] = useState<ChatMessage | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(true);
@@ -1555,7 +1561,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloudId]);
 
   useEffect(() => {
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       if (!emojiOpen) {
         return;
       }
@@ -1574,8 +1580,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setEmojiOpen(false);
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [emojiOpen]);
 
   useEffect(() => {
@@ -1598,8 +1604,18 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setActionMenuOpen(false);
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [actionMenuOpen]);
 
   const loadCloud = useCallback(async () => {
@@ -1644,8 +1660,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [user?.id]);
 
-  const joinCloud = useCallback((socket: Socket) => {
-    socket.emit("cloud:join", { cloudId });
+  const joinCloud = useCallback((socket: Socket, announce = false) => {
+    socket.emit("cloud:join", { cloudId, announce });
   }, [cloudId]);
 
   const isCloudAuthor = Boolean(user?.id && cloud?.authorId && user.id === cloud.authorId);
@@ -1752,7 +1768,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
   const handleLeaveCloud = useCallback(async () => {
-    if (!cloud || isCloudAuthor || isLeavingCloud) {
+    if (!cloud || isLeavingCloud) {
       return;
     }
 
@@ -1763,7 +1779,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       // Remove the live socket first so the backend count is already current
       // when the persisted membership endpoint is called.
       socketRef.current?.emit("cloud:leave", { cloudId });
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/leave`, {
+      // The creator remains the owner of the Cloud, but leaving the chat still
+      // needs to be explicit and visible to the other people in the room.
+      const exitAction = isCloudAuthor ? "exit" : "leave";
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/${exitAction}`, {
         method: "POST",
         credentials: "include",
       });
@@ -1938,28 +1957,47 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (status !== "authenticated" || !user) {
+    if (status !== "authenticated" || !user || !socket) {
       return;
     }
 
-    // Emit socket join on every reconnection so the socket room stays correct
-    socket.emit("cloud:join", { cloudId });
-
-    // HTTP join only once per component mount — creates the system message + broadcasts membersCount
-    if (!hasJoinedRef.current) {
+    // When returning after leaving, restore the persisted membership before
+    // asking Socket.IO to join and announce the entry. Otherwise the gateway
+    // correctly rejects the socket as a user who is no longer a member.
+    if (joinOnEntry && !hasJoinedRef.current) {
       hasJoinedRef.current = true;
+      // `join=1` is a one-time intent added by the Cloud card. Consume it
+      // immediately so a refresh, tab restore, or focus return cannot be
+      // mistaken for another explicit entry.
+      if (typeof window !== "undefined") {
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.has("join")) {
+          currentUrl.searchParams.delete("join");
+          window.history.replaceState(window.history.state, "", `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+        }
+      }
       fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
         method: "POST",
         credentials: "include",
       }).then((response) => {
         if (response.ok) {
+          // The HTTP endpoint already persisted and broadcast the entry
+          // message. This call only joins the newly-authorized socket room.
+          joinCloud(socket, false);
           void loadMessages();
+        } else {
+          hasJoinedRef.current = false;
         }
       }).catch(() => {
-        // ignore — system message is best-effort
+        hasJoinedRef.current = false;
       });
+      return;
     }
-  }, [cloudId, connectionState, status, user]);
+
+    // Reconnects only restore the socket room; they must not create another
+    // system message.
+    joinCloud(socket, false);
+  }, [cloudId, connectionState, joinCloud, joinOnEntry, status, user]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -2018,8 +2056,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [audioRecorder]);
 
   const sendReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (messageId.startsWith("client-")) {
+      setError("Aguarde o envio da mensagem antes de reagir.");
+      return;
+    }
     try {
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(messageId)}/reactions`, {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(messageId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emoji }),
@@ -2363,15 +2405,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+    <div onClick={() => setActionMenuOpen(false)} className="flex h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <div className="flex shrink-0 items-center gap-3 bg-black px-4 pb-3 pt-4">
-        <Link
-          href="/"
+        <button
+          type="button"
           aria-label="Voltar"
+          onClick={() => setLeaveConfirmOpen(true)}
           className="flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
         >
           <ArrowLeftIcon s={18} />
-        </Link>
+        </button>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
           <h1 className="truncate text-[28px] font-bold leading-tight text-white">
@@ -2383,7 +2426,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               {resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa
             </span>
             <span className="text-white/20">|</span>
-            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] text-[22px]" style={{ fontFamily: "Arial, sans-serif" }}>
+            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] text-[24px]" style={{ fontFamily: "Arial, sans-serif" }}>
               <HeaderClockIcon />
               {liveTimer}
             </span>
@@ -2393,27 +2436,37 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         <div className="flex shrink-0 items-center gap-0.5">
           {!isDarkCloud && (
             <>
-              <button
-                type="button"
-                aria-label="Hype"
-                onClick={() => {
-                  if (hypesCount > 0) {
-                    setHypeListOpen(true);
-                    fetchHypeUsers();
-                  } else {
-                    void handleToggleHype();
-                  }
-                }}
-                disabled={isUpdatingHype}
-                className={`group relative flex h-10 w-10 items-center justify-center transition ${hyped ? "text-[#F97316]" : "text-white hover:text-[#F97316]"}`}
-              >
-                <HeaderFireIcon active={hyped} />
-                {hypesCount > 0 && (
-                  <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#F97316] text-[10px] font-bold text-white">
-                    {hypesCount}
-                  </span>
+              <div className="relative flex h-10 items-center">
+                {hypesCount >= 100 && (
+                  <button
+                    type="button"
+                    aria-label="Ver pessoas que deram hype"
+                    onClick={() => { setHypeListOpen(true); void fetchHypeUsers(); }}
+                    className="mr-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#A855F7] bg-black text-[6px] font-extrabold leading-none text-white transition hover:border-[#C084FC]"
+                  >
+                    100+
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  aria-label={hyped ? "Remover hype" : "Dar hype"}
+                  onClick={() => void handleToggleHype()}
+                  disabled={isUpdatingHype}
+                  className={`group flex h-10 w-10 items-center justify-center transition ${hyped ? "text-[#FF7A18] hover:text-[#FF8C35]" : "text-white hover:text-[#FF7A18]"}`}
+                >
+                  <HeaderFireIcon active={hyped} />
+                </button>
+                {hypesCount > 0 && hypesCount < 100 && (
+                  <button
+                    type="button"
+                    aria-label="Ver pessoas que deram hype"
+                    onClick={() => { setHypeListOpen(true); void fetchHypeUsers(); }}
+                    className="absolute -bottom-1 -right-1 z-10 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#7C3AED] px-[3px] text-[5px] font-extrabold leading-none text-white transition hover:bg-[#9333EA]"
+                  >
+                    <span className="scale-[0.65]">{hypesCount}</span>
+                  </button>
+                )}
+              </div>
               <button
                 type="button"
                 aria-label="Encaminhar"
@@ -2451,12 +2504,15 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             </>
           )}
 
-          <div className="relative" data-cloud-action-root="true">
+          <div className="relative z-50" data-cloud-action-root="true">
             <button
               type="button"
               aria-label="Mais opções"
               data-cloud-action-toggle="true"
-              onClick={() => setActionMenuOpen((current) => !current)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setActionMenuOpen((current) => !current);
+              }}
               className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
             >
               <HeaderDotsIcon />
@@ -2465,6 +2521,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             {actionMenuOpen && (
               <div
                 data-cloud-action-menu="true"
+                onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#11141F] shadow-xl"
               >
                 <button
@@ -2579,7 +2636,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 return <SystemMessageBubble key={msg.id} msg={msg} />;
               }
 
-              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
+              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={setReactionDetailsMessage} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
             });
           })()
         )}
@@ -2667,7 +2724,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     disabled={isAudioBusy}
                     className="text-white transition hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    😀
+                    <CloudEmojiIcon />
                   </button>
                   <button
                     type="button"
@@ -2864,7 +2921,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </div>
       )}
 
-      {leaveConfirmOpen && !isCloudAuthor && (
+      {leaveConfirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -2910,12 +2967,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       {hypeListOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setHypeListOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[18px] font-bold">Pessoas que deram Hype</h3>
               <button type="button" onClick={() => setHypeListOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
-            <div className="max-h-64 overflow-y-auto space-y-3">
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple space-y-3 pr-1">
               {hypeUsers.length === 0 ? (
                 <p className="text-[14px] text-white/50 text-center py-4">Ninguém deu hype ainda</p>
               ) : (
@@ -2929,6 +2986,56 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reactionDetailsMessage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setReactionDetailsMessage(null)}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#15161C] p-6 shadow-2xl shadow-black/40" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C084FC]">Clouds</p>
+                <h3 className="mt-1 text-[18px] font-bold text-white">{reactionDetailsMessage.reactions.length} {reactionDetailsMessage.reactions.length === 1 ? "reação" : "reações"}</h3>
+              </div>
+              <button type="button" aria-label="Fechar reações" onClick={() => setReactionDetailsMessage(null)} className="text-xl leading-none text-white/50 transition hover:text-white">×</button>
+            </div>
+            <div className="mb-4 flex flex-wrap gap-2 border-b border-white/[0.08] pb-4">
+              {Object.entries(reactionDetailsMessage.reactions.reduce((groups, reaction) => {
+                groups[reaction.emoji] = [...(groups[reaction.emoji] ?? []), reaction];
+                return groups;
+              }, {} as Record<string, ReactionPayload[]>)).map(([emoji, reactions]) => (
+                <span key={emoji} className="rounded-full border border-white/[0.1] bg-white/[0.06] px-3 py-1.5 text-[14px] text-white">
+                  {emoji} <span className="ml-1 text-white/60">{reactions.length}</span>
+                </span>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto scrollbar-purple pr-1">
+              {reactionDetailsMessage.reactions.map((reaction) => {
+                const ownReaction = reaction.userId === user?.id;
+                return (
+                  <button
+                    key={reaction.id}
+                    type="button"
+                    disabled={!ownReaction}
+                    onClick={() => {
+                      if (ownReaction) {
+                        setReactionDetailsMessage(null);
+                        void sendReaction(reactionDetailsMessage.id, reaction.emoji);
+                      }
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition ${ownReaction ? "hover:bg-white/[0.07]" : "cursor-default"}`}
+                  >
+                    <UserAvatar user={reaction.user} size={40} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-semibold text-white">{ownReaction ? "Você" : reaction.user.displayName}</p>
+                      <p className="truncate text-[12px] text-white/50">{ownReaction ? "Clique para remover" : `@${reaction.user.username}`}</p>
+                    </div>
+                    <span className="text-[24px]" aria-label={`Reação ${reaction.emoji}`}>{reaction.emoji}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

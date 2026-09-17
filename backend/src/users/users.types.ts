@@ -42,6 +42,19 @@ export type UsersSearchResponse = {
   users: PublicUserProfilePayload[];
 };
 
+export type ReceivedHypeUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  hypesCount: number;
+};
+
+export type ReceivedHypesResponse = {
+  ok: true;
+  users: ReceivedHypeUser[];
+};
+
 export type MeetResponse = {
   ok: true;
   popularRecent: Array<PublicUserProfilePayload & { hypes: number }>;

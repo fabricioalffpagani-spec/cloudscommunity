@@ -33,6 +33,7 @@ function TrashIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24"
 function LogOutIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>; }
 function CheckIcon({ s = 14 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>; }
 function ChevronRightIcon() { return <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>; }
+function SendIcon({ s = 16 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>; }
 
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
@@ -513,6 +514,36 @@ function PanelDados() {
 }
 
 function PanelSobre() {
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const sendFeedback = async () => {
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length < 10) {
+      setFeedbackStatus({ type: "error", text: "Escreva uma mensagem com pelo menos 10 caracteres." });
+      return;
+    }
+
+    setSending(true);
+    setFeedbackStatus(null);
+    try {
+      const response = await fetch("/api/auth/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: trimmedMessage }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.message || "Não foi possível enviar sua mensagem agora.");
+      setMessage("");
+      setFeedbackStatus({ type: "success", text: "Mensagem enviada. Obrigado por ajudar a melhorar o Clouds!" });
+    } catch (error) {
+      setFeedbackStatus({ type: "error", text: error instanceof Error ? error.message : "Não foi possível enviar sua mensagem agora." });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Sobre</h2>
     <Card><div className="flex flex-col items-center gap-4 py-4">
       <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain"/>
@@ -529,7 +560,14 @@ function PanelSobre() {
         <a key={label} href={href} target="_blank" rel="noreferrer" className="flex items-center justify-between py-3.5 text-[14px] text-white/80 hover:text-white transition">{label}<ChevronRightIcon/></a>
       ))}
     </div></Card>
-    <Card><Sub>Sugestões e suporte</Sub><p className="text-[13px] leading-6 text-white/70">Envie sugestões, melhorias ou reclamações sobre o site e a plataforma:</p><div className="mt-3 flex flex-col gap-2 text-[14px] text-white"><a href="mailto:cloudscomunidade@gmail.com" className="hover:text-[#C084FC] transition">cloudscomunidade@gmail.com</a><a href="https://wa.me/554999225972" target="_blank" rel="noreferrer" className="hover:text-[#C084FC] transition">WhatsApp: +55 49 9922-5972</a></div></Card>
+    <Card><Sub>Sugestões e suporte</Sub><p className="text-[13px] leading-6 text-white/70">Envie sugestões, melhorias, atualizações ou reclamações sobre o site e a plataforma.</p>
+      <div className="mt-4">
+        <label htmlFor="feedback-message" className="sr-only">Sua sugestão ou reclamação</label>
+        <textarea id="feedback-message" value={message} onChange={event => setMessage(event.target.value)} maxLength={4000} placeholder="Escreva sua sugestão ou reclamação..." className="min-h-28 w-full resize-y rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-white outline-none transition placeholder:text-[#6B7280] focus:border-[#A855F7]" />
+        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-[12px] text-white/45">{message.length}/4000</span><button type="button" onClick={sendFeedback} disabled={sending || !message.trim()} className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#A855F7] disabled:cursor-not-allowed disabled:opacity-50"><SendIcon/>{sending ? "Enviando..." : "Enviar sugestão"}</button></div>
+        {feedbackStatus && <p className={`mt-3 text-[13px] ${feedbackStatus.type === "success" ? "text-emerald-400" : "text-red-400"}`}>{feedbackStatus.text}</p>}
+      </div>
+      </Card>
     <p className="text-center text-[12px] text-white/50">Feito com ☁️ pela equipe Clouds Community</p>
   </div>);
 }

@@ -80,23 +80,26 @@ export default function TrendingPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [scope, setScope] = useState<"world" | "nearby">("world");
+  const [nearbyUnavailable, setNearbyUnavailable] = useState(false);
 
   const loadTrending = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/trending", { cache: "no-store" });
-      const data = (await res.json()) as { ok: boolean; topics: TrendingTopic[]; totalActiveClouds: number };
+      const res = await fetch(`/api/trending?scope=${scope}`, { cache: "no-store" });
+      const data = (await res.json()) as { ok: boolean; topics: TrendingTopic[]; totalActiveClouds: number; nearbyUnavailable?: boolean };
       if (data.ok) {
         setTopics(data.topics);
         setTotalActiveClouds(data.totalActiveClouds ?? 0);
         setLastUpdated(new Date());
+        setNearbyUnavailable(Boolean(data.nearbyUnavailable));
       }
     } catch {
       // mantém estado anterior em caso de erro
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   // Carrega ao montar e atualiza a cada 60s
   useEffect(() => {
@@ -119,9 +122,10 @@ export default function TrendingPage() {
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
           </Link>
-          <nav aria-label="Navegação" className="flex items-end gap-12 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">For You</Link>
-            <Link href="/following" className="inline-flex h-12 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
+            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">For You</Link>
+            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Meet</Link>
           </nav>
           <div className="flex items-center gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
@@ -168,6 +172,11 @@ export default function TrendingPage() {
             </button>
           </div>
 
+          <div className="mb-5 flex w-fit rounded-full border border-white/10 bg-white/[0.04] p-1">
+            <button type="button" onClick={() => setScope("world")} className={`rounded-full px-4 py-2 text-[13px] font-semibold transition ${scope === "world" ? "bg-[#9333EA] text-white" : "text-white/55 hover:text-white"}`}>Mundo</button>
+            <button type="button" onClick={() => setScope("nearby")} className={`rounded-full px-4 py-2 text-[13px] font-semibold transition ${scope === "nearby" ? "bg-[#9333EA] text-white" : "text-white/55 hover:text-white"}`}>Perto de mim</button>
+          </div>
+
           {lastUpdated && !loading && (
             <p className="mb-5 text-[12px] text-white/30">
               Atualizado às {lastUpdated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -184,8 +193,8 @@ export default function TrendingPage() {
           ) : topics.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] py-20 text-center">
               <FlameIcon s={40} />
-              <p className="text-[18px] font-semibold text-white/60">Nenhuma Cloud ativa no momento</p>
-              <p className="text-[14px] text-white/30">Quando as pessoas criarem Clouds, as palavras mais usadas vão aparecer aqui.</p>
+              <p className="text-[18px] font-semibold text-white/60">{nearbyUnavailable ? "Informe sua localização no perfil" : "Nenhuma Cloud ativa no momento"}</p>
+              <p className="text-[14px] text-white/30">{nearbyUnavailable ? "Assim podemos mostrar tópicos perto de você." : "Quando as pessoas criarem Clouds, as palavras mais usadas vão aparecer aqui."}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -227,27 +236,11 @@ export default function TrendingPage() {
           )}
         </div>
       </main>
-
-      {/* ── Bottom Navigation ── */}
       <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/>
-              <path d="M9 21V12h6v9"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Home</span>
-          </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span className="text-[13px] font-semibold">Messages</span>
-          </Link>
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]">
-            <FlameIcon s={30} />
-            <span className="text-[13px] font-semibold">Trending</span>
-          </Link>
+          <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M9 21V12h6v9"/></svg><span className="text-[13px] font-semibold">Home</span></Link>
+          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span className="text-[13px] font-semibold">Messages</span></Link>
+          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
     </div>

@@ -18,6 +18,7 @@ export type CloudAuthorPayload = {
   name: string;
   username: string;
   avatarUrl: string | null;
+  location: string | null;
 };
 
 export type CloudMessageReactionPayload = {
@@ -75,7 +76,14 @@ export type CloudPayload = {
   authorId: string;
   author: CloudAuthorPayload;
   hypesCount: number;
+  hyped?: boolean;
   membersCount: number;
+  participantProfiles: Array<{
+    id: string;
+    name: string;
+    username: string;
+    avatarUrl: string | null;
+  }>;
   href: string;
 };
 
