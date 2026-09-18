@@ -92,6 +92,16 @@ export class UsersController {
     return this.usersService.unfollow(extractSessionToken(req), identifier);
   }
 
+  @Post(':identifier/block')
+  async block(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.block(extractSessionToken(req), identifier);
+  }
+
+  @Delete(':identifier/block')
+  async unblock(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.unblock(extractSessionToken(req), identifier);
+  }
+
   @Delete(':identifier/followers/:followerId')
   async removeFollower(@Req() req: Request, @Param('identifier') identifier: string, @Param('followerId') followerId: string) {
     return this.usersService.removeFollower(extractSessionToken(req), identifier, followerId);

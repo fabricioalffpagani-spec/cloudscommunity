@@ -6,6 +6,8 @@ import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { NotificationsBell } from "../components/NotificationsPanel";
+import { MessagesNavLink } from "../components/MessagesNavLink";
+import { MobileAppNav, MobileFeedHeader } from "../components/MobileAppChrome";
 
 type PublicUserProfile = {
   id: string;
@@ -24,6 +26,7 @@ type PublicUserProfile = {
   followingCount: number;
   cloudsCount: number;
   hypesCount: number;
+  showHypesCount: boolean;
   isFollowing: boolean;
   isFollowRequested?: boolean;
   isSelf: boolean;
@@ -36,6 +39,17 @@ type MeetPayload = {
   popularAllTime: Array<PublicUserProfile & { hypes: number }>;
   nearby: Array<PublicUserProfile & { mutualFollowersCount: number }>;
 };
+
+const TEST_MEET_USERS: Array<PublicUserProfile & { hypes: number; mutualFollowersCount: number }> = [
+  ["teste-lia", "Lia Monteiro", "lia.monteiro", "São Paulo", 184, 12],
+  ["teste-caio", "Caio Nunes", "caio.nunes", "Rio de Janeiro", 142, 8],
+  ["teste-nina", "Nina Alves", "nina.alves", "Belo Horizonte", 118, 6],
+  ["teste-joao", "João Lima", "joao.lima", "Curitiba", 96, 4],
+].map(([id, displayName, username, location, hypes, mutualFollowersCount]) => ({
+  id: String(id), username: String(username), name: String(displayName), displayName: String(displayName), bio: "Perfil de teste para visualizar sugestões no Meet.", avatarUrl: null, coverUrl: null, location: String(location), website: null,
+  isPrivate: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), followersCount: Number(hypes), followingCount: 0, cloudsCount: 3, hypesCount: Number(hypes), showHypesCount: true,
+  isFollowing: false, isFollowRequested: false, isSelf: false, profileUrl: `/users/${String(id)}`, hypes: Number(hypes), mutualFollowersCount: Number(mutualFollowersCount),
+}));
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -218,7 +232,13 @@ export default function MeetPage() {
         const response = await fetch("/api/users/meet", { cache: "no-store" });
         const payload = await response.json().catch(() => null) as MeetPayload | null;
         if (!cancelled && response.ok && payload?.ok) {
-          setMeetData(payload);
+          const hasSuggestions = payload.popularRecent.length + payload.popularAllTime.length + payload.nearby.length > 0;
+          setMeetData(hasSuggestions ? payload : {
+            ok: true,
+            popularRecent: TEST_MEET_USERS,
+            popularAllTime: [...TEST_MEET_USERS].reverse(),
+            nearby: TEST_MEET_USERS,
+          });
         }
       } finally {
         if (!cancelled) setMeetLoading(false);
@@ -231,6 +251,18 @@ export default function MeetPage() {
 
   const toggleFollow = async (target: PublicUserProfile) => {
     if (target.isSelf) {
+      return;
+    }
+
+    if (target.id.startsWith("teste-")) {
+      const updated = { ...target, isFollowing: !target.isFollowing };
+      setResults((current) => current.map((item) => item.id === target.id ? updated : item));
+      setMeetData((current) => current && {
+        ...current,
+        popularRecent: current.popularRecent.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
+        popularAllTime: current.popularAllTime.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
+        nearby: current.nearby.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
+      });
       return;
     }
 
@@ -263,9 +295,9 @@ export default function MeetPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden text-white"
+    <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <header className="flex-none bg-transparent">
+      <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2"><HeaderBrand /></Link>
           <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
@@ -280,9 +312,10 @@ export default function MeetPage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[860px] flex-1 overflow-y-auto px-6 pb-28 pt-8">
+      <MobileFeedHeader active="meet" />
+      <main className="mx-auto w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-28 pt-6 md:px-6 md:pb-28 md:pt-8">
         <div className="mb-6">
-          <h1 className="text-[42px] font-bold tracking-tight text-white">Meet</h1>
+          <h1 className="text-[32px] font-bold tracking-tight text-white md:text-[42px]">Meet</h1>
           <p className="mt-1 text-[16px] text-[#9b98ed]">Encontre pessoas para conhecer e acompanhar.</p>
         </div>
 
@@ -334,7 +367,7 @@ export default function MeetPage() {
                 {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetData?.nearby)?.map((item) => {
                   const hypes = "hypes" in item ? item.hypes : 0;
                   const mutualFollowersCount = "mutualFollowersCount" in item ? item.mutualFollowersCount : 0;
-                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? `${hypes} hype${hypes === 1 ? "" : "s"}` : `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
+                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
                 })}
                 {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
                 {!meetLoading && meetCategory === "popular" && (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime)?.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
@@ -345,13 +378,14 @@ export default function MeetPage() {
         )}
       </main>
 
-      <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
+      <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><MessageIcon s={32} /><span className="text-[13px] font-semibold">Messages</span></Link>
+          <MessagesNavLink />
           <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
+      <MobileAppNav />
 
     </div>
   );

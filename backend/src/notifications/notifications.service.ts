@@ -16,7 +16,7 @@ export class NotificationsService {
     const current = await this.requireSession(token);
 
     const items = await this.prisma.notification.findMany({
-      where: { userId: current.user.id },
+      where: { userId: current.user.id, type: { not: 'direct_message' } },
       orderBy: { createdAt: 'desc' },
       ...(includeAll ? {} : { take: 10 }),
     });
@@ -63,7 +63,7 @@ export class NotificationsService {
     }));
 
     const unreadCount = await this.prisma.notification.count({
-      where: { userId: current.user.id, isRead: false },
+      where: { userId: current.user.id, isRead: false, type: { not: 'direct_message' } },
     });
 
     return {

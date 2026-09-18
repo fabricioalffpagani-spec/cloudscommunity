@@ -603,6 +603,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     }
 
     try {
+      if (!window.isSecureContext) {
+        throw new Error("Para gravar áudio no celular, abra o Clouds pelo link HTTPS.");
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Seu navegador não oferece suporte à gravação de áudio.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
@@ -662,13 +668,13 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
         secondsRef.current += 1;
         setSeconds(secondsRef.current);
       }, 1000);
-    } catch {
+    } catch (error) {
       stopTimers();
       cleanupStream();
       setState("idle");
       setSeconds(0);
       secondsRef.current = 0;
-      throw new Error("Permissão de microfone negada.");
+      throw error instanceof Error ? error : new Error("Permissão de microfone negada.");
     }
   }, [cleanupStream, onStop, state, startSampler, stopTimers]);
 
@@ -1307,7 +1313,7 @@ function CloudMessageBubble({
 }: {
   msg: ChatMessage;
   onReact: (messageId: string, emoji: string) => void;
-  onShowReactions: (msg: ChatMessage) => void;
+  onShowReactions: (msg: ChatMessage, emoji: string) => void;
   onReply: (msg: ChatMessage) => void;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
@@ -1386,7 +1392,7 @@ function CloudMessageBubble({
                 <button
                   key={emoji}
                   type="button"
-                  onClick={() => onShowReactions(msg)}
+                  onClick={() => onShowReactions(msg, emoji)}
                   className="rounded-full bg-white/10 px-2 py-1 text-[12px] transition hover:bg-white/20"
                   title={`${reactions.length} reação(ões) com ${emoji}`}
                 >
@@ -1491,6 +1497,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const hasJoinedRef = useRef(false);
+  const messagesLoadRequestRef = useRef(0);
   const audioRecorder = useAudioRecorder((recording) => {
     void handleAudioRecordingStop(recording);
   });
@@ -1508,6 +1515,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [hypeUsers, setHypeUsers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
   const [hypeListOpen, setHypeListOpen] = useState(false);
   const [reactionDetailsMessage, setReactionDetailsMessage] = useState<ChatMessage | null>(null);
+  const [reactionDetailsEmoji, setReactionDetailsEmoji] = useState<string | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(true);
@@ -1526,6 +1534,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
   const [isDeletingCloud, setIsDeletingCloud] = useState(false);
@@ -1635,11 +1644,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloudId]);
 
   const loadMessages = useCallback(async () => {
+    const requestId = ++messagesLoadRequestRef.current;
     setLoadingMessages(true);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
       const payload = await readJson<{ ok: true; messages: CloudMessagePayload[] }>(response);
-      setMessages(payload.messages.map((message) => normalizeMessage(message, user?.id)));
+      // An older initial request can finish after the join notification was
+      // created. Only the latest response may replace the conversation.
+      if (requestId === messagesLoadRequestRef.current) {
+        setMessages(payload.messages.map((message) => normalizeMessage(message, user?.id)));
+      }
     } catch {
       // silently ignore message load errors — cloud still functional
     } finally {
@@ -1913,9 +1927,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       }, 1000);
     });
 
-    socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number }) => {
+    socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number; members?: CloudPayload["members"] }) => {
       if (payload.cloudId !== cloudId) return;
-      setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount } : prev);
+      setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount, ...(payload.members ? { members: normalizeCloud({ ...prev, members: payload.members } as CloudPayload).members } : {}) } : prev);
     });
 
     socket.on("cloud:banned", (payload: { cloudId: string }) => {
@@ -2382,6 +2396,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [manageMembersOpen]);
 
   const isAudioBusy = audioUploading || imageUploading || audioRecorder.state !== "idle";
+  const managedMembers = useMemo<CloudMemberEntry[]>(() => {
+    if (!cloud) return [];
+    const host: CloudMemberEntry = {
+      id: `host-${cloud.authorId}`,
+      userId: cloud.authorId,
+      role: "host",
+      user: { id: cloud.author.id, displayName: cloud.author.name, username: cloud.author.username, avatarUrl: cloud.author.avatarUrl },
+    };
+    return [host, ...(cloud.members ?? []).filter((member) => member.userId !== cloud.authorId)];
+  }, [cloud]);
+  const filteredManagedMembers = managedMembers.filter((member) =>
+    `${member.user.displayName} ${member.user.username}`.toLowerCase().includes(memberSearch.trim().toLowerCase()),
+  );
   const resolvedTitle = cloud?.title || title || "Cloud";
   const resolvedParticipants = cloud?.membersCount ?? 0;
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
@@ -2398,35 +2425,36 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   if (status === "loading" || loadingCloud) {
     return (
-      <div className="flex h-screen items-center justify-center text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      <div className="flex h-[100dvh] min-h-screen items-center justify-center text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
         Carregando a cloud...
       </div>
     );
   }
 
   return (
-    <div onClick={() => setActionMenuOpen(false)} className="flex h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="flex shrink-0 items-center gap-3 bg-black px-4 pb-3 pt-4">
+    <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      <div className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
         <button
           type="button"
           aria-label="Voltar"
           onClick={() => setLeaveConfirmOpen(true)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center text-white/70 transition hover:text-white"
+          className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"
         >
           <ArrowLeftIcon s={18} />
         </button>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
-          <h1 className="truncate text-[28px] font-bold leading-tight text-white">
+          <h1 className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]">
             {resolvedTitle}
           </h1>
-          <div className="flex items-center gap-3 text-[16px] text-white/50">
-            <span className="flex items-center gap-1">
-              <span className="inline-block h-3 w-3 rounded-full bg-[#A855F7] animate-pulse" />
-              {resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa
+          <div className="flex items-center gap-1.5 whitespace-nowrap text-[13px] text-white/50 sm:gap-3 sm:text-[16px]">
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#A855F7] animate-pulse sm:h-3 sm:w-3" />
+              <span className="md:hidden">{resolvedParticipants} na conversa</span>
+              <span className="hidden md:inline">{resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa</span>
             </span>
-            <span className="text-white/20">|</span>
-            <span className="flex items-center gap-1 font-sans font-bold text-[#A855F7] text-[24px]" style={{ fontFamily: "Arial, sans-serif" }}>
+            <span className="hidden text-white/20 md:inline">|</span>
+            <span className="flex items-center gap-1 font-sans text-[18px] font-bold text-[#A855F7] sm:text-[24px]" style={{ fontFamily: "Arial, sans-serif" }}>
               <HeaderClockIcon />
               {liveTimer}
             </span>
@@ -2452,7 +2480,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   aria-label={hyped ? "Remover hype" : "Dar hype"}
                   onClick={() => void handleToggleHype()}
                   disabled={isUpdatingHype}
-                  className={`group flex h-10 w-10 items-center justify-center transition ${hyped ? "text-[#FF7A18] hover:text-[#FF8C35]" : "text-white hover:text-[#FF7A18]"}`}
+                className={`group flex h-9 w-9 items-center justify-center transition sm:h-10 sm:w-10 ${hyped ? "text-[#FF7A18] hover:text-[#FF8C35]" : "text-white hover:text-[#FF7A18]"}`}
                 >
                   <HeaderFireIcon active={hyped} />
                 </button>
@@ -2471,7 +2499,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 type="button"
                 aria-label="Encaminhar"
                 onClick={() => setShareOpen(true)}
-                className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
+                className="group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
               >
                 <HeaderForwardIcon />
               </button>
@@ -2484,7 +2512,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 type="button"
                 aria-label="Gerenciar membros"
                 onClick={() => setManageMembersOpen(true)}
-                className="group relative flex h-10 w-10 items-center justify-center text-white/60 transition hover:text-white"
+                className="group relative hidden h-10 w-10 items-center justify-center text-white/60 transition hover:text-white md:flex"
               >
                 <HeaderMembersIcon />
                 {reportNotifCount > 0 && (
@@ -2497,7 +2525,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 type="button"
                 aria-label="Excluir cloud"
                 onClick={() => setDeleteConfirmOpen(true)}
-                className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-red-500"
+                className="group hidden h-10 w-10 items-center justify-center text-white transition hover:text-red-500 md:flex"
               >
                 <AnimatedTrashIcon s={24} />
               </button>
@@ -2513,7 +2541,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 event.stopPropagation();
                 setActionMenuOpen((current) => !current);
               }}
-              className="group flex h-10 w-10 items-center justify-center text-white transition hover:text-white"
+              className="group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
             >
               <HeaderDotsIcon />
             </button>
@@ -2537,6 +2565,20 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   </span>
                   Informações da Cloud
                 </button>
+                {isCloudAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setManageMembersOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white md:hidden"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center text-white/60"><HeaderMembersIcon /></span>
+                    Gerenciar membros
+                    {reportNotifCount > 0 && <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{reportNotifCount > 9 ? "9+" : reportNotifCount}</span>}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -2574,6 +2616,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     Sair da Cloud
                   </button>
                 )}
+                {isCloudAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setDeleteConfirmOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 transition hover:bg-white/5 hover:text-red-200 md:hidden"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center text-red-300"><AnimatedTrashIcon s={19} /></span>
+                    Excluir Cloud
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2599,7 +2654,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         );
       })()}
 
-      <div className="flex-1 overflow-y-auto scrollbar-purple px-8 py-6">
+      <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-4 sm:px-8 sm:py-6">
         {loadingMessages && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
         ) : messages.length === 0 ? (
@@ -2636,7 +2691,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 return <SystemMessageBubble key={msg.id} msg={msg} />;
               }
 
-              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={setReactionDetailsMessage} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
+              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
             });
           })()
         )}
@@ -2648,8 +2703,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-white/[0.07] bg-[#000000] px-5 py-4">
-        <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
+      <div className="border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
+        <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
           {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
             <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
               <div className="flex-1 text-[14px] text-white" style={{ fontFamily: "Arial, sans-serif" }}>
@@ -2722,7 +2777,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     data-cloud-emoji-toggle="true"
                     onClick={() => setEmojiOpen((current) => !current)}
                     disabled={isAudioBusy}
-                    className="text-white transition hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="text-[#9CA3AF] transition hover:text-[#D1D5DB] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <CloudEmojiIcon />
                   </button>
@@ -2731,7 +2786,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     aria-label="Adicionar imagem"
                     onClick={openImagePicker}
                     disabled={isAudioBusy}
-                    className="text-white transition hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="text-[#9CA3AF] transition hover:text-[#D1D5DB] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <PlusIcon s={18} />
                   </button>
@@ -2992,27 +3047,26 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       )}
 
       {reactionDetailsMessage && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setReactionDetailsMessage(null)}>
-          <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#15161C] p-6 shadow-2xl shadow-black/40" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => { setReactionDetailsMessage(null); setReactionDetailsEmoji(null); }}>
+          <div className="flex max-h-[78dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-[#A855F7]/30 bg-[#130a2d] p-5 shadow-2xl shadow-black/50 sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-6" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#C084FC]">Clouds</p>
-                <h3 className="mt-1 text-[18px] font-bold text-white">{reactionDetailsMessage.reactions.length} {reactionDetailsMessage.reactions.length === 1 ? "reação" : "reações"}</h3>
+                <h3 className="text-[18px] font-bold text-white">{reactionDetailsMessage.reactions.length} {reactionDetailsMessage.reactions.length === 1 ? "reação" : "reações"}</h3>
               </div>
-              <button type="button" aria-label="Fechar reações" onClick={() => setReactionDetailsMessage(null)} className="text-xl leading-none text-white/50 transition hover:text-white">×</button>
+              <button type="button" aria-label="Fechar reações" onClick={() => { setReactionDetailsMessage(null); setReactionDetailsEmoji(null); }} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-xl leading-none text-white/50 transition hover:bg-white/10 hover:text-white">×</button>
             </div>
-            <div className="mb-4 flex flex-wrap gap-2 border-b border-white/[0.08] pb-4">
+            <div className="mb-4 flex gap-2 overflow-x-auto border-b border-white/[0.08] pb-4 scrollbar-none">
               {Object.entries(reactionDetailsMessage.reactions.reduce((groups, reaction) => {
                 groups[reaction.emoji] = [...(groups[reaction.emoji] ?? []), reaction];
                 return groups;
               }, {} as Record<string, ReactionPayload[]>)).map(([emoji, reactions]) => (
-                <span key={emoji} className="rounded-full border border-white/[0.1] bg-white/[0.06] px-3 py-1.5 text-[14px] text-white">
+                <button type="button" key={emoji} onClick={() => setReactionDetailsEmoji(emoji)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[14px] transition ${reactionDetailsEmoji === emoji ? "border-[#A855F7]/70 bg-[#9333EA]/25 text-white" : "border-white/[0.1] bg-white/[0.06] text-white/75 hover:bg-white/[0.1]"}`}>
                   {emoji} <span className="ml-1 text-white/60">{reactions.length}</span>
-                </span>
+                </button>
               ))}
             </div>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto scrollbar-purple pr-1">
-              {reactionDetailsMessage.reactions.map((reaction) => {
+              {reactionDetailsMessage.reactions.filter((reaction) => !reactionDetailsEmoji || reaction.emoji === reactionDetailsEmoji).map((reaction) => {
                 const ownReaction = reaction.userId === user?.id;
                 return (
                   <button
@@ -3022,15 +3076,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     onClick={() => {
                       if (ownReaction) {
                         setReactionDetailsMessage(null);
+                        setReactionDetailsEmoji(null);
                         void sendReaction(reactionDetailsMessage.id, reaction.emoji);
                       }
                     }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition ${ownReaction ? "hover:bg-white/[0.07]" : "cursor-default"}`}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition ${ownReaction ? "bg-[#9333EA]/10 hover:bg-[#9333EA]/20" : "hover:bg-white/[0.06]"}`}
                   >
                     <UserAvatar user={reaction.user} size={40} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-semibold text-white">{ownReaction ? "Você" : reaction.user.displayName}</p>
-                      <p className="truncate text-[12px] text-white/50">{ownReaction ? "Clique para remover" : `@${reaction.user.username}`}</p>
+                      <p className="truncate text-[12px] text-white/50">{ownReaction ? "Toque para remover sua reação" : `@${reaction.user.username}`}</p>
                     </div>
                     <span className="text-[24px]" aria-label={`Reação ${reaction.emoji}`}>{reaction.emoji}</span>
                   </button>
@@ -3047,6 +3102,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             <div className="mb-4 flex items-center justify-between shrink-0">
               <h3 className="text-[18px] font-bold">Gerenciar membros</h3>
               <button type="button" onClick={() => { setManageMembersOpen(false); setReportNotifCount(0); }} className="text-white/50 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div className="relative mb-4 shrink-0">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40">⌕</span>
+              <input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Buscar participante" className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2.5 pl-9 pr-3 text-[13px] text-white outline-none placeholder:text-white/35 focus:border-[#A855F7]/70" />
             </div>
 
             {/* Denúncias */}
@@ -3091,10 +3151,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
             {/* Lista de membros */}
             <div className="space-y-2 overflow-y-auto scrollbar-purple flex-1 pr-1">
-              {(cloud.members ?? []).length === 0 ? (
-                <p className="text-[14px] text-white/55">Nenhum membro adicional carregado para esta cloud.</p>
+              {filteredManagedMembers.length === 0 ? (
+                <p className="text-[14px] text-white/55">Nenhum participante encontrado.</p>
               ) : (
-                (cloud.members ?? []).map((member) => {
+                filteredManagedMembers.map((member) => {
                   const hasReport = cloudReports.some((r) => r.reportedId === member.userId);
                   return (
                     <div key={member.id} className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${hasReport ? "border-red-500/20 bg-red-500/[0.04]" : "border-white/10 bg-white/[0.04]"}`}>
@@ -3105,7 +3165,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                         />
                         <div className="min-w-0">
                           <p className="truncate text-[13px] font-semibold text-white">{member.user.displayName}</p>
-                          <p className="truncate text-[11px] text-white/45">@{member.user.username}</p>
+                          <p className="truncate text-[11px] text-white/45">@{member.user.username}{member.role === "host" ? " · Host" : ""}</p>
                         </div>
                       </div>
                       {member.userId !== user?.id && (

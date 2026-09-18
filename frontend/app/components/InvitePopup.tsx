@@ -55,26 +55,28 @@ function InstagramIcon() {
 export function InvitePopup() {
   const { user, status } = useSessionUser();
   const [visible, setVisible] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState("http://localhost:3000/invite");
+  const [inviteUrl, setInviteUrl] = useState(() => typeof window === "undefined" ? "" : `${window.location.origin}/cloudscommunity`);
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inviteMessage = `Ei! Te convido a fazer parte do Clouds Community ☁️ — me acompanha por lá! Compartilhe suas opiniões e visões no Clouds, seu streaming de conversas. Entre agora: ${inviteUrl}`;
 
   useEffect(() => {
-    if (status !== "authenticated" || !user?.id) return;
+    const previewMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invitePreview") === "1";
+    if (!previewMode && (status !== "authenticated" || !user?.id)) return;
 
-    const userId = user.id;
+    const userId = user?.id ?? "invite-preview";
 
     // Não agendar se não está na hora de mostrar
-    if (!shouldShow(userId)) return;
+    if (!previewMode && !shouldShow(userId)) return;
 
     // Agenda o popup para aparecer após o delay
     timerRef.current = setTimeout(async () => {
       // Re-checar ao disparar (usuário pode ter fechado em outra aba)
-      if (!shouldShow(userId)) return;
+      if (!previewMode && !shouldShow(userId)) return;
 
       try {
+        if (!user?.id) throw new Error("Prévia sem sessão");
         const res = await fetch("/api/users/send-invite", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -88,15 +90,14 @@ export function InvitePopup() {
       } catch { /* silent */ }
 
       setVisible(true);
-    }, POPUP_DELAY_MS);
+    }, previewMode ? 0 : POPUP_DELAY_MS);
 
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, user?.id]);
 
   const dismiss = () => {
-    if (!user?.id) return;
-    markShown(user.id);
+    if (user?.id) markShown(user.id);
     setVisible(false);
   };
 
@@ -114,13 +115,32 @@ export function InvitePopup() {
 
     if (platform === "whatsapp") {
       window.open(
-        `https://web.whatsapp.com/send?text=${encodeURIComponent(inviteMessage)}`,
+        `https://wa.me/?text=${encodeURIComponent(inviteMessage)}`,
         "_blank",
         "noopener,noreferrer"
       );
     } else {
       window.open("https://www.instagram.com/direct/inbox/", "_blank", "noopener,noreferrer");
     }
+  };
+
+  const copyInviteLink = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopiedPlatform("link");
+      setTimeout(() => setCopiedPlatform(null), 2500);
+      if (user?.id) markShown(user.id);
+    } catch { /* silent */ }
+  };
+
+  const shareNatively = async () => {
+    if (!inviteUrl || !navigator.share) return;
+    try {
+      await navigator.share({ title: "Clouds Community", text: inviteMessage, url: inviteUrl });
+      if (user?.id) markShown(user.id);
+      setVisible(false);
+    } catch { /* user cancelled */ }
   };
 
   if (!visible) return null;
@@ -159,6 +179,11 @@ export function InvitePopup() {
 
       {/* Sharing options */}
       <div className="bg-[#0E0A1F] px-4 py-4 space-y-3">
+        {typeof navigator !== "undefined" && "share" in navigator && (
+          <button type="button" onClick={() => void shareNatively()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-[14px] font-bold text-white transition hover:bg-[#6D28D9]">
+            Compartilhar convite
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void handleShare("whatsapp")}
@@ -176,6 +201,10 @@ export function InvitePopup() {
           <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-40">
             <path d="M5 12h14M12 5l7 7-7 7"/>
           </svg>
+        </button>
+
+        <button type="button" onClick={() => void copyInviteLink()} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.12] px-4 py-3 text-[13px] font-semibold text-white/75 transition hover:bg-white/[0.06]">
+          {copiedPlatform === "link" ? "Link copiado" : "Copiar meu link de convite"}
         </button>
 
         <button

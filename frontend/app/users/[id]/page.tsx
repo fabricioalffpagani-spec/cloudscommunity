@@ -28,6 +28,7 @@ type PublicUserProfile = {
   location: string | null;
   website: string | null;
   isPrivate: boolean;
+  showHypesCount: boolean;
   createdAt: string;
   updatedAt: string;
   followersCount: number;
@@ -36,6 +37,8 @@ type PublicUserProfile = {
   hypesCount: number;
   isFollowing: boolean;
   isFollowRequested?: boolean;
+  isBlockedByMe: boolean;
+  isBlockedByUser: boolean;
   isSelf: boolean;
   profileUrl: string;
   activeClouds: Array<{
@@ -298,7 +301,7 @@ export default function UserProfilePage() {
   }, [profile]);
 
   const toggleFollow = async () => {
-    if (!profile || profile.isSelf || mutating) {
+    if (!profile || profile.isSelf || profile.isBlockedByMe || profile.isBlockedByUser || mutating) {
       return;
     }
 
@@ -365,6 +368,29 @@ export default function UserProfilePage() {
   const openFollowingModal = () => {
     setFollowingModalOpen(true);
     loadFollowing();
+  };
+
+  const toggleBlock = async () => {
+    if (!profile || profile.isSelf || mutating) return;
+    setMutating(true);
+    try {
+      const response = await fetch(`/api/users/${encodeURIComponent(profile.username)}/block`, {
+        method: profile.isBlockedByMe ? "DELETE" : "POST",
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: string } | null;
+      if (!response.ok || !payload?.ok) throw new Error(payload?.message ?? "Não foi possível atualizar o bloqueio.");
+      setProfile((current) => current ? {
+        ...current,
+        isBlockedByMe: !current.isBlockedByMe,
+        isFollowing: current.isBlockedByMe ? current.isFollowing : false,
+        isFollowRequested: current.isBlockedByMe ? current.isFollowRequested : false,
+        activeClouds: current.isBlockedByMe ? current.activeClouds : [],
+      } : current);
+    } catch (blockError) {
+      setError(blockError instanceof Error ? blockError.message : "Não foi possível atualizar o bloqueio.");
+    } finally {
+      setMutating(false);
+    }
   };
 
   const openHypesModal = async () => {
@@ -515,9 +541,9 @@ export default function UserProfilePage() {
         <ForwardToContactModal title="Encaminhar perfil" preview={`Perfil de ${displayName}`} url={profileUrl} label={JSON.stringify({ type: "profile_share", name: displayName, avatarUrl: profile.avatarUrl })} contacts={contacts} loading={loadingContacts} onClose={() => setForwardOpen(false)} />
       )}
 
-      <div className="mx-auto max-w-[680px] px-5 pb-32">
+      <div className="mx-auto max-w-[680px] px-6 pb-32 sm:px-5">
         <div className="mt-10 flex flex-col items-center text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#7C3AED] text-[32px] font-bold text-white ring-4 ring-white/10">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
             {profile.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
@@ -530,14 +556,13 @@ export default function UserProfilePage() {
           <p className="text-[13px] text-white/40">{handle}</p>
           {bio && <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>}
 
-          <div className="mt-5 flex items-center gap-6">
+          <div className="mt-5 flex max-w-full items-center gap-3 sm:gap-6">
             <FieldStat value={followers} label="Followers" description="Pessoas que seguem este perfil." onClick={openFollowersModal} />
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={following} label="Following" description="Perfis que esta pessoa segue." onClick={openFollowingModal} />
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={cloudsCount} label="Clouds" description="Clouds publicadas por este perfil." />
-            <div className="h-8 w-px bg-white/10" />
-            <FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." onClick={openHypesModal} />
+            {profile.showHypesCount && <><div className="h-8 w-px bg-white/10" /><FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." onClick={openHypesModal} /></>}
           </div>
 
           <div className="mt-3 flex items-center gap-3 text-[13px] text-white/30">
@@ -570,7 +595,7 @@ export default function UserProfilePage() {
                   {profile.isFollowing && <CheckIcon />}
                   {mutating ? "..." : profile.isFollowing ? "Following" : profile.isFollowRequested ? "Solicitado" : "Follow"}
                 </button>
-                {(!profile.isPrivate || profile.isFollowing) && (
+                {!profile.isBlockedByMe && !profile.isBlockedByUser && (!profile.isPrivate || profile.isFollowing) && (
                   <Link
                     href={`/messages?id=${encodeURIComponent(profile.id)}`}
                     className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-white/10"
@@ -579,6 +604,14 @@ export default function UserProfilePage() {
                     Mensagem
                   </Link>
                 )}
+                <button
+                  type="button"
+                  onClick={toggleBlock}
+                  disabled={mutating || profile.isBlockedByUser}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 py-2.5 text-[14px] font-semibold text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear" : "Bloquear"}
+                </button>
               </>
             )}
           </div>

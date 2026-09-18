@@ -147,6 +147,7 @@ export class CloudController {
   async removeMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
     const result = await this.cloudService.removeMember(extractSessionToken(req), id, userId);
     const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    await this.cloudMessagesGateway.broadcastMemberBanned(id, userId, []);
     return { ...result, membersCount };
   }
 

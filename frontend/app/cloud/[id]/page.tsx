@@ -23,7 +23,7 @@ export default async function CloudPage({ params, searchParams }: CloudPageProps
         duration={duration}
         createdAt={createdAt}
         visibility={visibility}
-        joinOnEntry={sp.join === '1'}
+        joinOnEntry={sp.join !== '0'}
       />
     </div>
   );

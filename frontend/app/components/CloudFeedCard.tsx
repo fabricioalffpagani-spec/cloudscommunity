@@ -145,7 +145,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
         </span>
       </div>
 
-      <h2 className="mt-4 text-[20px] font-semibold leading-snug text-white">{cloud.title}</h2>
+      <h2 className="mt-4 break-all text-[20px] font-semibold leading-snug text-white">{cloud.title}</h2>
 
       {cloud.description && (
         <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-white/60">

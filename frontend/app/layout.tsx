@@ -4,6 +4,7 @@ import { SessionUserProvider } from "./components/session-user";
 import { ScrollbarStyles } from "./components/ScrollbarStyles";
 import { AccessibilityProvider } from "./components/AccessibilityProvider";
 import { InvitePopupLoader } from "./components/InvitePopupLoader";
+import { MobileNavigationTutorial } from "./components/MobileNavigationTutorial";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -39,6 +40,7 @@ export default function RootLayout({
             <ScrollbarStyles />
             {children}
             <InvitePopupLoader />
+            <MobileNavigationTutorial />
           </AccessibilityProvider>
         </SessionUserProvider>
       </body>

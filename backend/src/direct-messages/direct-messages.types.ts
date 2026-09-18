@@ -54,6 +54,8 @@ export type DirectConversationPayload = {
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
+  blockedByPeer: boolean;
+  blockedByMe: boolean;
   participant: DirectConversationParticipantPayload;
 };
 

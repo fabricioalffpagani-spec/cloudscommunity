@@ -372,7 +372,7 @@ export class AuthService {
     };
   }
 
-  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
+  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean; showHypesCount?: boolean }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
     if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
 
     const displayName = input.displayName === undefined ? undefined : normalizeName(input.displayName);
@@ -391,7 +391,7 @@ export class AuthService {
 
     const updated = await this.prisma.user.update({
       where: { id: current.user.id },
-      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate } } },
+      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate, showHypesCount: input.showHypesCount } } },
       include: { profile: true },
     });
     return { ok: true, user: await this.mapUserWithStats(updated), session: this.mapSession(current.session) };
@@ -692,6 +692,7 @@ export class AuthService {
       location: profile.location,
       website: profile.website,
       isPrivate: profile.isPrivate,
+      showHypesCount: profile.showHypesCount,
       status: user.status,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),

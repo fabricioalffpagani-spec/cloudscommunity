@@ -18,6 +18,8 @@ import { HeaderBrand } from "./components/HeaderBrand";
 import { FlameIcon } from "./components/FlameIcon";
 import { NotificationsBell } from "./components/NotificationsPanel";
 import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
+import { MessagesNavLink } from "./components/MessagesNavLink";
+import { MobileAppNav } from "./components/MobileAppChrome";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -1218,11 +1220,13 @@ export function CreateCloudModal({
               autoFocus
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={e => setTitle(e.target.value.slice(0, 30))}
               onKeyDown={e => e.key === "Enter" && !isPrivateVisibility && handlePublish()}
               placeholder="Título da sua Cloud..."
+              maxLength={30}
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
+            <div className="mt-2 flex justify-end text-[11px] text-white/35">{title.length}/30</div>
           </div>
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Descrição (opcional)</label>
@@ -2276,7 +2280,7 @@ function TopicFeedStage({
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_285px] lg:items-center">
                     <div className="min-w-0">
-                      <h3 className="text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[31px]">
+                      <h3 className="break-all text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[31px]">
                         {cloud.title}
                       </h3>
                       {expanded ? (
@@ -2441,6 +2445,84 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
   );
 }
 
+function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cloud[]; onEnter: (cloud: Cloud) => void; onCreate: () => void; onOpenInfo: (cloud: Cloud) => void }) {
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const gestureHandled = useRef(false);
+
+  if (clouds.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/empty-clouds-available.png" alt="Sem Clouds ativas" className="h-auto w-full max-w-[280px] object-contain" draggable={false} />
+        <p className="mt-2 text-lg font-semibold text-white/85">Sem Clouds ativas agora</p>
+        <button type="button" onClick={onCreate} className="mt-6 rounded-full bg-[#9333EA] px-7 py-3 font-semibold text-white">Criar uma Cloud</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain">
+      {clouds.map((cloud) => {
+        const remaining = getTopicCountdown(cloud);
+        const profile = getTopicProfile(cloud, 0);
+        return (
+          <article key={cloud.id} className="relative flex min-h-full snap-start flex-col bg-[radial-gradient(ellipse_at_50%_47%,rgba(54,23,147,.78)_0%,rgba(24,9,73,.66)_30%,transparent_63%),linear-gradient(180deg,#04030b_0%,#0a041f_100%)] px-6 pb-3 pt-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {profile.avatar ? <img src={profile.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-base font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                <div className="min-w-0"><p className="truncate text-[18px] font-bold leading-none">{profile.name}</p><p className="mt-1 truncate text-[13px] text-white/65">@{profile.handle}</p></div>
+              </div>
+              <div className="flex -space-x-2">
+                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt="" className="h-8 w-8 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[10px] font-bold">{participant.name.slice(0, 1)}</span>)}
+                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length > 7 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[10px] font-bold text-white">+{(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length - 7}</span>}
+              </div>
+            </div>
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                gestureHandled.current = false;
+                touchStart.current = { x: event.clientX, y: event.clientY };
+              }}
+              onPointerUp={(event) => {
+                const start = touchStart.current;
+                touchStart.current = null;
+                if (!start) return;
+                const deltaX = event.clientX - start.x;
+                const deltaY = event.clientY - start.y;
+                if (deltaX < -48 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                  gestureHandled.current = true;
+                  onEnter(cloud);
+                  return;
+                }
+                if (Math.abs(deltaX) < 12 && Math.abs(deltaY) < 12) {
+                  gestureHandled.current = true;
+                  onOpenInfo(cloud);
+                }
+              }}
+              onPointerCancel={() => { touchStart.current = null; }}
+              onClick={() => {
+                if (gestureHandled.current) {
+                  gestureHandled.current = false;
+                  return;
+                }
+                onOpenInfo(cloud);
+              }}
+              className="mx-auto my-auto block max-w-[340px] touch-pan-y select-none text-center"
+              style={{ touchAction: "pan-y" }}
+              aria-label={`Detalhes da Cloud ${cloud.title}. Deslize para a esquerda para entrar.`}
+            >
+              <span className="block break-words font-display text-[52px] font-bold leading-[1.13] tracking-[-.045em] text-white">{cloud.title}</span>
+            </button>
+            <div className="flex items-center justify-end border-t border-white/[.08] pt-2">
+              <span className="inline-flex items-center gap-1.5 text-[19px] font-bold tabular-nums"><span className="text-[#9D22FF]">◷</span>{formatCountdown(remaining)}</span>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function PageContent() {
@@ -2448,6 +2530,7 @@ function PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
+  const mobilePreview = searchParams.get("mobilePreview") === "1";
 
   const [clouds, setClouds] = useState<Cloud[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -2467,6 +2550,12 @@ function PageContent() {
 
   // Slide animation: "left" = next, "right" = prev, null = settled
   const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get("create") !== "1") return;
+    setModal("create");
+    router.replace("/");
+  }, [router, searchParams]);
 
   // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
   // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
@@ -2716,7 +2805,7 @@ function PageContent() {
 
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden text-white"
+    <div className={`flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white ${mobilePreview ? "mx-auto max-w-[430px] border-x border-white/[.08] shadow-[0_0_80px_rgba(115,45,255,.35)]" : ""}`}
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
 
       {/* ── Modals ── */}
@@ -2727,7 +2816,7 @@ function PageContent() {
       {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
 
       {/* ── Header — fundo gradiente escuro ── */}
-      <header className="flex-none bg-transparent">
+      <header className={mobilePreview ? "hidden" : "hidden flex-none bg-transparent md:block"}>
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
 
           {/* Logo */}
@@ -2768,8 +2857,33 @@ function PageContent() {
         </div>
       </header>
 
+      {/* Cabeçalho compacto do feed móvel */}
+      <header className={`${mobilePreview ? "grid" : "grid md:hidden"} h-[76px] flex-none grid-cols-[48px_minmax(0,1fr)_48px] items-center px-5 pt-[max(.5rem,env(safe-area-inset-top))]`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo_clouds.png" alt="Clouds" className="h-[42px] w-[42px] object-contain" />
+        <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-4 whitespace-nowrap">
+          <Link href={mobilePreview ? "/following?mobilePreview=1" : "/following"} className="text-[16px] font-semibold text-white/60">Seguindo</Link>
+          <span className="relative text-[18px] font-bold text-[#B44DFF]">For You<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
+          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[16px] font-semibold text-white/60">Meet</Link>
+        </nav>
+        <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
+      </header>
+
+      <main className={`${mobilePreview ? "flex" : "flex md:hidden"} flex-1 overflow-hidden`}>
+        <MobileCloudFeed
+          clouds={activeClouds}
+          onEnter={enterConversation}
+          onCreate={() => setModal("create")}
+          onOpenInfo={(cloud) => {
+            const index = activeClouds.findIndex((item) => item.id === cloud.id);
+            if (index >= 0) setCurrentCloudIndex(index);
+            setCloudInfoOpen(true);
+          }}
+        />
+      </main>
+
       {/* ── Main: card + arrows ── */}
-      <main className="relative flex flex-1 items-center justify-center overflow-hidden px-4 gap-4">
+      <main className={mobilePreview ? "hidden" : "relative hidden flex-1 items-center justify-center gap-4 overflow-hidden px-4 md:flex"}>
         {homeStage === "topics" ? (
           <>
             {trendingQuery ? (
@@ -3018,13 +3132,15 @@ function PageContent() {
         />
       )}
 
-      <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
+      <nav className={mobilePreview ? "hidden" : "hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block"} aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><MessageIcon s={32} /><span className="text-[13px] font-semibold">Messages</span></Link>
+          <MessagesNavLink />
           <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
+
+      <MobileAppNav active="home" force={mobilePreview} />
 
     </div>
   );

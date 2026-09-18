@@ -181,17 +181,22 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       return { ok: true as const, data: { conversationId, isTyping: false } };
     }
 
-    const conversation = await this.directMessagesService.getConversationById(userId, conversationId);
-    const payload: ConversationTypingPayload = {
-      conversationId,
-      userId,
-      isTyping: true,
-    };
+    try {
+      const conversation = await this.directMessagesService.requireConversationContactAccess(userId, conversationId);
+      const peerId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+      const payload: ConversationTypingPayload = {
+        conversationId,
+        userId,
+        isTyping: true,
+      };
 
-    this.emitTypingToPeer(conversation.participant.id, payload);
-    this.scheduleTypingTimeout(socket, conversationId);
+      this.emitTypingToPeer(peerId, payload);
+      this.scheduleTypingTimeout(socket, conversationId);
 
-    return { ok: true as const, data: payload };
+      return { ok: true as const, data: payload };
+    } catch (error) {
+      return { ok: false as const, message: error instanceof Error ? error.message : 'Não foi possível atualizar a digitação.' };
+    }
   }
 
   @SubscribeMessage('message:send')

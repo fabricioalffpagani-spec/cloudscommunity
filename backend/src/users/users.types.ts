@@ -9,6 +9,7 @@ export type PublicUserProfilePayload = {
   location: string | null;
   website: string | null;
   isPrivate: boolean;
+  showHypesCount: boolean;
   createdAt: string;
   updatedAt: string;
   followersCount: number;
@@ -17,6 +18,8 @@ export type PublicUserProfilePayload = {
   hypesCount: number;
   isFollowing: boolean;
   isFollowRequested: boolean;
+  isBlockedByMe: boolean;
+  isBlockedByUser: boolean;
   isSelf: boolean;
   profileUrl: string;
   activeCloud?: {

@@ -8,8 +8,10 @@ import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { CloudCarousel, type CarouselCloud } from "../components/CloudCarousel";
 import { SearchModal } from "../components/SearchModal";
 import { NotificationsBell } from "../components/NotificationsPanel";
+import { MessagesNavLink } from "../components/MessagesNavLink";
 import { CreateCloudModal } from "../page";
 import { subscribeToCloudPresence } from "../lib/cloud-presence";
+import { MobileAppNav, MobileFeedHeader } from "../components/MobileAppChrome";
 
 type CloudAuthor = {
   id: string;
@@ -145,7 +147,7 @@ export default function FollowingPage() {
         />
       )}
 
-      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
+      <header className="fixed inset-x-0 top-0 z-50 hidden bg-transparent md:block">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
@@ -179,7 +181,9 @@ export default function FollowingPage() {
         </div>
       </header>
 
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-16 pt-[100px] pb-[72px]">
+      <MobileFeedHeader active="following" onSearch={() => setSearchOpen(true)} />
+
+      <main className="relative flex min-h-[calc(100dvh-104px-92px)] items-center justify-center overflow-hidden px-3 pb-[92px] pt-3 md:min-h-screen md:px-16 md:pb-[72px] md:pt-[100px]">
         {loading ? (
           <div className="flex w-full max-w-[1100px] items-center justify-center rounded-[28px] border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
             Carregando clouds de quem você segue...
@@ -191,7 +195,7 @@ export default function FollowingPage() {
         )}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 hidden border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#A855F7]">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -200,18 +204,14 @@ export default function FollowingPage() {
             </svg>
             <span className="text-[13px] font-semibold">Home</span>
           </Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
-            <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span className="text-[13px] font-semibold">Messages</span>
-          </Link>
+          <MessagesNavLink />
           <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
             <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </Link>
         </div>
       </nav>
+      <MobileAppNav active="home" />
     </div>
   );
 }

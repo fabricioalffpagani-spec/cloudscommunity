@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { CloudMode, CloudStatus, CloudVisibility, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
+import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
@@ -99,10 +100,14 @@ function normalizeDuration(value: string): (typeof ALLOWED_DURATIONS)[number] | 
 
 @Injectable()
 export class CloudService {
+  private readonly resend: Resend | null;
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
-  ) {}
+  ) {
+    const apiKey = process.env.RESEND_API_KEY?.trim();
+    this.resend = apiKey ? new Resend(apiKey) : null;
+  }
 
   async findById(token: string | null, cloudId: string): Promise<{ ok: true; cloud: CloudPayload }> {
     const session = await this.requireSession(token);
@@ -157,6 +162,11 @@ export class CloudService {
         deletedAt: null,
         status: CloudStatus.active,
         visibility: CloudVisibility.public,
+        OR: [
+          { authorId: current.user.id },
+          { author: { profile: { is: { isPrivate: false } } } },
+          { author: { followers: { some: { followerId: current.user.id } } } },
+        ],
         // Clouds públicas aparecem para todos, independente do tipo de perfil do criador
         // Clouds privadas só aparecem para o criador ou para quem foi convidado
       },
@@ -165,7 +175,13 @@ export class CloudService {
 
     // Score = hypeCount * 3 + recency decay (hours since creation, capped at 72h)
     const now = Date.now();
+    const blocks = await this.prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    const blockedUserIds = new Set(blocks.map((block) => block.blockerId === current.user.id ? block.blockedId : block.blockerId));
     const scored = clouds
+      .filter((cloud) => !blockedUserIds.has(cloud.authorId))
       .map((cloud) => {
         const ageHours = (now - cloud.createdAt.getTime()) / 3_600_000;
         const recency = Math.max(0, 1 - ageHours / 72);
@@ -261,10 +277,10 @@ export class CloudService {
       });
     }
 
-    if (title.length > 180) {
+    if (title.length > 30) {
       throw new BadRequestException({
         message: 'Título muito longo.',
-        fieldErrors: { title: 'O título deve ter até 180 caracteres.' },
+        fieldErrors: { title: 'O título deve ter até 30 caracteres.' },
       });
     }
 
@@ -347,6 +363,7 @@ export class CloudService {
 
     const cloud = await this.prisma.cloud.findFirst({
       where: { id: cloudId, deletedAt: null },
+      include: { author: { include: { profile: true } } },
     });
 
     if (!cloud) {
@@ -468,12 +485,18 @@ export class CloudService {
       throw new NotFoundException({ message: 'Membro não encontrado na cloud.' });
     }
 
-    await this.prisma.cloudMember.update({
-      where: { id: member.id },
-      data: {
-        leftAt: new Date(),
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.cloudMember.update({
+        where: { id: member.id },
+        data: { leftAt: new Date() },
+      }),
+      // Remoção pelo host é definitiva para esta Cloud, evitando novo acesso.
+      this.prisma.cloudBan.upsert({
+        where: { cloudId_userId: { cloudId, userId } },
+        create: { cloudId, userId, bannedById: current.user.id },
+        update: { bannedById: current.user.id, createdAt: new Date() },
+      }),
+    ]);
 
     return { ok: true };
   }
@@ -487,6 +510,7 @@ export class CloudService {
 
     const cloud = await this.prisma.cloud.findFirst({
       where: { id: cloudId, deletedAt: null },
+      include: { author: { include: { profile: true } } },
     });
 
     if (!cloud) {
@@ -582,6 +606,7 @@ export class CloudService {
 
     const cloud = await this.prisma.cloud.findFirst({
       where: { id: cloudId, deletedAt: null },
+      include: { author: { include: { profile: true } } },
     });
 
     if (!cloud) {
@@ -619,6 +644,20 @@ export class CloudService {
         reasons,
       },
     });
+
+    if (!messageId && this.resend) {
+      const creatorName = cloud.author.profile?.displayName ?? cloud.author.profile?.username ?? 'Usuário';
+      const creatorUsername = cloud.author.profile?.username ?? '';
+      const reporterName = current.user.profile?.displayName ?? current.user.profile?.username ?? 'Usuário';
+      const reporterUsername = current.user.profile?.username ?? '';
+      const text = `DENÚNCIA DE CLOUD\n\nCloud: ${cloud.title}\nID da Cloud: ${cloud.id}\nCriador: ${creatorName} (@${creatorUsername})\nID do criador: ${cloud.authorId}\nDenunciante: ${reporterName} (@${reporterUsername})\nMotivos: ${reasons.join(', ')}`;
+      const { error } = await this.resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+        to: ['cloudscomunidade@gmail.com'], subject: 'DENÚNCIA DE CLOUD', text,
+        html: `<h1>DENÚNCIA DE CLOUD</h1><p><strong>Cloud:</strong> ${this.escapeReportHtml(cloud.title)}<br/><strong>ID da Cloud:</strong> ${cloud.id}</p><p><strong>Criador:</strong> ${this.escapeReportHtml(creatorName)} (@${this.escapeReportHtml(creatorUsername)})<br/><strong>ID do criador:</strong> ${cloud.authorId}</p><p><strong>Denunciante:</strong> ${this.escapeReportHtml(reporterName)} (@${this.escapeReportHtml(reporterUsername)})</p><p><strong>Motivos:</strong> ${reasons.map((reason) => this.escapeReportHtml(reason)).join(', ')}</p>`,
+      });
+      if (error) throw new BadRequestException({ message: 'Não foi possível encaminhar a denúncia à plataforma. Tente novamente.' });
+    }
 
     const reportedUser = await this.prisma.user.findUnique({
       where: { id: reportedId },
@@ -1193,16 +1232,21 @@ export class CloudService {
     cloud: { id: string; authorId: string; author?: { profile: { isPrivate: boolean } | null } },
     viewerId: string,
   ) {
-    if (cloud.authorId === viewerId || !cloud.author?.profile?.isPrivate) {
-      return;
-    }
-
-    const member = await this.prisma.cloudMember.findFirst({
-      where: { cloudId: cloud.id, userId: viewerId, leftAt: null },
-      select: { id: true },
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: cloud.authorId },
+          { blockerId: cloud.authorId, blockedId: viewerId },
+        ],
+      },
+      select: { blockerId: true },
     });
 
-    if (member) {
+    if (block) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.authorId === viewerId || !cloud.author?.profile?.isPrivate) {
       return;
     }
 
@@ -1507,6 +1551,10 @@ export class CloudService {
     return this.createSystemMessage(cloudId, `${displayName} entrou na cloud`, userId);
   }
 
+  private escapeReportHtml(value: string): string {
+    return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
+  }
+
   async createLeaveNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
     const userWithProfile = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
     const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
@@ -1537,14 +1585,14 @@ export class CloudService {
       where: { cloudId, userId: current.user.id },
     });
 
-    let entered = false;
+    let membershipChanged = false;
     if (existing) {
       if (existing.leftAt !== null) {
         await this.prisma.cloudMember.update({
           where: { id: existing.id },
           data: { leftAt: null, joinedAt: new Date() },
         });
-        entered = true;
+        membershipChanged = true;
       }
     } else {
       await this.prisma.cloudMember.create({
@@ -1554,10 +1602,23 @@ export class CloudService {
           role: 'member',
         },
       });
-      entered = true;
+      membershipChanged = true;
     }
 
-    return { ok: true, userId: current.user.id, entered };
+    // The author and invited people are pre-created as members. Their first
+    // actual visit must still receive an entry message, while reloads must not.
+    const hasEntryNotification = await this.prisma.cloudMessage.findFirst({
+      where: {
+        cloudId,
+        userId: current.user.id,
+        type: 'system',
+        content: { endsWith: ' entrou na cloud' },
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    return { ok: true, userId: current.user.id, entered: membershipChanged || !hasEntryNotification };
   }
 
   async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string }> {
@@ -1682,6 +1743,21 @@ export class CloudService {
       hypesCount: cloud._count.hypes,
       // CloudMember is membership/history data, not real-time presence.
       membersCount: 0,
+      members: cloud.members
+        .filter((member) => member.user.profile)
+        .map((member) => ({
+          id: member.id,
+          userId: member.userId,
+          role: member.role,
+          user: {
+            id: member.user.id,
+            profile: {
+              displayName: member.user.profile!.displayName,
+              username: member.user.profile!.username,
+              avatarUrl: member.user.profile!.avatarUrl,
+            },
+          },
+        })),
       participantProfiles: cloud.members
         .filter((member) => member.userId !== cloud.authorId && member.user.profile)
         .slice(0, 7)
@@ -1694,5 +1770,17 @@ export class CloudService {
       href: `/cloud/${cloud.id}`,
       status: cloud.status === CloudStatus.active ? 'active' : 'inactive',
     };
+  }
+
+  async getActiveMembers(cloudId: string) {
+    const members = await this.prisma.cloudMember.findMany({
+      where: { cloudId, leftAt: null },
+      include: { user: { include: { profile: true } } },
+      orderBy: { joinedAt: 'asc' },
+    });
+    return members.filter((member) => member.user.profile).map((member) => ({
+      id: member.id, userId: member.userId, role: member.role,
+      user: { id: member.user.id, profile: { displayName: member.user.profile!.displayName, username: member.user.profile!.username, avatarUrl: member.user.profile!.avatarUrl } },
+    }));
   }
 }

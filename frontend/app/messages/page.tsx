@@ -20,6 +20,8 @@ type BackendConversation = {
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
   unreadCount: number;
+  blockedByPeer?: boolean;
+  blockedByMe?: boolean;
   participant: {
     id: string;
     username: string;
@@ -68,6 +70,8 @@ type Conversation = {
   unread: number;
   lastMessageAt: string | null;
   isPending?: boolean;
+  blockedByPeer?: boolean;
+  blockedByMe?: boolean;
 };
 
 type PublicUserProfile = {
@@ -368,6 +372,8 @@ function buildConversation(payload: BackendConversation): Conversation {
     lastMessage: parseLinkPreview(payload.lastMessagePreview) || "",
     time: timeLabel(payload.lastMessageAt),
     unread: payload.unreadCount,
+    blockedByPeer: payload.blockedByPeer ?? false,
+    blockedByMe: payload.blockedByMe ?? false,
     lastMessageAt: payload.lastMessageAt,
   };
 }
@@ -552,6 +558,12 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
     }
 
     try {
+      if (!window.isSecureContext) {
+        throw new Error("Para gravar áudio no celular, abra o Clouds pelo link HTTPS.");
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Seu navegador não oferece suporte à gravação de áudio.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
@@ -611,13 +623,13 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
         secondsRef.current += 1;
         setSeconds(secondsRef.current);
       }, 1000);
-    } catch {
+    } catch (error) {
       stopTimers();
       cleanupStream();
       setState("idle");
       setSeconds(0);
       secondsRef.current = 0;
-      throw new Error("Permissão de microfone negada.");
+      throw error instanceof Error ? error : new Error("Permissão de microfone negada.");
     }
   }, [cleanupStream, onStop, state, startSampler, stopTimers]);
 
@@ -738,7 +750,7 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
   return (
     <div className={`flex flex-col ${isForwarded ? "gap-0" : "gap-1"}`}>
       {isForwarded && (
-        <div className={`w-[248px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
+        <div className={`w-[272px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
           ↗ Encaminhada
         </div>
       )}
@@ -939,7 +951,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
 function MessageReceipt({ msg }: { msg: Msg }) {
   const isRead = Boolean(msg.readAt);
   const isDelivered = !msg.pending;
-  const iconClass = isRead ? "text-[#60A5FA]" : "text-white";
+  const iconClass = isRead ? "text-[#7C3AED]" : "text-white";
 
   if (!isDelivered) {
     return (
@@ -1660,6 +1672,7 @@ function MessagesPageContent() {
       : null
     : null;
   const isAudioBusy = audioUploading || imageUploading || linkUploading || audioRecorder.state !== "idle";
+  const isConversationBlocked = Boolean(activeConversation?.blockedByPeer || activeConversation?.blockedByMe);
 
   const loadConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -1712,14 +1725,9 @@ function MessagesPageContent() {
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
       if (response.status === 404) {
-        if (activeConversationIdRef.current === conversationId) {
-          const remainingConversations = conversationsRef.current.filter((conversation) => conversation.id !== conversationId);
-          const nextConversationId = remainingConversations[0]?.id ?? null;
-          activeConversationIdRef.current = nextConversationId;
-          conversationsRef.current = remainingConversations;
-          setConversations(remainingConversations);
-          setActiveConversationId(nextConversationId);
-        }
+        // A 404 pode acontecer momentaneamente enquanto o backend reinicia. Não remova
+        // a conversa da lista local, ou o usuário perde acesso às demais conversas.
+        setError("Não foi possível carregar as mensagens agora. Tente novamente em instantes.");
         return;
       }
       const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
@@ -2108,7 +2116,7 @@ function MessagesPageContent() {
   const sendText = useCallback(() => {
     const socket = socketRef.current;
     const content = draft.trim();
-    if (!activeConversationId || !content) return;
+    if (!activeConversationId || !content || isConversationBlocked) return;
 
     if (typingTimerRef.current) {
       clearTimeout(typingTimerRef.current);
@@ -2175,10 +2183,10 @@ function MessagesPageContent() {
       }
     })();
     setReplyingTo(null);
-  }, [activeConversationId, draft, replyingTo, user]);
+  }, [activeConversationId, draft, isConversationBlocked, replyingTo, user]);
 
   const startAudioRecording = useCallback(() => {
-    if (!activeConversationId || isAudioBusy) {
+    if (!activeConversationId || isAudioBusy || isConversationBlocked) {
       return;
     }
 
@@ -2186,7 +2194,7 @@ function MessagesPageContent() {
     void audioRecorder.start().catch((recordingError) => {
       setError(recordingError instanceof Error ? recordingError.message : "Não foi possível iniciar a gravação.");
     });
-  }, [activeConversationId, audioRecorder, isAudioBusy]);
+  }, [activeConversationId, audioRecorder, isAudioBusy, isConversationBlocked]);
 
   const stopAudioRecording = useCallback(() => {
     audioRecorder.stop();
@@ -2206,7 +2214,7 @@ function MessagesPageContent() {
   if (status === "loading") {
     return (
       <div
-        className="flex h-screen items-center justify-center text-white"
+        className="flex h-[100dvh] min-h-screen items-center justify-center text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
       >
         Carregando sua sessão...
@@ -2216,17 +2224,17 @@ function MessagesPageContent() {
 
   return (
     <div
-      className="flex h-screen flex-col overflow-hidden text-white"
+      className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
       <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-[400px] shrink-0 flex-col border-r border-white/[0.07] bg-transparent">
-          <div className="flex flex-col gap-3 bg-transparent px-6 py-5">
+        <aside className={`${activeConversationId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-white/[0.07] bg-transparent md:w-[400px]`}>
+          <div className="flex flex-col gap-3 bg-transparent px-4 py-5 sm:px-6">
             <div className="flex items-center gap-4">
               <Link href="/" aria-label="Voltar para home" className="flex h-9 w-9 items-center justify-center rounded-full text-white hover:text-white/80 transition">
                 <ArrowLeftIcon s={20} />
               </Link>
-              <span className="text-[20px] font-bold text-white">Messages</span>
+              <span className="text-[23px] font-bold text-white">Messages</span>
             </div>
             <div className="flex items-center gap-3 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-2.5">
               <SearchIcon s={20} className="text-white" />
@@ -2255,7 +2263,7 @@ function MessagesPageContent() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-purple px-2 py-1">
+          <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-2 sm:px-2 sm:py-1">
             {loadingFollowed && followedUsers.length === 0 ? (
               <div className="px-3 py-6 text-center text-[14px] text-white/40">Carregando contatos seguidos...</div>
             ) : (
@@ -2328,10 +2336,11 @@ function MessagesPageContent() {
 
         </aside>
 
-        <main className="relative flex flex-1 flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-6 py-4">
+        <main className={`${activeConversationId ? "flex" : "hidden md:flex"} relative flex-1 flex-col overflow-hidden`}>
+          <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-3 py-3 sm:px-6 sm:py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
+                <button type="button" aria-label="Voltar às conversas" onClick={() => setActiveConversationId(null)} className="flex h-9 w-9 items-center justify-center text-white/70 md:hidden"><ArrowLeftIcon s={20} /></button>
                   <Link href={`/users/${activeConversation.peerId}`} className="relative">
                   <UserAvatar user={{ id: activeConversation.peerId, username: activeConversation.peerUsername, displayName: activeConversation.name, avatarUrl: activeConversation.avatarUrl }} size={44} />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[activeConversation.status]}`} />
@@ -2389,6 +2398,8 @@ function MessagesPageContent() {
           </div>
 
           {error && <div className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
+          {activeConversation?.blockedByPeer && <div className="border-b border-white/[0.07] bg-[#251545] px-5 py-3 text-center text-[13px] text-[#D8B4FE]">Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.</div>}
+          {activeConversation?.blockedByMe && <div className="border-b border-white/[0.07] bg-[#251545] px-5 py-3 text-center text-[13px] text-[#D8B4FE]">Você bloqueou esta pessoa. Desbloqueie-a para voltar a enviar mensagens.</div>}
 
           {messageSearch.trim() && (
             <div className="border-b border-white/[0.07] bg-[#1a0e3d] px-5 py-2 text-[12px] text-white/60">
@@ -2575,7 +2586,7 @@ function MessagesPageContent() {
                         <button
                           type="button"
                           onClick={sendSharedLink}
-                          disabled={!activeConversationId || linkUploading || isAudioBusy}
+                          disabled={!activeConversationId || linkUploading || isAudioBusy || isConversationBlocked}
                           className="rounded-full bg-cyan-500 px-4 py-2 text-[12px] font-semibold text-[#04111F] transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {linkUploading ? "Enviando..." : "Enviar link"}
@@ -2589,17 +2600,22 @@ function MessagesPageContent() {
                       aria-label="Abrir emojis"
                       data-emoji-toggle="true"
                       onClick={() => setEmojiOpen((current) => !current)}
-                      disabled={!activeConversationId || isAudioBusy}
-                      className="text-[20px] leading-none transition opacity-90 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!activeConversationId || isAudioBusy || isConversationBlocked}
+                      className="text-[#9CA3AF] leading-none transition hover:text-[#D1D5DB] disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      😀
+                      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                        <path d="M9 9h.01" />
+                        <path d="M15 9h.01" />
+                      </svg>
                     </button>
                     <button
                       type="button"
                       aria-label="Adicionar imagem"
                       onClick={triggerImagePicker}
-                      disabled={!activeConversationId || isAudioBusy}
-                      className="text-white transition hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!activeConversationId || isAudioBusy || isConversationBlocked}
+                      className="text-[#9CA3AF] transition hover:text-[#D1D5DB] disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <PlusIcon s={18} />
                     </button>
@@ -2608,12 +2624,12 @@ function MessagesPageContent() {
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder={activeConversationId ? "Mensagem..." : "Selecione uma conversa para começar"}
-                      disabled={!activeConversationId || isAudioBusy}
+                      placeholder={isConversationBlocked ? "Envio de mensagens indisponível" : activeConversationId ? "Mensagem..." : "Selecione uma conversa para começar"}
+                      disabled={!activeConversationId || isAudioBusy || isConversationBlocked}
                       className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     {draft.trim() ? (
-                      <button type="button" aria-label="Enviar" onClick={sendText} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
+                      <button type="button" aria-label="Enviar" onClick={sendText} disabled={isConversationBlocked} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40">
                         <SendIcon s={18} />
                       </button>
                     ) : (
@@ -2621,7 +2637,7 @@ function MessagesPageContent() {
                         type="button"
                         aria-label="Gravar áudio"
                         onClick={startAudioRecording}
-                        disabled={!activeConversationId || isAudioBusy}
+                        disabled={!activeConversationId || isAudioBusy || isConversationBlocked}
                         className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1a0e3d] text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <MicIcon s={18} />

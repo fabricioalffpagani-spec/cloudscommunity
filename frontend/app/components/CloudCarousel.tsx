@@ -140,11 +140,11 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
   }
 
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden px-16">
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden px-3 md:px-16">
       <button
         onClick={() => navigateCloud(-1)}
         aria-label="Cloud anterior"
-        className="absolute left-[calc(50%-630px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+        className="absolute left-[calc(50%-630px)] z-10 hidden h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20] md:flex"
       >
         <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="m15 18-6-6 6-6" />
@@ -162,25 +162,25 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           opacity: slideAnim ? 0.15 : 1,
         }}
       >
-        <div className="flex items-center justify-between px-10 pt-8 pb-5">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-3 px-4 pb-4 pt-5 md:px-10 md:pb-5 md:pt-8">
+          <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <div className="relative">
               {currentCloud?.authorPhoto ? (
                 <img
                   src={currentCloud.authorPhoto}
                   alt={currentCloud.authorName ?? "Autor"}
-                  className="h-16 w-16 rounded-full object-cover ring-2 ring-white/10"
+                  className="h-11 w-11 rounded-full object-cover ring-2 ring-white/10 md:h-16 md:w-16"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#7C3AED] text-xl font-bold text-white ring-2 ring-white/10">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#7C3AED] text-base font-bold text-white ring-2 ring-white/10 md:h-16 md:w-16 md:text-xl">
                   {(currentCloud?.authorName ?? "A").slice(0, 1).toUpperCase()}
                 </span>
               )}
               <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
             </div>
             <div>
-              <p className="flex items-center gap-2 text-[18px] font-semibold text-white">
+              <p className="flex truncate items-center gap-2 text-[15px] font-semibold text-white md:text-[18px]">
                 {currentCloud?.authorName ?? "Autor"}
                 <svg viewBox="0 0 24 24" width={18} height={18} fill="#A855F7" aria-hidden="true">
                   <circle cx="12" cy="12" r="10" />
@@ -191,8 +191,8 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-            <div className="flex -space-x-3" aria-label="Participantes da Cloud">
+          <div className="flex shrink-0 items-center gap-2 md:gap-5">
+            <div className="hidden -space-x-3 sm:flex" aria-label="Participantes da Cloud">
               {currentCloud?.participantProfiles?.slice(0, 7).map((participant) => participant.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" />
@@ -200,16 +200,16 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
                 <span key={participant.id} title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>
               ))}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", background: "rgba(255,255,255,0.07)", borderRadius: "9999px", padding: "10px 20px" }}>
+            <div className="flex items-center gap-1.5 rounded-full bg-white/[.07] px-3 py-2 md:gap-2.5 md:px-5 md:py-2.5">
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 6v6l4 2" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
-              <span style={{ fontSize: "21px", fontWeight: 700, color: "#ffffff", fontVariantNumeric: "tabular-nums" }}>
+              <span className="text-[14px] font-bold tabular-nums text-white md:text-[19px]">
                 {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "16px", fontWeight: 600, color: "#ffffff" }}>
+            <div className="hidden items-center gap-2 text-[16px] font-semibold text-white sm:flex">
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
@@ -228,21 +228,21 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           </div>
         </div>
 
-        <div className="px-12 py-12 text-center">
+        <div className="px-6 py-12 text-center md:px-12">
           <h2
-            className="text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[72px]"
+            className="max-w-full whitespace-normal break-words text-[34px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[58px] md:text-[72px]"
             style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
           >
             {currentCloud?.title ?? "Nenhuma Cloud ativa no momento"}
           </h2>
         </div>
 
-        <div className="flex justify-center px-12 pb-12">
+        <div className="flex justify-center px-6 pb-8 md:px-12 md:pb-12">
           <button
             type="button"
             onClick={() => currentCloud && enterConversation(currentCloud)}
             disabled={!currentCloud}
-            className="rounded-full border border-[#A855F7]/70 bg-transparent px-24 py-5 text-[18px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full border border-[#A855F7]/70 bg-transparent px-12 py-3 text-[16px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:cursor-not-allowed disabled:opacity-40 md:px-24 md:py-5 md:text-[18px]"
           >
             Entrar na Cloud
           </button>
@@ -271,7 +271,7 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
       <button
         onClick={() => navigateCloud(1)}
         aria-label="Próxima Cloud"
-        className="absolute left-[calc(50%+580px)] z-10 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+        className="absolute left-[calc(50%+580px)] z-10 hidden h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20] md:flex"
       >
         <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="m9 18 6-6-6-6" />

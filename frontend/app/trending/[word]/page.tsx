@@ -9,6 +9,8 @@ import { SessionUserAvatar, useSessionUser } from "../../components/session-user
 import { useRouter } from "next/navigation";
 import { SearchModal } from "../../components/SearchModal";
 import { NotificationsBell } from "../../components/NotificationsPanel";
+import { MessagesNavLink } from "../../components/MessagesNavLink";
+import { MobileAppNav, MobileFeedHeader } from "../../components/MobileAppChrome";
 
 type CloudApiPayload = {
   id: string;
@@ -229,12 +231,12 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
 
   return (
     <div
-      className="flex h-screen flex-col overflow-hidden text-white"
+      className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {/* ── Header ── */}
-      <header className="flex-none bg-transparent">
+      <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
             <HeaderBrand />
@@ -258,10 +260,11 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           </div>
         </div>
       </header>
+      <MobileFeedHeader active="for-you" onSearch={() => setSearchOpen(true)} />
 
       {/* ── Main ── */}
       <main className="flex flex-1 flex-col overflow-y-auto">
-        <div className="mx-auto w-full max-w-[860px] px-6 py-8">
+        <div className="mx-auto w-full max-w-[860px] px-4 py-6 md:px-6 md:py-8">
 
           {/* Back + título */}
           <div className="mb-8">
@@ -272,7 +275,7 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
               <BackArrowIcon />
               Voltar ao Trending
             </Link>
-            <h1 className="mt-3 text-[36px] font-extrabold tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}>
+            <h1 className="mt-3 text-[30px] font-extrabold tracking-tight text-white md:text-[36px]" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}>
               #{word.charAt(0).toUpperCase() + word.slice(1)}
             </h1>
             <p className="mt-1 text-[15px] text-white/50">
@@ -310,13 +313,14 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           )}
         </div>
       </main>
-      <nav className="flex-none border-t border-white/[0.07] bg-[#060410]" aria-label="Navegação inferior">
+      <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M9 21V12h6v9"/></svg><span className="text-[13px] font-semibold">Home</span></Link>
-          <Link href="/messages" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span className="text-[13px] font-semibold">Messages</span></Link>
+          <MessagesNavLink />
           <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
+      <MobileAppNav active="trending" />
     </div>
   );
 }

@@ -78,6 +78,12 @@ export type CloudPayload = {
   hypesCount: number;
   hyped?: boolean;
   membersCount: number;
+  members: Array<{
+    id: string;
+    userId: string;
+    role: string;
+    user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } };
+  }>;
   participantProfiles: Array<{
     id: string;
     name: string;

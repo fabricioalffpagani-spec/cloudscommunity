@@ -206,3 +206,28 @@ textarea {
     scroll-behavior: smooth;
   }
 }
+
+@media (max-width: 767px) {
+  html,
+  body {
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  .mobile-cloud-feed {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobile-cloud-feed::-webkit-scrollbar {
+    display: none;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

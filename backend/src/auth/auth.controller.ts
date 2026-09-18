@@ -134,6 +134,7 @@ export class AuthController {
       location: typeof body.location === 'string' ? body.location : undefined,
       avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : undefined,
       isPrivate: typeof body.isPrivate === 'boolean' ? body.isPrivate : undefined,
+      showHypesCount: typeof body.showHypesCount === 'boolean' ? body.showHypesCount : undefined,
     });
   }
 

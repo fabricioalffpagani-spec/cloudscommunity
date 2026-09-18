@@ -12,6 +12,7 @@ import {
   getSessionUserDisplayName,
   useSessionUser,
 } from "../components/session-user";
+import { MobileAppNav } from "../components/MobileAppChrome";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -301,6 +302,7 @@ function PanelPerfil() {
 function PanelPrivacidade() {
   const { user, refresh } = useSessionUser();
   const [isPrivate, setIsPrivate] = useState(false);
+  const [showHypesCount, setShowHypesCount] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -308,6 +310,7 @@ function PanelPrivacidade() {
   useEffect(() => {
     if (!user) return;
     setIsPrivate(user.isPrivate ?? false);
+    setShowHypesCount(user.showHypesCount ?? true);
   }, [user]);
 
   const handlePrivateToggle = async (value: boolean) => {
@@ -330,6 +333,16 @@ function PanelPrivacidade() {
     }
   };
 
+  const handleHypesVisibilityToggle = async (value: boolean) => {
+    setShowHypesCount(value); setSaving(true); setError("");
+    try {
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ showHypesCount: value }) });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Erro ao salvar.");
+      await refresh(); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err) { setShowHypesCount(!value); setError(err instanceof Error ? err.message : "Erro ao salvar."); }
+    finally { setSaving(false); }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-[20px] font-bold text-white">Privacidade</h2>
@@ -341,6 +354,10 @@ function PanelPrivacidade() {
             <p className="text-[12px] text-white/60">Apenas seus seguidores podem ver seu perfil e Clouds privadas.</p>
           </div>
           <Toggle checked={isPrivate} onChange={handlePrivateToggle} />
+        </div>
+        <div className="flex items-center justify-between gap-4 py-3">
+          <div><p className="text-[14px] font-medium text-white">Mostrar total de hypes</p><p className="text-[12px] text-white/60">Você continuará vendo o total; visitantes não verão o número nem a lista de hypes.</p></div>
+          <Toggle checked={showHypesCount} onChange={handleHypesVisibilityToggle} />
         </div>
         {saving && <p className="text-[12px] text-white/60 pt-2">Salvando...</p>}
         {saved && <p className="text-[12px] text-[#A855F7] pt-2">Salvo!</p>}
@@ -588,7 +605,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 function Header({ onSearchOpen }: { onSearchOpen: () => void }) {
   const { user } = useSessionUser();
   return (
-    <header className="relative z-50 shrink-0 bg-transparent">
+    <header className="relative z-50 hidden shrink-0 bg-transparent md:block">
       <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-3 pb-4 lg:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-4">
           <HeaderBrand />
@@ -615,10 +632,15 @@ export default function SettingsPage() {
     seguranca:<PanelSeguranca/>, dados:<PanelDados/>, sobre:<PanelSobre/>
   };
   return (
-    <div className="flex h-screen flex-col overflow-hidden text-white"
+    <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       <Header onSearchOpen={() => setSearchOpen(true)} />
+      <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-white/[0.08] px-5 md:hidden">
+        <Link href="/profile" className="text-[14px] font-semibold text-white/65">‹ Perfil</Link>
+        <h1 className="text-[17px] font-bold text-white">Configurações</h1>
+        <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="text-white"><SearchIcon s={23}/></button>
+      </header>
       <div className="mx-auto flex w-full max-w-[1280px] flex-1 gap-8 overflow-y-auto px-5 pb-24 pt-4 lg:px-8">
         {/* Sidebar */}
         <aside className="hidden w-[220px] shrink-0 md:flex flex-col gap-1 pt-8">
@@ -640,6 +662,7 @@ export default function SettingsPage() {
         </div>
         <main className="flex-1 min-w-0 pt-8">{panels[active]}</main>
       </div>
+      <MobileAppNav active="profile" />
     </div>
   );
 }

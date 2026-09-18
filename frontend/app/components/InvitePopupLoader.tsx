@@ -10,9 +10,10 @@ const InvitePopup = dynamic(
 
 export function InvitePopupLoader() {
   const pathname = usePathname();
+  const previewMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invitePreview") === "1";
 
   // Só no feed (homepage) — não em cloudchats, DMs, settings, etc.
-  if (pathname !== "/") return null;
+  if (pathname !== "/" && !previewMode) return null;
 
   return <InvitePopup />;
 }

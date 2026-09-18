@@ -79,6 +79,7 @@ export class DirectMessagesService {
         message: 'Você não pode abrir uma conversa com você mesmo.',
       });
     }
+    await this.assertCanContact(userId, peerUserId);
 
     const [participantOneId, participantTwoId] = [userId, peerUserId].sort();
     const conversationKey = buildConversationKey(participantOneId, participantTwoId);
@@ -122,7 +123,18 @@ export class DirectMessagesService {
       include: this.conversationInclude(),
     });
 
-    return conversations.map((conversation) => this.mapConversation(conversation, userId));
+    const blocks = await this.prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    return conversations.map((conversation) => {
+      const peerId = this.getPeerId(conversation, userId);
+      const block = blocks.find((entry) => entry.blockerId === peerId || entry.blockedId === peerId);
+      return this.mapConversation(conversation, userId, undefined, {
+        blockedByPeer: block?.blockerId === peerId,
+        blockedByMe: block?.blockerId === userId,
+      });
+    });
   }
 
   async listConversationPeerIds(userId: string): Promise<string[]> {
@@ -194,6 +206,7 @@ export class DirectMessagesService {
     }
 
     const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
 
@@ -260,24 +273,6 @@ export class DirectMessagesService {
         },
       });
 
-      // Get sender profile for notification
-      const senderProfile = await tx.user.findUnique({
-        where: { id: userId },
-        include: { profile: true },
-      });
-
-      // Create notification for the recipient
-      await tx.notification.create({
-        data: {
-          userId: recipientId,
-          type: 'direct_message',
-          entityType: 'direct_message',
-          entityId: created.id,
-          title: 'Nova mensagem',
-          body: `${senderProfile?.profile?.displayName || 'Alguém'} te enviou uma mensagem`,
-        },
-      });
-
       return created;
     });
 
@@ -308,6 +303,7 @@ export class DirectMessagesService {
     }
 
     const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
 
@@ -387,24 +383,6 @@ export class DirectMessagesService {
         },
       });
 
-      // Get sender profile for notification
-      const senderProfile = await tx.user.findUnique({
-        where: { id: userId },
-        include: { profile: true },
-      });
-
-      // Create notification for the recipient
-      await tx.notification.create({
-        data: {
-          userId: recipientId,
-          type: 'direct_message',
-          entityType: 'direct_message',
-          entityId: created.id,
-          title: 'Nova mensagem',
-          body: `${senderProfile?.profile?.displayName || 'Alguém'} te enviou uma mensagem de áudio`,
-        },
-      });
-
       return created;
     });
 
@@ -435,6 +413,7 @@ export class DirectMessagesService {
     }
 
     const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
 
@@ -546,6 +525,7 @@ export class DirectMessagesService {
     }
 
     const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
 
@@ -664,6 +644,12 @@ export class DirectMessagesService {
     return this.mapConversation(conversation, userId);
   }
 
+  async requireConversationContactAccess(userId: string, conversationId: string): Promise<ConversationWithRelations> {
+    const conversation = await this.requireConversationAccess(conversationId, userId);
+    await this.assertCanContact(userId, this.getPeerId(conversation, userId));
+    return conversation;
+  }
+
   private async requireConversationAccess(conversationId: string, userId: string): Promise<ConversationWithRelations> {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
@@ -681,6 +667,23 @@ export class DirectMessagesService {
     }
 
     return conversation;
+  }
+
+  private getPeerId(conversation: ConversationWithRelations, userId: string) {
+    return conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+  }
+
+  private async assertCanContact(userId: string, peerUserId: string) {
+    const block = await this.prisma.userBlock.findFirst({
+      where: { OR: [{ blockerId: userId, blockedId: peerUserId }, { blockerId: peerUserId, blockedId: userId }] },
+      select: { blockerId: true },
+    });
+    if (!block) return;
+    throw new ForbiddenException({
+      message: block.blockerId === peerUserId
+        ? 'Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.'
+        : 'Você bloqueou esta pessoa. Desbloqueie-a para enviar mensagens.',
+    });
   }
 
   private async requireUserSummary(userId: string): Promise<UserSummary> {
@@ -725,7 +728,7 @@ export class DirectMessagesService {
     messageId: string,
     content: string,
   ): Promise<DirectMessagePayload> {
-    await this.requireConversationAccess(conversationId, userId);
+    await this.requireConversationContactAccess(userId, conversationId);
 
     const message = await this.prisma.directMessage.findFirst({
       where: { id: messageId, conversationId, deletedAt: null },
@@ -755,7 +758,7 @@ export class DirectMessagesService {
     conversationId: string,
     messageId: string,
   ): Promise<void> {
-    await this.requireConversationAccess(conversationId, userId);
+    await this.requireConversationContactAccess(userId, conversationId);
 
     const message = await this.prisma.directMessage.findFirst({
       where: { id: messageId, conversationId, deletedAt: null },
@@ -782,6 +785,7 @@ export class DirectMessagesService {
     conversation: ConversationWithRelations,
     viewerId: string,
     peerOverride?: UserSummary,
+    blockState: { blockedByPeer: boolean; blockedByMe: boolean } = { blockedByPeer: false, blockedByMe: false },
   ): DirectConversationPayload {
     const participantOne = conversation.participantOne;
     const participantTwo = conversation.participantTwo;
@@ -809,6 +813,8 @@ export class DirectMessagesService {
       unreadCount,
       createdAt: conversation.createdAt.toISOString(),
       updatedAt: conversation.updatedAt.toISOString(),
+      blockedByPeer: blockState.blockedByPeer,
+      blockedByMe: blockState.blockedByMe,
       participant: {
         id: participant.id,
         username: peerProfile.username,

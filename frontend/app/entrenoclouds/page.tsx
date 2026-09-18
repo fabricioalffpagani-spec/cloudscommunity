@@ -4,7 +4,8 @@ import { useEffect } from "react";
 
 export default function EnterCloudsPage() {
   useEffect(() => {
-    window.location.replace("/signup");
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    window.location.replace(ref ? `/signup?ref=${encodeURIComponent(ref)}` : "/signup");
   }, []);
 
   return null;

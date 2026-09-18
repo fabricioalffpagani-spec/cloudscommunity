@@ -27,7 +27,8 @@ function VerifyEmailContent() {
         await refresh();
         setState("success");
         setMessage("Email validado com sucesso. Sua conta está pronta!");
-        window.setTimeout(() => router.replace("/"), 1200);
+        sessionStorage.setItem("clouds:show-mobile-tutorial", "1");
+        window.setTimeout(() => router.replace("/?welcome=1"), 1200);
       })
       .catch((error: unknown) => {
         setState("error");

@@ -179,14 +179,14 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
 
   return (
     <div
-      className={`flex items-center gap-3 px-3 py-2.5 ${pillRadius} ${containerClass}`}
-      style={{ minWidth: 248, maxWidth: 320 }}
+      className={`flex items-start gap-3 px-3 pb-2.5 pt-4 ${pillRadius} ${containerClass}`}
+      style={{ minWidth: 272, maxWidth: 344 }}
     >
       <button
         type="button"
         onClick={toggle}
         aria-label={playing ? "Pausar áudio" : "Reproduzir áudio"}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${playButtonClass}`}
+        className={`-mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${playButtonClass}`}
       >
         {playing ? (
           <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden="true">
@@ -202,7 +202,7 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
 
       <div className="flex flex-1 flex-col justify-center gap-1">
         <div
-          className="flex items-center gap-[2.5px] cursor-pointer select-none"
+          className="flex items-center justify-between cursor-pointer select-none"
           style={{ height: 28 }}
           onClick={handleSeek}
           role="progressbar"
@@ -237,8 +237,7 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
             );
           })}
         </div>
-        <div className="flex items-center justify-between text-[11px] leading-none">
-          <span className={isOwn ? "text-white/70" : "text-white/45"}>Áudio</span>
+        <div className="flex items-center justify-end text-[11px] leading-none">
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${isOwn ? "bg-white/15 text-white/90" : "bg-white/10 text-white/70"}`}>
             {displayTime}
           </span>

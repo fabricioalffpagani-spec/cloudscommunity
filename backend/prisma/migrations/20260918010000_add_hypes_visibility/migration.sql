@@ -1,0 +1,1 @@
+ALTER TABLE "Profile" ADD COLUMN "showHypesCount" BOOLEAN NOT NULL DEFAULT true;

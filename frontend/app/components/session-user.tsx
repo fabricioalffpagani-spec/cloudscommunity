@@ -16,6 +16,7 @@ export type SessionUser = {
   location: string | null;
   website: string | null;
   isPrivate: boolean;
+  showHypesCount: boolean;
   status: string;
   createdAt: string;
   updatedAt: string;

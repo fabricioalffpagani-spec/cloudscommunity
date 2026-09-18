@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
@@ -130,6 +130,8 @@ export class UsersService {
       });
     }
 
+    await this.ensureUsersCanInteract(current.user.id, target.id);
+
     const existingFollow = await this.prisma.follow.findUnique({
       where: {
         followerId_followingId: {
@@ -176,6 +178,25 @@ export class UsersService {
       ok: true,
       user: await this.mapPublicProfile(target, current.user.id),
     };
+  }
+
+  async block(token: string | null, identifierInput: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+    if (target.id === current.user.id) throw new BadRequestException({ message: 'Você não pode bloquear a si mesmo.' });
+    await this.prisma.$transaction([
+      this.prisma.userBlock.upsert({ where: { blockerId_blockedId: { blockerId: current.user.id, blockedId: target.id } }, update: {}, create: { blockerId: current.user.id, blockedId: target.id } }),
+      this.prisma.follow.deleteMany({ where: { OR: [{ followerId: current.user.id, followingId: target.id }, { followerId: target.id, followingId: current.user.id }] } }),
+      this.prisma.followRequest.deleteMany({ where: { OR: [{ requesterId: current.user.id, targetId: target.id }, { requesterId: target.id, targetId: current.user.id }] } }),
+    ]);
+    return { ok: true };
+  }
+
+  async unblock(token: string | null, identifierInput: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifierInput);
+    await this.prisma.userBlock.deleteMany({ where: { blockerId: current.user.id, blockedId: target.id } });
+    return { ok: true };
   }
 
   async removeFollower(token: string | null, identifierInput: string, followerId: string): Promise<{ ok: true }> {
@@ -321,8 +342,11 @@ export class UsersService {
   }
 
   async getReceivedHypes(token: string | null, identifierInput: string): Promise<ReceivedHypesResponse> {
-    await this.requireSession(token);
+    const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
+    if (!target.profile?.showHypesCount && target.id !== current.user.id) {
+      throw new ForbiddenException({ message: 'Este perfil ocultou os hypes recebidos.' });
+    }
     const hypes = await this.prisma.cloudHype.findMany({
       where: { cloud: { authorId: target.id, deletedAt: null } },
       include: { user: { include: { profile: true } } },
@@ -720,11 +744,22 @@ export class UsersService {
       throw new Error('User profile is required.');
     }
 
-    const [followersCount, followingCount, cloudsCount, hypesCount] = await Promise.all([
+    const [followersCount, followingCount, cloudsCount, hypesCount, blockRelation] = await Promise.all([
       this.prisma.follow.count({ where: { followingId: user.id } }),
       this.prisma.follow.count({ where: { followerId: user.id } }),
       this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } }),
       this.prisma.cloudHype.count({ where: { cloud: { authorId: user.id, deletedAt: null } } }),
+      currentUserId && currentUserId !== user.id
+        ? this.prisma.userBlock.findFirst({
+            where: {
+              OR: [
+                { blockerId: currentUserId, blockedId: user.id },
+                { blockerId: user.id, blockedId: currentUserId },
+              ],
+            },
+            select: { blockerId: true },
+          })
+        : null,
     ]);
     const isFollowing = currentUserId
       ? Boolean(
@@ -752,7 +787,9 @@ export class UsersService {
       : false;
 
     const isSelf = currentUserId === user.id;
-    const canViewContent = isSelf || isFollowing || !profile.isPrivate;
+    const isBlockedByMe = blockRelation?.blockerId === currentUserId;
+    const isBlockedByUser = blockRelation?.blockerId === user.id;
+    const canViewContent = !blockRelation && (isSelf || isFollowing || !profile.isPrivate);
 
     const activeClouds = canViewContent ? await this.prisma.cloud.findMany({
       where: {
@@ -799,14 +836,33 @@ export class UsersService {
       followersCount,
       followingCount,
       cloudsCount,
-      hypesCount,
+      hypesCount: isSelf || profile.showHypesCount ? hypesCount : 0,
+      showHypesCount: isSelf || profile.showHypesCount,
       isFollowing,
       isFollowRequested,
+      isBlockedByMe,
+      isBlockedByUser,
       isSelf,
       profileUrl: `/users/${profile.username}`,
       activeCloud: serializedActiveClouds[0] ?? null,
       activeClouds: serializedActiveClouds,
     };
+  }
+
+  private async ensureUsersCanInteract(firstUserId: string, secondUserId: string) {
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: firstUserId, blockedId: secondUserId },
+          { blockerId: secondUserId, blockedId: firstUserId },
+        ],
+      },
+      select: { blockerId: true },
+    });
+
+    if (block) {
+      throw new ForbiddenException({ message: 'Não é possível interagir com este perfil.' });
+    }
   }
 
   async getInviteContacts(token: string | null): Promise<{
@@ -831,7 +887,7 @@ export class UsersService {
     await this.requireSession(token);
 
     const appUrl = process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
-    const inviteUrl = `${appUrl}/entrenoclouds`;
+    const inviteUrl = `${appUrl}/cloudscommunity`;
 
     return { ok: true, inviteUrl };
   }

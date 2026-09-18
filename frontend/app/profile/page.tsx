@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import {
@@ -11,6 +11,7 @@ import {
   getSessionUserHandle,
   useSessionUser,
 } from "../components/session-user";
+import { MobileAppNav } from "../components/MobileAppChrome";
 
 function PencilIcon() {
   return (
@@ -230,7 +231,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
   const isPublic = cloud.visibility === "public";
 
   return (
-    <article className="cloud-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6">
+    <article className="cloud-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
@@ -282,7 +283,11 @@ export default function ProfilePage() {
     name: "",
     bio: "",
     location: "",
+    avatarUrl: "" as string | null,
   });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const [followingModalOpen, setFollowingModalOpen] = useState(false);
   const [followersList, setFollowersList] = useState<FollowListUser[]>([]);
@@ -303,6 +308,7 @@ export default function ProfilePage() {
       name: user.displayName || user.name || "",
       bio: user.bio ?? "",
       location: user.location ?? "",
+      avatarUrl: user.avatarUrl,
     });
   }, [user]);
 
@@ -422,6 +428,61 @@ export default function ProfilePage() {
     } finally { setActioningUserId(null); }
   };
 
+  const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setProfileError("Escolha uma imagem para a foto de perfil.");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setProfileError("A foto deve ter no máximo 3 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const imageData = reader.result;
+      if (typeof imageData === "string") {
+        setDraft((current) => ({ ...current, avatarUrl: imageData }));
+        setProfileError(null);
+      }
+    };
+    reader.onerror = () => setProfileError("Não foi possível ler essa imagem.");
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    setProfileError(null);
+
+    try {
+      const response = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: draft.name.trim(),
+          bio: draft.bio.trim(),
+          location: draft.location.trim(),
+          avatarUrl: draft.avatarUrl,
+        }),
+      });
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) {
+        setProfileError(payload?.message || "Não foi possível salvar o perfil.");
+        return;
+      }
+      await refresh();
+      setEditing(false);
+    } catch {
+      setProfileError("Não foi possível salvar o perfil. Tente novamente.");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const displayName = getSessionUserDisplayName(user);
   const handle = getSessionUserHandle(user);
   const initials = displayName.charAt(0).toUpperCase();
@@ -470,10 +531,10 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[680px] px-5 pb-32">
+      <div className="mx-auto max-w-[680px] px-6 pb-32 sm:px-5 md:pb-32">
         <div className="mt-10 flex flex-col items-center text-center">
           <div className="relative">
-            <SessionUserAvatar user={user} size={96} className="ring-4 ring-[#9333EA]/40" />
+            <SessionUserAvatar user={user} size={80} className="ring-4 ring-[#9333EA]/40 sm:h-24 sm:w-24" />
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -488,7 +549,7 @@ export default function ProfilePage() {
           <p className="text-[13px] text-white/40">{handle}</p>
           <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>
 
-          <div className="mt-5 flex items-center gap-6 text-center">
+          <div className="mt-5 flex max-w-full items-center gap-3 text-center sm:gap-6">
             <button type="button" onClick={openFollowersModal} className="transition hover:opacity-80">
               <p className="text-[20px] font-bold text-white">{followers}</p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Seguidores</p>
@@ -589,9 +650,23 @@ export default function ProfilePage() {
                 onChange={(value) => setDraft({ ...draft, location: value })}
                 placeholder="Sua região"
               />
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-[13px] text-white/55">
-                Profile photo coming soon. For now, the avatar uses the first letter of your name.
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-lg font-bold text-white">
+                  {draft.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={draft.avatarUrl} alt="Prévia da foto de perfil" className="h-full w-full object-cover" />
+                  ) : (
+                    draft.name.trim().charAt(0).toUpperCase() || "?"
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-white">Foto de perfil</p>
+                  <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 3 MB.</p>
+                </div>
+                <button type="button" onClick={() => photoInputRef.current?.click()} className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</button>
               </div>
+              {profileError && <p className="text-[13px] text-red-300" role="alert">{profileError}</p>}
             </div>
 
             <div className="mt-6 flex gap-3">
@@ -602,15 +677,18 @@ export default function ProfilePage() {
                 Cancel
               </button>
               <button
-                onClick={() => setEditing(false)}
-                className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
+                type="button"
+                onClick={saveProfile}
+                disabled={savingProfile}
+                className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Save
+                {savingProfile ? "Salvando..." : "Save"}
               </button>
             </div>
           </div>
         </div>
       )}
+      <MobileAppNav active="profile" />
     </div>
   );
 }
