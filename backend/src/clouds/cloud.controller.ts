@@ -56,6 +56,29 @@ export class CloudController {
     return { ...result, clouds: await this.withLiveCounts(result.clouds) };
   }
 
+  @Get('read')
+  async read(@Req() req: Request, @Query('scope') scope?: string) {
+    return this.cloudService.listRead(extractSessionToken(req), scope === 'following' ? 'following' : 'for-you');
+  }
+
+  @Get(':id/preview')
+  async preview(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.getPreview(extractSessionToken(req), id);
+  }
+
+  @Get(':id/archive/messages')
+  async archivedMessages(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('take') take?: string,
+    @Query('before') before?: string,
+  ) {
+    return this.cloudService.getArchivedMessages(extractSessionToken(req), id, {
+      take: take ? Number(take) : undefined,
+      before: before || undefined,
+    });
+  }
+
   @Get('following')
   async following(@Req() req: Request) {
     const result = await this.cloudService.listFollowing(extractSessionToken(req));

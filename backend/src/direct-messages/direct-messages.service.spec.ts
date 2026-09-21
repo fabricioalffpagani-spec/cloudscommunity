@@ -3,6 +3,9 @@ import { DirectMessagesService, buildConversationKey, truncatePreview } from './
 
 function createPrismaMock() {
   const prisma: any = {
+    userBlock: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     user: {
       findUnique: jest.fn(),
     },

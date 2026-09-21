@@ -1,0 +1,20 @@
+# Explicit production overlay. Do not load docker-compose.override.yml with it.
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  backend:
+    build:
+      target: production
+    environment:
+      NODE_ENV: production
+    volumes: !reset []
+  frontend:
+    build:
+      dockerfile: Dockerfile.prod
+      args:
+        NEXT_PUBLIC_CLOUDS_SOCKET_URL: ${NEXT_PUBLIC_CLOUDS_SOCKET_URL:-http://localhost:3001}
+    environment:
+      NODE_ENV: production
+      WATCHPACK_POLLING: "false"
+      CHOKIDAR_USEPOLLING: "false"
+    volumes: !reset []
+    command: !reset null

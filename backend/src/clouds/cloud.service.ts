@@ -208,6 +208,110 @@ export class CloudService {
     };
   }
 
+  private async readableArchiveWhere(userId: string): Promise<Prisma.CloudWhereInput> {
+    const blocks = await this.prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    return {
+      deletedAt: null,
+      status: CloudStatus.ended,
+      visibility: CloudVisibility.public,
+      authorId: { notIn: blocks.map((block) => block.blockerId === userId ? block.blockedId : block.blockerId) },
+      bans: { none: { userId } },
+      OR: [
+        { authorId: userId },
+        { author: { profile: { is: { isPrivate: false } } } },
+        { author: { followers: { some: { followerId: userId } } } },
+      ],
+    };
+  }
+
+  async listRead(token: string | null, scope: 'for-you' | 'following' = 'for-you') {
+    const current = await this.requireSession(token);
+    await this.expireDueClouds();
+    const archiveWhere = await this.readableArchiveWhere(current.user.id);
+    let where = archiveWhere;
+
+    if (scope === 'following') {
+      const following = await this.prisma.follow.findMany({
+        where: { followerId: current.user.id },
+        select: { followingId: true },
+      });
+      const followingIds = following.map((entry) => entry.followingId);
+      if (followingIds.length === 0) return { ok: true, clouds: [] };
+      where = { AND: [archiveWhere, { authorId: { in: followingIds } }] };
+    }
+
+    const clouds = await this.prisma.cloud.findMany({
+      where,
+      include: { ...this.cloudInclude(), _count: { select: { hypes: true, members: true, messages: { where: { deletedAt: null, type: { not: 'system' } } } } } },
+      orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+    });
+    return { ok: true, clouds: clouds.map((cloud) => ({ ...this.mapCloud(cloud), endedAt: cloud.endedAt?.toISOString() ?? null, messagesCount: cloud._count.messages })) };
+  }
+
+  async getPreview(token: string | null, cloudId: string) {
+    const current = await this.requireSession(token);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+    await this.expireDueClouds();
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { ...(await this.readableArchiveWhere(current.user.id)), id: cloudId },
+      include: this.cloudInclude(),
+    });
+    if (!cloud) throw new NotFoundException({ message: 'Cloud encerrada não encontrada.' });
+    const messages = await this.prisma.cloudMessage.findMany({
+      where: { cloudId, deletedAt: null, type: { not: 'system' } },
+      select: { id: true, type: true, content: true, mediaUrl: true, createdAt: true, user: { select: { id: true, profile: { select: { displayName: true, username: true, avatarUrl: true } } } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: 10,
+    });
+    return { ok: true, cloud: this.mapCloud(cloud), messages: messages.map(({ user, ...message }) => ({ ...message, sender: { id: user.id, ...user.profile } })) };
+  }
+
+  async getArchivedMessages(
+    token: string | null,
+    cloudId: string,
+    query: ListCloudMessagesQuery = {},
+  ): Promise<{ ok: true; cloud: CloudPayload; messages: CloudMessagePayload[] }> {
+    const current = await this.requireSession(token);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+    await this.expireDueClouds();
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { ...(await this.readableArchiveWhere(current.user.id)), id: cloudId },
+      include: this.cloudInclude(),
+    });
+    if (!cloud) throw new NotFoundException({ message: 'Cloud encerrada não encontrada.' });
+
+    const before = query.before ? new Date(query.before) : null;
+    const messages = await this.prisma.cloudMessage.findMany({
+      where: {
+        cloudId,
+        deletedAt: null,
+        ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}),
+      },
+      include: this.messageInclude(),
+      orderBy: { createdAt: 'desc' },
+      take: this.normalizeTake(query.take),
+    });
+    return {
+      ok: true,
+      cloud: this.mapCloud(cloud),
+      messages: messages.reverse().map((message) => this.mapMessage(message)),
+    };
+  }
+
+  private requireActiveCloud(cloud: { status: CloudStatus; startedAt: Date | null; createdAt: Date; duration: string }) {
+    const end = (cloud.startedAt ?? cloud.createdAt).getTime() + (DURATION_TO_SECONDS[cloud.duration] ?? 1800) * 1000;
+    if (cloud.status !== CloudStatus.active || Date.now() >= end) {
+      throw new BadRequestException({ message: 'Esta cloud está encerrada e disponível apenas para leitura.' });
+    }
+  }
+
   async listFollowing(token: string | null): Promise<{ ok: true; clouds: CloudPayload[] }> {
     const current = await this.requireSession(token);
     await this.expireDueClouds();
@@ -217,7 +321,12 @@ export class CloudService {
       select: { followingId: true },
     });
 
-    const followingIds = following.map((entry) => entry.followingId);
+    const blocks = await this.prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }] },
+      select: { blockerId: true, blockedId: true },
+    });
+    const blockedUserIds = new Set(blocks.map((block) => block.blockerId === current.user.id ? block.blockedId : block.blockerId));
+    const followingIds = following.map((entry) => entry.followingId).filter((id) => !blockedUserIds.has(id));
 
     if (followingIds.length === 0) {
       return {
@@ -232,6 +341,7 @@ export class CloudService {
         status: CloudStatus.active,
         visibility: CloudVisibility.public,
         authorId: { in: followingIds },
+        bans: { none: { userId: current.user.id } },
       },
       include: this.cloudInclude(),
       orderBy: { createdAt: 'desc' },
@@ -251,7 +361,7 @@ export class CloudService {
       where: {
         deletedAt: null,
         authorId: current.user.id,
-        status: CloudStatus.active,
+        status: { in: [CloudStatus.active, CloudStatus.ended] },
       },
       include: this.cloudInclude(),
       orderBy: { createdAt: 'desc' },
@@ -782,6 +892,8 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
+    this.requireActiveCloud(cloud);
+
     if (cloud.authorId !== current.user.id) {
       throw new UnauthorizedException({
         message: 'Você não tem permissão para fixar comentários nesta cloud.',
@@ -837,6 +949,8 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
+    this.requireActiveCloud(cloud);
+
     if (cloud.authorId !== current.user.id) {
       throw new UnauthorizedException({
         message: 'Você não tem permissão para desfixar comentários nesta cloud.',
@@ -871,7 +985,8 @@ export class CloudService {
     body: CreateCloudMessageInput,
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     const messageType = body.type === 'audio' || body.type === 'image' || body.type === 'link' ? body.type : 'text';
@@ -895,7 +1010,8 @@ export class CloudService {
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     if (!file) {
@@ -928,7 +1044,8 @@ export class CloudService {
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     if (!file) {
@@ -956,7 +1073,8 @@ export class CloudService {
 
   async editMessage(token: string | null, cloudId: string, messageId: string, content: string): Promise<{ ok: true; message: { id: string; content: string } }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
@@ -982,7 +1100,8 @@ export class CloudService {
 
   async deleteMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null } });
@@ -1046,7 +1165,8 @@ export class CloudService {
     emoji: string,
   ): Promise<{ ok: true; reaction: CloudMessageReactionPayload; removed: boolean }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
+    this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
@@ -1278,7 +1398,8 @@ export class CloudService {
     cloudId: string,
     input: CreateCloudMessageInput,
   ): Promise<CloudMessagePayload> {
-    await this.requireCloudAccess(cloudId, userId);
+    const cloud = await this.requireCloudAccess(cloudId, userId);
+    this.requireActiveCloud(cloud);
     const replyToMessageId = input.replyToMessageId?.trim() || null;
     const type = input.type === 'audio' || input.type === 'image' || input.type === 'link' ? input.type : 'text';
 
@@ -1572,6 +1693,8 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
+    this.requireActiveCloud(cloud);
+
     // Block banned users
     const ban = await this.prisma.cloudBan.findUnique({
       where: { cloudId_userId: { cloudId, userId: current.user.id } },
@@ -1697,20 +1820,18 @@ export class CloudService {
         status: CloudStatus.active,
         deletedAt: null,
       },
-      select: { id: true, duration: true, startedAt: true },
+      select: { id: true, duration: true, startedAt: true, createdAt: true },
     });
 
     for (const cloud of activeClouds) {
-      if (!cloud.startedAt) continue;
-      
       const durationSeconds = DURATION_TO_SECONDS[cloud.duration] ?? 5 * 60;
-      const endTime = new Date(cloud.startedAt.getTime() + durationSeconds * 1000);
+      const endTime = new Date((cloud.startedAt ?? cloud.createdAt).getTime() + durationSeconds * 1000);
       if (now >= endTime) {
         await this.prisma.cloud.update({
           where: { id: cloud.id },
           data: {
             status: CloudStatus.ended,
-            endedAt: now,
+            endedAt: endTime,
           },
         });
       }
@@ -1732,6 +1853,7 @@ export class CloudService {
       visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
       createdAt: cloud.createdAt.toISOString(),
       updatedAt: cloud.updatedAt.toISOString(),
+      endedAt: cloud.endedAt?.toISOString() ?? null,
       authorId: cloud.authorId,
       author: {
         id: cloud.author.id,
@@ -1768,7 +1890,7 @@ export class CloudService {
           avatarUrl: member.user.profile!.avatarUrl,
         })),
       href: `/cloud/${cloud.id}`,
-      status: cloud.status === CloudStatus.active ? 'active' : 'inactive',
+      status: cloud.status,
     };
   }
 

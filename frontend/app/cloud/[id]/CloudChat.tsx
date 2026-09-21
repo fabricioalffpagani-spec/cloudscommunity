@@ -1000,11 +1000,12 @@ function TypingBubble({ avatars, exiting }: { avatars: Array<{ id: string; name:
       {/* Avatars empilhados */}
       <div className="flex -space-x-2 shrink-0">
         {avatars.slice(0, 3).map((p) => (
-          <UserAvatar
-            key={p.id}
-            user={{ id: p.id, username: p.id, displayName: p.name, avatarUrl: p.avatarUrl }}
-            size={26}
-          />
+          <Link key={p.id} href={`/users/${encodeURIComponent(p.id)}`} aria-label={`Ver perfil de ${p.name}`}>
+            <UserAvatar
+              user={{ id: p.id, username: p.id, displayName: p.name, avatarUrl: p.avatarUrl }}
+              size={26}
+            />
+          </Link>
         ))}
       </div>
       {/* Balão preto com bolinhas */}
@@ -1053,15 +1054,17 @@ function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
     <div className="flex justify-center py-1.5 w-full">
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.05]">
         {msg.senderAvatarUrl && (
-          <UserAvatar
-            user={{
-              id: msg.senderId,
-              username: msg.senderId,
-              displayName: msg.senderName,
-              avatarUrl: msg.senderAvatarUrl,
-            }}
-            size={20}
-          />
+          <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`}>
+            <UserAvatar
+              user={{
+                id: msg.senderId,
+                username: msg.senderId,
+                displayName: msg.senderName,
+                avatarUrl: msg.senderAvatarUrl,
+              }}
+              size={20}
+            />
+          </Link>
         )}
         {!msg.senderAvatarUrl && (
           <div className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-[#7C3AED]">
@@ -1349,17 +1352,17 @@ function CloudMessageBubble({
   return (
     <div className={`group flex items-end gap-2.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
-      <div className="w-9 shrink-0 mb-6">
+      <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
         />
-      </div>
+      </Link>
 
-      <div className={`flex items-end gap-2 ${own ? "flex-row-reverse" : "flex-row"}`} style={{ maxWidth: "74%" }}>
-        <div className={`flex flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
+      <div className={`flex min-w-0 max-w-[calc(100%_-_2.75rem)] items-end gap-2 sm:max-w-[74%] ${own ? "flex-row-reverse" : "flex-row"}`}>
+        <div className={`flex min-w-0 flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
           <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
-            <span className="text-[12px] font-semibold text-white/40">{own ? "Você" : msg.senderName}</span>
+            <Link href={`/users/${encodeURIComponent(msg.senderId)}`} className="text-[12px] font-semibold text-white/40 transition hover:text-white hover:underline">{own ? "Você" : msg.senderName}</Link>
             {isPinned && <span className="flex items-center gap-1 text-[10px] text-[#A855F7]"><CloudPinIcon pinned={true} /> fixada</span>}
           </div>
 
@@ -1375,11 +1378,11 @@ function CloudMessageBubble({
           ) : msg.kind === "image" ? (
             <ImageBubble msg={msg} />
           ) : msg.kind === "link" ? (
-            <div className={`rounded-2xl px-4 py-3 text-[14px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            <div className={`break-words rounded-2xl px-4 py-3 text-[14px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
               {msg.content}
             </div>
           ) : (
-            <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            <div className={`break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
               {msg.content}
               {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
             </div>
@@ -1413,7 +1416,7 @@ function CloudMessageBubble({
         </div>
 
         {/* Action icons aligned to the side of message box */}
-        <div className={`flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 self-center ${own ? "ml-2" : "mr-2"}`}>
+        <div className={`hidden items-center gap-1.5 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 sm:flex ${own ? "ml-2" : "mr-2"}`}>
           {isCloudAuthor && (
             <button
               type="button"

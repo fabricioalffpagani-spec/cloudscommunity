@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { SessionUserProvider } from "./components/session-user";
 import { ScrollbarStyles } from "./components/ScrollbarStyles";
@@ -40,7 +41,7 @@ export default function RootLayout({
             <ScrollbarStyles />
             {children}
             <InvitePopupLoader />
-            <MobileNavigationTutorial />
+            <Suspense fallback={null}><MobileNavigationTutorial /></Suspense>
           </AccessibilityProvider>
         </SessionUserProvider>
       </body>

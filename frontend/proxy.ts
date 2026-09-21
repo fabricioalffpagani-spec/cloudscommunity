@@ -9,6 +9,7 @@ const PROTECTED_PATH_PREFIXES = [
   "/settings",
   "/cloud",
   "/following",
+  "/read",
 ];
 
 function isStaticAsset(pathname: string) {

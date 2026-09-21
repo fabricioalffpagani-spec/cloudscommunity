@@ -301,8 +301,8 @@ export default function MeetPage() {
         <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 pb-2"><HeaderBrand /></Link>
           <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">For You</Link>
-            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Seguindo</Link>
+            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
+            <Link href="/read" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Read</Link>
             <Link href="/meet" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">Meet<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
           </nav>
           <div className="flex items-center gap-4 pb-2">

@@ -73,6 +73,7 @@ export type CloudPayload = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  endedAt: string | null;
   authorId: string;
   author: CloudAuthorPayload;
   hypesCount: number;

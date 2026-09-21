@@ -221,14 +221,16 @@ type ProfileCloud = {
   duration: string;
   visibility: "public" | "private";
   createdAt: string;
+  endedAt: string | null;
+  status: "active" | "ended";
   href: string;
 };
 
 function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) {
   const createdAt = new Date(cloud.createdAt);
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
-  const isLive = remainingSeconds > 0;
-  const isPublic = cloud.visibility === "public";
+  const isEnded = cloud.status === "ended";
+  const isLive = !isEnded && remainingSeconds > 0;
 
   return (
     <article className="cloud-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-4 sm:p-6">
@@ -242,14 +244,9 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
               Ao vivo
             </span>
           )}
-          {!isLive && isPublic && (
-            <span className="inline-flex items-center rounded-full bg-[#22C55E]/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#86EFAC]">
-              Pública
-            </span>
-          )}
-          {!isLive && !isPublic && (
-            <span className="inline-flex items-center rounded-full bg-white/[0.05] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">
-              Privada
+          {isEnded && (
+            <span className="inline-flex items-center rounded-full bg-white/[0.08] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
+              Encerrada
             </span>
           )}
         </div>
@@ -263,12 +260,12 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
-        <span>{isLive ? "Encerra em" : isPublic ? "Criada em" : "Encerrada"}</span>
-        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#A855F7]/12 text-[#D8B4FE]" : isPublic ? "bg-[#22C55E]/12 text-[#86EFAC]" : "bg-white/[0.05] text-white/45"}`}>
-          {formatCountdown(remainingSeconds)}
+        <span>{isEnded ? "Encerrada em" : "Encerra em"}</span>
+        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#A855F7]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
+          {isEnded && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : formatCountdown(remainingSeconds)}
         </span>
       </div>
-      <Link href={cloud.href} className="mt-5 inline-flex rounded-full bg-[#A855F7] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#9333EA]">Participar da Cloud</Link>
+      <Link href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="mt-5 inline-flex rounded-full bg-[#A855F7] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#9333EA]">{isEnded ? "Ver conversa" : "Participar da Cloud"}</Link>
     </article>
   );
 }
@@ -583,9 +580,9 @@ export default function ProfilePage() {
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>
-          ) : clouds.filter((cloud) => parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000) > 0).length > 0 ? (
+          ) : clouds.length > 0 ? (
             <div className="grid gap-3">
-              {clouds.filter((cloud) => parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000) > 0).map((cloud) => (
+              {clouds.map((cloud) => (
                 <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} />
               ))}
             </div>

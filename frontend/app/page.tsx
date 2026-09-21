@@ -20,6 +20,7 @@ import { NotificationsBell } from "./components/NotificationsPanel";
 import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import { MessagesNavLink } from "./components/MessagesNavLink";
 import { MobileAppNav } from "./components/MobileAppChrome";
+import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -216,7 +217,7 @@ const SEED_CLOUDS: Cloud[] = [
 ];
 
 const CATEGORIES: Category[] = [
-  { name: "For You",   bg: "#FFFFFF", color: "#111827" },
+  { name: "Talk",   bg: "#FFFFFF", color: "#111827" },
   { name: "Trending",  bg: "#A855F7" },
   { name: "Drama",     bg: "#EF4444" },
   { name: "Funny",     bg: "#EAB308" },
@@ -2541,6 +2542,7 @@ function PageContent() {
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
   const [feedOrder, setFeedOrder] = useState<"default" | "recent">("default");
+  const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
   const [cloudOptionsOpen, setCloudOptionsOpen] = useState(false);
   const [cloudInfoOpen, setCloudInfoOpen] = useState(false);
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
@@ -2590,7 +2592,7 @@ function PageContent() {
   // Reseta o índice sempre que a ordem muda para mostrar a 1ª cloud da nova ordenação
   useEffect(() => {
     setCurrentCloudIndex(0);
-  }, [feedOrder]);
+  }, [feedOrder, cloudScope]);
 
   const navigateCloud = (direction: number) => {
     const activeClouds = orderedClouds.filter(isCloudActive);
@@ -2641,7 +2643,7 @@ function PageContent() {
       }
 
       try {
-        const response = await fetch("/api/clouds", {
+        const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", {
           cache: "no-store",
         });
 
@@ -2657,7 +2659,7 @@ function PageContent() {
           : [];
 
         if (!cancelled) {
-          setClouds((current) => mergeClouds(current, serverClouds));
+          setClouds(serverClouds);
         }
       } catch {
         if (!cancelled) {
@@ -2675,7 +2677,7 @@ function PageContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cloudScope, user?.id]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -2827,11 +2829,11 @@ function PageContent() {
           {/* Nav */}
           <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
             <Link href="/" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">
-              For You
+              Talk
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/following" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
-              Seguindo
+            <Link href="/read" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+              Read
             </Link>
             <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
               Meet
@@ -2862,14 +2864,16 @@ function PageContent() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo_clouds.png" alt="Clouds" className="h-[42px] w-[42px] object-contain" />
         <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-4 whitespace-nowrap">
-          <Link href={mobilePreview ? "/following?mobilePreview=1" : "/following"} className="text-[16px] font-semibold text-white/60">Seguindo</Link>
-          <span className="relative text-[18px] font-bold text-[#B44DFF]">For You<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
+          <span className="relative text-[18px] font-bold text-[#B44DFF]">Talk<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
+          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[16px] font-semibold text-white/60">Read</Link>
           <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[16px] font-semibold text-white/60">Meet</Link>
         </nav>
         <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
       </header>
 
-      <main className={`${mobilePreview ? "flex" : "flex md:hidden"} flex-1 overflow-hidden`}>
+      <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+
+      <main className={`${mobilePreview ? "flex" : "flex md:hidden"} min-h-0 flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]`}>
         <MobileCloudFeed
           clouds={activeClouds}
           onEnter={enterConversation}

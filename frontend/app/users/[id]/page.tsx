@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 import { NotificationsBell } from "../../components/NotificationsPanel";
@@ -58,6 +58,20 @@ function BackIcon() {
       <path d="M15 18 8 12l7-6" />
     </svg>
   );
+}
+
+function ContextualBackButton({ label = "Voltar" }: { label?: string }) {
+  const router = useRouter();
+  const goBack = () => {
+    if (window.history.length > 1) router.back();
+    else router.push("/meet");
+  };
+
+  if (label !== "Voltar") {
+    return <button type="button" onClick={goBack} className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#7C3AED] px-4 py-2 text-[13px] font-semibold text-white"><BackIcon />{label}</button>;
+  }
+
+  return <button type="button" aria-label="Voltar para a página anterior" onClick={goBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10"><BackIcon /></button>;
 }
 
 function FireIcon({ s = 20 }: { s?: number }) {
@@ -446,9 +460,7 @@ export default function UserProfilePage() {
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
         <div className="sticky top-0 z-30 flex items-center justify-between bg-transparent px-5 py-3">
-          <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <BackIcon />
-          </Link>
+          <ContextualBackButton />
           <span className="text-[14px] font-semibold text-white">Profile</span>
           <NotificationsBell buttonClassName="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
         </div>
@@ -466,18 +478,14 @@ export default function UserProfilePage() {
       <div className="min-h-screen text-white"
         style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
         <div className="sticky top-0 z-30 flex items-center justify-between bg-transparent px-5 py-3">
-          <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <BackIcon />
-          </Link>
+          <ContextualBackButton />
           <span className="text-[14px] font-semibold text-white">Profile</span>
         </div>
         <div className="mx-auto max-w-[680px] px-5 py-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#111116] p-8 text-center">
             <p className="text-[18px] font-semibold text-white">Profile unavailable</p>
             <p className="mt-2 text-[13px] text-white/45">{error ?? "Could not load profile."}</p>
-            <Link href="/meet" className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#7C3AED] px-4 py-2 text-[13px] font-semibold text-white">
-              Back to Meet
-            </Link>
+            <ContextualBackButton label="Voltar para a página anterior" />
           </div>
         </div>
       </div>
@@ -488,9 +496,7 @@ export default function UserProfilePage() {
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <div className="sticky top-0 z-30 flex items-center justify-between gap-4 bg-transparent px-5 py-3">
-        <Link href="/meet" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-          <BackIcon />
-        </Link>
+        <ContextualBackButton />
           <span aria-hidden="true" />
         <div className="flex items-center gap-2">
           <NotificationsBell buttonClassName="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />

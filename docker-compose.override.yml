@@ -1,6 +1,6 @@
 # Override para desenvolvimento: hot-reload do frontend igual ao backend
 # Docker Compose carrega automaticamente este arquivo (docker compose up)
-# Para produção use: docker compose -f docker-compose.yml up --build
+# Para produção use: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 services:
   frontend:
     build:

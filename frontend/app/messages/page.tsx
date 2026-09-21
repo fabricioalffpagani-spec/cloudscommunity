@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 
@@ -9,6 +9,8 @@ import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUse
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
+import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
+import { buildMessageContactList } from "../lib/message-contacts";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -248,21 +250,6 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
-}
-
-function matchesContactQuery(user: PublicUserProfile, query: string) {
-  if (!query) {
-    return true;
-  }
-
-  const normalizedQuery = normalizeText(query.replace(/^@+/, ""));
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  const displayName = normalizeText(user.displayName);
-  const username = normalizeText(user.username);
-  return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
 }
 
 function highlightText(text: string, query: string): string {
@@ -1276,6 +1263,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
 
 function MessagesPageContent() {
   const { user, status } = useSessionUser();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const socketRef = useRef<Socket | null>(null);
   const activeConversationIdRef = useRef<string | null>(null);
@@ -1636,12 +1624,7 @@ function MessagesPageContent() {
   }, []);
 
   const filteredConversations = useMemo(() => {
-    const query = normalizeText(conversationSearch);
-    const conversationByPeerId = new Map(conversations.map((conversation) => [conversation.peerId, conversation]));
-
-    return followedUsers
-      .filter((followedUser) => matchesContactQuery(followedUser, query))
-      .map((followedUser) => conversationByPeerId.get(followedUser.id) ?? followedUser);
+    return buildMessageContactList(conversations, followedUsers, conversationSearch);
   }, [conversationSearch, conversations, followedUsers]);
 
   const forwardContacts = useMemo<ForwardContact[]>(() => {
@@ -1691,10 +1674,9 @@ function MessagesPageContent() {
       setConversations(mapped);
       const currentActiveId = activeConversationIdRef.current;
       const activeConversationStillExists = currentActiveId ? mapped.some((conversation) => conversation.id === currentActiveId) : false;
-      if (!activeConversationStillExists) {
-        const nextConversationId = mapped[0]?.id ?? null;
-        activeConversationIdRef.current = nextConversationId;
-        setActiveConversationId(nextConversationId);
+      if (currentActiveId && !activeConversationStillExists) {
+        activeConversationIdRef.current = null;
+        setActiveConversationId(null);
       }
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
@@ -1756,10 +1738,13 @@ function MessagesPageContent() {
       };
       setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
       setActiveConversationId(conversation.id);
+      if (!searchParams.get("share")) {
+        router.replace(messagesConversationHref(conversation.id), { scroll: false });
+      }
     } catch (conversationError) {
       setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
     }
-  }, []);
+  }, [router, searchParams]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
@@ -1774,9 +1759,23 @@ function MessagesPageContent() {
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
     const peerUserId = searchParams.get("id")?.trim();
-    if (!peerUserId) return;
-    void ensureConversation(peerUserId);
+    const rememberedConversationId = requestedConversationId(searchParams);
+    if (!peerUserId && !rememberedConversationId) {
+      openedPeerRef.current = null;
+      activeConversationIdRef.current = null;
+      setActiveConversationId(null);
+      return;
+    }
+    if (peerUserId) void ensureConversation(peerUserId);
   }, [ensureConversation, searchParams, status, user]);
+
+  useEffect(() => {
+    const rememberedConversationId = requestedConversationId(searchParams);
+    if (!rememberedConversationId || conversations.length === 0) return;
+    if (!conversations.some((conversation) => conversation.id === rememberedConversationId)) return;
+    activeConversationIdRef.current = rememberedConversationId;
+    setActiveConversationId(rememberedConversationId);
+  }, [conversations, searchParams]);
 
   useEffect(() => {
     if (!activeConversationId || !autoSendRef.current || !sharedLink) return;
@@ -1973,7 +1972,8 @@ function MessagesPageContent() {
     setDraft("");
     setEmojiOpen(false);
     setActiveConversationId(conversationId);
-  }, []);
+    router.replace(messagesConversationHref(conversationId), { scroll: false });
+  }, [router]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -2279,13 +2279,13 @@ function MessagesPageContent() {
                       onClick={() => selectConversation(conversation.id)}
                       className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversationId === conversation.id ? "bg-[#1a0e3d]" : "hover:bg-white/[0.04]"}`}
                     >
-                      <Link href={`/users/${conversation.peerId}`} className="relative shrink-0">
+                      <div className="relative shrink-0">
                         <UserAvatar user={{ id: conversation.peerId, username: conversation.peerUsername, displayName: conversation.name, avatarUrl: conversation.avatarUrl }} size={44} />
                         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[conversation.status]}`} />
-                      </Link>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <Link href={`/users/${conversation.peerId}`} className="truncate text-[14px] font-semibold text-white hover:underline">{conversation.name}</Link>
+                          <span className="truncate text-[14px] font-semibold text-white">{conversation.name}</span>
                           <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
@@ -2306,13 +2306,13 @@ function MessagesPageContent() {
                       }}
                       className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${activeConversation?.peerId === followedUser.id ? "bg-[#1a0e3d]" : "hover:bg-white/[0.04]"}`}
                     >
-                      <Link href={`/users/${followedUser.id}`} className="relative shrink-0">
+                      <div className="relative shrink-0">
                         <UserAvatar user={{ id: followedUser.id, username: followedUser.username, displayName: followedUser.displayName, avatarUrl: followedUser.avatarUrl }} size={44} />
                         <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
-                      </Link>
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <Link href={`/users/${followedUser.id}`} className="truncate text-[14px] font-semibold text-white hover:underline">{followedUser.displayName || followedUser.username}</Link>
+                          <span className="truncate text-[14px] font-semibold text-white">{followedUser.displayName || followedUser.username}</span>
                           <span className="shrink-0 text-[11px] font-medium text-[#9333EA]">Nova conversa</span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
@@ -2327,8 +2327,8 @@ function MessagesPageContent() {
             {!loadingFollowed && filteredConversations.length === 0 && (
               <p className="px-3 py-6 text-center text-[14px] text-white/40">
                 {conversationSearch.trim()
-                  ? "Nenhum resultado entre quem você segue."
-                  : "Você ainda não segue ninguém."}
+                  ? "Nenhuma conversa ou contato encontrado."
+                  : "Você ainda não possui conversas nem contatos seguidos."}
               </p>
             )}
           </div>
@@ -2340,7 +2340,7 @@ function MessagesPageContent() {
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-3 py-3 sm:px-6 sm:py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
-                <button type="button" aria-label="Voltar às conversas" onClick={() => setActiveConversationId(null)} className="flex h-9 w-9 items-center justify-center text-white/70 md:hidden"><ArrowLeftIcon s={20} /></button>
+                <button type="button" aria-label="Voltar às conversas" onClick={() => { activeConversationIdRef.current = null; setActiveConversationId(null); router.replace("/messages", { scroll: false }); }} className="flex h-9 w-9 items-center justify-center text-white/70 md:hidden"><ArrowLeftIcon s={20} /></button>
                   <Link href={`/users/${activeConversation.peerId}`} className="relative">
                   <UserAvatar user={{ id: activeConversation.peerId, username: activeConversation.peerUsername, displayName: activeConversation.name, avatarUrl: activeConversation.avatarUrl }} size={44} />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[activeConversation.status]}`} />

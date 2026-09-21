@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { SessionUserAvatar, useSessionUser } from "./session-user";
 
@@ -22,12 +23,16 @@ function FlameIcon() {
   return <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c4.1 0 7-2.8 7-6.7 0-3.1-1.8-5.1-4.1-7.6.1 2-1 3.8-2.9 4.8.3-3.1-1.2-5.8-3.7-8.3C7.6 7.5 5 10.4 5 14.5 5 18.8 8 22 12 22Z" /></svg>;
 }
 
-export function MobileFeedHeader({ active, onSearch }: { active: FeedTab; onSearch?: () => void }) {
+export function MobileFeedHeader(props: Parameters<typeof MobileFeedHeaderContent>[0]) {
+  return <Suspense fallback={null}><MobileFeedHeaderContent {...props} /></Suspense>;
+}
+
+function MobileFeedHeaderContent({ active, onSearch }: { active: FeedTab; onSearch?: () => void }) {
   const searchParams = useSearchParams();
   const previewSuffix = searchParams.get("mobilePreview") === "1" ? "?mobilePreview=1" : "";
   const tabs: Array<{ id: FeedTab; label: string; href: string }> = [
-    { id: "following", label: "Seguindo", href: "/following" },
-    { id: "for-you", label: "For You", href: "/" },
+    { id: "for-you", label: "Talk", href: "/" },
+    { id: "following", label: "Read", href: "/read" },
     { id: "meet", label: "Meet", href: "/meet" },
   ];
 
@@ -43,7 +48,11 @@ export function MobileFeedHeader({ active, onSearch }: { active: FeedTab; onSear
   );
 }
 
-export function MobileAppNav({ active, force = false }: { active?: "home" | "messages" | "trending" | "profile"; force?: boolean }) {
+export function MobileAppNav(props: Parameters<typeof MobileAppNavContent>[0]) {
+  return <Suspense fallback={null}><MobileAppNavContent {...props} /></Suspense>;
+}
+
+function MobileAppNavContent({ active, force = false }: { active?: "home" | "messages" | "trending" | "profile"; force?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user } = useSessionUser();

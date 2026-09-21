@@ -1,0 +1,133 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ReadOnlyCloudMessage, type ReadOnlyMessage } from "./ReadOnlyCloudMessage";
+import { useSessionUser } from "./session-user";
+
+type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
+type ArchivePayload = { cloud: { title: string }; messages: ArchivedMessage[] };
+
+function dateLabel(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) return "Hoje";
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+function BackIcon() {
+  return <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>;
+}
+
+function LockIcon() {
+  return <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
+}
+
+export function ArchivedConversation({ cloudId }: { cloudId: string }) {
+  const { user } = useSessionUser();
+  const [cloud, setCloud] = useState<ArchivePayload["cloud"] | null>(null);
+  const [messages, setMessages] = useState<ArchivedMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasOlder, setHasOlder] = useState(false);
+  const [error, setError] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const initialScrollPending = useRef(true);
+  const previousScrollHeight = useRef<number | null>(null);
+
+  const fetchPage = useCallback(async (before?: string) => {
+    const suffix = before ? `?take=100&before=${encodeURIComponent(before)}` : "?take=100";
+    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/archive/messages${suffix}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => null) as (ArchivePayload & { message?: string }) | null;
+    if (!response.ok || !payload?.cloud || !Array.isArray(payload.messages)) {
+      throw new Error(payload?.message ?? "Não foi possível carregar a conversa.");
+    }
+    return payload;
+  }, [cloudId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchPage().then((payload) => {
+      if (controller.signal.aborted) return;
+      setCloud(payload.cloud);
+      setMessages(payload.messages);
+      setHasOlder(payload.messages.length === 100);
+    }).catch((cause) => {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Não foi possível carregar a conversa.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
+  }, [fetchPage]);
+
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container || messages.length === 0) return;
+    if (previousScrollHeight.current !== null) {
+      container.scrollTop += container.scrollHeight - previousScrollHeight.current;
+      previousScrollHeight.current = null;
+      return;
+    }
+    if (initialScrollPending.current) {
+      container.scrollTop = container.scrollHeight;
+      initialScrollPending.current = false;
+    }
+  }, [messages]);
+
+  const loadOlder = async () => {
+    if (!messages[0] || loadingOlder) return;
+    setLoadingOlder(true);
+    previousScrollHeight.current = scrollRef.current?.scrollHeight ?? null;
+    try {
+      const payload = await fetchPage(messages[0].createdAt);
+      setMessages((current) => [...payload.messages, ...current]);
+      setHasOlder(payload.messages.length === 100);
+    } catch (cause) {
+      previousScrollHeight.current = null;
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar mensagens anteriores.");
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  let previousDate = "";
+
+  return <main className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+    <header className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
+      <Link href="/read" aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></Link>
+      <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+        <h1 className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]">{cloud?.title ?? "Conversa encerrada"}</h1>
+        <div className="flex items-center gap-2 whitespace-nowrap text-[13px] text-white/50 sm:text-[16px]">
+          <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-white/30 sm:h-3 sm:w-3" />
+          <span>Cloud encerrada</span>
+          <span className="text-white/20">|</span>
+          <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
+        </div>
+      </div>
+    </header>
+
+    {error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
+
+    <section ref={scrollRef} aria-label="Conversa completa" aria-busy={loading} className="scrollbar-purple flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-8 sm:py-6">
+      {loading && <div role="status" className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>}
+      {hasOlder && <button type="button" disabled={loadingOlder} onClick={() => void loadOlder()} className="mx-auto block rounded-full border border-white/15 px-5 py-2 text-sm text-white/70 transition hover:border-[#A855F7] hover:text-white disabled:opacity-50">{loadingOlder ? "Carregando..." : "Carregar mensagens anteriores"}</button>}
+      {!loading && !error && messages.length === 0 && <div className="flex h-full items-center justify-center text-center text-white/40"><div><p className="text-[16px] font-semibold text-white/70">Nenhuma mensagem</p><p className="mt-1 text-[14px]">Esta cloud terminou sem mensagens.</p></div></div>}
+      {messages.map((message) => {
+        const currentDate = new Date(message.createdAt).toDateString();
+        const showDate = currentDate !== previousDate;
+        previousDate = currentDate;
+        return <div key={message.id} className="space-y-4">
+          {showDate && <div className="flex justify-center py-1"><span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] text-white/40">{dateLabel(message.createdAt)}</span></div>}
+          <ReadOnlyCloudMessage message={message} own={Boolean(user?.id && message.sender.id === user.id)} />
+        </div>;
+      })}
+    </section>
+
+    <footer className="shrink-0 border-t border-white/[0.07] bg-black px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
+      <div className="mx-auto flex min-h-[54px] max-w-3xl items-center justify-center gap-2 rounded-full border border-[#6D28D9]/35 bg-[#1a0e3d] px-5 text-center text-[14px] text-white/55">
+        <LockIcon />
+        <span>Cloud encerrada · conversa disponível somente para leitura</span>
+      </div>
+    </footer>
+  </main>;
+}
