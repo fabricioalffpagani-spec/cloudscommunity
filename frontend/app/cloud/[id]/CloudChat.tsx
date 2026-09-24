@@ -84,6 +84,7 @@ type CloudMessagePayload = {
   type: "text" | "audio" | "image" | "link" | "system";
   content: string | null;
   mediaUrl: string | null;
+  isSticker: boolean;
   clientMessageId: string | null;
   replyToMessageId: string | null;
   createdAt: string;
@@ -146,6 +147,7 @@ type ChatMessage = {
   kind: "text" | "audio" | "image" | "link" | "system";
   content: string;
   mediaUrl: string | null;
+  isSticker?: boolean;
   replyTo: {
     id: string;
     sender: string;
@@ -154,6 +156,7 @@ type ChatMessage = {
   reactions: ReactionPayload[];
   time: string;
   isoTime: string;
+  updatedAt?: string;
   pending?: boolean;
   clientMessageId?: string | null;
   audioDurationMs?: number | null;
@@ -280,7 +283,43 @@ const EMOJI_CATEGORIES: { label: string; icon: string; emojis: string[] }[] = [
       "🦋","🐝","🌺","🍄","🌾","🐚","🪸","🪨","🪵","🌻",
     ],
   },
+  {
+    label: "Pessoas",
+    icon: "🧑",
+    emojis: [
+      "👶","🧒","👦","👧","🧑","👱","👨","🧔","👨‍🦰","👨‍🦱","👨‍🦳","👨‍🦲","👩","👩‍🦰","👩‍🦱","👩‍🦳","👩‍🦲","🧓","👴","👵",
+      "🙍","🙎","🙅","🙆","💁","🙋","🧏","🙇","🤦","🤷","🧑‍⚕️","🧑‍🎓","🧑‍🏫","🧑‍⚖️","🧑‍🌾","🧑‍🍳","🧑‍🔧","🧑‍🏭","🧑‍💼","🧑‍🔬",
+      "🧑‍💻","🧑‍🎤","🧑‍🎨","🧑‍✈️","🧑‍🚀","🧑‍🚒","👮","🕵️","💂","🥷","👷","🤴","👸","👳","👲","🧕","🤵","👰","🤰","🤱",
+      "👨‍👩‍👧","👨‍👩‍👦","👩‍👩‍👦","👨‍👨‍👧","🐶","🐱","🦸","🦹","🧙","🧚","🧛","🧜","🧝","🧞","🧟","💃","🕺","👯","🧖","🛀",
+    ],
+  },
+  {
+    label: "Símbolos",
+    icon: "💟",
+    emojis: [
+      "✅","☑️","✔️","❌","❎","➕","➖","➗","✖️","💲","💱","™️","©️","®️","〰️","➰","➿","🔚","🔙","🔛","🔝","🔜","☑️","🔘","⚪",
+      "⚫","🔴","🔵","🟢","🟡","🟠","🟣","🟤","⬛","⬜","◼️","◻️","◾","◽","▪️","▫️","🔶","🔷","🔸","🔹","🔺","🔻","💠","🔳","🔲",
+      "⚠️","🚫","⛔","📛","🚷","🚯","🚳","🚱","🔞","☢️","☣️","⬆️","↗️","➡️","↘️","⬇️","↙️","⬅️","↖️","↕️","↔️","🔄","🔃","🔀","🔁",
+      "🔂","▶️","⏸️","⏹️","⏺️","⏭️","⏮️","⏩","⏪","🔼","🔽","🎵","🎶","〽️","⚕️","♻️","⚜️","🔱","⚜️","🛐","☮️","☯️","✝️","☪️","🕉️",
+    ],
+  },
+  {
+    label: "Bandeiras",
+    icon: "🏳️",
+    emojis: [
+      "🏁","🚩","🎌","🏴","🏳️","🏳️‍🌈","🏳️‍⚧️","🇧🇷","🇵🇹","🇦🇷","🇺🇾","🇨🇱","🇨🇴","🇲🇽","🇺🇸","🇨🇦","🇬🇧","🇫🇷","🇩🇪","🇮🇹","🇪🇸","🇳🇱","🇧🇪","🇨🇭","🇸🇪",
+      "🇳🇴","🇩🇰","🇫🇮","🇮🇪","🇵🇱","🇺🇦","🇷🇺","🇯🇵","🇰🇷","🇨🇳","🇮🇳","🇹🇭","🇻🇳","🇮🇩","🇦🇺","🇳🇿","🇿🇦","🇳🇬","🇪🇬","🇲🇦","🇹🇷","🇮🇱","🇸🇦","🇦🇪","🇺🇳",
+    ],
+  },
 ];
+
+// Start with the full library instead of a small subset. The category tabs
+// remain available for people who prefer to browse by subject.
+EMOJI_CATEGORIES.unshift({
+  label: "Todos",
+  icon: "✨",
+  emojis: [...new Set(EMOJI_CATEGORIES.flatMap((category) => category.emojis))],
+});
 
 function timeLabel(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -364,10 +403,12 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     kind: payload.type,
     content: payload.content || "",
     mediaUrl: payload.mediaUrl,
+    isSticker: payload.isSticker,
     replyTo: payload.replyTo,
     reactions: payload.reactions || [],
     time: timeLabel(payload.createdAt),
     isoTime: payload.createdAt,
+    updatedAt: payload.updatedAt,
     clientMessageId: payload.clientMessageId,
     audioDurationMs: (payload as { audioDurationMs?: number | null }).audioDurationMs ?? null,
     audioPeaks: (payload as { peaks?: number[] | null }).peaks ?? null,
@@ -796,10 +837,10 @@ function MessageReceipt() {
 
 function CloudPinIcon({ pinned }: { pinned?: boolean }) {
   return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14 4v5l3 3v2H7v-2l3-3V4" />
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={pinned ? "2.5" : "2.2"} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 4h6" />
+      <path d="M10 4v5l-3 3v2h10v-2l-3-3V4" />
       <path d="M12 14v6" />
-      {pinned && <path d="M9 4h6" strokeWidth="3" />}
     </svg>
   );
 }
@@ -845,6 +886,7 @@ function CloudMsgMenu({
   onEdit,
   onDelete,
   onReport,
+  onSaveSticker,
   onClose,
 }: {
   msg: ChatMessage;
@@ -857,6 +899,7 @@ function CloudMsgMenu({
   onEdit: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
   onReport: (msg: ChatMessage) => void;
+  onSaveSticker: (mediaUrl: string) => void;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -922,6 +965,13 @@ function CloudMsgMenu({
       action: () => { onForward(msg); onClose(); },
       show: true,
       icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>,
+    },
+    {
+      key: "save-sticker",
+      label: "Salvar figurinha",
+      action: () => { if (msg.mediaUrl) onSaveSticker(msg.mediaUrl); onClose(); },
+      show: Boolean(msg.isSticker && msg.mediaUrl),
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>,
     },
     {
       key: "edit",
@@ -1039,14 +1089,38 @@ function AudioBubble({ msg, own }: { msg: ChatMessage; own?: boolean }) {
 
 function ImageBubble({ msg }: { msg: ChatMessage }) {
   return (
-    <a href={msg.mediaUrl || "#"} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d]">
+    <div className={`relative ${msg.isSticker ? "w-fit" : ""}`}>
+    <a href={msg.mediaUrl || "#"} target="_blank" rel="noreferrer" className={`block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] ${msg.isSticker ? "border-0 bg-transparent" : ""}`}>
       {msg.mediaUrl ? (
-        <img src={msg.mediaUrl} alt="Imagem enviada" className="max-h-[320px] max-w-full object-cover" />
+        <img src={msg.mediaUrl} alt={msg.isSticker ? "Figurinha enviada" : "Imagem enviada"} className={msg.isSticker ? "h-36 w-36 object-contain" : "max-h-[320px] max-w-full object-contain"} />
       ) : (
         <div className="px-4 py-8 text-[14px] text-white/50">Imagem indisponível</div>
       )}
     </a>
+    </div>
   );
+}
+
+async function makeStickerFile(file: File): Promise<File> {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = () => reject(new Error("Não foi possível ler a imagem selecionada."));
+      nextImage.src = sourceUrl;
+    });
+    const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
+    const scale = Math.min(1, 320 / longestSide);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Não foi possível criar a figurinha.")), "image/webp", 0.86));
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "figurinha"}.webp`, { type: "image/webp" });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
@@ -1067,9 +1141,9 @@ function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
           </Link>
         )}
         {!msg.senderAvatarUrl && (
-          <div className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-[#7C3AED]">
+          <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-[#7C3AED]">
             {msg.senderName.charAt(0).toUpperCase()}
-          </div>
+          </Link>
         )}
         <span className="text-[12px] text-white/60 font-medium">
           {msg.content}
@@ -1311,8 +1385,11 @@ function CloudMessageBubble({
   onEdit,
   onDelete,
   onReport,
+  onSaveSticker,
   isCloudAuthor,
   isPinned,
+  grouped = false,
+  showFooter = true,
 }: {
   msg: ChatMessage;
   onReact: (messageId: string, emoji: string) => void;
@@ -1323,8 +1400,11 @@ function CloudMessageBubble({
   onEdit: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
   onReport: (msg: ChatMessage) => void;
+  onSaveSticker: (mediaUrl: string) => void;
   isCloudAuthor: boolean;
   isPinned: boolean;
+  grouped?: boolean;
+  showFooter?: boolean;
 }) {
   const own = msg.side === "right";
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -1350,21 +1430,21 @@ function CloudMessageBubble({
   }
 
   return (
-    <div className={`group flex items-end gap-2.5 ${own ? "flex-row-reverse" : "flex-row"}`}>
+    <div className={`group flex items-end gap-2.5 ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
-      <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
+      {showFooter && !own && <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
         />
-      </Link>
+      </Link>}
 
       <div className={`flex min-w-0 max-w-[calc(100%_-_2.75rem)] items-end gap-2 sm:max-w-[74%] ${own ? "flex-row-reverse" : "flex-row"}`}>
         <div className={`flex min-w-0 flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
-          <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
+          {!grouped && <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
             <Link href={`/users/${encodeURIComponent(msg.senderId)}`} className="text-[12px] font-semibold text-white/40 transition hover:text-white hover:underline">{own ? "Você" : msg.senderName}</Link>
             {isPinned && <span className="flex items-center gap-1 text-[10px] text-[#A855F7]"><CloudPinIcon pinned={true} /> fixada</span>}
-          </div>
+          </div>}
 
           {msg.replyTo && (
             <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[12px] text-white/70">
@@ -1407,12 +1487,13 @@ function CloudMessageBubble({
           )}
 
           {/* Message actions row */}
-          <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
+          {showFooter && <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
             <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
               <span>{msg.time}</span>
+              {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="italic">editada</span>}
               {own && !msg.pending && <MessageReceipt />}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Action icons aligned to the side of message box */}
@@ -1483,6 +1564,7 @@ function CloudMessageBubble({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onReport={onReport}
+                onSaveSticker={onSaveSticker}
                 onClose={() => setMsgMenuOpen(false)}
               />
             )}
@@ -1498,7 +1580,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
   const hasJoinedRef = useRef(false);
   const messagesLoadRequestRef = useRef(0);
   const audioRecorder = useAudioRecorder((recording) => {
@@ -1509,10 +1590,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [stickerSaveNotice, setStickerSaveNotice] = useState<string | null>(null);
   const [loadingCloud, setLoadingCloud] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(true);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [emojiCategory, setEmojiCategory] = useState(0);
+  const [mediaPickerTab, setMediaPickerTab] = useState<"emoji" | "sticker">("emoji");
   const [hyped, setHyped] = useState(false);
   const [hypesCount, setHypesCount] = useState(0);
   const [hypeUsers, setHypeUsers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
@@ -1530,18 +1613,18 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const typingExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState<{ name: string } | null>(null);
+  const [imageFormatOpen, setImageFormatOpen] = useState(false);
+  const [savedStickers, setSavedStickers] = useState<Array<{ id: string; mediaUrl: string }>>([]);
   const [shareOpen, setShareOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
-  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
   const [isDeletingCloud, setIsDeletingCloud] = useState(false);
-  const [isLeavingCloud, setIsLeavingCloud] = useState(false);
   const [isManagingMemberId, setIsManagingMemberId] = useState<string | null>(null);
   const [isBanningMemberId, setIsBanningMemberId] = useState<string | null>(null);
   const [reportingMsg, setReportingMsg] = useState<ChatMessage | null>(null);
@@ -1570,6 +1653,15 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     activeCloudIdRef.current = cloudId;
+    const minimized = window.localStorage.getItem("clouds:minimized-cloud");
+    if (minimized) {
+      try {
+        if (JSON.parse(minimized).id === cloudId) {
+          window.localStorage.removeItem("clouds:minimized-cloud");
+          window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+        }
+      } catch { /* ignore invalid persisted state */ }
+    }
   }, [cloudId]);
 
   useEffect(() => {
@@ -1685,6 +1777,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const isPrivateCloud = (cloud?.visibility ?? visibility ?? "public") === "private";
   const typingPeople = Object.entries(typingUserIds)
     .filter(([, isTyping]) => isTyping)
+    .filter(([typingUserId]) => typingUserId !== user?.id) // Exclude current user from typing indicator
     .map(([typingUserId]) => {
       const member = cloud?.members?.find((entry) => entry.userId === typingUserId);
       if (member) {
@@ -1784,33 +1877,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
-  const handleLeaveCloud = useCallback(async () => {
-    if (!cloud || isLeavingCloud) {
-      return;
-    }
+  const resolvedTitle = cloud?.title || title || "Cloud";
 
-    setIsLeavingCloud(true);
-    setError(null);
-
-    try {
-      // Remove the live socket first so the backend count is already current
-      // when the persisted membership endpoint is called.
-      socketRef.current?.emit("cloud:leave", { cloudId });
-      // The creator remains the owner of the Cloud, but leaving the chat still
-      // needs to be explicit and visible to the other people in the room.
-      const exitAction = isCloudAuthor ? "exit" : "leave";
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/${exitAction}`, {
-        method: "POST",
-        credentials: "include",
-      });
-      await readJson<{ ok: true }>(response);
-      router.replace("/");
-    } catch (leaveError) {
-      setError(leaveError instanceof Error ? leaveError.message : "Não foi possível sair da cloud.");
-    } finally {
-      setIsLeavingCloud(false);
-    }
-  }, [cloud, cloudId, isCloudAuthor, isLeavingCloud, router]);
+  const minimizeCloud = useCallback(() => {
+    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
+    window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+    router.push("/");
+  }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router]);
 
   const handleRemoveMember = useCallback(async (memberId: string) => {
     if (!cloud || !isCloudAuthor || isManagingMemberId) {
@@ -2069,7 +2142,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       return;
     }
 
-    imageInputRef.current?.click();
+    setImageFormatOpen(true);
   }, [audioRecorder]);
 
   const sendReaction = useCallback(async (messageId: string, emoji: string) => {
@@ -2208,13 +2281,50 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [cloudId, user]);
 
-  const handleImageFile = useCallback(async (file: File | null) => {
-    if (!file || !user) {
+  useEffect(() => {
+    if (!user) return;
+    void fetch("/api/stickers").then((response) => readJson<{ stickers?: Array<{ id: string; mediaUrl: string }> }>(response)).then((payload) => {
+      setSavedStickers(payload.stickers ?? []);
+    }).catch(() => undefined);
+  }, [user]);
+
+  const saveSticker = useCallback(async (mediaUrl: string) => {
+    try {
+      const response = await fetch("/api/stickers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mediaUrl }) });
+      const payload = await readJson<{ sticker: { id: string; mediaUrl: string }; alreadySaved?: boolean }>(response);
+      setSavedStickers((current) => current.some((sticker) => sticker.mediaUrl === payload.sticker.mediaUrl) ? current : [payload.sticker, ...current]);
+      setStickerSaveNotice(payload.alreadySaved ? "Já salva!" : "Salva!");
+      window.setTimeout(() => setStickerSaveNotice(null), 1800);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar a figurinha.");
+    }
+  }, []);
+
+  const handleImageFile = useCallback(async (file: File | null, isSticker = false) => {
+    if (!file) {
+      return;
+    }
+
+    if (!user) {
+      setError("Entre na sua conta para enviar imagens e figurinhas.");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Selecione um arquivo de imagem para enviar como figurinha.");
+      return;
+    }
+
+    let fileToSend = file;
+    try {
+      if (isSticker) fileToSend = await makeStickerFile(file);
+    } catch (formatError) {
+      setError(formatError instanceof Error ? formatError.message : "Não foi possível transformar a imagem em figurinha.");
       return;
     }
 
     const clientMessageId = `client-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const tempUrl = URL.createObjectURL(file);
+    const tempUrl = URL.createObjectURL(fileToSend);
     const optimistic: ChatMessage = {
       id: clientMessageId,
       cloudId,
@@ -2225,6 +2335,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       kind: "image",
       content: "",
       mediaUrl: tempUrl,
+      isSticker,
       replyTo: null,
       reactions: [],
       time: timeLabel(new Date().toISOString()),
@@ -2238,8 +2349,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
     try {
       const formData = new FormData();
-      formData.set("file", file, file.name || `image-${Date.now()}.jpg`);
+      formData.set("file", fileToSend, fileToSend.name || `image-${Date.now()}.jpg`);
       formData.set("clientMessageId", clientMessageId);
+      formData.set("isSticker", String(isSticker));
 
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/image`, {
         method: "POST",
@@ -2258,6 +2370,27 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setSelectedFilePreview(null);
     }
   }, [cloudId, user]);
+
+  const chooseImageFromSystem = useCallback(async (isSticker: boolean) => {
+    type FilePickerWindow = Window & { showOpenFilePicker?: (options: { multiple?: boolean; types?: Array<{ description: string; accept: Record<string, string[]> }> }) => Promise<Array<{ getFile: () => Promise<File> }>> };
+    try {
+      const picker = (window as FilePickerWindow).showOpenFilePicker;
+      if (!picker) {
+        setError("Seu navegador não oferece o seletor de arquivos necessário. Use um navegador Chromium atualizado.");
+        return;
+      }
+      const [handle] = await picker({ multiple: false, types: [{ description: "Imagens", accept: { "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif"] } }] });
+      const file = await handle?.getFile();
+      if (file) {
+        setImageFormatOpen(false);
+        await handleImageFile(file, isSticker);
+      }
+    } catch (pickerError) {
+      if ((pickerError as DOMException | undefined)?.name !== "AbortError") {
+        setError("Não foi possível selecionar a imagem.");
+      }
+    }
+  }, [handleImageFile]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
@@ -2412,7 +2545,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const filteredManagedMembers = managedMembers.filter((member) =>
     `${member.user.displayName} ${member.user.username}`.toLowerCase().includes(memberSearch.trim().toLowerCase()),
   );
-  const resolvedTitle = cloud?.title || title || "Cloud";
   const resolvedParticipants = cloud?.membersCount ?? 0;
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const shareLink = typeof window !== "undefined" ? `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}` : `/cloud/${encodeURIComponent(cloudId)}`;
@@ -2439,8 +2571,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       <div className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
         <button
           type="button"
-          aria-label="Voltar"
-          onClick={() => setLeaveConfirmOpen(true)}
+          aria-label="Minimizar Cloud"
+          onClick={minimizeCloud}
           className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"
         >
           <ArrowLeftIcon s={18} />
@@ -2606,19 +2738,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     Denunciar Cloud
                   </button>
                 )}
-                {!isCloudAuthor && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActionMenuOpen(false);
-                      setLeaveConfirmOpen(true);
-                    }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-red-400"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">↩</span>
-                    Sair da Cloud
-                  </button>
-                )}
                 {isCloudAuthor && (
                   <button
                     type="button"
@@ -2639,6 +2758,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       </div>
 
       {error && <div className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
+      {stickerSaveNotice && <div role="status" className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-full border border-emerald-300/25 bg-emerald-950/95 px-4 py-2 text-[13px] font-semibold text-emerald-100 shadow-xl">{stickerSaveNotice}</div>}
 
       {pinnedMessageId && (() => {
         const pinned = messages.find((m) => m.id === pinnedMessageId);
@@ -2694,7 +2814,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 return <SystemMessageBubble key={msg.id} msg={msg} />;
               }
 
-              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} />;
+              const messageIndex = messages.findIndex((item) => item.id === msg.id);
+              const previousMessage = messages[messageIndex - 1];
+              const nextMessage = messages[messageIndex + 1];
+              const grouped = Boolean(previousMessage && previousMessage.kind !== "system" && previousMessage.senderId === msg.senderId && new Date(msg.isoTime).getTime() - new Date(previousMessage.isoTime).getTime() < 5 * 60_000);
+              const showFooter = !nextMessage || nextMessage.kind === "system" || nextMessage.senderId !== msg.senderId || new Date(nextMessage.isoTime).getTime() - new Date(msg.isoTime).getTime() >= 5 * 60_000;
+
+              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter} />;
             });
           })()
         )}
@@ -2817,50 +2943,22 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                       <MicIcon s={18} />
                     </button>
                   )}
-                  <input
-                    ref={imageInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      event.currentTarget.value = "";
-                      if (file) {
-                        setSelectedFilePreview({ name: file.name || "Imagem" });
-                        void handleImageFile(file);
-                      }
-                    }}
-                  />
                 </div>
 
                 {emojiOpen && (
                   <div data-cloud-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
-                    <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
-                      {EMOJI_CATEGORIES.map((cat, index) => (
-                        <button
-                          key={cat.label}
-                          type="button"
-                          onClick={() => setEmojiCategory(index)}
-                          title={cat.label}
-                          className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${index === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}
-                        >
-                          {cat.icon}
-                        </button>
-                      ))}
+                    <div role="tablist" aria-label="Tipo de conteúdo" className="mx-3 mt-3 grid grid-cols-2 rounded-xl border border-white/[0.10] bg-black/20 p-1">
+                      <button type="button" role="tab" aria-selected={mediaPickerTab === "emoji"} onClick={() => setMediaPickerTab("emoji")} className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "emoji" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}>😊 Emojis</button>
+                      <button type="button" role="tab" aria-selected={mediaPickerTab === "sticker"} onClick={() => setMediaPickerTab("sticker")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "sticker" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}><svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10a6 6 0 0 1 6-6h5a5 5 0 0 1 5 5v4a7 7 0 0 1-7 7h-3a6 6 0 0 1-6-6v-4Z"/><path d="M14 20a6 6 0 0 1 6-6"/><path d="m14 20 6-6"/></svg>Figurinhas</button>
                     </div>
-                    <div className="max-h-[28vh] overflow-y-auto p-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => (
-                          <button
-                            key={index}
-                            type="button"
-                            onClick={() => setDraft((current) => `${current}${emoji}`)}
-                            className="flex h-9 w-9 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/[0.07]"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
+                    {mediaPickerTab === "emoji" && <div aria-label="Categorias de emojis" className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
+                      {EMOJI_CATEGORIES.map((cat, index) => <button key={cat.label} type="button" onClick={() => setEmojiCategory(index)} title={cat.label} aria-label={cat.label} className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${index === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}>{cat.icon}</button>)}
+                    </div>}
+                    <div className="max-h-[28vh] overflow-y-auto p-3 [scrollbar-color:#7C3AED_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#7C3AED]">
+                      <div className="mb-2 flex items-center justify-between px-1"><p className="text-[12px] font-semibold text-white/65">{mediaPickerTab === "sticker" ? "Minhas figurinhas" : EMOJI_CATEGORIES[emojiCategory]?.label}</p><span className="text-[11px] text-white/35">{mediaPickerTab === "sticker" ? savedStickers.length : EMOJI_CATEGORIES[emojiCategory]?.emojis.length}</span></div>
+                      {mediaPickerTab === "sticker" ? (
+                        savedStickers.length > 0 ? <div className="flex flex-wrap gap-5 px-2 py-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" title="Enviar figurinha" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="h-28 w-28 rounded-2xl p-1.5 transition hover:bg-white/[0.08]"><img src={sticker.mediaUrl} alt="Figurinha salva" className="h-full w-full object-contain" /></button>)}</div> : <p className="py-6 text-center text-sm text-white/45">Nenhuma figurinha salva ainda.</p>
+                      ) : <div className="flex flex-wrap gap-1.5">{EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => <button key={index} type="button" onClick={() => setDraft((current) => `${current}${emoji}`)} className="flex h-9 w-9 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/[0.07]">{emoji}</button>)}</div>}
                     </div>
                   </div>
                 )}
@@ -2874,6 +2972,33 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       {shareOpen && (
         <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} onClose={() => setShareOpen(false)} />
+      )}
+
+      {imageFormatOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#05020d]/80 p-4 backdrop-blur-md">
+          <div className="w-full max-w-md overflow-hidden rounded-[28px] border border-white/[0.12] bg-[radial-gradient(ellipse_at_top,rgba(112,45,190,0.20),transparent_56%),#15161C] shadow-[0_28px_90px_rgba(0,0,0,0.65)]">
+            <div className="flex items-start justify-between px-6 pb-3 pt-6">
+              <div>
+                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-[#C084FC]/30 bg-[#7C3AED]/20 text-[#D8B4FE]"><svg viewBox="0 0 24 24" width={21} height={21} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4.5 18 5-5 3.5 3 2-2 4.5 4"/></svg></div>
+                <h2 className="text-[21px] font-bold tracking-tight text-white">Como deseja enviar?</h2>
+                <p className="mt-1 text-[13px] leading-relaxed text-white/55">Escolha o formato antes de selecionar a imagem.</p>
+              </div>
+              <button type="button" aria-label="Fechar" onClick={() => { setImageFormatOpen(false); setSelectedFilePreview(null); }} className="flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.08] hover:text-white">×</button>
+            </div>
+            <div className="grid gap-3 px-6 pb-5 sm:grid-cols-2">
+              <button type="button" onClick={() => void chooseImageFromSystem(false)} className="group rounded-2xl border border-white/[0.13] bg-white/[0.025] p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/[0.07]">
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.08] text-white/80 transition group-hover:bg-white/[0.14]"><svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9" r="1.5"/><path d="m4.5 18 5-5 3.5 3 2-2 4.5 4"/></svg></span>
+                <span className="block text-[15px] font-bold text-white">Imagem original</span><span className="mt-1.5 block text-[12px] leading-relaxed text-white/50">Preserva o tamanho e a qualidade do arquivo.</span>
+              </button>
+              <button type="button" onClick={() => void chooseImageFromSystem(true)} className="group relative overflow-hidden rounded-2xl border border-[#A855F7]/70 bg-[linear-gradient(145deg,rgba(124,58,237,0.32),rgba(77,24,136,0.26))] p-4 text-left shadow-[0_12px_28px_rgba(124,58,237,0.16)] transition duration-200 hover:-translate-y-0.5 hover:border-[#D8B4FE] hover:shadow-[0_15px_34px_rgba(124,58,237,0.30)]">
+                <span className="absolute right-3 top-3 rounded-full border border-[#E9D5FF]/30 bg-[#E9D5FF]/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#E9D5FF]">Rápido</span>
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-[#E9D5FF]/20 bg-[#E9D5FF]/15 text-[#F3E8FF]"><svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10a6 6 0 0 1 6-6h5a5 5 0 0 1 5 5v4a7 7 0 0 1-7 7h-3a6 6 0 0 1-6-6v-4Z"/><path d="M14 20a6 6 0 0 1 6-6"/><path d="m14 20 6-6"/></svg></span>
+                <span className="block text-[15px] font-bold text-white">Figurinha</span><span className="mt-1.5 block text-[12px] leading-relaxed text-[#E9D5FF]/75">Compacta em WebP e envia direto no chat.</span>
+              </button>
+            </div>
+            <div className="border-t border-white/[0.07] px-6 py-3.5 text-center"><button type="button" onClick={() => { setImageFormatOpen(false); setSelectedFilePreview(null); }} className="text-[13px] font-medium text-white/45 transition hover:text-white">Cancelar</button></div>
+          </div>
+        </div>
       )}
 
       {infoOpen && cloud && (
@@ -2979,27 +3104,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </div>
       )}
 
-      {leaveConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-[18px] font-bold">Sair da Cloud</h3>
-              <button type="button" onClick={() => setLeaveConfirmOpen(false)} className="text-white/50 hover:text-white">×</button>
-            </div>
-            <p className="text-[14px] leading-relaxed text-white/70">
-              Tem certeza que deseja sair desta Cloud? Você não poderá mais participar das conversas até entrar novamente.
-            </p>
-            <div className="mt-5 flex items-center justify-end gap-3">
-              <button type="button" onClick={() => setLeaveConfirmOpen(false)} className="rounded-full bg-white/[0.06] px-4 py-2 text-[13px] text-white/80 transition hover:bg-white/[0.12] hover:text-white">
-                Cancelar
-              </button>
-              <button type="button" onClick={() => void handleLeaveCloud()} disabled={isLeavingCloud} className="rounded-full bg-[#EF4444] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#DC2626] disabled:cursor-not-allowed disabled:opacity-50">
-                {isLeavingCloud ? "Saindo..." : "Sair"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {deleteConfirmOpen && isCloudAuthor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

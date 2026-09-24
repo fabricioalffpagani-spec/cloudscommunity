@@ -1,0 +1,2 @@
+ALTER TABLE "Profile" ADD COLUMN "interests" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "Profile" ADD COLUMN "interestsCompletedAt" TIMESTAMP(3);

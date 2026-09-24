@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
+import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
 
@@ -29,6 +30,8 @@ type PublicUserProfile = {
   website: string | null;
   isPrivate: boolean;
   showHypesCount: boolean;
+  showArchivedClouds: boolean;
+  showParticipatingNow: boolean;
   createdAt: string;
   updatedAt: string;
   followersCount: number;
@@ -47,6 +50,22 @@ type PublicUserProfile = {
     description: string | null;
     duration: string;
     createdAt: string;
+    visibility: "public" | "private";
+    href: string;
+  }>;
+  participatingNow: {
+    id: string;
+    title: string;
+    duration: string;
+    href: string;
+  } | null;
+  endedClouds: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    duration: string;
+    createdAt: string;
+    endedAt: string | null;
     visibility: "public" | "private";
     href: string;
   }>;
@@ -128,11 +147,13 @@ function formatMemberSince(value?: string | null) {
 
 function FieldStat({ value, label, description, onClick }: { value: string | number; label: string; description: string; onClick?: () => void }) {
   return (
-    <div onClick={onClick} className={`group relative ${onClick ? "cursor-pointer hover:opacity-80 transition" : ""}`}>
-      <p className="text-[20px] font-bold text-white">{value}</p>
-      <p className="text-[11px] uppercase tracking-widest text-white/40">{label}</p>
-      <p role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-40 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a0e3d] px-2 py-1.5 text-center text-[11px] leading-snug text-white/80 opacity-0 shadow-xl transition group-hover:opacity-100">{description}</p>
-    </div>
+    <LongPressHint hint={description}>
+      <div onClick={onClick} className={`group relative ${onClick ? "cursor-pointer hover:opacity-80 transition" : ""}`}>
+        <p className="text-[20px] font-bold text-white">{value}</p>
+        <p className="text-[11px] uppercase tracking-widest text-white/40">{label}</p>
+        <p role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-40 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a0e3d] px-2 py-1.5 text-center text-[11px] leading-snug text-white/80 opacity-0 shadow-xl transition group-hover:opacity-100">{description}</p>
+      </div>
+    </LongPressHint>
   );
 }
 
@@ -171,9 +192,10 @@ function parseDurationSeconds(duration: string) {
   return map[duration] ?? 30 * 60;
 }
 
-function ActiveCloudCard({ cloud, now }: { cloud: PublicUserProfile["activeClouds"][number]; now: number }) {
+function ActiveCloudCard({ cloud, now }: { cloud: PublicUserProfile["activeClouds"][number] | PublicUserProfile["endedClouds"][number]; now: number }) {
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000), 0);
-  const live = remainingSeconds > 0;
+  const ended = "endedAt" in cloud && Boolean(cloud.endedAt);
+  const live = !ended && remainingSeconds > 0;
 
   return (
     <article className="block w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-6 transition hover:border-[#A855F7]/50 hover:bg-[#22104f]">
@@ -186,7 +208,7 @@ function ActiveCloudCard({ cloud, now }: { cloud: PublicUserProfile["activeCloud
         </span>
       </div>
 
-      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
+      <h3 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[16px] leading-[1.3]" : "text-[18px] leading-snug"}`} style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
       {cloud.description && (
         <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
           {cloud.description}
@@ -194,13 +216,13 @@ function ActiveCloudCard({ cloud, now }: { cloud: PublicUserProfile["activeCloud
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
-        <span>{live ? "Encerra em" : "Encerrada"}</span>
+        <span>{live ? "Encerra em" : "Encerrada em"}</span>
         <span className={`rounded-full px-2.5 py-1 font-semibold ${live ? "bg-[#9333EA]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
-          {formatCountdown(remainingSeconds)}
+          {ended && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : formatCountdown(remainingSeconds)}
         </span>
       </div>
       <Link href={cloud.href} className="mt-5 inline-flex items-center justify-center rounded-full bg-[#7C3AED] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#6D28D9]">
-        Acessar cloud
+        {ended ? "Ler conversa" : "Acessar cloud"}
       </Link>
     </article>
   );
@@ -399,6 +421,7 @@ export default function UserProfilePage() {
         isFollowing: current.isBlockedByMe ? current.isFollowing : false,
         isFollowRequested: current.isBlockedByMe ? current.isFollowRequested : false,
         activeClouds: current.isBlockedByMe ? current.activeClouds : [],
+        endedClouds: current.isBlockedByMe ? current.endedClouds : [],
       } : current);
     } catch (blockError) {
       setError(blockError instanceof Error ? blockError.message : "Não foi possível atualizar o bloqueio.");
@@ -450,6 +473,8 @@ export default function UserProfilePage() {
   const bio = profile?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
   const isOwnProfile = Boolean(profile?.isSelf || sessionUser?.id === profile?.id);
   const activeClouds = profile?.activeClouds ?? [];
+  const endedClouds = profile?.endedClouds ?? [];
+  const participatingNow = profile?.participatingNow ?? null;
 
   const waText = profile
     ? encodeURIComponent(`Veja o perfil de ${displayName} no Clouds Community: ${profileUrl}`)
@@ -568,7 +593,7 @@ export default function UserProfilePage() {
             <FieldStat value={following} label="Following" description="Perfis que esta pessoa segue." onClick={openFollowingModal} />
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={cloudsCount} label="Clouds" description="Clouds publicadas por este perfil." />
-            {profile.showHypesCount && <><div className="h-8 w-px bg-white/10" /><FieldStat value={hypesCount} label="Hypes" description="Total de hypes recebidos nas suas Clouds." onClick={openHypesModal} /></>}
+            {profile.showHypesCount && <><div className="h-8 w-px bg-white/10" /><FieldStat value={hypesCount} label="Hypes" description={isOwnProfile ? "Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações" : "Total de hypes recebidos em clouds"} onClick={openHypesModal} /></>}
           </div>
 
           <div className="mt-3 flex items-center gap-3 text-[13px] text-white/30">
@@ -622,6 +647,28 @@ export default function UserProfilePage() {
             )}
           </div>
 
+          {participatingNow && (
+            <section className="mt-8 w-full rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-5 text-left shadow-[0_14px_40px_rgba(0,0,0,0.16)]">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5" aria-label="Ao vivo">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                    </span>
+                    <h2 className="text-[14px] font-bold uppercase tracking-[0.16em] text-[#D8B4FE]">Participando agora</h2>
+                  </div>
+                  <p className="mt-3 break-words text-[17px] font-semibold leading-snug text-white">{participatingNow.title}</p>
+                  <p className="mt-1 text-[12px] text-white/45">Cloud ao vivo · {participatingNow.duration}</p>
+                  {isOwnProfile && <p className="mt-3 text-[12px] leading-relaxed text-white/50">Você pode ocultar essa informação nas configurações.</p>}
+                </div>
+                <Link href={participatingNow.href} className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#7C3AED] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#6D28D9]">
+                  Acessar Cloud
+                </Link>
+              </div>
+            </section>
+          )}
+
           <div className="mt-10 w-full text-left">
             {activeClouds.length > 0 ? (
               <>
@@ -632,9 +679,15 @@ export default function UserProfilePage() {
                 </div>
               </>
             ) : (
-              <p className="text-center text-[14px] text-white">
-                Sem clouds ativas no momento
-              </p>
+              endedClouds.length === 0 && <p className="text-center text-[14px] text-white">{isOwnProfile ? "As clouds que criar aparecerão aqui. Você pode ocultá-las de seu perfil nas configurações." : "Sem clouds publicadas no momento"}</p>
+            )}
+            {endedClouds.length > 0 && (
+              <section className="mt-6">
+                <h2 className="mb-3 text-[14px] font-bold uppercase tracking-[0.16em] text-white/50">Clouds encerradas</h2>
+                <div className="grid gap-3">
+                  {endedClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} />)}
+                </div>
+              </section>
             )}
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSessionUser } from "./session-user";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ type CloudResult = {
   authorUsername?: string;
   membersCount?: number;
 };
+type HistoryEntry = { query: string; kind: "profile" | "cloud" | "query"; targetId: string | null; subtitle: string | null; avatarUrl: string | null };
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -55,16 +57,39 @@ function SpinnerIcon() {
   );
 }
 
+function HistoryIcon() {
+  return <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 7v5l3 2" /></svg>;
+}
+
+function normalizeSearchText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+}
+
+const MAX_RECENT_SEARCHES = 150;
+
+function mergeRecentSearches(...groups: HistoryEntry[][]): HistoryEntry[] {
+  return Array.from(new Map(groups.flat().map((entry) => [`${entry.kind}:${entry.targetId ?? entry.query}`, entry])).values())
+    .slice(0, MAX_RECENT_SEARCHES);
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const { user } = useSessionUser();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<UserResult[]>([]);
   const [clouds, setClouds] = useState<CloudResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<HistoryEntry[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyStorageKey = `clouds-search-history:${user?.id ?? "guest"}`;
+
+  const saveRecentSearchesLocally = (searches: HistoryEntry[]) => {
+    setRecentSearches(searches);
+    try { window.localStorage.setItem(historyStorageKey, JSON.stringify(searches)); } catch { /* armazenamento indisponível */ }
+  };
 
   // ESC to close
   useEffect(() => {
@@ -72,6 +97,24 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  useEffect(() => {
+    let localSearches: HistoryEntry[] = [];
+    try {
+      const raw = window.localStorage.getItem(historyStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      localSearches = Array.isArray(parsed) ? parsed.filter((item): item is HistoryEntry => typeof item?.query === "string" && (item.kind === "profile" || item.kind === "cloud" || item.kind === "query")) : [];
+      setRecentSearches(localSearches);
+    } catch { /* armazenamento indisponível */ }
+
+    void fetch("/api/users/search-history", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload: { searches?: HistoryEntry[] } | null) => {
+        const merged = mergeRecentSearches(Array.isArray(payload?.searches) ? payload.searches : [], localSearches);
+        saveRecentSearchesLocally(merged);
+      })
+      .catch(() => undefined);
+  }, [historyStorageKey]);
 
   // Debounced search
   useEffect(() => {
@@ -107,13 +150,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
         // Clouds — filter client-side by title/author
         const cloudsPayload = cloudsRes.ok ? (await cloudsRes.json().catch(() => null)) : null;
-        const lower = trimmed.toLowerCase();
+        const lower = normalizeSearchText(trimmed);
         const fetchedClouds: CloudResult[] = Array.isArray(cloudsPayload?.clouds)
           ? (cloudsPayload.clouds as Array<{ id: string; title: string; duration: string; createdAt: string; author: { username: string }; membersCount: number }>)
               .filter(
                 (c) =>
-                  c.title.toLowerCase().includes(lower) ||
-                  c.author?.username?.toLowerCase().includes(lower),
+                  normalizeSearchText(c.title).includes(lower) ||
+                  normalizeSearchText(c.author?.username ?? "").includes(lower),
               )
               .slice(0, 5)
               .map((c) => ({
@@ -129,6 +172,16 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         setUsers(fetchedUsers);
         setClouds(fetchedClouds);
         setSearched(true);
+        const searchedEntries: HistoryEntry[] = [
+          ...fetchedUsers.map((user) => ({ query: user.displayName, kind: "profile" as const, targetId: user.id, subtitle: `@${user.username}`, avatarUrl: user.avatarUrl })),
+          ...fetchedClouds.map((cloud) => ({ query: cloud.title, kind: "cloud" as const, targetId: cloud.id, subtitle: cloud.authorUsername ? `@${cloud.authorUsername}` : null, avatarUrl: null })),
+        ];
+        if (searchedEntries.length) {
+          saveRecentSearchesLocally(mergeRecentSearches(searchedEntries, recentSearches));
+          searchedEntries.forEach((entry) => {
+            void fetch("/api/users/search-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) }).catch(() => undefined);
+          });
+        }
       } catch {
         setUsers([]);
         setClouds([]);
@@ -143,6 +196,23 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
   const hasResults = users.length > 0 || clouds.length > 0;
   const showEmpty = searched && !hasResults && !loading;
+  const clearRecentSearches = async () => {
+    saveRecentSearchesLocally([]);
+    await fetch("/api/users/search-history", { method: "DELETE" }).catch(() => undefined);
+  };
+  const saveHistoryEntry = (entry: HistoryEntry) => {
+    saveRecentSearchesLocally(mergeRecentSearches([entry], recentSearches));
+    void fetch("/api/users/search-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(entry) }).catch(() => undefined);
+  };
+  const removeHistoryEntry = (entry: HistoryEntry) => {
+    const next = recentSearches.filter((item) => !(item.kind === entry.kind && item.targetId === entry.targetId));
+    saveRecentSearchesLocally(next);
+    void fetch(`/api/users/search-history?kind=${encodeURIComponent(entry.kind)}&targetId=${encodeURIComponent(entry.targetId ?? "")}`, { method: "DELETE" }).catch(() => undefined);
+  };
+  const profileHistory = recentSearches.filter((entry) => entry.kind === "profile");
+  const cloudHistory = recentSearches.filter((entry) => entry.kind === "cloud");
+  const [showAllProfiles, setShowAllProfiles] = useState(false);
+  const [showAllClouds, setShowAllClouds] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 px-4" onClick={onClose}>
@@ -176,7 +246,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">Pessoas</p>
                 {users.map(user => (
                   <button key={user.id} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
-                    onClick={() => { router.push(`/users/${user.id}`); onClose(); }}>
+                    onClick={() => { saveHistoryEntry({ query: user.displayName, kind: "profile", targetId: user.id, subtitle: `@${user.username}`, avatarUrl: user.avatarUrl }); router.push(`/users/${user.id}`); onClose(); }}>
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#A855F7] text-[13px] font-bold text-white overflow-hidden">
                       {user.avatarUrl
                         ? <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
@@ -196,6 +266,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 {clouds.map(cloud => (
                   <button key={cloud.id} className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
                     onClick={() => {
+                      saveHistoryEntry({ query: cloud.title, kind: "cloud", targetId: cloud.id, subtitle: cloud.authorUsername ? `@${cloud.authorUsername}` : null, avatarUrl: null });
                       const params = new URLSearchParams({ title: cloud.title, duration: cloud.duration, createdAt: cloud.createdAt });
                       router.push(`/cloud/${cloud.id}?${params.toString()}`);
                       onClose();
@@ -220,9 +291,23 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!query && (
-          <p className="mt-3 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+        {!query && (profileHistory.length > 0 || cloudHistory.length > 0) && (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35">Pesquisas recentes</p>
+              <button type="button" onClick={() => void clearRecentSearches()} className="text-[13px] font-medium text-[#C084FC] transition hover:text-white">Limpar</button>
+            </div>
+            <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+              {profileHistory.slice(0, showAllProfiles ? undefined : 10).map((entry) => <div key={`${entry.kind}:${entry.targetId}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.06]"><div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-xs font-bold">{entry.avatarUrl ? <img src={entry.avatarUrl} alt="" className="h-full w-full object-cover" /> : entry.query[0]}</div><button className="min-w-0 flex-1 text-left" onClick={() => { router.push(`/users/${entry.targetId}`); onClose(); }}><p className="truncate text-[13px] font-semibold">{entry.query}</p><p className="truncate text-[11px] text-white/40">{entry.subtitle}</p></button><button aria-label="Apagar pesquisa" onClick={() => removeHistoryEntry(entry)} className="p-2 text-white/35 hover:text-white"><XIcon /></button></div>)}
+              {profileHistory.length > 10 && <button onClick={() => setShowAllProfiles((value) => !value)} className="py-2 text-[13px] font-semibold text-[#C084FC]">{showAllProfiles ? "Ver menos" : "Ver mais"}</button>}
+              {cloudHistory.length > 0 && <p className="mt-3 px-1 text-[11px] font-semibold uppercase tracking-wider text-white/35">Clouds buscadas</p>}
+              {cloudHistory.slice(0, showAllClouds ? undefined : 10).map((entry) => <div key={`${entry.kind}:${entry.targetId}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.06]"><CloudIcon /><button className="min-w-0 flex-1 text-left" onClick={() => { router.push(`/cloud/${entry.targetId}`); onClose(); }}><p className="truncate text-[13px] font-semibold">{entry.query}</p><p className="truncate text-[11px] text-white/40">{entry.subtitle}</p></button><button aria-label="Apagar pesquisa" onClick={() => removeHistoryEntry(entry)} className="p-2 text-white/35 hover:text-white"><XIcon /></button></div>)}
+              {cloudHistory.length > 10 && <button onClick={() => setShowAllClouds((value) => !value)} className="py-2 text-[13px] font-semibold text-[#C084FC]">{showAllClouds ? "Ver menos" : "Ver mais"}</button>}
+            </div>
+          </div>
         )}
+
+        {!query && <p className="mt-4 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>}
       </div>
     </div>
   );

@@ -27,6 +27,21 @@ export class UsersController {
     return this.usersService.search(extractSessionToken(req), q ?? '', limit ?? null);
   }
 
+  @Get('search-history')
+  async searchHistory(@Req() req: Request) {
+    return this.usersService.getSearchHistory(extractSessionToken(req));
+  }
+
+  @Post('search-history')
+  async saveSearchHistory(@Req() req: Request, @Body() body: { query?: string; kind?: string; targetId?: string; subtitle?: string; avatarUrl?: string | null }) {
+    return this.usersService.saveSearchHistory(extractSessionToken(req), body);
+  }
+
+  @Delete('search-history')
+  async clearSearchHistory(@Req() req: Request, @Query('kind') kind?: string, @Query('targetId') targetId?: string) {
+    return kind && targetId ? this.usersService.deleteSearchHistory(extractSessionToken(req), kind, targetId) : this.usersService.clearSearchHistory(extractSessionToken(req));
+  }
+
   @Get('following')
   async following(@Req() req: Request, @Query('sort') sort?: string, @Query('limit') limit?: string) {
     return this.usersService.following(extractSessionToken(req), sort, limit);

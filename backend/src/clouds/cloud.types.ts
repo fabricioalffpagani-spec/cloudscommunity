@@ -19,6 +19,7 @@ export type CloudAuthorPayload = {
   username: string;
   avatarUrl: string | null;
   location: string | null;
+  isTestClouder: boolean;
 };
 
 export type CloudMessageReactionPayload = {
@@ -54,6 +55,7 @@ export type CloudMessagePayload = {
   type: 'text' | 'audio' | 'image' | 'link' | 'system';
   content: string | null;
   mediaUrl: string | null;
+  isSticker: boolean;
   clientMessageId: string | null;
   replyToMessageId: string | null;
   createdAt: string;
@@ -79,6 +81,8 @@ export type CloudPayload = {
   hypesCount: number;
   hyped?: boolean;
   membersCount: number;
+  participantsCount: number;
+  originCloud?: { id: string; title: string } | null;
   members: Array<{
     id: string;
     userId: string;
@@ -99,6 +103,7 @@ export type CreateCloudInput = {
   description?: string;
   duration?: string;
   visibility?: CloudVisibilityValue;
+  originCloudId?: string;
 };
 
 export type ListCloudMessagesQuery = {
@@ -110,6 +115,7 @@ export type CreateCloudMessageInput = {
   type: 'text' | 'audio' | 'image' | 'link';
   content?: string;
   mediaUrl?: string;
+  isSticker?: boolean;
   clientMessageId?: string;
   replyToMessageId?: string;
 };

@@ -103,6 +103,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
   const isCloudOwner = currentUserId === cloud.authorId;
   const canShare = cloud.visibility === "public" || isCloudOwner;
   const participantAvatars = cloud.authorPhoto ? [cloud.authorPhoto] : [];
+  const longTitle = cloud.title.length > 68;
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -145,7 +146,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
         </span>
       </div>
 
-      <h2 className="mt-4 break-all text-[20px] font-semibold leading-snug text-white">{cloud.title}</h2>
+      <h2 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${longTitle ? "text-[18px] leading-[1.3] tracking-[-0.012em]" : "text-[20px] leading-snug"}`}>{cloud.title}</h2>
 
       {cloud.description && (
         <p className="mt-2 line-clamp-3 text-[14px] leading-relaxed text-white/60">

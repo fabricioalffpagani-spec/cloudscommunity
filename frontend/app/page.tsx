@@ -21,6 +21,7 @@ import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import { MessagesNavLink } from "./components/MessagesNavLink";
 import { MobileAppNav } from "./components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
+import { SearchModal } from "./components/SearchModal";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -53,6 +54,7 @@ type Cloud = {
   liveParticipants?: number;
   authorId?: string;
   participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
+  originCloud?: { id: string; title: string } | null;
 };
 
 type PollOption = { id: string; text: string; votes: number };
@@ -85,6 +87,7 @@ type CloudApiAuthor = {
   name: string;
   username: string;
   avatarUrl: string | null;
+  isTestClouder?: boolean;
 };
 
 type CloudApiPayload = {
@@ -101,7 +104,9 @@ type CloudApiPayload = {
   hypesCount: number;
   hyped?: boolean;
   membersCount: number;
+  participantsCount: number;
   participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
+  originCloud?: { id: string; title: string } | null;
   href: string;
 };
 
@@ -135,13 +140,14 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     href: cloud.href,
     hypes: cloud.hypesCount,
     hyped: cloud.hyped ?? false,
-    authorName: cloud.author.name,
+    authorName: cloud.author.isTestClouder ? `${cloud.author.name} · Clouder` : cloud.author.name,
     authorHandle: cloud.author.username,
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     description: cloud.description ?? undefined,
-    liveParticipants: Math.max(1, cloud.membersCount),
+    liveParticipants: cloud.membersCount,
     authorId: cloud.authorId,
     participantProfiles: cloud.participantProfiles,
+    originCloud: cloud.originCloud,
   };
 }
 
@@ -904,7 +910,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
       </div>
 
       {/* Title */}
-      <h2 className="mt-4 text-[20px] font-semibold text-white leading-snug">{cloud.title}</h2>
+      <h2 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[18px] leading-[1.3] tracking-[-0.012em]" : "text-[20px] leading-snug"}`}>{cloud.title}</h2>
 
       {cloud.description && (
         <p className="mt-2 text-[14px] leading-relaxed text-white/60 line-clamp-3">
@@ -1855,7 +1861,7 @@ type SearchResult = {
   clouds: Cloud[];
 };
 
-function SearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds: Cloud[] }) {
+function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds: Cloud[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -2281,7 +2287,7 @@ function TopicFeedStage({
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_285px] lg:items-center">
                     <div className="min-w-0">
-                      <h3 className="break-all text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[31px]">
+                      <h3 lang="pt-BR" className="hyphens-auto break-normal text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[28px]" style={{ hyphenateCharacter: "–" }}>
                         {cloud.title}
                       </h3>
                       {expanded ? (
@@ -2467,15 +2473,15 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
         return (
-          <article key={cloud.id} className="relative flex min-h-full snap-start flex-col bg-[radial-gradient(ellipse_at_50%_47%,rgba(54,23,147,.78)_0%,rgba(24,9,73,.66)_30%,transparent_63%),linear-gradient(180deg,#04030b_0%,#0a041f_100%)] px-6 pb-3 pt-6">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                {profile.avatar ? <img src={profile.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-base font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                <div className="min-w-0"><p className="truncate text-[18px] font-bold leading-none">{profile.name}</p><p className="mt-1 truncate text-[13px] text-white/65">@{profile.handle}</p></div>
+          <article key={cloud.id} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                {profile.avatar ? <img src={profile.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-sm font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
+                <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-none">{profile.name}</p><p className="mt-1 truncate text-[12px] text-white/65">@{profile.handle}</p></div>
               </div>
-              <div className="flex -space-x-2">
-                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt="" className="h-8 w-8 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[10px] font-bold">{participant.name.slice(0, 1)}</span>)}
-                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length > 7 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[10px] font-bold text-white">+{(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length - 7}</span>}
+              <div className="flex shrink-0 -space-x-2" aria-label={`${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
+                {(cloud.participantProfiles ?? []).slice(0, 4).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold">{participant.name.slice(0, 1)}</span>)}
+                {(cloud.participantProfiles ?? []).length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">+{(cloud.participantProfiles ?? []).length - 4}</span>}
               </div>
             </div>
             <button
@@ -2512,11 +2518,11 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
               style={{ touchAction: "pan-y" }}
               aria-label={`Detalhes da Cloud ${cloud.title}. Deslize para a esquerda para entrar.`}
             >
-              <span className="block break-words font-display text-[52px] font-bold leading-[1.13] tracking-[-.045em] text-white">{cloud.title}</span>
+              <span lang="pt-BR" className={`block break-words hyphens-auto font-display font-bold text-white ${cloud.title.length > 68 ? "text-[43px] leading-[1.17] tracking-[-.035em]" : "text-[52px] leading-[1.13] tracking-[-.045em]"}`}>{cloud.title}</span>
             </button>
-            <div className="flex items-center justify-end border-t border-white/[.08] pt-2">
-              <span className="inline-flex items-center gap-1.5 text-[19px] font-bold tabular-nums"><span className="text-[#9D22FF]">◷</span>{formatCountdown(remaining)}</span>
-            </div>
+            <span className="absolute bottom-6 right-6 rounded-full bg-white/[0.07] px-3 py-1.5 text-[14px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(remaining)} restantes`}>
+              {formatCountdown(remaining)}
+            </span>
           </article>
         );
       })}
@@ -2531,6 +2537,7 @@ function PageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
+  const requestedCloudId = searchParams.get("cloud");
   const mobilePreview = searchParams.get("mobilePreview") === "1";
 
   const [clouds, setClouds] = useState<Cloud[]>([]);
@@ -2538,6 +2545,7 @@ function PageContent() {
   const [hydrated, setHydrated] = useState(false);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
+  const [originCloudId, setOriginCloudId] = useState<string | null>(null);
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
@@ -2548,13 +2556,14 @@ function PageContent() {
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
   const [cloudReportOpen, setCloudReportOpen] = useState(false);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
-  const [participants, setParticipants] = useState<number>(0);
 
-  // Slide animation: "left" = next, "right" = prev, null = settled
-  const [slideAnim, setSlideAnim] = useState<"left" | "right" | null>(null);
+  // Slide animation: "up" = next, "down" = previous, null = settled.
+  const [slideAnim, setSlideAnim] = useState<"up" | "down" | null>(null);
+  const cloudWheelLocked = useRef(false);
 
   useEffect(() => {
     if (searchParams.get("create") !== "1") return;
+    setOriginCloudId(searchParams.get("originCloudId"));
     setModal("create");
     router.replace("/");
   }, [router, searchParams]);
@@ -2594,11 +2603,17 @@ function PageContent() {
     setCurrentCloudIndex(0);
   }, [feedOrder, cloudScope]);
 
+  useEffect(() => {
+    if (!requestedCloudId) return;
+    const index = orderedClouds.filter(isCloudActive).findIndex((cloud) => cloud.id === requestedCloudId);
+    if (index >= 0) setCurrentCloudIndex(index);
+  }, [orderedClouds, requestedCloudId]);
+
   const navigateCloud = (direction: number) => {
     const activeClouds = orderedClouds.filter(isCloudActive);
     if (activeClouds.length <= 1) return;
 
-    const dir = direction > 0 ? "left" : "right";
+    const dir = direction > 0 ? "up" : "down";
     setSlideAnim(dir);
     setTimeout(() => {
       setCurrentCloudIndex(prev => {
@@ -2620,6 +2635,15 @@ function PageContent() {
       join: "1",
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
+  };
+
+  const handleDesktopCloudWheel = (event: React.WheelEvent<HTMLElement>) => {
+    if (homeStage !== "topics" || Math.abs(event.deltaY) < Math.abs(event.deltaX) || event.deltaY === 0) return;
+    event.preventDefault();
+    if (cloudWheelLocked.current) return;
+    cloudWheelLocked.current = true;
+    navigateCloud(event.deltaY > 0 ? 1 : -1);
+    window.setTimeout(() => { cloudWheelLocked.current = false; }, 320);
   };
 
 
@@ -2689,34 +2713,7 @@ function PageContent() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    const activeClouds = orderedClouds.filter(isCloudActive);
-    if (activeClouds.length === 0) {
-      setParticipants(0);
-      return;
-    }
-
-    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
-    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
-    setParticipants(base);
-  }, [currentCloudIndex, orderedClouds]);
-
-  useEffect(() => {
-    const activeClouds = orderedClouds.filter(isCloudActive);
-    if (activeClouds.length === 0) return;
-
-    const current = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? activeClouds[0];
-    const base = current?.liveParticipants ?? 12 + ((current?.id.charCodeAt(0) ?? 0) % 40);
-
-    const iv = window.setInterval(() => {
-      const delta = Math.floor(Math.random() * 3) - 1;
-      setParticipants(() => Math.max(1, base + delta));
-    }, 4000);
-
-    return () => window.clearInterval(iv);
-  }, [currentCloudIndex, orderedClouds]);
-
-  const closeModal = () => setModal(null);
+  const closeModal = () => { setModal(null); setOriginCloudId(null); };
 
   const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string; invitedUserIds?: string[] }) => {
     if (data.audioUrl) {
@@ -2745,6 +2742,7 @@ function PageContent() {
         duration: data.duration,
         visibility: data.visibility,
         invitedUserIds: data.invitedUserIds,
+        originCloudId: originCloudId ?? undefined,
       }),
     });
 
@@ -2811,7 +2809,7 @@ function PageContent() {
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
 
       {/* ── Modals ── */}
-      {modal === "search"        && <SearchModal onClose={closeModal} feedClouds={clouds} />}
+      {modal === "search"        && <SearchModal onClose={closeModal} />}
       {modal === "create"        && <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />}
       {modal === "poll"          && <CreatePollModal onClose={closeModal} onPublish={publishPoll} />}
       {modal === "profile"       && <ProfileMenu onClose={closeModal} />}
@@ -2819,29 +2817,29 @@ function PageContent() {
 
       {/* ── Header — fundo gradiente escuro ── */}
       <header className={mobilePreview ? "hidden" : "hidden flex-none bg-transparent md:block"}>
-        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
+        <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
 
           {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
+          <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
             <HeaderBrand />
           </Link>
 
           {/* Nav */}
-          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
-            <Link href="/" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">
+          <nav aria-label="Navegação" className="flex items-end justify-self-center gap-16 pb-2">
+            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">
               Talk
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/read" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Read
             </Link>
-            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Meet
             </Link>
           </nav>
 
           {/* Right icons */}
-          <div className="flex items-center gap-4 pb-2">
+          <div className="flex items-center justify-self-end gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setModal("search")}
               className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
@@ -2861,12 +2859,14 @@ function PageContent() {
 
       {/* Cabeçalho compacto do feed móvel */}
       <header className={`${mobilePreview ? "grid" : "grid md:hidden"} h-[76px] flex-none grid-cols-[48px_minmax(0,1fr)_48px] items-center px-5 pt-[max(.5rem,env(safe-area-inset-top))]`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo_clouds.png" alt="Clouds" className="h-[42px] w-[42px] object-contain" />
-        <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-4 whitespace-nowrap">
+        <Link href={mobilePreview ? "/?mobilePreview=1" : "/"} aria-label="Ir para a página inicial" className="flex h-[42px] w-[42px] items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo_clouds.png" alt="Clouds Community" className="h-[42px] w-[42px] object-contain" />
+        </Link>
+        <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap">
           <span className="relative text-[18px] font-bold text-[#B44DFF]">Talk<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
-          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[16px] font-semibold text-white/60">Read</Link>
-          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[16px] font-semibold text-white/60">Meet</Link>
+          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[18px] font-semibold text-white/60">Read</Link>
+          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[18px] font-semibold text-white/60">Meet</Link>
         </nav>
         <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
       </header>
@@ -2887,7 +2887,7 @@ function PageContent() {
       </main>
 
       {/* ── Main: card + arrows ── */}
-      <main className={mobilePreview ? "hidden" : "relative hidden flex-1 items-center justify-center gap-4 overflow-hidden px-4 md:flex"}>
+      <main onWheel={handleDesktopCloudWheel} className={mobilePreview ? "hidden" : "relative hidden flex-1 items-center justify-center overflow-hidden px-4 md:flex"}>
         {homeStage === "topics" ? (
           <>
             {trendingQuery ? (
@@ -2913,17 +2913,25 @@ function PageContent() {
             )}
             {currentCloud ? (
             <>
-            {/* Left arrow */}
-            <button
-              onClick={() => navigateCloud(-1)}
-              aria-label="Cloud anterior"
-              className="z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
-            >
-              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-            </button>
+            <div className="absolute right-[max(1.5rem,calc(50%-620px))] top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-3 md:flex">
+              <button
+                onClick={() => navigateCloud(-1)}
+                aria-label="Cloud anterior"
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+              >
+                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+              </button>
+              <button
+                onClick={() => navigateCloud(1)}
+                aria-label="Próxima Cloud"
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
+              >
+                <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+            </div>
 
             {/* Cloud card + dot indicators */}
-            <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4">
+            <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4 md:mr-20 xl:mr-0">
             <div
               onClick={() => setCloudOptionsOpen(false)}
               className="cloud-card relative w-full overflow-hidden rounded-3xl"
@@ -2932,14 +2940,14 @@ function PageContent() {
                 border: "1px solid rgba(168,85,247,0.22)",
                 boxShadow: "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
                 transition: "transform 0.25s ease, opacity 0.25s ease",
-                transform: slideAnim === "left" ? "translateX(-36px)" : slideAnim === "right" ? "translateX(36px)" : "translateX(0)",
+                transform: slideAnim === "up" ? "translateY(-36px)" : slideAnim === "down" ? "translateY(36px)" : "translateY(0)",
                 opacity: slideAnim ? 0.15 : 1,
               }}
             >
               {/* Card header */}
               <div className="flex items-center justify-between px-10 pt-8 pb-5">
                 <div className="flex items-center gap-4">
-                  <div className="relative">
+                  <Link href={`/users/${encodeURIComponent(currentCloud.authorId ?? "")}`} aria-label={`Ver perfil de ${currentCloud.authorName ?? "Autor"}`} className="relative">
                     {currentCloud.authorPhoto ? (
                       <img
                         src={currentCloud.authorPhoto}
@@ -2953,7 +2961,7 @@ function PageContent() {
                       </span>
                     )}
                     <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
-                  </div>
+                  </Link>
                   <div>
                     <p className="flex items-center gap-2 text-[18px] font-semibold text-white">
                       {currentCloud.authorName ?? "Autor"}
@@ -2967,35 +2975,13 @@ function PageContent() {
                 </div>
 
                 <div className="flex items-center gap-5">
-                  <div className="flex -space-x-3" aria-label="Participantes da Cloud">
-                    {currentCloud.participantProfiles?.slice(0, 7).map((participant) => participant.avatarUrl ? (
-                      <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <span key={participant.id} title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>
+                  <div className="flex -space-x-3" aria-label={`${currentCloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
+                    {currentCloud.participantProfiles?.slice(0, 7).map((participant) => (
+                      <Link key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} aria-label={`Ver perfil de ${participant.name}`}>
+                        {participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>}
+                      </Link>
                     ))}
-                  </div>
-                  {/* Timer */}
-                  <div className="flex items-center gap-2.5 rounded-full bg-white/[0.07] px-5 py-2.5">
-                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/>
-                    </svg>
-                    <span className="text-[19px] font-bold tabular-nums text-white">
-                      {formatCountdown(currentCountdown)}
-                    </span>
-                  </div>
-                  {/* Participants */}
-                  <div className="flex items-center gap-2 text-[16px] font-semibold text-white">
-                    {currentCloud.visibility === "private" && (
-                      <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
-                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                      </svg>
-                    )}
-                    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                    {formatParticipantCount(participants)}
+                    {(currentCloud.participantProfiles?.length ?? 0) > 7 && <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[13px] font-bold text-white">+{(currentCloud.participantProfiles?.length ?? 0) - 7}</span>}
                   </div>
                   <div className="relative flex items-center">
                     <button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setCloudOptionsOpen((open) => !open); }} className="flex items-center text-white hover:text-white/70 transition">
@@ -3014,9 +3000,11 @@ function PageContent() {
 
               {/* Big title */}
               <div className="px-12 py-12 text-center">
+                {currentCloud.originCloud && <p className="mb-4 text-[12px] text-white/45">Inspirada em <Link href={`/read?cloud=${encodeURIComponent(currentCloud.originCloud.id)}`} className="font-semibold text-[#C084FC] hover:text-white hover:underline">{currentCloud.originCloud.title}</Link></p>}
                 <h2
-                  className="text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[72px]"
-                  style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
+                  lang="pt-BR"
+                  className="hyphens-auto break-normal text-[58px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[60px]"
+                  style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}
                 >
                   {currentCloud.title}
                 </h2>
@@ -3032,34 +3020,13 @@ function PageContent() {
                   Entrar na Cloud
                 </button>
               </div>
+              <span className="absolute bottom-8 right-10 rounded-full bg-white/[0.07] px-5 py-2.5 text-[19px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(currentCountdown)} restantes`}>
+                {formatCountdown(currentCountdown)}
+              </span>
             </div>
 
-          {/* Dot indicators */}
-          {activeClouds.length > 1 && (
-            <div className="flex justify-center gap-2">
-              {activeClouds.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    const dir = i > currentCloudIndex ? "left" : "right";
-                    setSlideAnim(dir);
-                    setTimeout(() => { setCurrentCloudIndex(i); setSlideAnim(null); }, 250);
-                  }}
-                  className={`h-1.5 rounded-full transition-all ${i === currentCloudIndex ? "w-6 bg-[#A855F7]" : "w-1.5 bg-white/20"}`}
-                />
-              ))}
-            </div>
-          )}
             </div>
 
-        {/* Right arrow */}
-        <button
-          onClick={() => navigateCloud(1)}
-          aria-label="Próxima Cloud"
-          className="z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]"
-        >
-          <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
-        </button>
             </>
             ) : (
             /* Empty state — sem cards, sem setas */
@@ -3084,16 +3051,6 @@ function PageContent() {
               </button>
             </div>
             )}
-
-        {/* FAB + */}
-        <button
-          type="button"
-          aria-label="Publicar nova Cloud"
-          onClick={() => setModal("create")}
-          className="absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full bg-[#A855F7] text-white transition hover:bg-[#9333EA] hover:scale-105 active:scale-95"
-        >
-          <PlusIcon s={22} />
-        </button>
         </>
         ) : (
           <div className="absolute inset-0 flex h-full flex-col px-3 py-4 lg:px-6">
@@ -3125,7 +3082,7 @@ function PageContent() {
         )}
       </main>
 
-      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(participants)}</p></div></div></div>}
+      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(currentCloud.liveParticipants ?? 0)}</p></div></div></div>}
       {cloudDescriptionOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Descrição da Cloud</h3><button onClick={() => setCloudDescriptionOpen(false)} className="text-white/50 hover:text-white">×</button></div><p className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/75">{currentCloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p></div></div>}
       {cloudReportOpen && currentCloud && currentCloud.authorId && (
         <CloudReportModal
@@ -3137,10 +3094,14 @@ function PageContent() {
       )}
 
       <nav className={mobilePreview ? "hidden" : "hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block"} aria-label="Navegação inferior">
-        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
+        <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
+          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#C084FC]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
           <MessagesNavLink />
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
+          <button type="button" aria-label="Publicar nova Cloud" onClick={() => setModal("create")} className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
+            <span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span>
+            <span className="text-[13px] font-semibold">Publicar</span>
+          </button>
+          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
 

@@ -298,14 +298,14 @@ export default function MeetPage() {
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <header className="hidden flex-none bg-transparent md:block">
-        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
-          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2"><HeaderBrand /></Link>
-          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
-            <Link href="/read" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Read</Link>
-            <Link href="/meet" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">Meet<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
+        <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
+          <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2"><HeaderBrand /></Link>
+          <nav aria-label="Navegação" className="flex items-end justify-self-center gap-16 pb-2">
+            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
+            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Read</Link>
+            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">Meet<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
           </nav>
-          <div className="flex items-center gap-4 pb-2">
+          <div className="flex items-center justify-self-end gap-4 pb-2">
             <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
             <Link href="/profile" aria-label="Meu perfil" className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white"><SessionUserAvatar user={user} size={56} /></Link>
             <Link href="/settings" aria-label="Configurações" className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"><GearIcon s={28} /></Link>
@@ -379,10 +379,11 @@ export default function MeetPage() {
       </main>
 
       <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
-        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+        <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
           <MessagesNavLink />
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
+          <Link href="/?create=1" aria-label="Publicar nova Cloud" className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span><span className="text-[13px] font-semibold">Publicar</span></Link>
+          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
       <MobileAppNav />

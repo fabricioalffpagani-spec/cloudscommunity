@@ -16,6 +16,7 @@ type UserWithProfile = Prisma.UserGetPayload<{
 
 const DEFAULT_SEARCH_LIMIT = 10;
 const MAX_SEARCH_LIMIT = 10;
+const MAX_SEARCH_HISTORY_PER_KIND = 50;
 
 function normalizeText(value: string) {
   return value
@@ -146,6 +147,9 @@ export class UsersService {
         await this.createFollowRequest(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
       } else {
         await this.createFollow(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
+        if (target.isTestClouder) {
+          await this.createFollow(target.id, current.user.id, target.profile?.displayName ?? 'Clouder');
+        }
       }
     }
 
@@ -178,6 +182,53 @@ export class UsersService {
       ok: true,
       user: await this.mapPublicProfile(target, current.user.id),
     };
+  }
+
+  async getSearchHistory(token: string | null) {
+    const current = await this.requireSession(token);
+    const searches = await this.prisma.searchHistory.findMany({
+      where: { userId: current.user.id },
+      orderBy: { updatedAt: 'desc' },
+      take: MAX_SEARCH_HISTORY_PER_KIND * 3,
+      select: { query: true, kind: true, targetId: true, subtitle: true, avatarUrl: true },
+    });
+    return { ok: true, searches };
+  }
+
+  async saveSearchHistory(token: string | null, input: { query?: string; kind?: string; targetId?: string; subtitle?: string; avatarUrl?: string | null }) {
+    const current = await this.requireSession(token);
+    const query = (input.query ?? '').trim().replace(/\s+/g, ' ').slice(0, 120);
+    if (!query) throw new BadRequestException({ message: 'Informe uma busca.' });
+    const kind = input.kind === 'profile' || input.kind === 'cloud' ? input.kind : 'query';
+    const targetId = (input.targetId ?? query).trim().slice(0, 255);
+
+    await this.prisma.searchHistory.upsert({
+      where: { userId_kind_targetId: { userId: current.user.id, kind, targetId } },
+      create: { userId: current.user.id, query, kind, targetId, subtitle: input.subtitle?.slice(0, 255) ?? null, avatarUrl: input.avatarUrl ?? null },
+      update: { query, subtitle: input.subtitle?.slice(0, 255) ?? null, avatarUrl: input.avatarUrl ?? null, updatedAt: new Date() },
+    });
+    const staleSearches = await this.prisma.searchHistory.findMany({
+      where: { userId: current.user.id, kind },
+      orderBy: { updatedAt: 'desc' },
+      skip: MAX_SEARCH_HISTORY_PER_KIND,
+      select: { id: true },
+    });
+    if (staleSearches.length) {
+      await this.prisma.searchHistory.deleteMany({ where: { id: { in: staleSearches.map(({ id }) => id) } } });
+    }
+    return this.getSearchHistory(token);
+  }
+
+  async clearSearchHistory(token: string | null) {
+    const current = await this.requireSession(token);
+    await this.prisma.searchHistory.deleteMany({ where: { userId: current.user.id } });
+    return { ok: true, searches: [] };
+  }
+
+  async deleteSearchHistory(token: string | null, kind: string, targetId: string) {
+    const current = await this.requireSession(token);
+    await this.prisma.searchHistory.deleteMany({ where: { userId: current.user.id, kind, targetId } });
+    return this.getSearchHistory(token);
   }
 
   async block(token: string | null, identifierInput: string): Promise<{ ok: true }> {
@@ -791,13 +842,14 @@ export class UsersService {
     const isBlockedByUser = blockRelation?.blockerId === user.id;
     const canViewContent = !blockRelation && (isSelf || isFollowing || !profile.isPrivate);
 
+    const cloudVisibilityFilter = (!isSelf && !isFollowing) ? { visibility: 'public' as const } : {};
     const activeClouds = canViewContent ? await this.prisma.cloud.findMany({
       where: {
         authorId: user.id,
         deletedAt: null,
         status: CloudStatus.active,
         // Non-followers can only see public clouds even when profile is public
-        ...((!isSelf && !isFollowing) ? { visibility: 'public' } : {}),
+        ...cloudVisibilityFilter,
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -820,6 +872,46 @@ export class UsersService {
       href: `/cloud/${cloud.id}?source=for-you`,
     }));
 
+    const endedClouds = canViewContent && (isSelf || profile.showArchivedClouds)
+      ? await this.prisma.cloud.findMany({
+          where: {
+            authorId: user.id,
+            deletedAt: null,
+            status: CloudStatus.ended,
+            ...cloudVisibilityFilter,
+          },
+          orderBy: [{ endedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            duration: true,
+            createdAt: true,
+            endedAt: true,
+            visibility: true,
+          },
+        })
+      : [];
+
+    const serializedEndedClouds = endedClouds.map((cloud) => ({
+      id: cloud.id,
+      title: cloud.title,
+      description: cloud.content,
+      duration: cloud.duration,
+      createdAt: cloud.createdAt.toISOString(),
+      endedAt: cloud.endedAt?.toISOString() ?? null,
+      visibility: (cloud.visibility === 'private' ? 'private' : 'public') as 'private' | 'public',
+      href: `/cloud/${cloud.id}/conversation`,
+    }));
+
+    const participatingNow = canViewContent && (isSelf || profile.showParticipatingNow)
+      ? await this.prisma.cloudMember.findFirst({
+          where: { userId: user.id, leftAt: null, cloud: { deletedAt: null, status: CloudStatus.active, ...cloudVisibilityFilter } },
+          orderBy: { joinedAt: 'desc' },
+          select: { cloud: { select: { id: true, title: true, duration: true } } },
+        })
+      : null;
+
     return {
       id: user.id,
       username: profile.username,
@@ -831,6 +923,8 @@ export class UsersService {
       location: profile.location,
       website: profile.website,
       isPrivate: profile.isPrivate,
+      showArchivedClouds: isSelf || profile.showArchivedClouds,
+      showParticipatingNow: isSelf || profile.showParticipatingNow,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       followersCount,
@@ -845,7 +939,9 @@ export class UsersService {
       isSelf,
       profileUrl: `/users/${profile.username}`,
       activeCloud: serializedActiveClouds[0] ?? null,
+      participatingNow: participatingNow ? { id: participatingNow.cloud.id, title: participatingNow.cloud.title, duration: participatingNow.cloud.duration, href: `/cloud/${participatingNow.cloud.id}` } : null,
       activeClouds: serializedActiveClouds,
+      endedClouds: serializedEndedClouds,
     };
   }
 

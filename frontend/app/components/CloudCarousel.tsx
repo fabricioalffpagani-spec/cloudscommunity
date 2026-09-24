@@ -42,13 +42,6 @@ function formatCountdown(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function formatParticipantCount(value: number) {
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(1).replace(".0", "")}K`;
-  }
-  return `${value}`;
-}
-
 function PlusIcon({ s = 22 }: { s?: number }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -79,10 +72,6 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
   const currentCloud = activeClouds[safeIndex] ?? null;
   const currentCountdown = currentCloud
     ? Math.max(parseDurationSeconds(currentCloud.duration) - Math.floor((now - currentCloud.createdAt.getTime()) / 1000), 0)
-    : 0;
-
-  const participants = currentCloud
-    ? Math.max(1, (currentCloud.liveParticipants ?? 12 + ((currentCloud.id.charCodeAt(0) ?? 0) % 40)) + ((Math.floor(now / 4000) % 3) - 1))
     : 0;
 
   const navigateCloud = (direction: number) => {
@@ -192,13 +181,14 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           </div>
 
           <div className="flex shrink-0 items-center gap-2 md:gap-5">
-            <div className="hidden -space-x-3 sm:flex" aria-label="Participantes da Cloud">
+            <div className="hidden -space-x-3 sm:flex" aria-label={`${currentCloud?.participantProfiles?.length ?? 0} participantes da Cloud`}>
               {currentCloud?.participantProfiles?.slice(0, 7).map((participant) => participant.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-11 w-11 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <span key={participant.id} title={participant.name} className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[13px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>
               ))}
+              {(currentCloud?.participantProfiles?.length ?? 0) > 7 && <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[13px] font-bold text-white">+{(currentCloud?.participantProfiles?.length ?? 0) - 7}</span>}
             </div>
             <div className="flex items-center gap-1.5 rounded-full bg-white/[.07] px-3 py-2 md:gap-2.5 md:px-5 md:py-2.5">
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#A855F7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -208,15 +198,6 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
               <span className="text-[14px] font-bold tabular-nums text-white md:text-[19px]">
                 {currentCloud ? formatCountdown(currentCountdown) : "00:00:00"}
               </span>
-            </div>
-            <div className="hidden items-center gap-2 text-[16px] font-semibold text-white sm:flex">
-              <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-              <span style={{ color: "#ffffff" }}>{formatParticipantCount(participants)}</span>
             </div>
             <button type="button" style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
               <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true">
@@ -230,8 +211,9 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
 
         <div className="px-6 py-12 text-center md:px-12">
           <h2
-            className="max-w-full whitespace-normal break-words text-[34px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[58px] md:text-[72px]"
-            style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif" }}
+            lang="pt-BR"
+            className="max-w-full whitespace-normal hyphens-auto break-normal text-[34px] font-extrabold leading-[1.08] tracking-tight text-white sm:text-[52px] md:text-[60px]"
+            style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}
           >
             {currentCloud?.title ?? "Nenhuma Cloud ativa no momento"}
           </h2>
@@ -248,24 +230,6 @@ export function CloudCarousel({ clouds, onCreateCloud }: { clouds: CarouselCloud
           </button>
         </div>
 
-        {activeClouds.length > 1 && (
-          <div className="flex justify-center gap-2 pb-5">
-            {activeClouds.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  const dir = i > safeIndex ? "left" : "right";
-                  setSlideAnim(dir);
-                  setTimeout(() => {
-                    setCurrentCloudIndex(i);
-                    setSlideAnim(null);
-                  }, 250);
-                }}
-                className={`h-1.5 rounded-full transition-all ${i === safeIndex ? "w-6 bg-[#A855F7]" : "w-1.5 bg-white/20"}`}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
       <button

@@ -6,6 +6,8 @@ import { ScrollbarStyles } from "./components/ScrollbarStyles";
 import { AccessibilityProvider } from "./components/AccessibilityProvider";
 import { InvitePopupLoader } from "./components/InvitePopupLoader";
 import { MobileNavigationTutorial } from "./components/MobileNavigationTutorial";
+import { OnboardingGate } from "./components/OnboardingGate";
+import { MiniCloudDock } from "./components/MiniCloudDock";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -37,9 +39,11 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-[var(--bg-root)] text-[var(--text-primary)]">
         <SessionUserProvider>
+          <OnboardingGate />
           <AccessibilityProvider>
             <ScrollbarStyles />
             {children}
+            <MiniCloudDock />
             <InvitePopupLoader />
             <Suspense fallback={null}><MobileNavigationTutorial /></Suspense>
           </AccessibilityProvider>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
@@ -31,6 +32,7 @@ function GearIcon({ s = 23 }: { s?: number }) {
 }
 
 export default function ReadPage() {
+  const searchParams = useSearchParams();
   const { user } = useSessionUser();
   const [clouds, setClouds] = useState<ReadCloud[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function ReadPage() {
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
+
 
   useEffect(() => {
     let cancelled = false;
@@ -78,25 +81,25 @@ export default function ReadPage() {
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       <header className="hidden flex-none bg-transparent md:block">
-        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
-          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
+        <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
+          <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
             <HeaderBrand />
           </Link>
 
-          <nav aria-label="Navegação principal" className="flex items-end gap-8 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+          <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-16 pb-2">
+            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Talk
             </Link>
-            <Link href="/read" className="relative inline-flex h-12 items-center text-[20px] font-semibold text-white">
+            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">
               Read
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">
+            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
               Meet
             </Link>
           </nav>
 
-          <div className="flex items-center gap-4 pb-2">
+          <div className="flex items-center justify-self-end gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
             </button>
@@ -122,13 +125,13 @@ export default function ReadPage() {
           </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <ReadFeed key={cloudScope} clouds={clouds} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} />
           </div>
         )}
       </main>
 
       <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
-        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+        <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#A855F7]">
             <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
@@ -137,7 +140,11 @@ export default function ReadPage() {
             <span className="text-[13px] font-semibold">Home</span>
           </Link>
           <MessagesNavLink />
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-white transition hover:text-white">
+          <Link href="/?create=1" aria-label="Publicar nova Cloud" className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
+            <span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span>
+            <span className="text-[13px] font-semibold">Publicar</span>
+          </Link>
+          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
             <FlameIcon s={30} />
             <span className="text-[13px] font-semibold">Trending</span>
           </Link>

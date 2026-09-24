@@ -135,6 +135,9 @@ export class AuthController {
       avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : undefined,
       isPrivate: typeof body.isPrivate === 'boolean' ? body.isPrivate : undefined,
       showHypesCount: typeof body.showHypesCount === 'boolean' ? body.showHypesCount : undefined,
+      showArchivedClouds: typeof body.showArchivedClouds === 'boolean' ? body.showArchivedClouds : undefined,
+      showParticipatingNow: typeof body.showParticipatingNow === 'boolean' ? body.showParticipatingNow : undefined,
+      interests: Array.isArray(body.interests) ? body.interests.filter((interest): interest is string => typeof interest === 'string') : undefined,
     });
   }
 

@@ -201,6 +201,11 @@ textarea {
   100% { opacity: 0; }
 }
 
+/* Variações visuais intencionais dos avatares fictícios dos Clouders. */
+img[src*="clouder-avatars"][src*="tone=mono"] { filter: grayscale(1) contrast(1.08); }
+img[src*="clouder-avatars"][src*="tone=warm"] { filter: sepia(.18) saturate(.86) contrast(.96); }
+img[src*="clouder-avatars"][src*="tone=cool"] { filter: saturate(.82) contrast(1.06) hue-rotate(4deg); }
+
 @media (prefers-reduced-motion: no-preference) {
   html {
     scroll-behavior: smooth;

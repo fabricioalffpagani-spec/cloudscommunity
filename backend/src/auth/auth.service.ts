@@ -372,7 +372,7 @@ export class AuthService {
     };
   }
 
-  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean; showHypesCount?: boolean }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
+  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean; showHypesCount?: boolean; showArchivedClouds?: boolean; showParticipatingNow?: boolean; interests?: string[] }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
     if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
 
     const displayName = input.displayName === undefined ? undefined : normalizeName(input.displayName);
@@ -388,10 +388,15 @@ export class AuthService {
     if (avatarUrl && !avatarUrl.startsWith('data:image/') && !/^https?:\/\//.test(avatarUrl)) {
       throw new BadRequestException({ message: 'Imagem de perfil inválida.' });
     }
+    const allowedInterests = new Set(['musica', 'filmes_series', 'games', 'esportes', 'tecnologia', 'relacionamentos', 'humor_internet', 'livros_cultura', 'atualidades', 'politica_sociedade']);
+    const interests = input.interests === undefined ? undefined : [...new Set(input.interests.map((interest) => interest.trim()).filter((interest) => allowedInterests.has(interest)))];
+    if (interests !== undefined && interests.length < 3) {
+      throw new BadRequestException({ message: 'Escolha pelo menos 3 temas para continuar.' });
+    }
 
     const updated = await this.prisma.user.update({
       where: { id: current.user.id },
-      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate, showHypesCount: input.showHypesCount } } },
+      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate, showHypesCount: input.showHypesCount, showArchivedClouds: input.showArchivedClouds, showParticipatingNow: input.showParticipatingNow, interests, interestsCompletedAt: interests === undefined ? undefined : new Date() } } },
       include: { profile: true },
     });
     return { ok: true, user: await this.mapUserWithStats(updated), session: this.mapSession(current.session) };
@@ -693,6 +698,10 @@ export class AuthService {
       website: profile.website,
       isPrivate: profile.isPrivate,
       showHypesCount: profile.showHypesCount,
+      showArchivedClouds: profile.showArchivedClouds,
+      showParticipatingNow: profile.showParticipatingNow,
+      interests: profile.interests,
+      interestsCompletedAt: profile.interestsCompletedAt?.toISOString() ?? null,
       status: user.status,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),

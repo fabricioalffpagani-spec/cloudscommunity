@@ -10,11 +10,19 @@ import { NotificationsBell } from "../components/NotificationsPanel";
 import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader } from "../components/MobileAppChrome";
 
-type TrendingTopic = {
-  word: string;
-  count: number;
+type TrendingCloud = {
+  id: string;
+  title: string;
+  duration: string;
   rank: number;
-  cloudIds: string[];
+  hypesCount: number;
+  membersCount: number;
+  author?: {
+    name?: string;
+    username?: string;
+    avatarUrl?: string | null;
+    location?: string | null;
+  };
 };
 
 function SearchIcon({ s = 24 }: { s?: number }) {
@@ -54,19 +62,6 @@ function RefreshIcon({ s = 18 }: { s?: number }) {
   );
 }
 
-// Barra de progresso visual relativa ao #1
-function BarFill({ count, max }: { count: number; max: number }) {
-  const pct = max > 0 ? Math.round((count / max) * 100) : 0;
-  return (
-    <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-      <div
-        className="h-full rounded-full bg-[#A855F7]/60 transition-all duration-700"
-        style={{ width: `${pct}%` }}
-      />
-    </div>
-  );
-}
-
 function RankBadge({ rank }: { rank: number }) {
   return (
     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#A855F7]/20 text-[#C084FC] font-bold text-[16px]">
@@ -77,7 +72,7 @@ function RankBadge({ rank }: { rank: number }) {
 
 export default function TrendingPage() {
   const { user: sessionUser } = useSessionUser();
-  const [topics, setTopics] = useState<TrendingTopic[]>([]);
+  const [clouds, setClouds] = useState<TrendingCloud[]>([]);
   const [totalActiveClouds, setTotalActiveClouds] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -89,9 +84,9 @@ export default function TrendingPage() {
     setLoading(true);
     try {
       const res = await fetch(`/api/trending?scope=${scope}`, { cache: "no-store" });
-      const data = (await res.json()) as { ok: boolean; topics: TrendingTopic[]; totalActiveClouds: number; nearbyUnavailable?: boolean };
+      const data = (await res.json()) as { ok: boolean; clouds: TrendingCloud[]; totalActiveClouds: number; nearbyUnavailable?: boolean };
       if (data.ok) {
-        setTopics(data.topics);
+        setClouds(data.clouds ?? []);
         setTotalActiveClouds(data.totalActiveClouds ?? 0);
         setLastUpdated(new Date());
         setNearbyUnavailable(Boolean(data.nearbyUnavailable));
@@ -109,8 +104,6 @@ export default function TrendingPage() {
     const interval = setInterval(() => void loadTrending(), 60_000);
     return () => clearInterval(interval);
   }, [loadTrending]);
-
-  const maxCount = topics[0]?.count ?? 1;
 
   return (
     <div
@@ -156,7 +149,7 @@ export default function TrendingPage() {
                 Trending
               </h1>
               <p className="mt-1 text-[15px] text-white/50">
-                Palavras que mais aparecem nos títulos das Clouds ativas agora
+                {scope === "nearby" ? "Clouds mais hypadas no seu país" : "Clouds mais hypadas na plataforma"}
                 {totalActiveClouds > 0 && (
                   <span className="ml-2 rounded-full bg-white/[0.07] px-2.5 py-0.5 text-[13px] text-white/60">
                     {totalActiveClouds} {totalActiveClouds === 1 ? "cloud ativa" : "clouds ativas"}
@@ -193,44 +186,43 @@ export default function TrendingPage() {
                 <div key={i} className="h-[80px] animate-pulse rounded-2xl border border-white/[0.06] bg-white/[0.03]" />
               ))}
             </div>
-          ) : topics.length === 0 ? (
+          ) : clouds.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] py-20 text-center">
               <FlameIcon s={40} />
-              <p className="text-[18px] font-semibold text-white/60">{nearbyUnavailable ? "Informe sua localização no perfil" : "Nenhuma Cloud ativa no momento"}</p>
-              <p className="text-[14px] text-white/30">{nearbyUnavailable ? "Assim podemos mostrar tópicos perto de você." : "Quando as pessoas criarem Clouds, as palavras mais usadas vão aparecer aqui."}</p>
+              <p className="text-[18px] font-semibold text-white/60">{nearbyUnavailable ? "Informe seu país no perfil" : "Nenhuma Cloud ativa no momento"}</p>
+              <p className="text-[14px] text-white/30">{nearbyUnavailable ? "Assim podemos mostrar as Clouds hypadas no seu país." : scope === "nearby" ? "Ainda não há Clouds ativas no seu país." : "Quando as pessoas criarem Clouds, as mais hypadas aparecerão aqui."}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {topics.map((topic) => {
-                const searchUrl = `/trending/${encodeURIComponent(topic.word.toLowerCase())}`;
-
+              {clouds.map((cloud) => {
                 return (
                   <div
-                    key={topic.word}
+                    key={cloud.id}
                     className="group relative flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-[#100828]/80 px-5 py-4 transition hover:border-[#A855F7]/40 hover:bg-[#180d38]/80"
                   >
                     {/* Rank */}
-                    <RankBadge rank={topic.rank} />
+                    <RankBadge rank={cloud.rank} />
 
                     {/* Info */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-[19px] font-bold text-white">
-                          #{topic.word}
-                        </span>
-                        <span className="text-[13px] text-white/40">
-                          {topic.count} {topic.count === 1 ? "Cloud" : "Clouds"}
-                        </span>
+                      <p className="truncate text-[19px] font-bold text-white">{cloud.title}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-white/45">
+                        {cloud.author?.avatarUrl && <img src={cloud.author.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />}
+                        <span>{cloud.author?.name ?? cloud.author?.username ?? "Clouder"}</span>
+                        {cloud.author?.location && <span>• {cloud.author.location}</span>}
+                        <span>• {cloud.membersCount} {cloud.membersCount === 1 ? "pessoa" : "pessoas"}</span>
+                        <span className="sm:hidden">• {cloud.hypesCount} hypes</span>
                       </div>
-                      <BarFill count={topic.count} max={maxCount} />
                     </div>
 
-                    {/* Botão Ver Clouds */}
+                    <span className="hidden shrink-0 items-center gap-1 text-[13px] font-semibold text-[#C084FC] sm:flex">
+                      <FlameIcon s={17} /> {cloud.hypesCount}
+                    </span>
                     <Link
-                      href={searchUrl}
+                      href={`/cloud/${encodeURIComponent(cloud.id)}?join=1`}
                       className="shrink-0 rounded-full border border-[#A855F7]/60 bg-transparent px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#A855F7]/20"
                     >
-                      Ver Clouds
+                      Entrar
                     </Link>
                   </div>
                 );
@@ -240,10 +232,11 @@ export default function TrendingPage() {
         </div>
       </main>
       <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
-        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+        <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M9 21V12h6v9"/></svg><span className="text-[13px] font-semibold">Home</span></Link>
           <MessagesNavLink />
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
+          <Link href="/?create=1" aria-label="Publicar nova Cloud" className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span><span className="text-[13px] font-semibold">Publicar</span></Link>
+          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
       <MobileAppNav active="trending" />

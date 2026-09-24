@@ -29,6 +29,7 @@ type CloudApiPayload = {
   };
   hypesCount: number;
   membersCount: number;
+  participantProfiles?: Array<{ id: string; name: string; avatarUrl: string | null }>;
   href: string;
 };
 
@@ -45,6 +46,7 @@ type Cloud = {
   authorName: string;
   authorHandle: string;
   authorPhoto?: string;
+  participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
 };
 
 const DURATION_SECONDS: Record<string, number> = {
@@ -139,11 +141,6 @@ function CloudCard({ cloud }: { cloud: Cloud }) {
             <p className="text-[12px] text-white/40">@{cloud.authorHandle}</p>
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-widest ${
-          cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"
-        }`}>
-          {cloud.visibility === "public" ? "Público" : "Privado"}
-        </span>
       </div>
 
       {/* Título */}
@@ -161,10 +158,7 @@ function CloudCard({ cloud }: { cloud: Cloud }) {
             <ClockIcon />
             {isActive ? formatCountdown(remaining) : "Encerrada"}
           </span>
-          <span className="flex items-center gap-1.5">
-            <PeopleIcon />
-            {cloud.membersCount} {cloud.membersCount === 1 ? "pessoa" : "pessoas"}
-          </span>
+          <div className="flex -space-x-2">{cloud.participantProfiles.slice(0,7).map(person => person.avatarUrl ? <img key={person.id} src={person.avatarUrl} alt={person.name} className="h-7 w-7 rounded-full border-2 border-[#100828] object-cover"/> : <span key={person.id} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100828] bg-[#7C3AED] text-[10px] font-bold text-white">{person.name.slice(0,1)}</span>)}{cloud.participantProfiles.length > 7 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100828] bg-[#32106f] text-[10px] font-bold text-white">+{cloud.participantProfiles.length-7}</span>}</div>
         </div>
         <button
           type="button"
@@ -207,6 +201,7 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
             authorName: c.author.name,
             authorHandle: c.author.username,
             authorPhoto: c.author.avatarUrl ?? undefined,
+            participantProfiles: c.participantProfiles ?? [],
           }))
         : [];
 
@@ -314,10 +309,11 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
         </div>
       </main>
       <nav className="hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block" aria-label="Navegação inferior">
-        <div className="mx-auto grid max-w-[480px] grid-cols-3 items-center px-4 py-5">
+        <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-white transition hover:text-white"><svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z"/><path d="M9 21V12h6v9"/></svg><span className="text-[13px] font-semibold">Home</span></Link>
           <MessagesNavLink />
-          <Link href="/trending" className="flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
+          <Link href="/?create=1" aria-label="Publicar nova Cloud" className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span><span className="text-[13px] font-semibold">Publicar</span></Link>
+          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-[#A855F7]"><FlameIcon s={30}/><span className="text-[13px] font-semibold">Trending</span></Link>
         </div>
       </nav>
       <MobileAppNav active="trending" />

@@ -21,11 +21,13 @@ export class NotificationsService {
       ...(includeAll ? {} : { take: 10 }),
     });
 
-    const actorIds = [...new Set(
-      items
-        .filter((item) => item.type === 'follow' || item.type === 'follow_request')
-        .map((item) => item.entityId),
-    )];
+    const actorIds = [...new Set(items.flatMap((item) => {
+      if (item.type === 'follow' || item.type === 'follow_request') return [item.entityId];
+      if (item.type === 'cloud_continuation' && item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)) {
+        return typeof item.metadata.actorUserId === 'string' ? [item.metadata.actorUserId] : [];
+      }
+      return [];
+    }))];
 
     const actors = actorIds.length
       ? await this.prisma.user.findMany({
@@ -57,6 +59,9 @@ export class NotificationsService {
       entityId: item.entityId,
       title: item.title,
       body: item.body,
+      metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+        ? Object.fromEntries(Object.entries(item.metadata).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+        : null,
       isRead: item.isRead,
       createdAt: item.createdAt.toISOString(),
       actor: actorById.get(item.entityId) ?? null,

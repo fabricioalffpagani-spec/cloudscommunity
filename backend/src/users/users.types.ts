@@ -10,6 +10,8 @@ export type PublicUserProfilePayload = {
   website: string | null;
   isPrivate: boolean;
   showHypesCount: boolean;
+  showArchivedClouds: boolean;
+  showParticipatingNow: boolean;
   createdAt: string;
   updatedAt: string;
   followersCount: number;
@@ -29,12 +31,23 @@ export type PublicUserProfilePayload = {
     createdAt: string;
     visibility: "public" | "private";
   } | null;
+  participatingNow: { id: string; title: string; duration: string; href: string } | null;
   activeClouds: Array<{
     id: string;
     title: string;
     description: string | null;
     duration: string;
     createdAt: string;
+    visibility: "public" | "private";
+    href: string;
+  }>;
+  endedClouds: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    duration: string;
+    createdAt: string;
+    endedAt: string | null;
     visibility: "public" | "private";
     href: string;
   }>;

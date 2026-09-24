@@ -45,7 +45,7 @@ export function MessagesNavLink({ active = false }: { active?: boolean }) {
     <Link
       href="/messages"
       aria-label={label}
-      className={`flex flex-col items-center gap-2 transition hover:text-white ${active ? "text-[#A855F7]" : "text-white"}`}
+      className={`flex flex-col items-center gap-2 transition hover:text-[#A855F7] ${active ? "text-[#A855F7]" : "text-white"}`}
     >
       <span className="relative inline-flex" aria-hidden="true">
         <svg viewBox="0 0 24 24" width={32} height={32} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

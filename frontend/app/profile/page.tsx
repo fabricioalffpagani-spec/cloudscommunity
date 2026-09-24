@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
+import { LongPressHint } from "../components/LongPressHint";
 import {
   SessionUserAvatar,
   SessionUserLink,
@@ -121,6 +122,7 @@ function FollowListModal({
   onAction,
   actioningId,
   showHypes,
+  hint,
 }: {
   title: string;
   emptyMessage: string;
@@ -131,6 +133,7 @@ function FollowListModal({
   onAction?: (user: FollowListUser) => void;
   actioningId?: string | null;
   showHypes?: boolean;
+  hint?: string;
 }) {
   return (
     <div
@@ -138,7 +141,8 @@ function FollowListModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] p-6"
+        className="absolute left-1/2 top-1/2 flex max-h-[calc(100dvh-3rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] p-4 sm:p-6"
+        style={{ width: "calc(100% - 3rem)" }}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -147,6 +151,7 @@ function FollowListModal({
             <XIcon />
           </button>
         </div>
+        {hint && <p className="mb-4 text-[12px] leading-relaxed text-white/55">{hint}</p>}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
           {loading ? (
             <p className="py-4 text-center text-white/50">Carregando...</p>
@@ -168,9 +173,9 @@ function FollowListModal({
                       listedUser.displayName.charAt(0).toUpperCase()
                     )}
                   </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-white">{listedUser.displayName}</p>
-                    <p className="text-sm text-white/50">@{listedUser.username}</p>
+                  <div className="min-w-0 text-left">
+                    <p className="truncate font-semibold text-white">{listedUser.displayName}</p>
+                    <p className="truncate text-sm text-white/50">@{listedUser.username}</p>
                   </div>
                   </Link>
                   {showHypes && <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[#FF7A18]"><FlameIcon s={22} filled /><span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7C3AED] px-1 text-[9px] font-extrabold leading-none text-white">{listedUser.hypesCount}</span></span>}
@@ -202,8 +207,8 @@ function formatMemberSince(value?: string | null) {
 function ProfileEmptyState() {
   return (
     <div className="mt-10 rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center">
-      <p className="text-[16px] font-semibold text-white">Nenhuma cloud ativa no momento</p>
-      <p className="mt-2 text-[13px] text-white/45">Quando você entrar em uma cloud ao vivo, ela aparece aqui.</p>
+      <p className="text-[16px] font-semibold text-white">As clouds que criar aparecerão aqui.</p>
+      <p className="mt-2 text-[13px] text-white/45">Você pode ocultá-las de seu perfil nas configurações.</p>
       <Link
         href="/"
         className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#22C55E]/15 px-4 py-2 text-[13px] font-semibold text-[#22C55E] transition hover:bg-[#22C55E]/25"
@@ -252,7 +257,7 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
         </div>
       </div>
 
-      <h3 className="mt-4 break-words text-[18px] font-semibold leading-snug text-white" style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
+      <h3 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[16px] leading-[1.3]" : "text-[18px] leading-snug"}`} style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
       {cloud.description && (
         <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
           {cloud.description}
@@ -562,10 +567,13 @@ export default function ProfilePage() {
               <p className="text-[11px] uppercase tracking-widest text-white/40">Clouds</p>
             </div>
             <div className="h-8 w-px bg-white/10" />
-            <button type="button" onClick={openHypesModal} className="transition hover:opacity-80">
+            <LongPressHint hint="Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações">
+            <button type="button" onClick={openHypesModal} className="group relative transition hover:opacity-80">
               <p className="text-[20px] font-bold text-white">{hypesCount}</p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Hypes</p>
+              <span role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a0e3d] px-2 py-1.5 text-center text-[11px] leading-snug text-white/80 opacity-0 shadow-xl transition group-hover:opacity-100">Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações</span>
             </button>
+            </LongPressHint>
           </div>
 
           <div className="mt-4 flex items-center gap-3 text-[13px] text-white">
@@ -618,7 +626,7 @@ export default function ProfilePage() {
         />
       )}
 
-      {hypesModalOpen && <FollowListModal title="Hypes recebidos" emptyMessage="Nenhum hype recebido ainda" loading={loadingHypes} users={hypesList} onClose={() => setHypesModalOpen(false)} showHypes />}
+      {hypesModalOpen && <FollowListModal title="Hypes recebidos" hint="Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações" emptyMessage="Nenhum hype recebido ainda" loading={loadingHypes} users={hypesList} onClose={() => setHypesModalOpen(false)} showHypes />}
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center">

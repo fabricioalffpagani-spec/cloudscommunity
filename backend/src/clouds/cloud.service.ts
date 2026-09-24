@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
 import {
   CloudInvitePayload,
   CloudMessagePayload,
@@ -23,8 +24,9 @@ type CloudWithRelations = Prisma.CloudGetPayload<{
         profile: true;
       };
     };
+    originCloud: { select: { id: true; title: true } };
     members: {
-      where: { leftAt: null };
+      orderBy: { joinedAt: 'asc' };
       include: {
         user: {
           include: {
@@ -104,6 +106,7 @@ export class CloudService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly topicClassifier: CloudTopicClassifierService,
   ) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     this.resend = apiKey ? new Resend(apiKey) : null;
@@ -229,8 +232,12 @@ export class CloudService {
 
   async listRead(token: string | null, scope: 'for-you' | 'following' = 'for-you') {
     const current = await this.requireSession(token);
-    await this.expireDueClouds();
-    const archiveWhere = await this.readableArchiveWhere(current.user.id);
+    // Neither operation depends on the other. Running them together keeps the
+    // archive feed responsive while still ensuring expired Clouds are included.
+    const [, archiveWhere] = await Promise.all([
+      this.expireDueClouds(),
+      this.readableArchiveWhere(current.user.id),
+    ]);
     let where = archiveWhere;
 
     if (scope === 'following') {
@@ -245,10 +252,61 @@ export class CloudService {
 
     const clouds = await this.prisma.cloud.findMany({
       where,
-      include: { ...this.cloudInclude(), _count: { select: { hypes: true, members: true, messages: { where: { deletedAt: null, type: { not: 'system' } } } } } },
+      // Read only displays author data, the first few participant avatars and
+      // message/participant totals. Avoid loading every historic membership
+      // record (which grows quickly for popular Clouds).
+      select: {
+        id: true,
+        title: true,
+        endedAt: true,
+        author: {
+          select: {
+            id: true,
+            isTestClouder: true,
+            profile: { select: { displayName: true, username: true, avatarUrl: true } },
+          },
+        },
+        members: {
+          orderBy: { joinedAt: 'asc' },
+          take: 8,
+          select: {
+            user: {
+              select: {
+                id: true,
+                profile: { select: { displayName: true, avatarUrl: true } },
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            members: true,
+            messages: { where: { deletedAt: null, type: { not: 'system' } } },
+          },
+        },
+      },
       orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
     });
-    return { ok: true, clouds: clouds.map((cloud) => ({ ...this.mapCloud(cloud), endedAt: cloud.endedAt?.toISOString() ?? null, messagesCount: cloud._count.messages })) };
+    return {
+      ok: true,
+      clouds: clouds.map((cloud) => ({
+        id: cloud.id,
+        title: cloud.title,
+        endedAt: cloud.endedAt?.toISOString() ?? null,
+        messagesCount: cloud._count.messages,
+        participantsCount: cloud._count.members,
+        author: {
+          name: cloud.author.profile?.displayName ?? 'Clouder',
+          username: cloud.author.profile?.username ?? '',
+          avatarUrl: cloud.author.profile?.avatarUrl ?? null,
+          isTestClouder: cloud.author.isTestClouder,
+        },
+        participantProfiles: cloud.members.flatMap((member) => {
+          const profile = member.user.profile;
+          return profile ? [{ id: member.user.id, name: profile.displayName, avatarUrl: profile.avatarUrl }] : [];
+        }),
+      })),
+    };
   }
 
   async getPreview(token: string | null, cloudId: string) {
@@ -377,6 +435,7 @@ export class CloudService {
     const current = await this.requireSession(token);
     const title = (input.title ?? '').trim();
     const description = (input.description ?? '').trim();
+    const originCloudId = input.originCloudId?.trim() || null;
     const duration = input.duration ?? '';
     const visibility = input.visibility === 'private' ? CloudVisibility.private : CloudVisibility.public;
 
@@ -417,6 +476,14 @@ export class CloudService {
       });
     }
 
+    let origin: { id: string; authorId: string; title: string } | null = null;
+    if (originCloudId) {
+      origin = await this.prisma.cloud.findFirst({ where: { id: originCloudId, status: CloudStatus.ended, deletedAt: null }, select: { id: true, authorId: true, title: true } });
+      if (!origin) throw new BadRequestException({ message: 'A conversa de origem não está disponível.' });
+    }
+
+    const classification = this.topicClassifier.classifyCloudTopic({ title, description });
+
     const created = await this.prisma.$transaction(async (tx) => {
       const cloud = await tx.cloud.create({
         data: {
@@ -429,6 +496,13 @@ export class CloudService {
           status: CloudStatus.active,
           duration: normalizedDuration,
           startedAt: new Date(),
+          originCloudId,
+          primaryTopic: classification.primaryTopic,
+          topicScores: classification.topics,
+          topicKeywords: classification.matchedTerms,
+          topicConfidence: classification.confidence,
+          classificationVersion: classification.classificationVersion,
+          classifiedAt: new Date(),
         },
         include: this.cloudInclude(),
       });
@@ -459,13 +533,60 @@ export class CloudService {
         }
       }
 
-      return cloud;
+      if (origin && origin.authorId !== current.user.id) {
+        const creatorName = current.user.profile?.displayName ?? current.user.profile?.username ?? 'Um usuário';
+        await tx.notification.create({
+          data: {
+            userId: origin.authorId,
+            type: 'cloud_continuation',
+            entityType: 'cloud',
+            entityId: cloud.id,
+            title: `${creatorName} continuou uma conversa sua`,
+            body: `Criou a Cloud “${title}” com base em “${origin.title}”.`,
+            metadata: {
+              actorUserId: current.user.id,
+              continuationCloudId: cloud.id,
+              continuationCloudTitle: title,
+              originCloudId: origin.id,
+              originCloudTitle: origin.title,
+            },
+          },
+        });
+      }
+
+      return tx.cloud.findUniqueOrThrow({ where: { id: cloud.id }, include: this.cloudInclude() });
     });
 
     return {
       ok: true,
       cloud: this.mapCloud(created),
     };
+  }
+
+  /** Internal maintenance entry point for a future batch reclassification job. */
+  async reclassifyCloud(cloudId: string) {
+    const cloud = await this.prisma.cloud.findUnique({
+      where: { id: cloudId },
+      select: { id: true, title: true, content: true },
+    });
+    if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
+
+    const classification = this.topicClassifier.classifyCloudTopic({
+      title: cloud.title,
+      description: cloud.content,
+    });
+    await this.prisma.cloud.update({
+      where: { id: cloud.id },
+      data: {
+        primaryTopic: classification.primaryTopic,
+        topicScores: classification.topics,
+        topicKeywords: classification.matchedTerms,
+        topicConfidence: classification.confidence,
+        classificationVersion: classification.classificationVersion,
+        classifiedAt: new Date(),
+      },
+    });
+    return classification;
   }
 
   async hype(token: string | null, cloudId: string): Promise<{ ok: true; hypesCount: number }> {
@@ -1006,7 +1127,7 @@ export class CloudService {
   async sendAudioMessage(
     token: string | null,
     cloudId: string,
-    body: { clientMessageId?: string; replyToMessageId?: string },
+    body: { clientMessageId?: string; replyToMessageId?: string; isSticker?: boolean },
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
@@ -1040,7 +1161,7 @@ export class CloudService {
   async sendImageMessage(
     token: string | null,
     cloudId: string,
-    body: { clientMessageId?: string; replyToMessageId?: string },
+    body: { clientMessageId?: string; replyToMessageId?: string; isSticker?: boolean },
     file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
@@ -1065,10 +1186,46 @@ export class CloudService {
       message: await this.createCloudMessage(current.user.id, cloudId, {
         type: 'image',
         mediaUrl: this.buildDataUrl(file.mimetype, file.buffer),
+        isSticker: body.isSticker === true,
         clientMessageId: body.clientMessageId,
         replyToMessageId: body.replyToMessageId,
       }),
     };
+  }
+
+  async getSavedStickers(token: string | null) {
+    const current = await this.requireSession(token);
+    const stickers = await this.prisma.savedSticker.findMany({
+      where: { userId: current.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return { ok: true, stickers };
+  }
+
+  async saveSticker(token: string | null, mediaUrl?: string) {
+    const current = await this.requireSession(token);
+    if (!mediaUrl?.startsWith('data:image/')) {
+      throw new BadRequestException({ message: 'A figurinha precisa ser uma imagem válida.' });
+    }
+    if (mediaUrl.length > 14 * 1024 * 1024) {
+      throw new BadRequestException({ message: 'A figurinha excede o limite permitido.' });
+    }
+    // The image itself can be a large data URL, which must not be used as an
+    // indexed column in PostgreSQL. Its stable short hash gives each user one
+    // saved copy of the same sticker.
+    const contentHash = crypto.createHash('md5').update(mediaUrl).digest('hex');
+    const existing = await this.prisma.savedSticker.findUnique({
+      where: { userId_contentHash: { userId: current.user.id, contentHash } },
+    });
+    if (existing) return { ok: true, sticker: existing, alreadySaved: true };
+
+    const sticker = await this.prisma.savedSticker.upsert({
+      where: { userId_contentHash: { userId: current.user.id, contentHash } },
+      update: {},
+      create: { userId: current.user.id, mediaUrl, contentHash },
+    });
+    return { ok: true, sticker, alreadySaved: false };
   }
 
   async editMessage(token: string | null, cloudId: string, messageId: string, content: string): Promise<{ ok: true; message: { id: string; content: string } }> {
@@ -1427,6 +1584,7 @@ export class CloudService {
         type,
         content: input.content ?? null,
         mediaUrl: input.mediaUrl ?? null,
+        isSticker: input.isSticker === true,
         replyToMessageId,
       },
       include: this.messageInclude(),
@@ -1477,6 +1635,7 @@ export class CloudService {
       type: message.type as CloudMessagePayload['type'],
       content: message.content,
       mediaUrl: message.mediaUrl,
+      isSticker: message.isSticker,
       clientMessageId,
       replyToMessageId: message.replyToMessageId,
       createdAt: message.createdAt.toISOString(),
@@ -1678,8 +1837,8 @@ export class CloudService {
 
   async createLeaveNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
     const userWithProfile = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
-    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
-    return this.createSystemMessage(cloudId, `${displayName} saiu da cloud`, userId);
+    const username = userWithProfile?.profile?.username || userWithProfile?.profile?.displayName || 'usuário';
+    return this.createSystemMessage(cloudId, `@${username} saiu da cloud`, userId);
   }
 
   async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; entered: boolean }> {
@@ -1744,7 +1903,7 @@ export class CloudService {
     return { ok: true, userId: current.user.id, entered: membershipChanged || !hasEntryNotification };
   }
 
-  async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string }> {
+  async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; left: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1760,7 +1919,10 @@ export class CloudService {
     });
 
     if (!member) {
-      throw new NotFoundException({ message: 'Você não é membro desta cloud.' });
+      // A minimized Cloud can outlive a tab refresh or a previous successful
+      // leave request. Treat a second exit as complete instead of blocking the
+      // user with an error; no duplicate system message will be emitted.
+      return { ok: true, userId: current.user.id, left: false };
     }
 
     await this.prisma.cloudMember.update({
@@ -1768,13 +1930,13 @@ export class CloudService {
       data: { leftAt: new Date() },
     });
 
-    return { ok: true, userId: current.user.id };
+    return { ok: true, userId: current.user.id, left: true };
   }
 
   /** Records that the author left the conversation without relinquishing
    * ownership. Keeping the same membership transition makes a later entry
    * from the feed observable just like any other member re-entry. */
-  async exitCloudConversation(token: string | null, cloudId: string): Promise<{ ok: true; userId: string }> {
+  async exitCloudConversation(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; left: boolean }> {
     return this.leaveCloud(token, cloudId);
   }
 
@@ -1785,8 +1947,9 @@ export class CloudService {
           profile: true,
         },
       },
+      originCloud: { select: { id: true, title: true } },
       members: {
-        where: { leftAt: null as Date | null },
+        orderBy: { joinedAt: 'asc' as const },
         include: {
           user: {
             include: {
@@ -1815,15 +1978,26 @@ export class CloudService {
   // Check for expired clouds
   private async expireDueClouds() {
     const now = new Date();
+    const durationCutoffs = ALLOWED_DURATIONS.map((duration) => ({
+      duration,
+      cutoff: new Date(now.getTime() - (DURATION_TO_SECONDS[duration] ?? 5 * 60) * 1000),
+    }));
     const activeClouds = await this.prisma.cloud.findMany({
       where: {
         status: CloudStatus.active,
         deletedAt: null,
+        OR: durationCutoffs.map(({ duration, cutoff }) => ({
+          duration,
+          OR: [
+            { startedAt: { lte: cutoff } },
+            { startedAt: null, createdAt: { lte: cutoff } },
+          ],
+        })),
       },
       select: { id: true, duration: true, startedAt: true, createdAt: true },
     });
 
-    for (const cloud of activeClouds) {
+    await Promise.all(activeClouds.map(async (cloud) => {
       const durationSeconds = DURATION_TO_SECONDS[cloud.duration] ?? 5 * 60;
       const endTime = new Date((cloud.startedAt ?? cloud.createdAt).getTime() + durationSeconds * 1000);
       if (now >= endTime) {
@@ -1835,7 +2009,7 @@ export class CloudService {
           },
         });
       }
-    }
+    }));
   }
 
   private mapCloud(cloud: CloudWithRelations): CloudPayload {
@@ -1861,11 +2035,14 @@ export class CloudService {
         username: profile.username,
         avatarUrl: profile.avatarUrl,
         location: profile.location,
+        isTestClouder: cloud.author.isTestClouder,
       },
       hypesCount: cloud._count.hypes,
-      // CloudMember is membership/history data, not real-time presence.
-      membersCount: 0,
+      membersCount: cloud._count.members,
+      participantsCount: cloud.members.length,
+      originCloud: cloud.originCloud ? { id: cloud.originCloud.id, title: cloud.originCloud.title } : null,
       members: cloud.members
+        .filter((member) => member.leftAt === null)
         .filter((member) => member.user.profile)
         .map((member) => ({
           id: member.id,
@@ -1881,8 +2058,7 @@ export class CloudService {
           },
         })),
       participantProfiles: cloud.members
-        .filter((member) => member.userId !== cloud.authorId && member.user.profile)
-        .slice(0, 7)
+        .filter((member) => member.user.profile)
         .map((member) => ({
           id: member.user.id,
           name: member.user.profile!.displayName,
@@ -1893,6 +2069,7 @@ export class CloudService {
       status: cloud.status,
     };
   }
+
 
   async getActiveMembers(cloudId: string) {
     const members = await this.prisma.cloudMember.findMany({

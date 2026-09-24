@@ -124,10 +124,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
     </section>
 
     <footer className="shrink-0 border-t border-white/[0.07] bg-black px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
-      <div className="mx-auto flex min-h-[54px] max-w-3xl items-center justify-center gap-2 rounded-full border border-[#6D28D9]/35 bg-[#1a0e3d] px-5 text-center text-[14px] text-white/55">
-        <LockIcon />
-        <span>Cloud encerrada · conversa disponível somente para leitura</span>
-      </div>
+      <Link href={`/?create=1&originCloudId=${encodeURIComponent(cloudId)}`} className="mx-auto flex min-h-[54px] max-w-3xl items-center justify-center rounded-full bg-[#A855F7] px-7 text-center text-[14px] font-semibold text-white transition hover:bg-[#9333EA]">Continuar essa conversa</Link>
     </footer>
   </main>;
 }

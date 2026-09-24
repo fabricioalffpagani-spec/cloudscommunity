@@ -184,8 +184,8 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
   }
 
   async broadcastMembersUpdated(cloudId: string) {
-    const membersCount = await this.getConnectedMemberCount(cloudId);
     const members = await this.cloudService.getActiveMembers(cloudId);
+    const membersCount = members.length;
     this.server.emit('cloud:members_updated', { cloudId, membersCount, members });
     return membersCount;
   }

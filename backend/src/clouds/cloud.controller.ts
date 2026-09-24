@@ -61,6 +61,11 @@ export class CloudController {
     return this.cloudService.listRead(extractSessionToken(req), scope === 'following' ? 'following' : 'for-you');
   }
 
+  @Get('stickers')
+  async getSavedStickers(@Req() req: Request) {
+    return this.cloudService.getSavedStickers(extractSessionToken(req));
+  }
+
   @Get(':id/preview')
   async preview(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.getPreview(extractSessionToken(req), id);
@@ -103,6 +108,7 @@ export class CloudController {
       description: typeof body.description === 'string' ? body.description : undefined,
       duration: typeof body.duration === 'string' ? body.duration : undefined,
       visibility: body.visibility === 'private' ? 'private' : 'public',
+      originCloudId: typeof body.originCloudId === 'string' ? body.originCloudId : undefined,
     } satisfies CreateCloudInput);
     // Creation is independent from Socket.IO presence. The creator is not in
     // the room yet, so the service response correctly starts at zero.
@@ -132,17 +138,22 @@ export class CloudController {
   @Post(':id/leave')
   async leaveCloud(@Param('id') id: string, @Req() req: Request) {
     const result = await this.cloudService.leaveCloud(extractSessionToken(req), id);
-    const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
-    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
-    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
-    return { ok: true, membersCount };
+    if (result.left) {
+      const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
+      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+      const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+      return { ok: true, membersCount };
+    }
+    return { ok: true };
   }
 
   @Post(':id/exit')
   async exitCloudConversation(@Param('id') id: string, @Req() req: Request) {
     const result = await this.cloudService.exitCloudConversation(extractSessionToken(req), id);
-    const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
-    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+    if (result.left) {
+      const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
+      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+    }
     return { ok: true };
   }
 
@@ -314,11 +325,17 @@ export class CloudController {
       {
         clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : undefined,
         replyToMessageId: typeof body.replyToMessageId === 'string' ? body.replyToMessageId : undefined,
+        isSticker: body.isSticker === 'true',
       },
       file as MulterFile,
     );
     await this.cloudMessagesGateway.broadcastMessageCreated(session?.user.id ?? null, id, result.message);
     return result;
+  }
+
+  @Post('stickers')
+  async saveSticker(@Req() req: Request, @Body() body: { mediaUrl?: string }) {
+    return this.cloudService.saveSticker(extractSessionToken(req), body.mediaUrl);
   }
 
   @Post(':id/messages/:messageId/reactions')

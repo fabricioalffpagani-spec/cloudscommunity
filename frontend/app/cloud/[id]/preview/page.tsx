@@ -1,6 +1,6 @@
-import { CloudPreview } from "../../../components/CloudPreview";
+import { redirect } from "next/navigation";
 
 export default async function PreviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CloudPreview cloudId={id} />;
+  redirect(`/cloud/${id}/conversation`);
 }

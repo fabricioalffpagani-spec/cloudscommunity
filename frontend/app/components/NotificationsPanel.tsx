@@ -19,6 +19,7 @@ type AppNotification = {
   entityId: string;
   title: string;
   body: string;
+  metadata?: Record<string, string> | null;
   isRead: boolean;
   createdAt: string;
   actor: NotificationActor | null;
@@ -135,6 +136,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 const initials = (notification.actor?.displayName ?? notification.title).trim().charAt(0).toUpperCase() || "C";
                 const href = notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
                 const alreadyFollowingBack = followingBack.has(notification.id);
+                const continuation = notification.type === "cloud_continuation" ? notification.metadata : null;
 
                 return (
                   <div key={notification.id} className="border-b border-white/[0.05] px-4 py-3 last:border-b-0">
@@ -151,7 +153,14 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                       </Link>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold text-white">{notification.title}</p>
-                        <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">{notification.body}</p>
+                        {continuation?.continuationCloudId && continuation?.originCloudId ? (
+                          <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">
+                            Criou a Cloud{" "}
+                            <Link href={`/?cloud=${encodeURIComponent(continuation.continuationCloudId)}`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.continuationCloudTitle ?? "continuação"}</Link>{" "}
+                            com base em{" "}
+                            <Link href={`/read?cloud=${encodeURIComponent(continuation.originCloudId)}`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.originCloudTitle ?? "sua Cloud"}</Link>.
+                          </p>
+                        ) : <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">{notification.body}</p>}
                         <p className="mt-1 text-[11px] text-white/30">{formatRelativeTime(notification.createdAt)}</p>
 
                         {notification.type === "follow_request" && !notification.accepted && (

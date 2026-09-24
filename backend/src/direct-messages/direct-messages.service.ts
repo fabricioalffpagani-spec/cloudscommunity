@@ -279,6 +279,52 @@ export class DirectMessagesService {
     return this.mapMessage(message);
   }
 
+  /**
+   * Sends a text reply on behalf of a platform-managed account. This follows
+   * the same conversation bookkeeping as a regular message, but intentionally
+   * does not require a browser session for the managed account.
+   */
+  async sendAutomatedTextMessage(senderId: string, conversationId: string, rawContent: string): Promise<DirectMessagePayload> {
+    const content = rawContent.replace(/\s+/g, ' ').trim();
+    if (!content || content.length > MAX_MESSAGE_LENGTH) {
+      throw new BadRequestException({ message: 'A mensagem automática é inválida.' });
+    }
+
+    const conversation = await this.prisma.conversation.findFirst({
+      where: {
+        id: conversationId,
+        deletedAt: null,
+        OR: [{ participantOneId: senderId }, { participantTwoId: senderId }],
+      },
+      select: { participantOneId: true, participantTwoId: true },
+    });
+    if (!conversation) {
+      throw new BadRequestException({ message: 'Conversa não encontrada.' });
+    }
+
+    const createdAt = new Date();
+    const message = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.directMessage.create({
+        data: { conversationId, senderId, type: 'text', content },
+        include: this.messageInclude(),
+      });
+      const unreadField = conversation.participantOneId === senderId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastMessageId: created.id,
+          lastMessageType: 'text',
+          lastMessageAt: createdAt,
+          lastMessagePreview: truncatePreview(content),
+          [unreadField]: { increment: 1 },
+        },
+      });
+      return created;
+    });
+
+    return this.mapMessage(message);
+  }
+
   async sendAudioMessage(
     userId: string,
     input: SendAudioMessageInput,

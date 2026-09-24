@@ -13,6 +13,7 @@ export type NotificationPayload = {
   entityId: string;
   title: string;
   body: string;
+  metadata: Record<string, string> | null;
   isRead: boolean;
   createdAt: string;
   actor: NotificationActor | null;

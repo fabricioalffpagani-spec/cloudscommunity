@@ -40,7 +40,8 @@ type BackendMessage = {
   type: MessageKind;
   content: string | null;
   clientMessageId: string | null;
-  createdAt: string;
+    createdAt: string;
+    updatedAt: string;
   readAt: string | null;
   mediaAsset: {
     id: string;
@@ -95,7 +96,8 @@ type Msg = {
   kind: MessageKind;
   content: string;
   time: string;
-  isoTime: string;
+    isoTime: string;
+    updatedAt?: string;
   readAt: string | null;
   mediaUrl: string | null;
   mediaFileName?: string | null;
@@ -414,7 +416,8 @@ function buildMessage(
     kind: resolvedKind,
     content: payload.content || "",
     time: timeLabel(payload.createdAt),
-    isoTime: payload.createdAt,
+      isoTime: payload.createdAt,
+      updatedAt: payload.updatedAt,
     readAt: payload.readAt,
     mediaUrl: payload.mediaAsset?.url ?? null,
     mediaFileName: payload.mediaAsset?.originalFileName ?? null,
@@ -1196,12 +1199,12 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
   return (
     <div className={`group flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
-      <div className="w-9 shrink-0 mb-7">
+      {!isRight && <div className="w-9 shrink-0 mb-7">
         <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderDisplayName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
         />
-      </div>
+      </div>}
       <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
         <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
         {msg.kind === "audio" ? (
@@ -1220,6 +1223,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
         {/* Action row: reply + three-dot menu */}
         <div className={`flex items-center gap-1 px-1 ${isRight ? "flex-row-reverse" : ""}`}>
           <span className="text-[11px] text-white">{msg.time}</span>
+          {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="text-[10px] italic text-white/45">editada</span>}
           {isRight && <MessageReceipt msg={msg} />}
           {/* Actions — visible on hover */}
           <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isRight ? "mr-1.5" : "ml-1.5"}`}>
@@ -2448,7 +2452,7 @@ function MessagesPageContent() {
                 });
               })()
             )}
-            {typingPerson && (
+            {typingPerson && typingPerson.id !== user?.id && (
               <div className="flex items-end gap-2 pt-1 justify-start" role="status" aria-live="polite">
                 <Link href={`/users/${typingPerson.id}`} aria-label={`Ver perfil de ${typingPerson.name}`}>
                   <UserAvatar user={{ id: typingPerson.id, username: typingPerson.username, displayName: typingPerson.name, avatarUrl: typingPerson.avatarUrl }} size={28} />

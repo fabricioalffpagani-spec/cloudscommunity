@@ -2,20 +2,6 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// Palavras irrelevantes que devem ser ignoradas na análise
-const STOP_WORDS = new Set([
-  "a", "as", "o", "os", "um", "uma", "uns", "umas",
-  "de", "do", "da", "dos", "das", "no", "na", "nos", "nas",
-  "em", "por", "para", "com", "sem", "que", "se", "e", "ou",
-  "ao", "à", "aos", "às", "pelo", "pela", "pelos", "pelas",
-  "como", "mais", "mas", "sua", "seu", "seus", "suas",
-  "meu", "minha", "meus", "minhas", "esse", "essa", "esses", "essas",
-  "este", "esta", "estes", "estas", "neste", "nessa", "isto", "isso",
-  "aqui", "ali", "já", "não", "sim", "vai", "vem", "vão",
-  "é", "são", "foi", "ser", "tem", "ter", "the", "of", "and", "in",
-  "vs", "vs.", "x", "ft", "ft.", "ep", "ep.",
-]);
-
 type CloudApiPayload = {
   id: string;
   title: string;
@@ -23,7 +9,14 @@ type CloudApiPayload = {
   visibility: string;
   status: string;
   createdAt: string;
-  author?: { location?: string | null };
+  hypesCount: number;
+  membersCount: number;
+  author?: {
+    name?: string;
+    username?: string;
+    avatarUrl?: string | null;
+    location?: string | null;
+  };
 };
 
 const DURATION_SECONDS: Record<string, number> = {
@@ -40,22 +33,13 @@ function isCloudActive(cloud: CloudApiPayload): boolean {
   return elapsedSecs < durationSecs;
 }
 
-function extractWords(title: string): string[] {
-  return title
-    .toLowerCase()
-    // remove pontuação e caracteres especiais, mantendo letras e acentos
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+function normalizeCountry(value?: string | null): string {
+  return (value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
 }
-
-export type TrendingTopic = {
-  word: string;
-  count: number;
-  rank: number;
-  cloudIds: string[];
-};
 
 export async function GET(req: Request) {
   try {
@@ -67,7 +51,7 @@ export async function GET(req: Request) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ ok: false, topics: [] }, { status: 200 });
+      return NextResponse.json({ ok: false, clouds: [] }, { status: 200 });
     }
 
     const payload = (await response.json()) as { clouds?: CloudApiPayload[] };
@@ -85,43 +69,23 @@ export async function GET(req: Request) {
         cache: "no-store",
       });
       const profilePayload = await profileResponse.json().catch(() => null) as { user?: { location?: string | null } } | null;
-      const location = profilePayload?.user?.location?.trim().toLocaleLowerCase("pt-BR");
-      if (!location) {
+      const country = normalizeCountry(profilePayload?.user?.location);
+      if (!country) {
         nearbyUnavailable = true;
         activeClouds = [];
       } else {
-        activeClouds = activeClouds.filter((cloud) => cloud.author?.location?.trim().toLocaleLowerCase("pt-BR") === location);
+        activeClouds = activeClouds.filter((cloud) => normalizeCountry(cloud.author?.location) === country);
       }
     }
 
-    // Conta quantas clouds distintas contêm cada palavra (uma ocorrência por cloud)
-    const wordMap = new Map<string, { count: number; cloudIds: Set<string> }>();
+    // Hype é o sinal principal. Em empate, a Cloud mais recente aparece primeiro.
+    const rankedClouds = activeClouds
+      .sort((a, b) => b.hypesCount - a.hypesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 25)
+      .map((cloud, index) => ({ ...cloud, rank: index + 1 }));
 
-    for (const cloud of activeClouds) {
-      const words = extractWords(cloud.title);
-      // deduplica dentro do mesmo título para não inflar uma cloud com palavra repetida
-      const uniqueWords = Array.from(new Set(words));
-      for (const word of uniqueWords) {
-        const entry = wordMap.get(word) ?? { count: 0, cloudIds: new Set() };
-        entry.count += 1;
-        entry.cloudIds.add(cloud.id);
-        wordMap.set(word, entry);
-      }
-    }
-
-    // Ordena por contagem decrescente; empate desfeito alfabeticamente para ranking estável
-    const topics: TrendingTopic[] = Array.from(wordMap.entries())
-      .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
-      .slice(0, 10)
-      .map(([word, { count, cloudIds }], index) => ({
-        word: word.charAt(0).toUpperCase() + word.slice(1),
-        count,
-        rank: index + 1,
-        cloudIds: Array.from(cloudIds),
-      }));
-
-    return NextResponse.json({ ok: true, topics, totalActiveClouds: activeClouds.length, nearbyUnavailable });
+    return NextResponse.json({ ok: true, clouds: rankedClouds, totalActiveClouds: activeClouds.length, nearbyUnavailable });
   } catch {
-    return NextResponse.json({ ok: false, topics: [] }, { status: 200 });
+    return NextResponse.json({ ok: false, clouds: [] }, { status: 200 });
   }
 }

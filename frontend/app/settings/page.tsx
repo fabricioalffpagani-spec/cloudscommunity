@@ -56,16 +56,16 @@ function Field({ label, type="text", value, onChange, placeholder="" }: { label:
   );
 }
 function Card({ children, className="" }: { children: React.ReactNode; className?:string }) {
-  return <div className={`rounded-2xl border border-white/[0.08] bg-[#120a2e] p-6 ${className}`}>{children}</div>;
+  return <div className={`rounded-2xl border border-white/[0.08] bg-[#120a2e] p-4 sm:p-6 ${className}`}>{children}</div>;
 }
 function Sub({ children }: { children: React.ReactNode }) {
   return <h3 className="mb-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white">{children}</h3>;
 }
 function TRow({ label, desc, checked, onChange }: { label:string; desc?:string; checked:boolean; onChange:(v:boolean)=>void }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3 border-b border-white/[0.06] last:border-0">
-      <div><p className="text-[14px] font-medium text-white">{label}</p>{desc && <p className="text-[12px] text-white/60">{desc}</p>}</div>
-      <Toggle checked={checked} onChange={onChange} />
+    <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] py-3 sm:items-center sm:gap-4 last:border-0">
+      <div className="min-w-0"><p className="text-[14px] font-medium text-white">{label}</p>{desc && <p className="text-[12px] text-white/60">{desc}</p>}</div>
+      <span className="mt-0.5 shrink-0 sm:mt-0"><Toggle checked={checked} onChange={onChange} /></span>
     </div>
   );
 }
@@ -303,6 +303,8 @@ function PanelPrivacidade() {
   const { user, refresh } = useSessionUser();
   const [isPrivate, setIsPrivate] = useState(false);
   const [showHypesCount, setShowHypesCount] = useState(true);
+  const [showArchivedClouds, setShowArchivedClouds] = useState(true);
+  const [showParticipatingNow, setShowParticipatingNow] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
@@ -311,6 +313,8 @@ function PanelPrivacidade() {
     if (!user) return;
     setIsPrivate(user.isPrivate ?? false);
     setShowHypesCount(user.showHypesCount ?? true);
+    setShowArchivedClouds(user.showArchivedClouds ?? true);
+    setShowParticipatingNow(user.showParticipatingNow ?? true);
   }, [user]);
 
   const handlePrivateToggle = async (value: boolean) => {
@@ -343,6 +347,21 @@ function PanelPrivacidade() {
     finally { setSaving(false); }
   };
 
+  const handleArchivedCloudsVisibilityToggle = async (value: boolean) => {
+    setShowArchivedClouds(value); setSaving(true); setError("");
+    try {
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ showArchivedClouds: value }) });
+      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Erro ao salvar.");
+      await refresh(); setSaved(true); setTimeout(() => setSaved(false), 2000);
+    } catch (err) { setShowArchivedClouds(!value); setError(err instanceof Error ? err.message : "Erro ao salvar."); }
+    finally { setSaving(false); }
+  };
+  const handleParticipatingNowVisibilityToggle = async (value: boolean) => {
+    setShowParticipatingNow(value); setSaving(true); setError("");
+    try { const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ showParticipatingNow: value }) }); if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Erro ao salvar."); await refresh(); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    catch (err) { setShowParticipatingNow(!value); setError(err instanceof Error ? err.message : "Erro ao salvar."); } finally { setSaving(false); }
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <h2 className="text-[20px] font-bold text-white">Privacidade</h2>
@@ -358,6 +377,14 @@ function PanelPrivacidade() {
         <div className="flex items-center justify-between gap-4 py-3">
           <div><p className="text-[14px] font-medium text-white">Mostrar total de hypes</p><p className="text-[12px] text-white/60">Você continuará vendo o total; visitantes não verão o número nem a lista de hypes.</p></div>
           <Toggle checked={showHypesCount} onChange={handleHypesVisibilityToggle} />
+        </div>
+        <div className="flex items-center justify-between gap-4 border-t border-white/[0.06] py-3">
+          <div><p className="text-[14px] font-medium text-white">Mostrar Clouds encerradas no perfil</p><p className="text-[12px] text-white/60">Você continuará vendo suas Clouds; visitantes deixam de vê-las no seu perfil.</p></div>
+          <Toggle checked={showArchivedClouds} onChange={handleArchivedCloudsVisibilityToggle} />
+        </div>
+        <div className="flex items-center justify-between gap-4 border-t border-white/[0.06] py-3">
+          <div><p className="text-[14px] font-medium text-white">Mostrar “Participando agora”</p><p className="text-[12px] text-white/60">Exibe no seu perfil a Cloud ao vivo em que você está participando.</p></div>
+          <Toggle checked={showParticipatingNow} onChange={handleParticipatingNowVisibilityToggle} />
         </div>
         {saving && <p className="text-[12px] text-white/60 pt-2">Salvando...</p>}
         {saved && <p className="text-[12px] text-[#A855F7] pt-2">Salvo!</p>}
@@ -564,7 +591,7 @@ function PanelSobre() {
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Sobre</h2>
     <Card><div className="flex flex-col items-center gap-4 py-4">
       <Image src="/logo_clouds.png" alt="Clouds Community" width={64} height={64} className="object-contain"/>
-      <div className="text-center"><p className="text-[20px] font-bold text-white">Clouds Community</p><p className="text-[13px] text-white/60 mt-1">Versão 1.0.0 · Build 2026.06</p></div>
+      <div className="text-center"><p className="text-[20px] font-bold text-white">Clouds Community</p><p className="mt-1 text-[12px] text-white/75">Uma produção de Fabrício A. Pagani e Vicente L. Seganfredo</p><p className="text-[13px] text-white/60 mt-1">Versão 1.0.0 · Build 2026.06</p></div>
     </div></Card>
     <Card><Sub>Legal</Sub><div className="divide-y divide-white/[0.06]">
       {[
@@ -641,7 +668,7 @@ export default function SettingsPage() {
         <h1 className="text-[17px] font-bold text-white">Configurações</h1>
         <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="text-white"><SearchIcon s={23}/></button>
       </header>
-      <div className="mx-auto flex w-full max-w-[1280px] flex-1 gap-8 overflow-y-auto px-5 pb-24 pt-4 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col overflow-y-auto px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-0 md:flex-row md:gap-8 md:px-5 md:pb-24 md:pt-4 lg:px-8">
         {/* Sidebar */}
         <aside className="hidden w-[220px] shrink-0 md:flex flex-col gap-1 pt-8">
           <p className="mb-3 px-3 text-[11px] font-bold uppercase tracking-[0.2em] text-white/70">Settings</p>
@@ -653,14 +680,16 @@ export default function SettingsPage() {
           ))}
         </aside>
         {/* Mobile pills */}
-        <div className="md:hidden w-full -mt-4 mb-6 col-span-full">
-          <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
-            {NAV_ITEMS.map(({key,label})=>(
-              <button key={key} onClick={()=>setActive(key)} className={`shrink-0 rounded-full px-4 py-1.5 text-[13px] font-semibold transition ${active===key?"bg-[#A855F7] text-white":"bg-[#1a0e3d] border border-white/[0.08] text-white/80"}`}>{label}</button>
+        <div className="order-1 -mx-4 border-b border-white/[0.08] bg-[#09031d]/95 px-4 py-3 backdrop-blur-md md:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            {NAV_ITEMS.map(({key,label,icon})=>(
+              <button key={key} type="button" onClick={()=>setActive(key)} aria-pressed={active===key} className={`flex min-h-10 items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] font-semibold transition ${active===key?"bg-[#A855F7] text-white shadow-[0_4px_14px_rgba(168,85,247,.28)]":"border border-white/[0.08] bg-[#1a0e3d] text-white/80 active:bg-white/[0.10]"}`}>
+                <span className="shrink-0">{icon}</span>{label}
+              </button>
             ))}
           </div>
         </div>
-        <main className="flex-1 min-w-0 pt-8">{panels[active]}</main>
+        <main className="order-2 min-w-0 w-full flex-1 py-5 md:w-auto md:pt-8">{panels[active]}</main>
       </div>
       <MobileAppNav active="profile" />
     </div>

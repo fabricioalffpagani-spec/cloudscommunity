@@ -12,6 +12,10 @@ export type AuthUserPayload = {
   website: string | null;
   isPrivate: boolean;
   showHypesCount: boolean;
+  showArchivedClouds: boolean;
+  showParticipatingNow: boolean;
+  interests: string[];
+  interestsCompletedAt: string | null;
   status: string;
   createdAt: string;
   updatedAt: string;
