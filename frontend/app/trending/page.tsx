@@ -208,7 +208,7 @@ export default function TrendingPage() {
                       <p className="truncate text-[19px] font-bold text-white">{cloud.title}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-white/45">
                         {cloud.author?.avatarUrl && <img src={cloud.author.avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />}
-                        <span>{cloud.author?.name ?? cloud.author?.username ?? "Clouder"}</span>
+                        <span>{cloud.author?.name ?? cloud.author?.username ?? "Usuário"}</span>
                         {cloud.author?.location && <span>• {cloud.author.location}</span>}
                         <span>• {cloud.membersCount} {cloud.membersCount === 1 ? "pessoa" : "pessoas"}</span>
                         <span className="sm:hidden">• {cloud.hypesCount} hypes</span>

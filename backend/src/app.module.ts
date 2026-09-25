@@ -11,10 +11,18 @@ import { ChatPresenceModule } from './infrastructure/chat-presence/chat-presence
 import { SocketIoRedisModule } from './infrastructure/socket-io-redis/socket-io-redis.module';
 import { UsersModule } from './users/users.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { ClouderModule } from './clouders/clouder.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, CloudModule, UsersModule, NotificationsModule, SocketIoRedisModule, ChatPresenceModule, DirectMessagesModule, ClouderModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    CloudModule,
+    UsersModule,
+    NotificationsModule,
+    SocketIoRedisModule,
+    ChatPresenceModule,
+    DirectMessagesModule,
+  ],
   controllers: [AppController, HealthController],
   providers: [AppService, HealthService],
 })

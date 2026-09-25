@@ -1,12 +1,27 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { MeetResponse, PublicUserProfilePayload, ReceivedHypesResponse, UserProfileResponse, UsersSearchResponse } from './users.types';
+import {
+  MeetResponse,
+  PublicUserProfilePayload,
+  ReceivedHypesResponse,
+  UserProfileResponse,
+  UsersSearchResponse,
+} from './users.types';
 
-type SessionUser = Awaited<ReturnType<AuthService['resolveSession']>> extends infer T
-  ? T extends { user: infer U } ? U : never
-  : never;
+type SessionUser =
+  Awaited<ReturnType<AuthService['resolveSession']>> extends infer T
+    ? T extends { user: infer U }
+      ? U
+      : never
+    : never;
 
 type UserWithProfile = Prisma.UserGetPayload<{
   include: {
@@ -27,7 +42,9 @@ function normalizeText(value: string) {
 }
 
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function searchScore(query: string, user: UserWithProfile) {
@@ -61,11 +78,17 @@ export class UsersService {
     private readonly authService: AuthService,
   ) {}
 
-  async search(token: string | null, queryInput: string, limitInput?: string | null): Promise<UsersSearchResponse> {
+  async search(
+    token: string | null,
+    queryInput: string,
+    limitInput?: string | null,
+  ): Promise<UsersSearchResponse> {
     const current = await this.resolveCurrentSession(token);
     const query = normalizeText(queryInput ?? '');
     const parsedLimit = Number.parseInt(limitInput ?? '', 10);
-    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), MAX_SEARCH_LIMIT) : DEFAULT_SEARCH_LIMIT;
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), MAX_SEARCH_LIMIT)
+      : DEFAULT_SEARCH_LIMIT;
 
     const candidates = await this.prisma.user.findMany({
       where: {
@@ -87,7 +110,7 @@ export class UsersService {
         user,
         score: searchScore(query, user),
       }))
-      .filter(({ score }) => query ? score > 0 : true)
+      .filter(({ score }) => (query ? score > 0 : true))
       .sort((left, right) => {
         if (right.score !== left.score) {
           return right.score - left.score;
@@ -97,7 +120,11 @@ export class UsersService {
       })
       .slice(0, limit);
 
-    const users = await Promise.all(ranked.map(({ user }) => this.mapPublicProfile(user, current?.user.id ?? null)));
+    const users = await Promise.all(
+      ranked.map(({ user }) =>
+        this.mapPublicProfile(user, current?.user.id ?? null),
+      ),
+    );
 
     return {
       ok: true,
@@ -105,7 +132,10 @@ export class UsersService {
     };
   }
 
-  async getProfile(token: string | null, identifierInput: string): Promise<UserProfileResponse> {
+  async getProfile(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<UserProfileResponse> {
     const current = await this.resolveCurrentSession(token);
     const user = await this.findUserByIdentifier(identifierInput);
 
@@ -121,7 +151,10 @@ export class UsersService {
     };
   }
 
-  async follow(token: string | null, identifierInput: string): Promise<UserProfileResponse> {
+  async follow(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<UserProfileResponse> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
@@ -144,12 +177,17 @@ export class UsersService {
 
     if (!existingFollow) {
       if (target.profile?.isPrivate) {
-        await this.createFollowRequest(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
+        await this.createFollowRequest(
+          current.user.id,
+          target.id,
+          current.user.profile?.displayName ?? 'Alguém',
+        );
       } else {
-        await this.createFollow(current.user.id, target.id, current.user.profile?.displayName ?? 'Alguém');
-        if (target.isTestClouder) {
-          await this.createFollow(target.id, current.user.id, target.profile?.displayName ?? 'Clouder');
-        }
+        await this.createFollow(
+          current.user.id,
+          target.id,
+          current.user.profile?.displayName ?? 'Alguém',
+        );
       }
     }
 
@@ -159,7 +197,10 @@ export class UsersService {
     };
   }
 
-  async unfollow(token: string | null, identifierInput: string): Promise<UserProfileResponse> {
+  async unfollow(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<UserProfileResponse> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
@@ -178,6 +219,15 @@ export class UsersService {
 
     await this.cancelFollowRequest(current.user.id, target.id);
 
+    // Remove follow notification when unfollowing
+    await this.prisma.notification.deleteMany({
+      where: {
+        userId: target.id,
+        type: 'follow',
+        entityId: current.user.id,
+      },
+    });
+
     return {
       ok: true,
       user: await this.mapPublicProfile(target, current.user.id),
@@ -190,22 +240,53 @@ export class UsersService {
       where: { userId: current.user.id },
       orderBy: { updatedAt: 'desc' },
       take: MAX_SEARCH_HISTORY_PER_KIND * 3,
-      select: { query: true, kind: true, targetId: true, subtitle: true, avatarUrl: true },
+      select: {
+        query: true,
+        kind: true,
+        targetId: true,
+        subtitle: true,
+        avatarUrl: true,
+      },
     });
     return { ok: true, searches };
   }
 
-  async saveSearchHistory(token: string | null, input: { query?: string; kind?: string; targetId?: string; subtitle?: string; avatarUrl?: string | null }) {
+  async saveSearchHistory(
+    token: string | null,
+    input: {
+      query?: string;
+      kind?: string;
+      targetId?: string;
+      subtitle?: string;
+      avatarUrl?: string | null;
+    },
+  ) {
     const current = await this.requireSession(token);
     const query = (input.query ?? '').trim().replace(/\s+/g, ' ').slice(0, 120);
-    if (!query) throw new BadRequestException({ message: 'Informe uma busca.' });
-    const kind = input.kind === 'profile' || input.kind === 'cloud' ? input.kind : 'query';
+    if (!query)
+      throw new BadRequestException({ message: 'Informe uma busca.' });
+    const kind =
+      input.kind === 'profile' || input.kind === 'cloud' ? input.kind : 'query';
     const targetId = (input.targetId ?? query).trim().slice(0, 255);
 
     await this.prisma.searchHistory.upsert({
-      where: { userId_kind_targetId: { userId: current.user.id, kind, targetId } },
-      create: { userId: current.user.id, query, kind, targetId, subtitle: input.subtitle?.slice(0, 255) ?? null, avatarUrl: input.avatarUrl ?? null },
-      update: { query, subtitle: input.subtitle?.slice(0, 255) ?? null, avatarUrl: input.avatarUrl ?? null, updatedAt: new Date() },
+      where: {
+        userId_kind_targetId: { userId: current.user.id, kind, targetId },
+      },
+      create: {
+        userId: current.user.id,
+        query,
+        kind,
+        targetId,
+        subtitle: input.subtitle?.slice(0, 255) ?? null,
+        avatarUrl: input.avatarUrl ?? null,
+      },
+      update: {
+        query,
+        subtitle: input.subtitle?.slice(0, 255) ?? null,
+        avatarUrl: input.avatarUrl ?? null,
+        updatedAt: new Date(),
+      },
     });
     const staleSearches = await this.prisma.searchHistory.findMany({
       where: { userId: current.user.id, kind },
@@ -214,56 +295,121 @@ export class UsersService {
       select: { id: true },
     });
     if (staleSearches.length) {
-      await this.prisma.searchHistory.deleteMany({ where: { id: { in: staleSearches.map(({ id }) => id) } } });
+      await this.prisma.searchHistory.deleteMany({
+        where: { id: { in: staleSearches.map(({ id }) => id) } },
+      });
     }
     return this.getSearchHistory(token);
   }
 
   async clearSearchHistory(token: string | null) {
     const current = await this.requireSession(token);
-    await this.prisma.searchHistory.deleteMany({ where: { userId: current.user.id } });
+    await this.prisma.searchHistory.deleteMany({
+      where: { userId: current.user.id },
+    });
     return { ok: true, searches: [] };
   }
 
-  async deleteSearchHistory(token: string | null, kind: string, targetId: string) {
+  async deleteSearchHistory(
+    token: string | null,
+    kind: string,
+    targetId: string,
+  ) {
     const current = await this.requireSession(token);
-    await this.prisma.searchHistory.deleteMany({ where: { userId: current.user.id, kind, targetId } });
+    await this.prisma.searchHistory.deleteMany({
+      where: { userId: current.user.id, kind, targetId },
+    });
     return this.getSearchHistory(token);
   }
 
-  async block(token: string | null, identifierInput: string): Promise<{ ok: true }> {
+  async block(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
-    if (target.id === current.user.id) throw new BadRequestException({ message: 'Você não pode bloquear a si mesmo.' });
+    if (target.id === current.user.id)
+      throw new BadRequestException({
+        message: 'Você não pode bloquear a si mesmo.',
+      });
     await this.prisma.$transaction([
-      this.prisma.userBlock.upsert({ where: { blockerId_blockedId: { blockerId: current.user.id, blockedId: target.id } }, update: {}, create: { blockerId: current.user.id, blockedId: target.id } }),
-      this.prisma.follow.deleteMany({ where: { OR: [{ followerId: current.user.id, followingId: target.id }, { followerId: target.id, followingId: current.user.id }] } }),
-      this.prisma.followRequest.deleteMany({ where: { OR: [{ requesterId: current.user.id, targetId: target.id }, { requesterId: target.id, targetId: current.user.id }] } }),
+      this.prisma.userBlock.upsert({
+        where: {
+          blockerId_blockedId: {
+            blockerId: current.user.id,
+            blockedId: target.id,
+          },
+        },
+        update: {},
+        create: { blockerId: current.user.id, blockedId: target.id },
+      }),
+      this.prisma.follow.deleteMany({
+        where: {
+          OR: [
+            { followerId: current.user.id, followingId: target.id },
+            { followerId: target.id, followingId: current.user.id },
+          ],
+        },
+      }),
+      this.prisma.followRequest.deleteMany({
+        where: {
+          OR: [
+            { requesterId: current.user.id, targetId: target.id },
+            { requesterId: target.id, targetId: current.user.id },
+          ],
+        },
+      }),
     ]);
     return { ok: true };
   }
 
-  async unblock(token: string | null, identifierInput: string): Promise<{ ok: true }> {
+  async unblock(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
-    await this.prisma.userBlock.deleteMany({ where: { blockerId: current.user.id, blockedId: target.id } });
+    await this.prisma.userBlock.deleteMany({
+      where: { blockerId: current.user.id, blockedId: target.id },
+    });
     return { ok: true };
   }
 
-  async removeFollower(token: string | null, identifierInput: string, followerId: string): Promise<{ ok: true }> {
+  async removeFollower(
+    token: string | null,
+    identifierInput: string,
+    followerId: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     if (target.id !== current.user.id) {
-      throw new UnauthorizedException({ message: 'Você só pode remover seguidores do seu próprio perfil.' });
+      throw new UnauthorizedException({
+        message: 'Você só pode remover seguidores do seu próprio perfil.',
+      });
     }
 
-    await this.prisma.follow.deleteMany({ where: { followerId, followingId: current.user.id } });
+    await this.prisma.follow.deleteMany({
+      where: { followerId, followingId: current.user.id },
+    });
     await this.cancelFollowRequest(followerId, current.user.id);
+
+    // Remove follow notification when removing follower
+    await this.prisma.notification.deleteMany({
+      where: {
+        userId: current.user.id,
+        type: 'follow',
+        entityId: followerId,
+      },
+    });
+
     return { ok: true };
   }
 
-  async acceptFollowRequest(token: string | null, requesterIdentifier: string): Promise<{ ok: true }> {
+  async acceptFollowRequest(
+    token: string | null,
+    requesterIdentifier: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const requester = await this.requireTargetUser(requesterIdentifier);
 
@@ -288,13 +434,20 @@ export class UsersService {
       });
     }
 
-    await this.createFollow(requester.id, current.user.id, requester.profile?.displayName ?? 'Alguém');
+    await this.createFollow(
+      requester.id,
+      current.user.id,
+      requester.profile?.displayName ?? 'Alguém',
+    );
     await this.cancelFollowRequest(requester.id, current.user.id);
 
     return { ok: true };
   }
 
-  async declineFollowRequest(token: string | null, requesterIdentifier: string): Promise<{ ok: true }> {
+  async declineFollowRequest(
+    token: string | null,
+    requesterIdentifier: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const requester = await this.requireTargetUser(requesterIdentifier);
 
@@ -324,7 +477,10 @@ export class UsersService {
     return { ok: true };
   }
 
-  async getFollowers(token: string | null, identifierInput: string): Promise<UsersSearchResponse> {
+  async getFollowers(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<UsersSearchResponse> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
@@ -345,7 +501,11 @@ export class UsersService {
     for (const entry of followers) {
       const user = entry.follower;
 
-      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+      if (
+        !user.profile ||
+        user.status !== UserStatus.active ||
+        user.deletedAt !== null
+      ) {
         continue;
       }
 
@@ -358,7 +518,10 @@ export class UsersService {
     };
   }
 
-  async getUserFollowing(token: string | null, identifierInput: string): Promise<UsersSearchResponse> {
+  async getUserFollowing(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<UsersSearchResponse> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
@@ -379,7 +542,11 @@ export class UsersService {
     for (const entry of following) {
       const user = entry.following;
 
-      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+      if (
+        !user.profile ||
+        user.status !== UserStatus.active ||
+        user.deletedAt !== null
+      ) {
         continue;
       }
 
@@ -392,11 +559,16 @@ export class UsersService {
     };
   }
 
-  async getReceivedHypes(token: string | null, identifierInput: string): Promise<ReceivedHypesResponse> {
+  async getReceivedHypes(
+    token: string | null,
+    identifierInput: string,
+  ): Promise<ReceivedHypesResponse> {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifierInput);
     if (!target.profile?.showHypesCount && target.id !== current.user.id) {
-      throw new ForbiddenException({ message: 'Este perfil ocultou os hypes recebidos.' });
+      throw new ForbiddenException({
+        message: 'Este perfil ocultou os hypes recebidos.',
+      });
     }
     const hypes = await this.prisma.cloudHype.findMany({
       where: { cloud: { authorId: target.id, deletedAt: null } },
@@ -406,7 +578,12 @@ export class UsersService {
     const grouped = new Map<string, ReceivedHypesResponse['users'][number]>();
     for (const hype of hypes) {
       const profile = hype.user.profile;
-      if (!profile || hype.user.status !== UserStatus.active || hype.user.deletedAt !== null) continue;
+      if (
+        !profile ||
+        hype.user.status !== UserStatus.active ||
+        hype.user.deletedAt !== null
+      )
+        continue;
       const existing = grouped.get(hype.userId);
       if (existing) {
         existing.hypesCount += 1;
@@ -421,10 +598,21 @@ export class UsersService {
       }
     }
 
-    return { ok: true, users: [...grouped.values()].sort((a, b) => b.hypesCount - a.hypesCount || a.displayName.localeCompare(b.displayName, 'pt-BR')) };
+    return {
+      ok: true,
+      users: [...grouped.values()].sort(
+        (a, b) =>
+          b.hypesCount - a.hypesCount ||
+          a.displayName.localeCompare(b.displayName, 'pt-BR'),
+      ),
+    };
   }
 
-  async following(token: string | null, sort?: string, limit?: string): Promise<UsersSearchResponse> {
+  async following(
+    token: string | null,
+    sort?: string,
+    limit?: string,
+  ): Promise<UsersSearchResponse> {
     const current = await this.requireSession(token);
 
     const following = await this.prisma.follow.findMany({
@@ -444,7 +632,11 @@ export class UsersService {
     for (const entry of following) {
       const user = entry.following;
 
-      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+      if (
+        !user.profile ||
+        user.status !== UserStatus.active ||
+        user.deletedAt !== null
+      ) {
         continue;
       }
 
@@ -481,7 +673,10 @@ export class UsersService {
       const counts = new Map<string, number>();
       for (const entry of entries) {
         if (entry.cloud.authorId !== current.user.id) {
-          counts.set(entry.cloud.authorId, (counts.get(entry.cloud.authorId) ?? 0) + 1);
+          counts.set(
+            entry.cloud.authorId,
+            (counts.get(entry.cloud.authorId) ?? 0) + 1,
+          );
         }
       }
       return counts;
@@ -502,7 +697,10 @@ export class UsersService {
       });
 
       for (const entry of followedByFollowers) {
-        nearbyCounts.set(entry.followingId, (nearbyCounts.get(entry.followingId) ?? 0) + 1);
+        nearbyCounts.set(
+          entry.followingId,
+          (nearbyCounts.get(entry.followingId) ?? 0) + 1,
+        );
       }
     }
 
@@ -515,16 +713,31 @@ export class UsersService {
       if (rankedIds.length === 0) return [];
 
       const candidates = await this.prisma.user.findMany({
-        where: { id: { in: rankedIds }, status: UserStatus.active, deletedAt: null },
+        where: {
+          id: { in: rankedIds },
+          status: UserStatus.active,
+          deletedAt: null,
+        },
         include: { profile: true },
       });
-      const byId = new Map(candidates.filter((candidate) => candidate.profile).map((candidate) => [candidate.id, candidate]));
+      const byId = new Map(
+        candidates
+          .filter((candidate) => candidate.profile)
+          .map((candidate) => [candidate.id, candidate]),
+      );
 
-      return Promise.all(rankedIds.flatMap(async (id) => {
-        const candidate = byId.get(id);
-        if (!candidate) return [];
-        return [{ ...(await this.mapPublicProfile(candidate, current.user.id)), score: counts.get(id) ?? 0 }];
-      }));
+      return Promise.all(
+        rankedIds.flatMap(async (id) => {
+          const candidate = byId.get(id);
+          if (!candidate) return [];
+          return [
+            {
+              ...(await this.mapPublicProfile(candidate, current.user.id)),
+              score: counts.get(id) ?? 0,
+            },
+          ];
+        }),
+      );
     };
 
     const [recentRanked, allTimeRanked, nearbyRanked] = await Promise.all([
@@ -535,9 +748,16 @@ export class UsersService {
 
     return {
       ok: true,
-      popularRecent: recentRanked.flat().map(({ score, ...user }) => ({ ...user, hypes: score })),
-      popularAllTime: allTimeRanked.flat().map(({ score, ...user }) => ({ ...user, hypes: score })),
-      nearby: nearbyRanked.flat().map(({ score, ...user }) => ({ ...user, mutualFollowersCount: score })),
+      popularRecent: recentRanked
+        .flat()
+        .map(({ score, ...user }) => ({ ...user, hypes: score })),
+      popularAllTime: allTimeRanked
+        .flat()
+        .map(({ score, ...user }) => ({ ...user, hypes: score })),
+      nearby: nearbyRanked.flat().map(({ score, ...user }) => ({
+        ...user,
+        mutualFollowersCount: score,
+      })),
     };
   }
 
@@ -554,7 +774,7 @@ export class UsersService {
       return { ok: true, users: [] };
     }
 
-    const followerIds = followers.map(f => f.followerId);
+    const followerIds = followers.map((f) => f.followerId);
 
     // Get follows of those followers
     const followsOfFollowers = await this.prisma.follow.findMany({
@@ -579,7 +799,7 @@ export class UsersService {
     }
 
     // Get unique users and sort by follower overlap count
-    const uniqueUsers = new Map<string, typeof followsOfFollowers[0]>();
+    const uniqueUsers = new Map<string, (typeof followsOfFollowers)[0]>();
     for (const follow of followsOfFollowers) {
       if (!uniqueUsers.has(follow.followingId)) {
         uniqueUsers.set(follow.followingId, follow);
@@ -599,7 +819,11 @@ export class UsersService {
     for (const entry of sortedUsers) {
       const user = entry.following;
 
-      if (!user.profile || user.status !== UserStatus.active || user.deletedAt !== null) {
+      if (
+        !user.profile ||
+        user.status !== UserStatus.active ||
+        user.deletedAt !== null
+      ) {
         continue;
       }
 
@@ -618,7 +842,7 @@ export class UsersService {
     }
 
     const session = await this.authService.resolveSession(token);
-    return session ? { ...session, user: session.user as SessionUser } : null;
+    return session ? { ...session, user: session.user } : null;
   }
 
   private async requireSession(token: string | null) {
@@ -652,7 +876,9 @@ export class UsersService {
       return null;
     }
 
-    const normalizedUsername = identifier.startsWith('@') ? identifier.slice(1) : identifier;
+    const normalizedUsername = identifier.startsWith('@')
+      ? identifier.slice(1)
+      : identifier;
 
     if (isUuid(identifier)) {
       const byId = await this.prisma.user.findUnique({
@@ -690,13 +916,19 @@ export class UsersService {
 
     const byDisplayName = candidates.find((candidate) => {
       const profile = candidate.profile;
-      return profile ? normalizeText(profile.displayName) === normalizedIdentifier : false;
+      return profile
+        ? normalizeText(profile.displayName) === normalizedIdentifier
+        : false;
     });
 
     return byDisplayName?.profile ? byDisplayName : null;
   }
 
-  private async createFollow(followerId: string, followingId: string, followerName: string) {
+  private async createFollow(
+    followerId: string,
+    followingId: string,
+    followerName: string,
+  ) {
     await this.prisma.follow.upsert({
       where: {
         followerId_followingId: {
@@ -738,7 +970,11 @@ export class UsersService {
     });
   }
 
-  private async createFollowRequest(requesterId: string, targetId: string, requesterName: string) {
+  private async createFollowRequest(
+    requesterId: string,
+    targetId: string,
+    requesterName: string,
+  ) {
     const existing = await this.prisma.followRequest.findUnique({
       where: {
         requesterId_targetId: {
@@ -788,18 +1024,31 @@ export class UsersService {
     });
   }
 
-  private async mapPublicProfile(user: UserWithProfile, currentUserId: string | null): Promise<PublicUserProfilePayload> {
+  private async mapPublicProfile(
+    user: UserWithProfile,
+    currentUserId: string | null,
+  ): Promise<PublicUserProfilePayload> {
     const profile = user.profile;
 
     if (!profile) {
       throw new Error('User profile is required.');
     }
 
-    const [followersCount, followingCount, cloudsCount, hypesCount, blockRelation] = await Promise.all([
+    const [
+      followersCount,
+      followingCount,
+      cloudsCount,
+      hypesCount,
+      blockRelation,
+    ] = await Promise.all([
       this.prisma.follow.count({ where: { followingId: user.id } }),
       this.prisma.follow.count({ where: { followerId: user.id } }),
-      this.prisma.cloud.count({ where: { authorId: user.id, deletedAt: null } }),
-      this.prisma.cloudHype.count({ where: { cloud: { authorId: user.id, deletedAt: null } } }),
+      this.prisma.cloud.count({
+        where: { authorId: user.id, deletedAt: null },
+      }),
+      this.prisma.cloudHype.count({
+        where: { cloud: { authorId: user.id, deletedAt: null } },
+      }),
       currentUserId && currentUserId !== user.id
         ? this.prisma.userBlock.findFirst({
             where: {
@@ -823,44 +1072,49 @@ export class UsersService {
           }),
         )
       : false;
-    const isFollowRequested = currentUserId && !isFollowing
-      ? Boolean(
-          await this.prisma.followRequest.findUnique({
-            where: {
-              requesterId_targetId: {
-                requesterId: currentUserId,
-                targetId: user.id,
+    const isFollowRequested =
+      currentUserId && !isFollowing
+        ? Boolean(
+            await this.prisma.followRequest.findUnique({
+              where: {
+                requesterId_targetId: {
+                  requesterId: currentUserId,
+                  targetId: user.id,
+                },
               },
-            },
-            select: { requesterId: true },
-          }),
-        )
-      : false;
+              select: { requesterId: true },
+            }),
+          )
+        : false;
 
     const isSelf = currentUserId === user.id;
     const isBlockedByMe = blockRelation?.blockerId === currentUserId;
     const isBlockedByUser = blockRelation?.blockerId === user.id;
-    const canViewContent = !blockRelation && (isSelf || isFollowing || !profile.isPrivate);
+    const canViewContent =
+      !blockRelation && (isSelf || isFollowing || !profile.isPrivate);
 
-    const cloudVisibilityFilter = (!isSelf && !isFollowing) ? { visibility: 'public' as const } : {};
-    const activeClouds = canViewContent ? await this.prisma.cloud.findMany({
-      where: {
-        authorId: user.id,
-        deletedAt: null,
-        status: CloudStatus.active,
-        // Non-followers can only see public clouds even when profile is public
-        ...cloudVisibilityFilter,
-      },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        duration: true,
-        createdAt: true,
-        visibility: true,
-      },
-    }) : [];
+    const cloudVisibilityFilter =
+      !isSelf && !isFollowing ? { visibility: 'public' as const } : {};
+    const activeClouds = canViewContent
+      ? await this.prisma.cloud.findMany({
+          where: {
+            authorId: user.id,
+            deletedAt: null,
+            status: CloudStatus.active,
+            // Non-followers can only see public clouds even when profile is public
+            ...cloudVisibilityFilter,
+          },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            duration: true,
+            createdAt: true,
+            visibility: true,
+          },
+        })
+      : [];
 
     const serializedActiveClouds = activeClouds.map((cloud) => ({
       id: cloud.id,
@@ -872,26 +1126,27 @@ export class UsersService {
       href: `/cloud/${cloud.id}?source=for-you`,
     }));
 
-    const endedClouds = canViewContent && (isSelf || profile.showArchivedClouds)
-      ? await this.prisma.cloud.findMany({
-          where: {
-            authorId: user.id,
-            deletedAt: null,
-            status: CloudStatus.ended,
-            ...cloudVisibilityFilter,
-          },
-          orderBy: [{ endedAt: 'desc' }, { createdAt: 'desc' }],
-          select: {
-            id: true,
-            title: true,
-            content: true,
-            duration: true,
-            createdAt: true,
-            endedAt: true,
-            visibility: true,
-          },
-        })
-      : [];
+    const endedClouds =
+      canViewContent && (isSelf || profile.showArchivedClouds)
+        ? await this.prisma.cloud.findMany({
+            where: {
+              authorId: user.id,
+              deletedAt: null,
+              status: CloudStatus.ended,
+              ...cloudVisibilityFilter,
+            },
+            orderBy: [{ endedAt: 'desc' }, { createdAt: 'desc' }],
+            select: {
+              id: true,
+              title: true,
+              content: true,
+              duration: true,
+              createdAt: true,
+              endedAt: true,
+              visibility: true,
+            },
+          })
+        : [];
 
     const serializedEndedClouds = endedClouds.map((cloud) => ({
       id: cloud.id,
@@ -904,13 +1159,24 @@ export class UsersService {
       href: `/cloud/${cloud.id}/conversation`,
     }));
 
-    const participatingNow = canViewContent && (isSelf || profile.showParticipatingNow)
-      ? await this.prisma.cloudMember.findFirst({
-          where: { userId: user.id, leftAt: null, cloud: { deletedAt: null, status: CloudStatus.active, ...cloudVisibilityFilter } },
-          orderBy: { joinedAt: 'desc' },
-          select: { cloud: { select: { id: true, title: true, duration: true } } },
-        })
-      : null;
+    const participatingNow =
+      canViewContent && (isSelf || profile.showParticipatingNow)
+        ? await this.prisma.cloudMember.findFirst({
+            where: {
+              userId: user.id,
+              leftAt: null,
+              cloud: {
+                deletedAt: null,
+                status: CloudStatus.active,
+                ...cloudVisibilityFilter,
+              },
+            },
+            orderBy: { joinedAt: 'desc' },
+            select: {
+              cloud: { select: { id: true, title: true, duration: true } },
+            },
+          })
+        : null;
 
     return {
       id: user.id,
@@ -939,13 +1205,23 @@ export class UsersService {
       isSelf,
       profileUrl: `/users/${profile.username}`,
       activeCloud: serializedActiveClouds[0] ?? null,
-      participatingNow: participatingNow ? { id: participatingNow.cloud.id, title: participatingNow.cloud.title, duration: participatingNow.cloud.duration, href: `/cloud/${participatingNow.cloud.id}` } : null,
+      participatingNow: participatingNow
+        ? {
+            id: participatingNow.cloud.id,
+            title: participatingNow.cloud.title,
+            duration: participatingNow.cloud.duration,
+            href: `/cloud/${participatingNow.cloud.id}`,
+          }
+        : null,
       activeClouds: serializedActiveClouds,
       endedClouds: serializedEndedClouds,
     };
   }
 
-  private async ensureUsersCanInteract(firstUserId: string, secondUserId: string) {
+  private async ensureUsersCanInteract(
+    firstUserId: string,
+    secondUserId: string,
+  ) {
     const block = await this.prisma.userBlock.findFirst({
       where: {
         OR: [
@@ -957,16 +1233,26 @@ export class UsersService {
     });
 
     if (block) {
-      throw new ForbiddenException({ message: 'Não é possível interagir com este perfil.' });
+      throw new ForbiddenException({
+        message: 'Não é possível interagir com este perfil.',
+      });
     }
   }
 
   async getInviteContacts(token: string | null): Promise<{
     ok: true;
-    contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }>;
+    contacts: Array<{
+      identifier: string;
+      displayName: string;
+      type: 'email' | 'phone';
+    }>;
   }> {
     const current = await this.requireSession(token);
-    const contacts: Array<{ identifier: string; displayName: string; type: 'email' | 'phone' }> = [];
+    const contacts: Array<{
+      identifier: string;
+      displayName: string;
+      type: 'email' | 'phone';
+    }> = [];
 
     if (current.user.email) {
       contacts.push({
@@ -979,10 +1265,15 @@ export class UsersService {
     return { ok: true, contacts };
   }
 
-  async sendInvite(token: string | null, identifier: string): Promise<{ ok: true; inviteUrl: string }> {
+  async sendInvite(
+    token: string | null,
+    identifier: string,
+  ): Promise<{ ok: true; inviteUrl: string }> {
     await this.requireSession(token);
 
-    const appUrl = process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ?? 'http://localhost:3000';
+    const appUrl =
+      process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ??
+      'http://localhost:3000';
     const inviteUrl = `${appUrl}/cloudscommunity`;
 
     return { ok: true, inviteUrl };

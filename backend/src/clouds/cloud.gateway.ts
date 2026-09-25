@@ -13,16 +13,23 @@ import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
 import { CloudService } from './cloud.service';
-import type { CloudMessagePayload, CloudMessageReactionPayload } from './cloud.types';
+import type {
+  CloudMessagePayload,
+  CloudMessageReactionPayload,
+} from './cloud.types';
 
 type CloudSocketData = {
   userId?: string;
   sessionId?: string;
+  guest?: boolean;
   joinedCloudIds?: Set<string>;
 };
 
 function extractTokenFromHandshake(socket: Socket): string | null {
-  const authToken = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : null;
+  const authToken =
+    typeof socket.handshake.auth?.token === 'string'
+      ? socket.handshake.auth.token
+      : null;
   if (authToken) {
     return authToken;
   }
@@ -43,15 +50,22 @@ function extractTokenFromHandshake(socket: Socket): string | null {
 @WebSocketGateway({
   namespace: '/clouds',
   cors: {
-    origin: process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ?? true,
+    origin:
+      process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ??
+      true,
     credentials: true,
   },
 })
-export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class CloudMessagesGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Server;
 
-  private readonly typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly typingTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(
     private readonly authService: AuthService,
@@ -70,31 +84,28 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     const token = extractTokenFromHandshake(socket);
     const session = await this.authService.resolveSession(token);
 
-    if (!session) {
-      socket.disconnect(true);
-      return;
-    }
-
     socket.data = {
       ...(socket.data as CloudSocketData),
-      userId: session.user.id,
-      sessionId: session.session.id,
+      userId: session?.user.id,
+      sessionId: session?.session.id,
+      guest: !session,
       joinedCloudIds: new Set<string>(),
     };
 
-    await socket.join(this.userRoom(session.user.id));
+    if (session) await socket.join(this.userRoom(session.user.id));
   }
 
   async handleDisconnect(socket: Socket) {
     const userId = (socket.data as CloudSocketData).userId;
-    const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
+    const joinedCloudIds =
+      (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
 
-    if (!userId) {
-      return;
-    }
-
-    await this.clearTypingStatesForUser(userId, joinedCloudIds);
-    await Promise.all(Array.from(joinedCloudIds, (cloudId) => this.broadcastMembersUpdated(cloudId)));
+    if (userId) await this.clearTypingStatesForUser(userId, joinedCloudIds);
+    await Promise.all(
+      Array.from(joinedCloudIds, (cloudId) =>
+        this.broadcastMembersUpdated(cloudId),
+      ),
+    );
   }
 
   @SubscribeMessage('cloud:join')
@@ -104,18 +115,27 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
   ) {
     const userId = await this.resolveOrHydrateUserId(socket);
 
-    if (!userId) {
-      return { ok: false as const, message: 'Socket não autenticado.' };
-    }
-
     const cloudId = body?.cloudId?.trim();
 
     if (!cloudId) {
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
-    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
-    const joinedCloudIds = (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
+    const cloud = await this.cloudService.requireCloudAccess(
+      cloudId,
+      userId ?? undefined,
+    );
+    if (
+      !userId &&
+      (cloud.visibility !== 'public' || cloud.status !== 'active')
+    ) {
+      return {
+        ok: false as const,
+        message: 'Cloud indisponível para visitantes.',
+      };
+    }
+    const joinedCloudIds =
+      (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
     await socket.join(this.cloudRoom(cloudId));
     joinedCloudIds.add(cloudId);
 
@@ -179,40 +199,67 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
   }
 
   async getConnectedMemberCount(cloudId: string): Promise<number> {
-    const sockets = await this.server.in(this.cloudRoom(cloudId)).fetchSockets();
+    const sockets = await this.server
+      .in(this.cloudRoom(cloudId))
+      .fetchSockets();
     return sockets.length;
   }
 
   async broadcastMembersUpdated(cloudId: string) {
     const members = await this.cloudService.getActiveMembers(cloudId);
     const membersCount = members.length;
-    this.server.emit('cloud:members_updated', { cloudId, membersCount, members });
+    this.server.to(this.cloudRoom(cloudId)).emit('cloud:members_updated', {
+      cloudId,
+      membersCount,
+      members,
+    });
     return membersCount;
   }
 
-  async broadcastMessageCreated(userId: string | null, cloudId: string, message: CloudMessagePayload) {
+  async broadcastMessageCreated(
+    userId: string | null,
+    cloudId: string,
+    message: CloudMessagePayload,
+  ) {
     if (userId) {
       await this.cloudService.requireCloudAccess(cloudId, userId);
     }
 
     const broadcaster = this.server.to(this.cloudRoom(cloudId));
     if (userId) {
-      broadcaster.except(this.userRoom(userId)).emit('cloud:message:new', message);
+      broadcaster
+        .except(this.userRoom(userId))
+        .emit('cloud:message:new', message);
       return;
     }
 
     broadcaster.emit('cloud:message:new', message);
   }
 
-  async broadcastMemberBanned(cloudId: string, bannedUserId: string, deletedMessageIds: string[] = []) {
+  async broadcastMemberBanned(
+    cloudId: string,
+    bannedUserId: string,
+    deletedMessageIds: string[] = [],
+  ) {
     // Notify all room members to remove the deleted messages
     if (deletedMessageIds.length > 0) {
-      this.server.to(this.cloudRoom(cloudId)).emit('cloud:messages:deleted', { cloudId, messageIds: deletedMessageIds });
+      this.server.to(this.cloudRoom(cloudId)).emit('cloud:messages:deleted', {
+        cloudId,
+        messageIds: deletedMessageIds,
+      });
     }
     // Small delay so the system message is processed by the banned user before redirect
     await new Promise((resolve) => setTimeout(resolve, 400));
     // Notify the banned user to force redirect
-    this.server.to(this.userRoom(bannedUserId)).emit('cloud:banned', { cloudId });
+    this.server
+      .to(this.userRoom(bannedUserId))
+      .emit('cloud:banned', { cloudId });
+  }
+
+  async broadcastMemberRemoved(cloudId: string, removedUserId: string) {
+    this.server
+      .to(this.userRoom(removedUserId))
+      .emit('cloud:removed', { cloudId });
   }
 
   async broadcastReport(
@@ -251,7 +298,9 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     };
 
     if (userId) {
-      broadcaster.except(this.userRoom(userId)).emit('cloud:reaction:changed', payload);
+      broadcaster
+        .except(this.userRoom(userId))
+        .emit('cloud:reaction:changed', payload);
       return;
     }
 
@@ -305,8 +354,13 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
     });
   }
 
-  private async clearTypingStatesForUser(userId: string, joinedCloudIds: Set<string>) {
-    const keys = Array.from(this.typingTimers.keys()).filter((key) => key.endsWith(`:${userId}`));
+  private async clearTypingStatesForUser(
+    userId: string,
+    joinedCloudIds: Set<string>,
+  ) {
+    const keys = Array.from(this.typingTimers.keys()).filter((key) =>
+      key.endsWith(`:${userId}`),
+    );
 
     for (const key of keys) {
       const [cloudId] = key.split(':');
@@ -350,7 +404,8 @@ export class CloudMessagesGateway implements OnGatewayInit, OnGatewayConnection,
       ...(socket.data as CloudSocketData),
       userId: session.user.id,
       sessionId: session.session.id,
-      joinedCloudIds: (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>(),
+      joinedCloudIds:
+        (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>(),
     };
 
     return session.user.id;

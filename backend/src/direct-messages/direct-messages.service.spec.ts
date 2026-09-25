@@ -1,5 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { DirectMessagesService, buildConversationKey, truncatePreview } from './direct-messages.service';
+import {
+  DirectMessagesService,
+  buildConversationKey,
+  truncatePreview,
+} from './direct-messages.service';
 
 function createPrismaMock() {
   const prisma: any = {
@@ -25,7 +29,9 @@ function createPrismaMock() {
     mediaAsset: {
       create: jest.fn(),
     },
-    $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) => callback(prisma)),
+    $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
+      callback(prisma),
+    ),
   };
 
   return prisma;
@@ -379,7 +385,10 @@ describe('DirectMessagesService', () => {
       conversationId: 'conv-1',
       senderId: 'user-1',
       type: 'link',
-      content: JSON.stringify({ url: 'https://clouds.community/cloud/abc', label: 'Cloud legal' }),
+      content: JSON.stringify({
+        url: 'https://clouds.community/cloud/abc',
+        label: 'Cloud legal',
+      }),
       clientMessageId: 'client-3',
       replyToMessageId: null,
       readAt: null,
@@ -419,6 +428,8 @@ describe('DirectMessagesService', () => {
     const service = new DirectMessagesService(prisma);
     prisma.conversation.findFirst.mockResolvedValue(null);
 
-    await expect(service.getConversationById('user-1', 'conv-1')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getConversationById('user-1', 'conv-1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

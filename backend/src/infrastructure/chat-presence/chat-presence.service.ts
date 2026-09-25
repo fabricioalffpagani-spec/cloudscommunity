@@ -17,7 +17,9 @@ export class ChatPresenceService implements OnModuleDestroy {
     }
 
     this.client = createClient({ url: endpoint });
-    this.client.on('error', (error) => this.logger.error(`Redis presence error: ${this.describeError(error)}`));
+    this.client.on('error', (error) =>
+      this.logger.error(`Redis presence error: ${this.describeError(error)}`),
+    );
     await this.client.connect();
     return this.client;
   }

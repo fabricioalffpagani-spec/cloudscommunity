@@ -1,18 +1,53 @@
-import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { CloudService } from './cloud.service';
 
 const cloudId = '12345678-1234-1234-1234-123456789012';
 function setup() {
-  const cloud = { id: cloudId, authorId: 'author', status: 'ended', visibility: 'public', title: 'Topic', duration: '10min', createdAt: new Date(Date.now() - 3600000), updatedAt: new Date(), startedAt: null, endedAt: new Date(), author: { id: 'author', profile: { displayName: 'Author', username: 'author', isPrivate: false } }, members: [], _count: { hypes: 0, members: 0, messages: 12 } };
+  const cloud = {
+    id: cloudId,
+    authorId: 'author',
+    status: 'ended',
+    visibility: 'public',
+    title: 'Topic',
+    duration: '10min',
+    createdAt: new Date(Date.now() - 3600000),
+    updatedAt: new Date(),
+    startedAt: null,
+    endedAt: new Date(),
+    author: {
+      id: 'author',
+      profile: { displayName: 'Author', username: 'author', isPrivate: false },
+    },
+    members: [],
+    _count: { hypes: 0, members: 0, messages: 12 },
+  };
   const prisma: any = {
-    cloud: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(cloud), update: jest.fn() },
-    cloudMessage: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn() },
-    userBlock: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
+    cloud: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(cloud),
+      update: jest.fn(),
+    },
+    cloudMessage: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    userBlock: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     cloudHype: { findMany: jest.fn().mockResolvedValue([]) },
-    cloudMember: { create: jest.fn(), findFirst: jest.fn() },
+    cloudMember: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
+    cloudBan: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
     follow: { findMany: jest.fn().mockResolvedValue([]) },
   };
-  const auth: any = { resolveSession: jest.fn().mockResolvedValue({ user: { id: 'viewer' } }) };
+  const auth: any = {
+    resolveSession: jest.fn().mockResolvedValue({ user: { id: 'viewer' } }),
+  };
   return { service: new CloudService(prisma, auth), prisma, auth, cloud };
 }
 
@@ -20,13 +55,19 @@ describe('Talk / Read regression', () => {
   it('keeps Talk restricted to active public clouds', async () => {
     const { service, prisma } = setup();
     await service.listFeed('token');
-    expect(prisma.cloud.findMany.mock.calls[1][0].where).toMatchObject({ status: 'active', visibility: 'public', deletedAt: null });
+    expect(prisma.cloud.findMany.mock.calls[1][0].where).toMatchObject({
+      status: 'active',
+      visibility: 'public',
+      deletedAt: null,
+    });
   });
   it('filters active Talk clouds to followed authors and excludes inaccessible clouds', async () => {
     const { service, prisma, cloud } = setup();
     cloud.status = 'active';
     prisma.follow.findMany.mockResolvedValue([{ followingId: 'author' }]);
-    prisma.cloud.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([cloud]);
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([cloud]);
     const result = await service.listFollowing('token');
     expect(prisma.cloud.findMany.mock.calls[1][0].where).toMatchObject({
       status: 'active',
@@ -38,41 +79,82 @@ describe('Talk / Read regression', () => {
   });
   it('lists ended public clouds while honoring bans, blocked users and private profiles', async () => {
     const { service, prisma, cloud } = setup();
-    prisma.userBlock.findMany.mockResolvedValue([{ blockerId: 'viewer', blockedId: 'blocked' }]);
-    prisma.cloud.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([cloud]);
+    prisma.userBlock.findMany.mockResolvedValue([
+      { blockerId: 'viewer', blockedId: 'blocked' },
+    ]);
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([cloud]);
     const result = await service.listRead('token');
     const query = prisma.cloud.findMany.mock.calls[1][0];
-    expect(query.where).toMatchObject({ status: 'ended', visibility: 'public', deletedAt: null, authorId: { notIn: ['blocked'] }, bans: { none: { userId: 'viewer' } } });
-    expect(query.where.OR).toContainEqual({ author: { followers: { some: { followerId: 'viewer' } } } });
+    expect(query.where).toMatchObject({
+      status: 'ended',
+      visibility: 'public',
+      deletedAt: null,
+      authorId: { notIn: ['blocked'] },
+      bans: { none: { userId: 'viewer' } },
+    });
+    expect(query.where.OR).toContainEqual({
+      author: { followers: { some: { followerId: 'viewer' } } },
+    });
     expect(result.clouds[0].messagesCount).toBe(12);
   });
   it('filters ended clouds to authors the viewer follows', async () => {
     const { service, prisma, cloud } = setup();
     prisma.follow.findMany.mockResolvedValue([{ followingId: 'author' }]);
-    prisma.cloud.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([cloud]);
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([cloud]);
     const result = await service.listRead('token', 'following');
     const query = prisma.cloud.findMany.mock.calls[1][0];
-    expect(prisma.follow.findMany).toHaveBeenCalledWith({ where: { followerId: 'viewer' }, select: { followingId: true } });
+    expect(prisma.follow.findMany).toHaveBeenCalledWith({
+      where: { followerId: 'viewer' },
+      select: { followingId: true },
+    });
     expect(query.where.AND[1]).toEqual({ authorId: { in: ['author'] } });
     expect(result.clouds).toHaveLength(1);
   });
   it('limits the preview to the earliest 10 non-deleted conversation messages', async () => {
     const { service, prisma } = setup();
-    prisma.cloudMessage.findMany.mockResolvedValue([{ id: 'first', content: 'Hello', user: { id: 'author', profile: { displayName: 'Author' } } }]);
+    prisma.cloudMessage.findMany.mockResolvedValue([
+      {
+        id: 'first',
+        content: 'Hello',
+        user: { id: 'author', profile: { displayName: 'Author' } },
+      },
+    ]);
     const result = await service.getPreview('token', cloudId);
-    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { cloudId, deletedAt: null, type: { not: 'system' } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 10 }));
-    expect(result.messages[0].sender).toEqual({ id: 'author', displayName: 'Author' });
+    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { cloudId, deletedAt: null, type: { not: 'system' } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: 10,
+      }),
+    );
+    expect(result.messages[0].sender).toEqual({
+      id: 'author',
+      displayName: 'Author',
+    });
     expect(prisma.cloudMember.create).not.toHaveBeenCalled();
   });
   it('loads the complete archive in read-only pages without requiring membership', async () => {
     const { service, prisma } = setup();
     prisma.cloudMessage.findMany.mockResolvedValue([]);
-    await service.getArchivedMessages('token', cloudId, { take: 50, before: '2026-09-20T12:00:00Z' });
-    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { cloudId, deletedAt: null, createdAt: { lt: new Date('2026-09-20T12:00:00Z') } },
-      orderBy: { createdAt: 'desc' },
+    await service.getArchivedMessages('token', cloudId, {
       take: 50,
-    }));
+      before: '2026-09-20T12:00:00Z',
+    });
+    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          cloudId,
+          deletedAt: null,
+          createdAt: { lt: new Date('2026-09-20T12:00:00Z') },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+    );
     expect(prisma.cloudMember.findFirst).not.toHaveBeenCalled();
   });
   it('includes active and ended clouds in the owner profile', async () => {
@@ -87,40 +169,68 @@ describe('Talk / Read regression', () => {
   it('does not fetch messages when the archive is inaccessible', async () => {
     const { service, prisma } = setup();
     prisma.cloud.findFirst.mockResolvedValue(null);
-    await expect(service.getPreview('token', cloudId)).rejects.toThrow(NotFoundException);
+    await expect(service.getPreview('token', cloudId)).rejects.toThrow(
+      NotFoundException,
+    );
     expect(prisma.cloudMessage.findMany).not.toHaveBeenCalled();
   });
   it('requires authentication for Read and previews', async () => {
     const { service, prisma, auth } = setup();
     auth.resolveSession.mockResolvedValue(null);
     await expect(service.listRead(null)).rejects.toThrow(UnauthorizedException);
-    await expect(service.getPreview(null, cloudId)).rejects.toThrow(UnauthorizedException);
+    await expect(service.getPreview(null, cloudId)).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(prisma.cloud.findMany).not.toHaveBeenCalled();
   });
   it('rejects malformed preview identifiers', async () => {
     const { service } = setup();
-    await expect(service.getPreview('token', 'invalid')).rejects.toThrow(NotFoundException);
+    await expect(service.getPreview('token', 'invalid')).rejects.toThrow(
+      NotFoundException,
+    );
   });
   it('expires overdue clouds at their actual ending time', async () => {
     const { service, prisma, cloud } = setup();
-    prisma.cloud.findMany.mockResolvedValueOnce([cloud]).mockResolvedValueOnce([]);
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([cloud])
+      .mockResolvedValueOnce([]);
     await service.listRead('token');
-    expect(prisma.cloud.update).toHaveBeenCalledWith({ where: { id: cloudId }, data: { status: 'ended', endedAt: new Date(cloud.createdAt.getTime() + 600000) } });
+    expect(prisma.cloud.update).toHaveBeenCalledWith({
+      where: { id: cloudId },
+      data: {
+        status: 'ended',
+        endedAt: new Date(cloud.createdAt.getTime() + 600000),
+      },
+    });
   });
-  it.each(['ended', 'active'])('rejects joining an expired cloud with status %s', async (status) => {
-    const { service, cloud } = setup();
-    cloud.status = status;
-    await expect(service.joinCloud('token', cloudId)).rejects.toThrow(BadRequestException);
-  });
-  it.each(['text', 'audio', 'image', 'link'] as const)('rejects %s messages in ended clouds', async (type) => {
-    const { service, prisma } = setup();
-    await expect(service.createMessage('token', cloudId, { type, content: 'Message' })).rejects.toThrow(BadRequestException);
-    expect(prisma.cloudMessage.create).not.toHaveBeenCalled();
-  });
+  it.each(['ended', 'active'])(
+    'rejects joining an expired cloud with status %s',
+    async (status) => {
+      const { service, cloud } = setup();
+      cloud.status = status;
+      await expect(service.joinCloud('token', cloudId)).rejects.toThrow(
+        BadRequestException,
+      );
+    },
+  );
+  it.each(['text', 'audio', 'image', 'link'] as const)(
+    'rejects %s messages in ended clouds',
+    async (type) => {
+      const { service, prisma } = setup();
+      await expect(
+        service.createMessage('token', cloudId, { type, content: 'Message' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.cloudMessage.create).not.toHaveBeenCalled();
+    },
+  );
   it('rejects edits and deletion after ending', async () => {
     const { service, prisma } = setup();
-    await expect(service.editMessage('token', cloudId, 'message', 'Changed')).rejects.toThrow(BadRequestException);
-    await expect(service.deleteMessage('token', cloudId, 'message')).rejects.toThrow(BadRequestException);
+    await expect(
+      service.editMessage('token', cloudId, 'message', 'Changed'),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.deleteMessage('token', cloudId, 'message'),
+    ).rejects.toThrow(BadRequestException);
     expect(prisma.cloudMessage.update).not.toHaveBeenCalled();
   });
   it('preserves entry into an active cloud', async () => {
@@ -128,14 +238,80 @@ describe('Talk / Read regression', () => {
     cloud.status = 'active';
     cloud.createdAt = new Date();
     prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
-    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member', leftAt: null });
-    prisma.cloudMessage.findFirst = jest.fn().mockResolvedValue({ id: 'entry-notification' });
-    await expect(service.joinCloud('token', cloudId)).resolves.toEqual({ ok: true, userId: 'viewer', entered: false });
+    prisma.cloudMember.findFirst.mockResolvedValue({
+      id: 'member',
+      leftAt: null,
+    });
+    prisma.cloudMessage.findFirst = jest
+      .fn()
+      .mockResolvedValue({ id: 'entry-notification' });
+    await expect(service.joinCloud('token', cloudId)).resolves.toEqual({
+      ok: true,
+      userId: 'viewer',
+      entered: false,
+    });
+  });
+  it('hides a private cloud from an authenticated user who was not invited', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active';
+    cloud.visibility = 'private';
+    prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.findById('token', cloudId)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+  it('does not let an uninvited user join a private cloud', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
+    cloud.visibility = 'private';
+    prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.joinCloud('token', cloudId)).rejects.toThrow(
+      NotFoundException,
+    );
+    expect(prisma.cloudMember.create).not.toHaveBeenCalled();
+  });
+  it('removes a member without creating a permanent ban', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    cloud.status = 'active';
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member-record' });
+
+    await expect(service.removeMember('token', cloudId, 'viewer')).resolves.toEqual({ ok: true });
+
+    expect(prisma.cloudMember.update).toHaveBeenCalledWith({
+      where: { id: 'member-record' },
+      data: { leftAt: expect.any(Date) },
+    });
+    expect(prisma.cloudBan.upsert).not.toHaveBeenCalled();
+  });
+  it('blocks banned users from all Cloud access paths, including sockets', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudBan.findUnique.mockResolvedValue({ cloudId, userId: 'viewer' });
+
+    await expect(service.requireCloudAccess(cloudId, 'viewer')).rejects.toThrow(
+      NotFoundException,
+    );
   });
   it('preserves the existing chat history pagination for members', async () => {
     const { service, prisma } = setup();
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
-    await service.getMessages('token', cloudId, { take: 25, before: '2026-09-20T12:00:00Z' });
-    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 25, orderBy: { createdAt: 'desc' }, where: { cloudId, deletedAt: null, createdAt: { lt: new Date('2026-09-20T12:00:00Z') } } }));
+    await service.getMessages('token', cloudId, {
+      take: 25,
+      before: '2026-09-20T12:00:00Z',
+    });
+    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 25,
+        orderBy: { createdAt: 'desc' },
+        where: {
+          cloudId,
+          deletedAt: null,
+          createdAt: { lt: new Date('2026-09-20T12:00:00Z') },
+        },
+      }),
+    );
   });
 });

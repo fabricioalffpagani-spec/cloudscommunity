@@ -19,7 +19,6 @@ export type CloudAuthorPayload = {
   username: string;
   avatarUrl: string | null;
   location: string | null;
-  isTestClouder: boolean;
 };
 
 export type CloudMessageReactionPayload = {
@@ -87,7 +86,14 @@ export type CloudPayload = {
     id: string;
     userId: string;
     role: string;
-    user: { id: string; profile: { displayName: string; username: string; avatarUrl: string | null } };
+    user: {
+      id: string;
+      profile: {
+        displayName: string;
+        username: string;
+        avatarUrl: string | null;
+      };
+    };
   }>;
   participantProfiles: Array<{
     id: string;

@@ -20,7 +20,9 @@ export class PrismaService
     } catch (error) {
       console.error('Failed to connect to database:', error);
       // Don't throw error to allow app to start without database for development
-      console.warn('Application will run without database connection. Some features may not work.');
+      console.warn(
+        'Application will run without database connection. Some features may not work.',
+      );
     }
   }
 

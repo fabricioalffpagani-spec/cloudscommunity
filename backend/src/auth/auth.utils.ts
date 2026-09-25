@@ -3,9 +3,19 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import {
+  createHash,
+  randomBytes,
+  scryptSync,
+  timingSafeEqual,
+} from 'node:crypto';
 import type { Response } from 'express';
-import { MIN_PASSWORD_LENGTH, SESSION_COOKIE_NAME, SESSION_TTL_MS, USERNAME_PATTERN } from './auth.constants';
+import {
+  MIN_PASSWORD_LENGTH,
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_MS,
+  USERNAME_PATTERN,
+} from './auth.constants';
 
 export type RequestMeta = {
   ipAddress: string | null;
@@ -19,11 +29,19 @@ export function normalizeEmail(value: string): string {
 }
 
 export function normalizeUsername(value: string): string {
-  return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 export function normalizeName(value: string): string {
-  return value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
 export function normalizeOptionalText(value?: string | null): string | null {
@@ -77,20 +95,27 @@ export function parseBirthDate(value: string): Date {
   if (parsed > today) {
     throw new BadRequestException({
       message: 'Data de nascimento não pode ser no futuro.',
-      fieldErrors: { birthDate: 'A data de nascimento não pode ser no futuro.' },
+      fieldErrors: {
+        birthDate: 'A data de nascimento não pode ser no futuro.',
+      },
     });
   }
 
   return parsed;
 }
 
-export function validateMinimumAge(birthDate: Date, minimumAge = 16, maximumAge = 100): void {
+export function validateMinimumAge(
+  birthDate: Date,
+  minimumAge = 16,
+  maximumAge = 100,
+): void {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
 
   if (
     today.getMonth() < birthDate.getMonth() ||
-    (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())
+    (today.getMonth() === birthDate.getMonth() &&
+      today.getDate() < birthDate.getDate())
   ) {
     age -= 1;
   }
@@ -99,7 +124,8 @@ export function validateMinimumAge(birthDate: Date, minimumAge = 16, maximumAge 
     throw new BadRequestException({
       message: 'Idade mínima não atendida.',
       fieldErrors: {
-        birthDate: 'Você precisa ter pelo menos 16 anos completos para participar do Clouds.',
+        birthDate:
+          'Você precisa ter pelo menos 16 anos completos para participar do Clouds.',
       },
     });
   }
@@ -107,7 +133,9 @@ export function validateMinimumAge(birthDate: Date, minimumAge = 16, maximumAge 
   if (age > maximumAge) {
     throw new BadRequestException({
       message: 'Idade máxima excedida.',
-      fieldErrors: { birthDate: `A idade máxima permitida é de ${maximumAge} anos.` },
+      fieldErrors: {
+        birthDate: `A idade máxima permitida é de ${maximumAge} anos.`,
+      },
     });
   }
 }
@@ -131,11 +159,16 @@ export function validatePassword(password: string): void {
     });
   }
 
-  if (!/[a-zA-Z]/.test(trimmed) || !/[0-9]/.test(trimmed) || !/[^a-zA-Z0-9\s]/.test(trimmed)) {
+  if (
+    !/[a-zA-Z]/.test(trimmed) ||
+    !/[0-9]/.test(trimmed) ||
+    !/[^a-zA-Z0-9\s]/.test(trimmed)
+  ) {
     throw new BadRequestException({
       message: 'Senha fraca.',
       fieldErrors: {
-        password: 'A senha deve conter letras, números e um caractere especial.',
+        password:
+          'A senha deve conter letras, números e um caractere especial.',
       },
     });
   }
@@ -214,7 +247,11 @@ export function getSessionCookieOptions(expiresAt: Date) {
   };
 }
 
-export function setSessionCookie(res: Response, token: string, expiresAt: Date) {
+export function setSessionCookie(
+  res: Response,
+  token: string,
+  expiresAt: Date,
+) {
   res.cookie(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
 }
 
@@ -233,7 +270,8 @@ export function getRequestMeta(headers: {
   get(name: string): string | null | undefined;
   ip?: string | null;
 }): RequestMeta {
-  const forwardedFor = headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  const forwardedFor =
+    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   return {
     ipAddress: forwardedFor || headers.ip || null,
     userAgent: headers.get('user-agent') ?? null,
@@ -247,7 +285,10 @@ export function makeAuthConflict(fieldErrors: FieldErrors, message: string) {
   });
 }
 
-export function makeAuthUnauthorized(fieldErrors: FieldErrors, message: string) {
+export function makeAuthUnauthorized(
+  fieldErrors: FieldErrors,
+  message: string,
+) {
   throw new UnauthorizedException({
     message,
     fieldErrors,

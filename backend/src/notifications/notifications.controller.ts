@@ -23,7 +23,10 @@ export class NotificationsController {
 
   @Get()
   async list(@Req() req: Request, @Query('all') all?: string) {
-    return this.notificationsService.list(extractSessionToken(req), all === 'true');
+    return this.notificationsService.list(
+      extractSessionToken(req),
+      all === 'true',
+    );
   }
 
   @Post('read')
@@ -33,11 +36,17 @@ export class NotificationsController {
 
   @Post(':id/accept')
   async accept(@Req() req: Request, @Param('id') id: string) {
-    return this.notificationsService.acceptFollowRequest(extractSessionToken(req), id);
+    return this.notificationsService.acceptFollowRequest(
+      extractSessionToken(req),
+      id,
+    );
   }
 
   @Post(':id/decline')
   async decline(@Req() req: Request, @Param('id') id: string) {
-    return this.notificationsService.declineFollowRequest(extractSessionToken(req), id);
+    return this.notificationsService.declineFollowRequest(
+      extractSessionToken(req),
+      id,
+    );
   }
 }

@@ -12,7 +12,10 @@ import { Server, Socket } from 'socket.io';
 import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
-import { SocketIoRedisService, type RedisAdapter } from '../infrastructure/socket-io-redis/socket-io-redis.service';
+import {
+  SocketIoRedisService,
+  type RedisAdapter,
+} from '../infrastructure/socket-io-redis/socket-io-redis.service';
 import { DirectMessagesService } from './direct-messages.service';
 import type {
   ConversationPresencePayload,
@@ -29,12 +32,13 @@ type ChatSocketData = {
   joinedConversationIds?: Set<string>;
 };
 
-type AckResult<T> =
-  | { ok: true; data: T }
-  | { ok: false; message: string };
+type AckResult<T> = { ok: true; data: T } | { ok: false; message: string };
 
 function extractTokenFromHandshake(socket: Socket): string | null {
-  const authToken = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : null;
+  const authToken =
+    typeof socket.handshake.auth?.token === 'string'
+      ? socket.handshake.auth.token
+      : null;
   if (authToken) {
     return authToken;
   }
@@ -55,15 +59,22 @@ function extractTokenFromHandshake(socket: Socket): string | null {
 @WebSocketGateway({
   namespace: '/direct-messages',
   cors: {
-    origin: process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ?? true,
+    origin:
+      process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ??
+      true,
     credentials: true,
   },
 })
-export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class DirectMessagesGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server!: Server;
 
-  private readonly typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly typingTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
   constructor(
     private readonly authService: AuthService,
@@ -105,10 +116,13 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
 
   async handleDisconnect(socket: Socket) {
     const userId = (socket.data as ChatSocketData).userId;
-    const joinedConversationIds = (socket.data as ChatSocketData).joinedConversationIds ?? new Set<string>();
+    const joinedConversationIds =
+      (socket.data as ChatSocketData).joinedConversationIds ??
+      new Set<string>();
 
     if (userId) {
-      const shouldBroadcast = await this.chatPresenceService.markOffline(userId);
+      const shouldBroadcast =
+        await this.chatPresenceService.markOffline(userId);
       if (shouldBroadcast) {
         await this.broadcastPresence(userId, 'offline');
       }
@@ -134,7 +148,10 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       return { ok: false as const, message: 'Informe a conversa.' };
     }
 
-    const conversation = await this.directMessagesService.getConversationById(userId, conversationId);
+    const conversation = await this.directMessagesService.getConversationById(
+      userId,
+      conversationId,
+    );
     await socket.join(this.conversationRoom(conversationId));
     (socket.data as ChatSocketData).joinedConversationIds?.add(conversationId);
 
@@ -153,7 +170,9 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     }
 
     await socket.leave(this.conversationRoom(conversationId));
-    (socket.data as ChatSocketData).joinedConversationIds?.delete(conversationId);
+    (socket.data as ChatSocketData).joinedConversationIds?.delete(
+      conversationId,
+    );
     await this.stopTyping(socket, conversationId);
     return { ok: true as const, data: { conversationId } };
   }
@@ -182,8 +201,15 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     }
 
     try {
-      const conversation = await this.directMessagesService.requireConversationContactAccess(userId, conversationId);
-      const peerId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+      const conversation =
+        await this.directMessagesService.requireConversationContactAccess(
+          userId,
+          conversationId,
+        );
+      const peerId =
+        conversation.participantOneId === userId
+          ? conversation.participantTwoId
+          : conversation.participantOneId;
       const payload: ConversationTypingPayload = {
         conversationId,
         userId,
@@ -195,7 +221,13 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
 
       return { ok: true as const, data: payload };
     } catch (error) {
-      return { ok: false as const, message: error instanceof Error ? error.message : 'Não foi possível atualizar a digitação.' };
+      return {
+        ok: false as const,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível atualizar a digitação.',
+      };
     }
   }
 
@@ -208,13 +240,19 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     const userId = this.getUserId(socket);
 
     if (!userId) {
-      const payload = { ok: false as const, message: 'Socket não autenticado.' };
+      const payload = {
+        ok: false as const,
+        message: 'Socket não autenticado.',
+      };
       ack?.(payload);
       return payload;
     }
 
     try {
-      const message = await this.directMessagesService.sendTextMessage(userId, body);
+      const message = await this.directMessagesService.sendTextMessage(
+        userId,
+        body,
+      );
       await this.broadcastMessageCreated(userId, body.conversationId, message);
       await this.stopTyping(socket, body.conversationId);
 
@@ -222,7 +260,10 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       ack?.(payload);
       return payload;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível enviar a mensagem.';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível enviar a mensagem.';
       const payload = { ok: false as const, message };
       ack?.(payload);
       return payload;
@@ -246,7 +287,10 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       return { ok: false as const, message: 'Informe a conversa.' };
     }
 
-    const conversation = await this.directMessagesService.markConversationRead(userId, conversationId);
+    const conversation = await this.directMessagesService.markConversationRead(
+      userId,
+      conversationId,
+    );
     const readAt = new Date().toISOString();
     const payload: ConversationReadPayload = {
       conversationId,
@@ -254,15 +298,25 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       readAt,
     };
 
-    this.server.to(this.conversationRoom(conversationId)).emit('conversation:read', payload);
-    this.server.to(this.userRoom(userId)).emit('conversation:updated', conversation);
-    this.server.to(this.userRoom(conversation.participant.id)).emit('conversation:updated', conversation);
+    this.server
+      .to(this.conversationRoom(conversationId))
+      .emit('conversation:read', payload);
+    this.server
+      .to(this.userRoom(userId))
+      .emit('conversation:updated', conversation);
+    this.server
+      .to(this.userRoom(conversation.participant.id))
+      .emit('conversation:updated', conversation);
 
     return { ok: true as const, data: conversation };
   }
 
-  async broadcastPresence(userId: string, status: ConversationPresencePayload['status']) {
-    const peerIds = await this.directMessagesService.listConversationPeerIds(userId);
+  async broadcastPresence(
+    userId: string,
+    status: ConversationPresencePayload['status'],
+  ) {
+    const peerIds =
+      await this.directMessagesService.listConversationPeerIds(userId);
     const payload: ConversationPresencePayload = { userId, status };
 
     for (const peerId of peerIds) {
@@ -270,25 +324,53 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     }
   }
 
-  async broadcastMessageCreated(userId: string, conversationId: string, message: DirectMessagePayload) {
-    const senderConversation = await this.directMessagesService.getConversationById(userId, conversationId);
-    const recipientConversation = await this.directMessagesService.getConversationById(senderConversation.participant.id, conversationId);
+  async broadcastMessageCreated(
+    userId: string,
+    conversationId: string,
+    message: DirectMessagePayload,
+  ) {
+    const senderConversation =
+      await this.directMessagesService.getConversationById(
+        userId,
+        conversationId,
+      );
+    const recipientConversation =
+      await this.directMessagesService.getConversationById(
+        senderConversation.participant.id,
+        conversationId,
+      );
 
-    this.server.to(this.conversationRoom(conversationId)).emit('message:new', message);
-    this.server.to(this.userRoom(userId)).emit('conversation:updated', senderConversation);
-    this.server.to(this.userRoom(senderConversation.participant.id)).emit('conversation:updated', recipientConversation);
+    this.server
+      .to(this.conversationRoom(conversationId))
+      .emit('message:new', message);
+    this.server
+      .to(this.userRoom(userId))
+      .emit('conversation:updated', senderConversation);
+    this.server
+      .to(this.userRoom(senderConversation.participant.id))
+      .emit('conversation:updated', recipientConversation);
   }
 
-  async broadcastMessageEdited(conversationId: string, message: DirectMessagePayload) {
-    this.server.to(this.conversationRoom(conversationId)).emit('message:edited', message);
+  async broadcastMessageEdited(
+    conversationId: string,
+    message: DirectMessagePayload,
+  ) {
+    this.server
+      .to(this.conversationRoom(conversationId))
+      .emit('message:edited', message);
   }
 
   async broadcastMessageDeleted(conversationId: string, messageId: string) {
-    this.server.to(this.conversationRoom(conversationId)).emit('message:deleted', { messageId });
+    this.server
+      .to(this.conversationRoom(conversationId))
+      .emit('message:deleted', { messageId });
   }
 
   async broadcastConversationRead(userId: string, conversationId: string) {
-    const conversation = await this.directMessagesService.markConversationRead(userId, conversationId);
+    const conversation = await this.directMessagesService.markConversationRead(
+      userId,
+      conversationId,
+    );
     const readAt = new Date().toISOString();
     const payload: ConversationReadPayload = {
       conversationId,
@@ -296,20 +378,35 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
       readAt,
     };
 
-    this.server.to(this.conversationRoom(conversationId)).emit('conversation:read', payload);
-    this.server.to(this.userRoom(userId)).emit('conversation:updated', conversation);
-    this.server.to(this.userRoom(conversation.participant.id)).emit('conversation:updated', conversation);
+    this.server
+      .to(this.conversationRoom(conversationId))
+      .emit('conversation:read', payload);
+    this.server
+      .to(this.userRoom(userId))
+      .emit('conversation:updated', conversation);
+    this.server
+      .to(this.userRoom(conversation.participant.id))
+      .emit('conversation:updated', conversation);
   }
 
-  async broadcastTyping(userId: string, conversationId: string, isTyping: boolean) {
-    const conversation = await this.directMessagesService.getConversationById(userId, conversationId);
+  async broadcastTyping(
+    userId: string,
+    conversationId: string,
+    isTyping: boolean,
+  ) {
+    const conversation = await this.directMessagesService.getConversationById(
+      userId,
+      conversationId,
+    );
     const payload: ConversationTypingPayload = {
       conversationId,
       userId,
       isTyping,
     };
 
-    this.server.to(this.userRoom(conversation.participant.id)).emit('conversation:typing', payload);
+    this.server
+      .to(this.userRoom(conversation.participant.id))
+      .emit('conversation:typing', payload);
   }
 
   private registerTypingTimer(socket: Socket, conversationId: string) {
@@ -359,8 +456,13 @@ export class DirectMessagesGateway implements OnGatewayInit, OnGatewayConnection
     }
   }
 
-  private async clearTypingStatesForUser(userId: string, joinedConversationIds: Set<string>) {
-    const keys = Array.from(this.typingTimers.keys()).filter((key) => key.endsWith(`:${userId}`));
+  private async clearTypingStatesForUser(
+    userId: string,
+    joinedConversationIds: Set<string>,
+  ) {
+    const keys = Array.from(this.typingTimers.keys()).filter((key) =>
+      key.endsWith(`:${userId}`),
+    );
 
     for (const key of keys) {
       const [conversationId] = key.split(':');

@@ -288,7 +288,7 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           ) : clouds.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] py-20 text-center">
               <FlameIcon s={40} />
-              <p className="text-[18px] font-semibold text-white/60">Nenhuma Cloud ativa com "{word}"</p>
+              <p className="text-[18px] font-semibold text-white/60">Nenhuma Cloud ativa com &quot;{word}&quot;</p>
               <p className="text-[14px] text-white/30">Esta palavra pode ter saído do trending. Volte ao ranking para ver os tópicos atuais.</p>
               <Link href="/trending" className="mt-2 rounded-full border border-white/10 px-5 py-2 text-[13px] font-semibold text-white/60 transition hover:text-white">
                 Ver Trending

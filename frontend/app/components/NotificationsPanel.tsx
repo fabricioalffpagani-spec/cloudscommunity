@@ -70,6 +70,14 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 30000);
+    const handleFocus = () => void loadNotifications();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [loadNotifications]);
 
   const respond = async (notification: AppNotification, action: "accept" | "decline") => {

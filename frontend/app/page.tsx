@@ -87,7 +87,6 @@ type CloudApiAuthor = {
   name: string;
   username: string;
   avatarUrl: string | null;
-  isTestClouder?: boolean;
 };
 
 type CloudApiPayload = {
@@ -140,7 +139,7 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     href: cloud.href,
     hypes: cloud.hypesCount,
     hyped: cloud.hyped ?? false,
-    authorName: cloud.author.isTestClouder ? `${cloud.author.name} · Clouder` : cloud.author.name,
+    authorName: cloud.author.name,
     authorHandle: cloud.author.username,
     authorPhoto: cloud.author.avatarUrl ?? undefined,
     description: cloud.description ?? undefined,
@@ -1404,7 +1403,7 @@ function RecordAudioModal({
   const [audioPeaks, setAudioPeaks] = useState<number[] | null>(null);
   const [category, setCategory] = useState(CATEGORIES[1].name);
   const [duration, setDuration] = useState(DURATIONS[0]);
-  const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const visibility = "public" as const;
   const [error, setError] = useState<string | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
@@ -1576,23 +1575,7 @@ function RecordAudioModal({
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">Visibilidade</label>
-                <div className="flex gap-2 flex-wrap">
-                  {(["public", "private"] as const).map(option => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setVisibility(option)}
-                      className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-                        visibility === option ? "bg-[#9333EA] text-white" : "bg-[#252840] border border-white/[0.08] text-white/60 hover:text-white"
-                      }`}
-                    >
-                      {option === "public" ? "Público" : "Privado"}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <p className="rounded-xl border border-white/[0.08] bg-[#252840] px-3 py-2.5 text-[12px] leading-relaxed text-white/55">Clouds de áudio ainda não suportam convites privados. Para criar uma Cloud privada, use uma Cloud de texto.</p>
             </div>
           )}
 

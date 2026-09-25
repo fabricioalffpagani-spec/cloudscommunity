@@ -1,4 +1,7 @@
-import type { ClassifiedTopic, SemanticTopicClassifier } from './topic-classification.types';
+import type {
+  ClassifiedTopic,
+  SemanticTopicClassifier,
+} from './topic-classification.types';
 
 /**
  * Extension point for embeddings, LLMs or another semantic provider.

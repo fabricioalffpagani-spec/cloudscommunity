@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type { Prisma, Session } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { Resend } from 'resend';
@@ -51,6 +55,7 @@ type SignupInput = {
   region?: string;
   acceptedTerms?: boolean;
   acceptedCommunityRules?: boolean;
+  returnTo?: string;
 };
 
 type SessionBundle = {
@@ -60,7 +65,8 @@ type SessionBundle = {
 
 const EMAIL_VERIFICATION_TTL_MS = 30 * 60 * 1000;
 const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
-const PASSWORD_RESET_TTL_MS = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES ?? 30) * 60 * 1000;
+const PASSWORD_RESET_TTL_MS =
+  Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES ?? 30) * 60 * 1000;
 
 type UserWithProfile = Prisma.UserGetPayload<{
   include: {
@@ -84,7 +90,10 @@ export class AuthService {
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
-  async signup(input: SignupInput, _meta: { ipAddress: string | null; userAgent: string | null }): Promise<SignupPendingResponse> {
+  async signup(
+    input: SignupInput,
+    _meta: { ipAddress: string | null; userAgent: string | null },
+  ): Promise<SignupPendingResponse> {
     const email = validateEmail(input.email ?? '');
     const name = normalizeName(input.name ?? '');
     const username = validateUsername(input.username ?? '');
@@ -95,7 +104,9 @@ export class AuthService {
     if (!input.acceptedTerms || !input.acceptedCommunityRules) {
       throw new BadRequestException({
         message: 'Aceite obrigatório.',
-        fieldErrors: { form: 'Aceite os Termos de Uso e as Regras da Comunidade para concluir o cadastro.' },
+        fieldErrors: {
+          form: 'Aceite os Termos de Uso e as Regras da Comunidade para concluir o cadastro.',
+        },
       });
     }
 
@@ -114,7 +125,10 @@ export class AuthService {
     });
 
     if (existingEmail) {
-      makeAuthConflict({ email: 'Este email já está em uso.' }, 'Email já cadastrado.');
+      makeAuthConflict(
+        { email: 'Este email já está em uso.' },
+        'Email já cadastrado.',
+      );
     }
 
     const existingUsername = await this.prisma.profile.findUnique({
@@ -123,11 +137,16 @@ export class AuthService {
     });
 
     if (existingUsername) {
-      makeAuthConflict({ username: 'Este nome de usuário já está em uso.' }, 'Username já cadastrado.');
+      makeAuthConflict(
+        { username: 'Este nome de usuário já está em uso.' },
+        'Username já cadastrado.',
+      );
     }
 
     const passwordHash = createPasswordHash(password);
-    const displayLocation = normalizeOptionalText(input.location ?? input.region);
+    const displayLocation = normalizeOptionalText(
+      input.location ?? input.region,
+    );
     const bio = normalizeOptionalText(input.bio);
     const created = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -155,16 +174,30 @@ export class AuthService {
       return user;
     });
 
-    await this.sendVerificationEmail(created.id, email, name);
+    await this.sendVerificationEmail(
+      created.id,
+      email,
+      name,
+      this.normalizeVerificationReturnTo(input.returnTo),
+    );
     return { ok: true, pendingVerification: true, email };
   }
 
-  async resendEmailVerification(emailInput: string): Promise<{ ok: true; message: string; retryAfterSeconds?: number }> {
+  async resendEmailVerification(
+    emailInput: string,
+  ): Promise<{ ok: true; message: string; retryAfterSeconds?: number }> {
     const email = validateEmail(emailInput);
-    const user = await this.prisma.user.findUnique({ where: { email }, include: { profile: true } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { profile: true },
+    });
 
     if (!user || user.status !== 'pending' || !user.profile) {
-      return { ok: true, message: 'Se existir uma conta pendente para este email, enviaremos um novo link.' };
+      return {
+        ok: true,
+        message:
+          'Se existir uma conta pendente para este email, enviaremos um novo link.',
+      };
     }
 
     const latestToken = await this.prisma.emailVerificationToken.findFirst({
@@ -172,38 +205,60 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
-    const elapsed = latestToken ? Date.now() - latestToken.createdAt.getTime() : EMAIL_RESEND_COOLDOWN_MS;
+    const elapsed = latestToken
+      ? Date.now() - latestToken.createdAt.getTime()
+      : EMAIL_RESEND_COOLDOWN_MS;
 
     if (elapsed < EMAIL_RESEND_COOLDOWN_MS) {
       return {
         ok: true,
         message: 'Aguarde antes de solicitar outro email.',
-        retryAfterSeconds: Math.ceil((EMAIL_RESEND_COOLDOWN_MS - elapsed) / 1000),
+        retryAfterSeconds: Math.ceil(
+          (EMAIL_RESEND_COOLDOWN_MS - elapsed) / 1000,
+        ),
       };
     }
 
-    await this.sendVerificationEmail(user.id, user.email, user.profile.displayName);
+    await this.sendVerificationEmail(
+      user.id,
+      user.email,
+      user.profile.displayName,
+    );
     return { ok: true, message: 'Um novo link de validação foi enviado.' };
   }
 
-  async verifyEmail(token: string, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
+  async verifyEmail(
+    token: string,
+    meta: { ipAddress: string | null; userAgent: string | null },
+  ): Promise<AuthResult> {
     const rawToken = token.trim();
-    if (!rawToken) throw new BadRequestException({ message: 'Link de validação inválido.' });
+    if (!rawToken)
+      throw new BadRequestException({ message: 'Link de validação inválido.' });
 
     const verification = await this.prisma.emailVerificationToken.findUnique({
       where: { tokenHash: this.hashVerificationToken(rawToken) },
       include: { user: { include: { profile: true } } },
     });
 
-    if (!verification || verification.usedAt || verification.expiresAt.getTime() <= Date.now() || !verification.user.profile) {
-      throw new BadRequestException({ message: 'Este link de validação é inválido ou expirou.' });
+    if (
+      !verification ||
+      verification.usedAt ||
+      verification.expiresAt.getTime() <= Date.now() ||
+      !verification.user.profile
+    ) {
+      throw new BadRequestException({
+        message: 'Este link de validação é inválido ou expirou.',
+      });
     }
 
     const claimed = await this.prisma.emailVerificationToken.updateMany({
       where: { id: verification.id, usedAt: null },
       data: { usedAt: new Date() },
     });
-    if (claimed.count !== 1) throw new BadRequestException({ message: 'Este link de validação já foi utilizado.' });
+    if (claimed.count !== 1)
+      throw new BadRequestException({
+        message: 'Este link de validação já foi utilizado.',
+      });
 
     const user = await this.prisma.user.update({
       where: { id: verification.user.id },
@@ -212,25 +267,46 @@ export class AuthService {
     });
     const session = await this.createSession(user.id, meta);
 
-    return { ok: true, user: this.mapUser(user), session: this.mapSession(session.session), token: session.token };
+    return {
+      ok: true,
+      user: this.mapUser(user),
+      session: this.mapSession(session.session),
+      token: session.token,
+    };
   }
 
-  async requestPasswordReset(emailInput: string): Promise<{ ok: true; message: string }> {
+  async requestPasswordReset(
+    emailInput: string,
+  ): Promise<{ ok: true; message: string }> {
     const email = validateEmail(emailInput);
-    const user = await this.prisma.user.findUnique({ where: { email }, include: { profile: true } });
-    const message = 'Se houver uma conta com este email, enviaremos um link para redefinir a senha.';
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { profile: true },
+    });
+    const message =
+      'Se houver uma conta com este email, enviaremos um link para redefinir a senha.';
 
     if (!user || user.status !== 'active' || !user.profile) {
       return { ok: true, message };
     }
 
-    await this.sendPasswordResetEmail(user.id, user.email, user.profile.displayName);
+    await this.sendPasswordResetEmail(
+      user.id,
+      user.email,
+      user.profile.displayName,
+    );
     return { ok: true, message };
   }
 
-  async resetPassword(tokenInput: string, passwordInput: string): Promise<{ ok: true; message: string }> {
+  async resetPassword(
+    tokenInput: string,
+    passwordInput: string,
+  ): Promise<{ ok: true; message: string }> {
     const rawToken = tokenInput.trim();
-    if (!rawToken) throw new BadRequestException({ message: 'Link de redefinição inválido.' });
+    if (!rawToken)
+      throw new BadRequestException({
+        message: 'Link de redefinição inválido.',
+      });
 
     validatePassword(passwordInput);
 
@@ -239,8 +315,15 @@ export class AuthService {
       include: { user: { include: { profile: true } } },
     });
 
-    if (!resetToken || resetToken.usedAt || resetToken.expiresAt.getTime() <= Date.now() || !resetToken.user.profile) {
-      throw new BadRequestException({ message: 'Este link de redefinição é inválido ou expirou.' });
+    if (
+      !resetToken ||
+      resetToken.usedAt ||
+      resetToken.expiresAt.getTime() <= Date.now() ||
+      !resetToken.user.profile
+    ) {
+      throw new BadRequestException({
+        message: 'Este link de redefinição é inválido ou expirou.',
+      });
     }
 
     const passwordHash = createPasswordHash(passwordInput);
@@ -250,20 +333,45 @@ export class AuthService {
         where: { id: resetToken.id, usedAt: null },
         data: { usedAt: changedAt },
       });
-      if (claimed.count !== 1) throw new BadRequestException({ message: 'Este link de redefinição já foi utilizado.' });
+      if (claimed.count !== 1)
+        throw new BadRequestException({
+          message: 'Este link de redefinição já foi utilizado.',
+        });
 
-      await tx.user.update({ where: { id: resetToken.userId }, data: { passwordHash } });
-      await tx.passwordResetToken.deleteMany({ where: { userId: resetToken.userId, usedAt: null } });
-      await tx.session.updateMany({ where: { userId: resetToken.userId, revokedAt: null }, data: { revokedAt: changedAt } });
-      return { email: resetToken.user.email, displayName: resetToken.user.profile!.displayName };
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      });
+      await tx.passwordResetToken.deleteMany({
+        where: { userId: resetToken.userId, usedAt: null },
+      });
+      await tx.session.updateMany({
+        where: { userId: resetToken.userId, revokedAt: null },
+        data: { revokedAt: changedAt },
+      });
+      return {
+        email: resetToken.user.email,
+        displayName: resetToken.user.profile!.displayName,
+      };
     });
 
-    await this.sendPasswordResetConfirmationEmail(result.email, result.displayName);
-    return { ok: true, message: 'Senha redefinida com sucesso. Você já pode entrar com a nova senha.' };
+    await this.sendPasswordResetConfirmationEmail(
+      result.email,
+      result.displayName,
+    );
+    return {
+      ok: true,
+      message:
+        'Senha redefinida com sucesso. Você já pode entrar com a nova senha.',
+    };
   }
 
-  async login(input: LoginInput, meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
-    const identifierRaw = input.identifier ?? input.email ?? input.username ?? '';
+  async login(
+    input: LoginInput,
+    meta: { ipAddress: string | null; userAgent: string | null },
+  ): Promise<AuthResult> {
+    const identifierRaw =
+      input.identifier ?? input.email ?? input.username ?? '';
     const identifier = identifierRaw.trim();
     const password = input.password ?? '';
 
@@ -341,7 +449,11 @@ export class AuthService {
       );
     }
 
-    const session = await this.createSession(authenticatedUser.id, meta, input.rememberDevice === true);
+    const session = await this.createSession(
+      authenticatedUser.id,
+      meta,
+      input.rememberDevice === true,
+    );
 
     await this.prisma.user.update({
       where: { id: authenticatedUser.id },
@@ -372,53 +484,140 @@ export class AuthService {
     };
   }
 
-  async updateProfile(token: string | null, input: { displayName?: string; bio?: string; location?: string; avatarUrl?: string; isPrivate?: boolean; showHypesCount?: boolean; showArchivedClouds?: boolean; showParticipatingNow?: boolean; interests?: string[] }): Promise<AuthResponse> {    const current = await this.resolveSession(token);
-    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+  async updateProfile(
+    token: string | null,
+    input: {
+      displayName?: string;
+      bio?: string;
+      location?: string;
+      avatarUrl?: string;
+      isPrivate?: boolean;
+      showHypesCount?: boolean;
+      showArchivedClouds?: boolean;
+      showParticipatingNow?: boolean;
+      interests?: string[];
+    },
+  ): Promise<AuthResponse> {
+    const current = await this.resolveSession(token);
+    if (!current)
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
 
-    const displayName = input.displayName === undefined ? undefined : normalizeName(input.displayName);
+    const displayName =
+      input.displayName === undefined
+        ? undefined
+        : normalizeName(input.displayName);
     if (input.displayName !== undefined && !displayName) {
       throw new BadRequestException({ message: 'Nome obrigatório.' });
     }
-    const bio = input.bio === undefined ? undefined : normalizeOptionalText(input.bio);
-    const location = input.location === undefined ? undefined : normalizeOptionalText(input.location);
-    const avatarUrl = input.avatarUrl === undefined ? undefined : normalizeOptionalText(input.avatarUrl);
-    if ((bio && bio.length > 500) || (location && location.length > 120) || (avatarUrl && avatarUrl.length > 4_000_000)) {
-      throw new BadRequestException({ message: 'Um dos campos excede o tamanho permitido.' });
+    const bio =
+      input.bio === undefined ? undefined : normalizeOptionalText(input.bio);
+    const location =
+      input.location === undefined
+        ? undefined
+        : normalizeOptionalText(input.location);
+    const avatarUrl =
+      input.avatarUrl === undefined
+        ? undefined
+        : normalizeOptionalText(input.avatarUrl);
+    if (
+      (bio && bio.length > 500) ||
+      (location && location.length > 120) ||
+      (avatarUrl && avatarUrl.length > 4_000_000)
+    ) {
+      throw new BadRequestException({
+        message: 'Um dos campos excede o tamanho permitido.',
+      });
     }
-    if (avatarUrl && !avatarUrl.startsWith('data:image/') && !/^https?:\/\//.test(avatarUrl)) {
+    if (
+      avatarUrl &&
+      !avatarUrl.startsWith('data:image/') &&
+      !/^https?:\/\//.test(avatarUrl)
+    ) {
       throw new BadRequestException({ message: 'Imagem de perfil inválida.' });
     }
-    const allowedInterests = new Set(['musica', 'filmes_series', 'games', 'esportes', 'tecnologia', 'relacionamentos', 'humor_internet', 'livros_cultura', 'atualidades', 'politica_sociedade']);
-    const interests = input.interests === undefined ? undefined : [...new Set(input.interests.map((interest) => interest.trim()).filter((interest) => allowedInterests.has(interest)))];
+    const allowedInterests = new Set([
+      'musica',
+      'filmes_series',
+      'games',
+      'esportes',
+      'tecnologia',
+      'relacionamentos',
+      'humor_internet',
+      'livros_cultura',
+      'atualidades',
+      'politica_sociedade',
+    ]);
+    const interests =
+      input.interests === undefined
+        ? undefined
+        : [
+            ...new Set(
+              input.interests
+                .map((interest) => interest.trim())
+                .filter((interest) => allowedInterests.has(interest)),
+            ),
+          ];
     if (interests !== undefined && interests.length < 3) {
-      throw new BadRequestException({ message: 'Escolha pelo menos 3 temas para continuar.' });
+      throw new BadRequestException({
+        message: 'Escolha pelo menos 3 temas para continuar.',
+      });
     }
 
     const updated = await this.prisma.user.update({
       where: { id: current.user.id },
-      data: { profile: { update: { displayName, bio, location, avatarUrl, isPrivate: input.isPrivate, showHypesCount: input.showHypesCount, showArchivedClouds: input.showArchivedClouds, showParticipatingNow: input.showParticipatingNow, interests, interestsCompletedAt: interests === undefined ? undefined : new Date() } } },
+      data: {
+        profile: {
+          update: {
+            displayName,
+            bio,
+            location,
+            avatarUrl,
+            isPrivate: input.isPrivate,
+            showHypesCount: input.showHypesCount,
+            showArchivedClouds: input.showArchivedClouds,
+            showParticipatingNow: input.showParticipatingNow,
+            interests,
+            interestsCompletedAt:
+              interests === undefined ? undefined : new Date(),
+          },
+        },
+      },
       include: { profile: true },
     });
-    return { ok: true, user: await this.mapUserWithStats(updated), session: this.mapSession(current.session) };
+    return {
+      ok: true,
+      user: await this.mapUserWithStats(updated),
+      session: this.mapSession(current.session),
+    };
   }
 
   async session(token: string | null): Promise<AuthResponse> {
     return this.me(token);
   }
 
-  async changePassword(token: string | null, input: { currentPassword?: string; newPassword?: string }): Promise<{ ok: true }> {
+  async changePassword(
+    token: string | null,
+    input: { currentPassword?: string; newPassword?: string },
+  ): Promise<{ ok: true }> {
     const current = await this.resolveSession(token);
-    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    if (!current)
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
 
     const currentPassword = input.currentPassword ?? '';
     const newPassword = input.newPassword ?? '';
 
     if (!currentPassword) {
-      throw new BadRequestException({ message: 'Senha atual obrigatória.', fieldErrors: { currentPassword: 'Informe a senha atual.' } });
+      throw new BadRequestException({
+        message: 'Senha atual obrigatória.',
+        fieldErrors: { currentPassword: 'Informe a senha atual.' },
+      });
     }
 
     if (!verifyPassword(currentPassword, current.user.passwordHash)) {
-      throw new BadRequestException({ message: 'Senha atual incorreta.', fieldErrors: { currentPassword: 'Senha atual incorreta.' } });
+      throw new BadRequestException({
+        message: 'Senha atual incorreta.',
+        fieldErrors: { currentPassword: 'Senha atual incorreta.' },
+      });
     }
 
     validatePassword(newPassword);
@@ -432,25 +631,38 @@ export class AuthService {
     return { ok: true };
   }
 
-  async sendFeedback(token: string | null, messageInput: string): Promise<{ ok: true }> {
+  async sendFeedback(
+    token: string | null,
+    messageInput: string,
+  ): Promise<{ ok: true }> {
     const current = await this.resolveSession(token);
-    if (!current) throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    if (!current)
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
 
     const message = messageInput.trim();
     if (message.length < 10) {
-      throw new BadRequestException({ message: 'Escreva uma mensagem com pelo menos 10 caracteres.' });
+      throw new BadRequestException({
+        message: 'Escreva uma mensagem com pelo menos 10 caracteres.',
+      });
     }
     if (message.length > 4_000) {
-      throw new BadRequestException({ message: 'A mensagem pode ter no máximo 4.000 caracteres.' });
+      throw new BadRequestException({
+        message: 'A mensagem pode ter no máximo 4.000 caracteres.',
+      });
     }
     if (!this.resend) {
-      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+      throw new BadRequestException({
+        message:
+          'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.',
+      });
     }
 
     const username = current.user.profile?.username ?? 'usuário';
     const displayName = current.user.profile?.displayName ?? username;
     const { error } = await this.resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      from:
+        process.env.RESEND_FROM_EMAIL?.trim() ||
+        'Clouds <no-reply@cloudscommunity.com.br>',
       to: ['cloudscomunidade@gmail.com'],
       subject: `SUGESTÃO/RECLAMAÇÃO do usuário @${username}`,
       text: `SUGESTÃO/RECLAMAÇÃO do usuário @${username}\n\nNome: ${displayName}\nE-mail: ${current.user.email}\n\nMensagem:\n${message}`,
@@ -458,7 +670,10 @@ export class AuthService {
     });
 
     if (error) {
-      throw new BadRequestException({ message: 'Não foi possível enviar sua mensagem agora. Tente novamente mais tarde.' });
+      throw new BadRequestException({
+        message:
+          'Não foi possível enviar sua mensagem agora. Tente novamente mais tarde.',
+      });
     }
 
     return { ok: true };
@@ -483,7 +698,9 @@ export class AuthService {
     return { ok: true };
   }
 
-  async usernameAvailability(usernameInput: string): Promise<UsernameAvailabilityResponse> {
+  async usernameAvailability(
+    usernameInput: string,
+  ): Promise<UsernameAvailabilityResponse> {
     const username = validateUsername(usernameInput);
     const existing = await this.prisma.profile.findUnique({
       where: { username },
@@ -497,7 +714,9 @@ export class AuthService {
     };
   }
 
-  async emailAvailability(emailInput: string): Promise<EmailAvailabilityResponse> {
+  async emailAvailability(
+    emailInput: string,
+  ): Promise<EmailAvailabilityResponse> {
     const email = validateEmail(emailInput);
     const existing = await this.prisma.user.findUnique({
       where: { email },
@@ -511,10 +730,16 @@ export class AuthService {
     };
   }
 
-  async createSession(userId: string, meta: { ipAddress: string | null; userAgent: string | null }, rememberDevice = true): Promise<SessionBundle> {
+  async createSession(
+    userId: string,
+    meta: { ipAddress: string | null; userAgent: string | null },
+    rememberDevice = true,
+  ): Promise<SessionBundle> {
     const token = createSessionToken();
     const refreshTokenHash = hashSessionToken(token);
-    const expiresAt = new Date(Date.now() + (rememberDevice ? SESSION_TTL_MS : 1000 * 60 * 60 * 24));
+    const expiresAt = new Date(
+      Date.now() + (rememberDevice ? SESSION_TTL_MS : 1000 * 60 * 60 * 24),
+    );
 
     const session = await this.prisma.session.create({
       data: {
@@ -530,7 +755,12 @@ export class AuthService {
     return { session, token };
   }
 
-  private async sendVerificationEmail(userId: string, email: string, displayName: string): Promise<void> {
+  private async sendVerificationEmail(
+    userId: string,
+    email: string,
+    displayName: string,
+    returnTo?: string,
+  ): Promise<void> {
     if (!this.resend) {
       throw new Error('RESEND_API_KEY não configurada.');
     }
@@ -538,44 +768,78 @@ export class AuthService {
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = this.hashVerificationToken(rawToken);
     const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
-    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim().replace(/\/+$/, '');
-    const verificationUrl = `${webOrigin}/verify-email?token=${encodeURIComponent(rawToken)}`;
+    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000')
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
+    const verificationUrl = `${webOrigin}/verify-email?token=${encodeURIComponent(rawToken)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ''}`;
     const safeDisplayName = this.escapeHtml(displayName);
 
-    await this.prisma.emailVerificationToken.deleteMany({ where: { userId, usedAt: null } });
-    await this.prisma.emailVerificationToken.create({ data: { userId, tokenHash, expiresAt } });
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId, usedAt: null },
+    });
+    await this.prisma.emailVerificationToken.create({
+      data: { userId, tokenHash, expiresAt },
+    });
 
     const { error } = await this.resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      from:
+        process.env.RESEND_FROM_EMAIL?.trim() ||
+        'Clouds <no-reply@cloudscommunity.com.br>',
       to: [email],
       subject: 'Valide seu email no Clouds',
-      text: `Olá, ${displayName}! Valide seu email acessando: ${verificationUrl}. Este link expira em 30 minutos.`,
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>Valide seu email</h1><p>Olá, ${safeDisplayName}!</p><p>Clique no botão abaixo para concluir seu cadastro no Clouds.</p><p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#9333ea;color:#fff;text-decoration:none;border-radius:999px">Validar meu email</a></p><p>Este link expira em 30 minutos.</p></div>`,
+      text: `Olá, ${displayName}! Valide seu email acessando: ${verificationUrl}. ${returnTo ? 'Após validar, você voltará para a Cloud que estava acompanhando. ' : ''}Este link expira em 30 minutos.`,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>Valide seu email</h1><p>Olá, ${safeDisplayName}!</p><p>Clique no botão abaixo para concluir seu cadastro no Clouds${returnTo ? ' e voltar para a Cloud que você estava acompanhando' : ''}.</p><p><a href="${verificationUrl}" style="display:inline-block;padding:12px 20px;background:#9333ea;color:#fff;text-decoration:none;border-radius:999px">Validar meu email${returnTo ? ' e voltar para a Cloud' : ''}</a></p><p>Este link expira em 30 minutos.</p></div>`,
     });
 
     if (error) {
-      await this.prisma.emailVerificationToken.deleteMany({ where: { tokenHash } });
-      throw new BadRequestException({ message: 'Não foi possível enviar o email de validação agora.' });
+      await this.prisma.emailVerificationToken.deleteMany({
+        where: { tokenHash },
+      });
+      throw new BadRequestException({
+        message: 'Não foi possível enviar o email de validação agora.',
+      });
     }
   }
 
-  private async sendPasswordResetEmail(userId: string, email: string, displayName: string): Promise<void> {
+  private normalizeVerificationReturnTo(value?: string): string | undefined {
+    if (!value?.startsWith('/cloud/')) return undefined;
+    return value.length <= 512 ? value : undefined;
+  }
+
+  private async sendPasswordResetEmail(
+    userId: string,
+    email: string,
+    displayName: string,
+  ): Promise<void> {
     if (!this.resend) {
-      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+      throw new BadRequestException({
+        message:
+          'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.',
+      });
     }
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = this.hashVerificationToken(rawToken);
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000').split(',')[0].trim().replace(/\/+$/, '');
+    const webOrigin = (process.env.APP_WEB_ORIGIN ?? 'http://localhost:3000')
+      .split(',')[0]
+      .trim()
+      .replace(/\/+$/, '');
     const resetUrl = `${webOrigin}/reset-password?token=${encodeURIComponent(rawToken)}`;
     const safeDisplayName = this.escapeHtml(displayName);
 
-    await this.prisma.passwordResetToken.deleteMany({ where: { userId, usedAt: null } });
-    await this.prisma.passwordResetToken.create({ data: { userId, tokenHash, expiresAt } });
+    await this.prisma.passwordResetToken.deleteMany({
+      where: { userId, usedAt: null },
+    });
+    await this.prisma.passwordResetToken.create({
+      data: { userId, tokenHash, expiresAt },
+    });
 
     const { error } = await this.resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      from:
+        process.env.RESEND_FROM_EMAIL?.trim() ||
+        'Clouds <no-reply@cloudscommunity.com.br>',
       to: [email],
       subject: 'Redefina sua senha do Clouds',
       text: `Olá, ${displayName}! Recebemos um pedido para redefinir sua senha. Use este link: ${resetUrl}. Ele expira em 30 minutos. Se não foi você, ignore este email.`,
@@ -583,23 +847,37 @@ export class AuthService {
     });
     if (error) {
       await this.prisma.passwordResetToken.deleteMany({ where: { tokenHash } });
-      throw new BadRequestException({ message: 'Não foi possível enviar o email de redefinição agora.' });
+      throw new BadRequestException({
+        message: 'Não foi possível enviar o email de redefinição agora.',
+      });
     }
   }
 
-  private async sendPasswordResetConfirmationEmail(email: string, displayName: string): Promise<void> {
+  private async sendPasswordResetConfirmationEmail(
+    email: string,
+    displayName: string,
+  ): Promise<void> {
     if (!this.resend) {
-      throw new BadRequestException({ message: 'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.' });
+      throw new BadRequestException({
+        message:
+          'O serviço de email está temporariamente indisponível. Tente novamente mais tarde.',
+      });
     }
     const safeDisplayName = this.escapeHtml(displayName);
     const { error } = await this.resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
+      from:
+        process.env.RESEND_FROM_EMAIL?.trim() ||
+        'Clouds <no-reply@cloudscommunity.com.br>',
       to: [email],
       subject: '✅ Senha alterada com sucesso — Clouds',
       text: `✅ Olá, ${displayName}! Sua senha foi alterada com sucesso. 🔒 Está tudo certo com a sua conta Clouds. Se não foi você, entre em contato com o suporte imediatamente.`,
       html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h1>✅ Senha alterada!</h1><p>Olá, ${safeDisplayName}!</p><p>🔒 Sua senha foi redefinida com sucesso e está tudo certo com a sua conta Clouds.</p><p>Se você não fez essa alteração, entre em contato com o suporte imediatamente.</p></div>`,
     });
-    if (error) throw new BadRequestException({ message: 'Senha alterada, mas não foi possível enviar o email de confirmação.' });
+    if (error)
+      throw new BadRequestException({
+        message:
+          'Senha alterada, mas não foi possível enviar o email de confirmação.',
+      });
   }
 
   private hashVerificationToken(token: string): string {
@@ -607,10 +885,22 @@ export class AuthService {
   }
 
   private escapeHtml(value: string): string {
-    return value.replace(/[&<>'\"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
+    return value.replace(
+      /[&<>'\"]/g,
+      (character) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;',
+        })[character] ?? character,
+    );
   }
 
-  async resolveSession(token: string | null): Promise<{ session: Session; user: UserWithProfile } | null> {
+  async resolveSession(
+    token: string | null,
+  ): Promise<{ session: Session; user: UserWithProfile } | null> {
     if (!token) {
       return null;
     }
@@ -665,7 +955,9 @@ export class AuthService {
     return this.buildUserPayload(user);
   }
 
-  private async mapUserWithStats(user: UserWithProfile): Promise<AuthUserPayload> {
+  private async mapUserWithStats(
+    user: UserWithProfile,
+  ): Promise<AuthUserPayload> {
     const profile = user.profile;
 
     if (!profile) {
@@ -677,7 +969,10 @@ export class AuthService {
     return this.buildUserPayload(user, userStats);
   }
 
-  private buildUserPayload(user: UserWithProfile, stats?: UserStats): AuthUserPayload {
+  private buildUserPayload(
+    user: UserWithProfile,
+    stats?: UserStats,
+  ): AuthUserPayload {
     const profile = user.profile;
 
     if (!profile) {
@@ -713,12 +1008,17 @@ export class AuthService {
   }
 
   private async loadUserStats(userId: string): Promise<UserStats> {
-    const [followersCount, followingCount, cloudsCount, hypesCount] = await Promise.all([
-      this.prisma.follow.count({ where: { followingId: userId } }),
-      this.prisma.follow.count({ where: { followerId: userId } }),
-      this.prisma.cloud.count({ where: { authorId: userId, deletedAt: null } }),
-      this.prisma.cloudHype.count({ where: { cloud: { authorId: userId, deletedAt: null } } }),
-    ]);
+    const [followersCount, followingCount, cloudsCount, hypesCount] =
+      await Promise.all([
+        this.prisma.follow.count({ where: { followingId: userId } }),
+        this.prisma.follow.count({ where: { followerId: userId } }),
+        this.prisma.cloud.count({
+          where: { authorId: userId, deletedAt: null },
+        }),
+        this.prisma.cloudHype.count({
+          where: { cloud: { authorId: userId, deletedAt: null } },
+        }),
+      ]);
 
     return {
       followersCount,

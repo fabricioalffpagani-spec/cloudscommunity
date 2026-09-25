@@ -24,5 +24,9 @@ export type CloudTopicClassification = {
 };
 
 export type SemanticTopicClassifier = {
-  classify(input: { title: string; description?: string | null; availableTopics: readonly TopicId[] }): Promise<ClassifiedTopic[]>;
+  classify(input: {
+    title: string;
+    description?: string | null;
+    availableTopics: readonly TopicId[];
+  }): Promise<ClassifiedTopic[]>;
 };

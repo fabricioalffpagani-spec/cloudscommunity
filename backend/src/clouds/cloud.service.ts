@@ -1,5 +1,15 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { CloudMode, CloudStatus, CloudVisibility, Prisma } from '@prisma/client';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  CloudMode,
+  CloudStatus,
+  CloudVisibility,
+  Prisma,
+} from '@prisma/client';
 import * as crypto from 'crypto';
 import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
@@ -80,7 +90,9 @@ const DURATION_TO_SECONDS: Record<string, number> = {
   '24h': 24 * 60 * 60,
 };
 
-function normalizeDuration(value: string): (typeof ALLOWED_DURATIONS)[number] | null {
+function normalizeDuration(
+  value: string,
+): (typeof ALLOWED_DURATIONS)[number] | null {
   const compactValue = value.trim().toLowerCase().replace(/[\s.]/g, '');
   const aliases: Record<string, (typeof ALLOWED_DURATIONS)[number]> = {
     '10min': '10min',
@@ -112,20 +124,27 @@ export class CloudService {
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
-  async findById(token: string | null, cloudId: string): Promise<{ ok: true; cloud: CloudPayload }> {
-    const session = await this.requireSession(token);
+  async findById(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; cloud: CloudPayload }> {
+    const session = await this.authService.resolveSession(token);
+    await this.expireDueClouds();
 
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const UUID_RE =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!UUID_RE.test(cloudId)) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
     // Block banned users from accessing the cloud
-    const ban = await this.prisma.cloudBan.findUnique({
-      where: { cloudId_userId: { cloudId, userId: session.user.id } },
-    });
-    if (ban) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    if (session) {
+      const ban = await this.prisma.cloudBan.findUnique({
+        where: { cloudId_userId: { cloudId, userId: session.user.id } },
+      });
+      if (ban) {
+        throw new NotFoundException({ message: 'Cloud não encontrada.' });
+      }
     }
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -140,12 +159,18 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
-    await this.requireCloudVisibility(cloud, session.user.id);
+    if (session) {
+      await this.requireCloudVisibility(cloud, session.user.id);
+    } else {
+      this.requireGuestCloudObservation(cloud);
+    }
 
-    const currentUserHype = await this.prisma.cloudHype.findUnique({
-      where: { cloudId_userId: { cloudId, userId: session.user.id } },
-      select: { cloudId: true },
-    });
+    const currentUserHype = session
+      ? await this.prisma.cloudHype.findUnique({
+          where: { cloudId_userId: { cloudId, userId: session.user.id } },
+          select: { cloudId: true },
+        })
+      : null;
 
     return {
       ok: true,
@@ -156,7 +181,9 @@ export class CloudService {
     };
   }
 
-  async listFeed(token: string | null): Promise<{ ok: true; clouds: CloudPayload[] }> {
+  async listFeed(
+    token: string | null,
+  ): Promise<{ ok: true; clouds: CloudPayload[] }> {
     const current = await this.requireSession(token);
     await this.expireDueClouds();
 
@@ -179,10 +206,16 @@ export class CloudService {
     // Score = hypeCount * 3 + recency decay (hours since creation, capped at 72h)
     const now = Date.now();
     const blocks = await this.prisma.userBlock.findMany({
-      where: { OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }] },
+      where: {
+        OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }],
+      },
       select: { blockerId: true, blockedId: true },
     });
-    const blockedUserIds = new Set(blocks.map((block) => block.blockerId === current.user.id ? block.blockedId : block.blockerId));
+    const blockedUserIds = new Set(
+      blocks.map((block) =>
+        block.blockerId === current.user.id ? block.blockedId : block.blockerId,
+      ),
+    );
     const scored = clouds
       .filter((cloud) => !blockedUserIds.has(cloud.authorId))
       .map((cloud) => {
@@ -211,7 +244,9 @@ export class CloudService {
     };
   }
 
-  private async readableArchiveWhere(userId: string): Promise<Prisma.CloudWhereInput> {
+  private async readableArchiveWhere(
+    userId: string,
+  ): Promise<Prisma.CloudWhereInput> {
     const blocks = await this.prisma.userBlock.findMany({
       where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
       select: { blockerId: true, blockedId: true },
@@ -220,7 +255,11 @@ export class CloudService {
       deletedAt: null,
       status: CloudStatus.ended,
       visibility: CloudVisibility.public,
-      authorId: { notIn: blocks.map((block) => block.blockerId === userId ? block.blockedId : block.blockerId) },
+      authorId: {
+        notIn: blocks.map((block) =>
+          block.blockerId === userId ? block.blockedId : block.blockerId,
+        ),
+      },
       bans: { none: { userId } },
       OR: [
         { authorId: userId },
@@ -230,7 +269,10 @@ export class CloudService {
     };
   }
 
-  async listRead(token: string | null, scope: 'for-you' | 'following' = 'for-you') {
+  async listRead(
+    token: string | null,
+    scope: 'for-you' | 'following' = 'for-you',
+  ) {
     const current = await this.requireSession(token);
     // Neither operation depends on the other. Running them together keeps the
     // archive feed responsive while still ensuring expired Clouds are included.
@@ -262,8 +304,9 @@ export class CloudService {
         author: {
           select: {
             id: true,
-            isTestClouder: true,
-            profile: { select: { displayName: true, username: true, avatarUrl: true } },
+            profile: {
+              select: { displayName: true, username: true, avatarUrl: true },
+            },
           },
         },
         members: {
@@ -296,14 +339,22 @@ export class CloudService {
         messagesCount: cloud._count.messages,
         participantsCount: cloud._count.members,
         author: {
-          name: cloud.author.profile?.displayName ?? 'Clouder',
+          name: cloud.author.profile?.displayName ?? 'Usuário',
+          id: cloud.author.id,
           username: cloud.author.profile?.username ?? '',
           avatarUrl: cloud.author.profile?.avatarUrl ?? null,
-          isTestClouder: cloud.author.isTestClouder,
         },
         participantProfiles: cloud.members.flatMap((member) => {
           const profile = member.user.profile;
-          return profile ? [{ id: member.user.id, name: profile.displayName, avatarUrl: profile.avatarUrl }] : [];
+          return profile
+            ? [
+                {
+                  id: member.user.id,
+                  name: profile.displayName,
+                  avatarUrl: profile.avatarUrl,
+                },
+              ]
+            : [];
         }),
       })),
     };
@@ -311,46 +362,93 @@ export class CloudService {
 
   async getPreview(token: string | null, cloudId: string) {
     const current = await this.requireSession(token);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        cloudId,
+      )
+    ) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
     await this.expireDueClouds();
     const cloud = await this.prisma.cloud.findFirst({
-      where: { ...(await this.readableArchiveWhere(current.user.id)), id: cloudId },
+      where: {
+        ...(await this.readableArchiveWhere(current.user.id)),
+        id: cloudId,
+      },
       include: this.cloudInclude(),
     });
-    if (!cloud) throw new NotFoundException({ message: 'Cloud encerrada não encontrada.' });
+    if (!cloud)
+      throw new NotFoundException({
+        message: 'Cloud encerrada não encontrada.',
+      });
     const messages = await this.prisma.cloudMessage.findMany({
       where: { cloudId, deletedAt: null, type: { not: 'system' } },
-      select: { id: true, type: true, content: true, mediaUrl: true, createdAt: true, user: { select: { id: true, profile: { select: { displayName: true, username: true, avatarUrl: true } } } } },
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        mediaUrl: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            profile: {
+              select: { displayName: true, username: true, avatarUrl: true },
+            },
+          },
+        },
+      },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take: 10,
     });
-    return { ok: true, cloud: this.mapCloud(cloud), messages: messages.map(({ user, ...message }) => ({ ...message, sender: { id: user.id, ...user.profile } })) };
+    return {
+      ok: true,
+      cloud: this.mapCloud(cloud),
+      messages: messages.map(({ user, ...message }) => ({
+        ...message,
+        sender: { id: user.id, ...user.profile },
+      })),
+    };
   }
 
   async getArchivedMessages(
     token: string | null,
     cloudId: string,
     query: ListCloudMessagesQuery = {},
-  ): Promise<{ ok: true; cloud: CloudPayload; messages: CloudMessagePayload[] }> {
+  ): Promise<{
+    ok: true;
+    cloud: CloudPayload;
+    messages: CloudMessagePayload[];
+  }> {
     const current = await this.requireSession(token);
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cloudId)) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        cloudId,
+      )
+    ) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
     await this.expireDueClouds();
     const cloud = await this.prisma.cloud.findFirst({
-      where: { ...(await this.readableArchiveWhere(current.user.id)), id: cloudId },
+      where: {
+        ...(await this.readableArchiveWhere(current.user.id)),
+        id: cloudId,
+      },
       include: this.cloudInclude(),
     });
-    if (!cloud) throw new NotFoundException({ message: 'Cloud encerrada não encontrada.' });
+    if (!cloud)
+      throw new NotFoundException({
+        message: 'Cloud encerrada não encontrada.',
+      });
 
     const before = query.before ? new Date(query.before) : null;
     const messages = await this.prisma.cloudMessage.findMany({
       where: {
         cloudId,
         deletedAt: null,
-        ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { lt: before } } : {}),
+        ...(before && !Number.isNaN(before.getTime())
+          ? { createdAt: { lt: before } }
+          : {}),
       },
       include: this.messageInclude(),
       orderBy: { createdAt: 'desc' },
@@ -363,14 +461,25 @@ export class CloudService {
     };
   }
 
-  private requireActiveCloud(cloud: { status: CloudStatus; startedAt: Date | null; createdAt: Date; duration: string }) {
-    const end = (cloud.startedAt ?? cloud.createdAt).getTime() + (DURATION_TO_SECONDS[cloud.duration] ?? 1800) * 1000;
+  private requireActiveCloud(cloud: {
+    status: CloudStatus;
+    startedAt: Date | null;
+    createdAt: Date;
+    duration: string;
+  }) {
+    const end =
+      (cloud.startedAt ?? cloud.createdAt).getTime() +
+      (DURATION_TO_SECONDS[cloud.duration] ?? 1800) * 1000;
     if (cloud.status !== CloudStatus.active || Date.now() >= end) {
-      throw new BadRequestException({ message: 'Esta cloud está encerrada e disponível apenas para leitura.' });
+      throw new BadRequestException({
+        message: 'Esta cloud está encerrada e disponível apenas para leitura.',
+      });
     }
   }
 
-  async listFollowing(token: string | null): Promise<{ ok: true; clouds: CloudPayload[] }> {
+  async listFollowing(
+    token: string | null,
+  ): Promise<{ ok: true; clouds: CloudPayload[] }> {
     const current = await this.requireSession(token);
     await this.expireDueClouds();
 
@@ -380,11 +489,19 @@ export class CloudService {
     });
 
     const blocks = await this.prisma.userBlock.findMany({
-      where: { OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }] },
+      where: {
+        OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }],
+      },
       select: { blockerId: true, blockedId: true },
     });
-    const blockedUserIds = new Set(blocks.map((block) => block.blockerId === current.user.id ? block.blockedId : block.blockerId));
-    const followingIds = following.map((entry) => entry.followingId).filter((id) => !blockedUserIds.has(id));
+    const blockedUserIds = new Set(
+      blocks.map((block) =>
+        block.blockerId === current.user.id ? block.blockedId : block.blockerId,
+      ),
+    );
+    const followingIds = following
+      .map((entry) => entry.followingId)
+      .filter((id) => !blockedUserIds.has(id));
 
     if (followingIds.length === 0) {
       return {
@@ -411,7 +528,9 @@ export class CloudService {
     };
   }
 
-  async listMine(token: string | null): Promise<{ ok: true; clouds: CloudPayload[] }> {
+  async listMine(
+    token: string | null,
+  ): Promise<{ ok: true; clouds: CloudPayload[] }> {
     const current = await this.requireSession(token);
     await this.expireDueClouds();
 
@@ -431,13 +550,20 @@ export class CloudService {
     };
   }
 
-  async create(token: string | null, input: CreateCloudInput, invitedUserIds?: string[]): Promise<{ ok: true; cloud: CloudPayload }> {
+  async create(
+    token: string | null,
+    input: CreateCloudInput,
+    invitedUserIds?: string[],
+  ): Promise<{ ok: true; cloud: CloudPayload }> {
     const current = await this.requireSession(token);
     const title = (input.title ?? '').trim();
     const description = (input.description ?? '').trim();
     const originCloudId = input.originCloudId?.trim() || null;
     const duration = input.duration ?? '';
-    const visibility = input.visibility === 'private' ? CloudVisibility.private : CloudVisibility.public;
+    const visibility =
+      input.visibility === 'private'
+        ? CloudVisibility.private
+        : CloudVisibility.public;
 
     if (!title) {
       throw new BadRequestException({
@@ -456,7 +582,9 @@ export class CloudService {
     if (description.length > 2000) {
       throw new BadRequestException({
         message: 'Descrição muito longa.',
-        fieldErrors: { description: 'A descrição deve ter até 2000 caracteres.' },
+        fieldErrors: {
+          description: 'A descrição deve ter até 2000 caracteres.',
+        },
       });
     }
 
@@ -478,11 +606,24 @@ export class CloudService {
 
     let origin: { id: string; authorId: string; title: string } | null = null;
     if (originCloudId) {
-      origin = await this.prisma.cloud.findFirst({ where: { id: originCloudId, status: CloudStatus.ended, deletedAt: null }, select: { id: true, authorId: true, title: true } });
-      if (!origin) throw new BadRequestException({ message: 'A conversa de origem não está disponível.' });
+      origin = await this.prisma.cloud.findFirst({
+        where: {
+          id: originCloudId,
+          status: CloudStatus.ended,
+          deletedAt: null,
+        },
+        select: { id: true, authorId: true, title: true },
+      });
+      if (!origin)
+        throw new BadRequestException({
+          message: 'A conversa de origem não está disponível.',
+        });
     }
 
-    const classification = this.topicClassifier.classifyCloudTopic({ title, description });
+    const classification = this.topicClassifier.classifyCloudTopic({
+      title,
+      description,
+    });
 
     const created = await this.prisma.$transaction(async (tx) => {
       const cloud = await tx.cloud.create({
@@ -516,25 +657,35 @@ export class CloudService {
       });
 
       // Add invited users as members for private clouds
-      if (visibility === CloudVisibility.private && invitedUserIds && invitedUserIds.length > 0) {
+      if (
+        visibility === CloudVisibility.private &&
+        invitedUserIds &&
+        invitedUserIds.length > 0
+      ) {
         const validUserIds = [...new Set(invitedUserIds)]; // Remove duplicates
         for (const userId of validUserIds) {
-          if (userId !== current.user.id) { // Don't add the author again
-            await tx.cloudMember.create({
-              data: {
-                cloudId: cloud.id,
-                userId,
-                role: 'member',
-              },
-            }).catch(() => {
-              // Ignore errors if user doesn't exist or is already a member
-            });
+          if (userId !== current.user.id) {
+            // Don't add the author again
+            await tx.cloudMember
+              .create({
+                data: {
+                  cloudId: cloud.id,
+                  userId,
+                  role: 'member',
+                },
+              })
+              .catch(() => {
+                // Ignore errors if user doesn't exist or is already a member
+              });
           }
         }
       }
 
       if (origin && origin.authorId !== current.user.id) {
-        const creatorName = current.user.profile?.displayName ?? current.user.profile?.username ?? 'Um usuário';
+        const creatorName =
+          current.user.profile?.displayName ??
+          current.user.profile?.username ??
+          'Um usuário';
         await tx.notification.create({
           data: {
             userId: origin.authorId,
@@ -554,7 +705,10 @@ export class CloudService {
         });
       }
 
-      return tx.cloud.findUniqueOrThrow({ where: { id: cloud.id }, include: this.cloudInclude() });
+      return tx.cloud.findUniqueOrThrow({
+        where: { id: cloud.id },
+        include: this.cloudInclude(),
+      });
     });
 
     return {
@@ -569,7 +723,8 @@ export class CloudService {
       where: { id: cloudId },
       select: { id: true, title: true, content: true },
     });
-    if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    if (!cloud)
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
 
     const classification = this.topicClassifier.classifyCloudTopic({
       title: cloud.title,
@@ -589,17 +744,12 @@ export class CloudService {
     return classification;
   }
 
-  async hype(token: string | null, cloudId: string): Promise<{ ok: true; hypesCount: number }> {
+  async hype(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; hypesCount: number }> {
     const current = await this.requireSession(token);
-
-    const cloud = await this.prisma.cloud.findFirst({
-      where: { id: cloudId, deletedAt: null },
-      include: { author: { include: { profile: true } } },
-    });
-
-    if (!cloud) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
-    }
+    await this.requireCloudAccess(cloudId, current.user.id);
 
     await this.prisma.cloudHype.upsert({
       where: { cloudId_userId: { cloudId, userId: current.user.id } },
@@ -607,23 +757,42 @@ export class CloudService {
       update: {},
     });
 
-    const hypesCount = await this.prisma.cloudHype.count({ where: { cloudId } });
+    const hypesCount = await this.prisma.cloudHype.count({
+      where: { cloudId },
+    });
     return { ok: true, hypesCount };
   }
 
-  async unhype(token: string | null, cloudId: string): Promise<{ ok: true; hypesCount: number }> {
+  async unhype(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; hypesCount: number }> {
     const current = await this.requireSession(token);
 
     await this.prisma.cloudHype.deleteMany({
       where: { cloudId, userId: current.user.id },
     });
 
-    const hypesCount = await this.prisma.cloudHype.count({ where: { cloudId } });
+    const hypesCount = await this.prisma.cloudHype.count({
+      where: { cloudId },
+    });
     return { ok: true, hypesCount };
   }
 
-  async getHypes(token: string | null, cloudId: string): Promise<{ ok: true; users: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }> }> {
-    await this.requireSession(token);
+  async getHypes(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{
+    ok: true;
+    users: Array<{
+      id: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+    }>;
+  }> {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
 
     const hypes = await this.prisma.cloudHype.findMany({
       where: { cloudId },
@@ -636,10 +805,18 @@ export class CloudService {
       },
     });
 
-    const users: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }> = hypes.map((hype) => ({
+    const users: Array<{
+      id: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+    }> = hypes.map((hype) => ({
       id: hype.user.id,
       username: hype.user.profile?.username || hype.user.email.split('@')[0],
-      displayName: hype.user.profile?.displayName || hype.user.profile?.username || hype.user.email.split('@')[0],
+      displayName:
+        hype.user.profile?.displayName ||
+        hype.user.profile?.username ||
+        hype.user.email.split('@')[0],
       avatarUrl: hype.user.profile?.avatarUrl ?? null,
     }));
 
@@ -678,7 +855,11 @@ export class CloudService {
     return { ok: true };
   }
 
-  async removeMember(token: string | null, cloudId: string, userId: string): Promise<{ ok: true }> {
+  async removeMember(
+    token: string | null,
+    cloudId: string,
+    userId: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -713,21 +894,17 @@ export class CloudService {
     });
 
     if (!member) {
-      throw new NotFoundException({ message: 'Membro não encontrado na cloud.' });
+      throw new NotFoundException({
+        message: 'Membro não encontrado na cloud.',
+      });
     }
 
-    await this.prisma.$transaction([
-      this.prisma.cloudMember.update({
-        where: { id: member.id },
-        data: { leftAt: new Date() },
-      }),
-      // Remoção pelo host é definitiva para esta Cloud, evitando novo acesso.
-      this.prisma.cloudBan.upsert({
-        where: { cloudId_userId: { cloudId, userId } },
-        create: { cloudId, userId, bannedById: current.user.id },
-        update: { bannedById: current.user.id, createdAt: new Date() },
-      }),
-    ]);
+    // Removal only ends the current participation. Unlike a ban, the person
+    // can enter a public Cloud again (or a private one they were invited to).
+    await this.prisma.cloudMember.update({
+      where: { id: member.id },
+      data: { leftAt: new Date() },
+    });
 
     return { ok: true };
   }
@@ -736,7 +913,11 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     userId: string,
-  ): Promise<{ ok: true; systemMessage: CloudMessagePayload; deletedMessageIds: string[] }> {
+  ): Promise<{
+    ok: true;
+    systemMessage: CloudMessagePayload;
+    deletedMessageIds: string[];
+  }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -749,7 +930,9 @@ export class CloudService {
     }
 
     if (cloud.authorId !== current.user.id) {
-      throw new UnauthorizedException({ message: 'Apenas o criador pode banir membros.' });
+      throw new UnauthorizedException({
+        message: 'Apenas o criador pode banir membros.',
+      });
     }
 
     if (userId === current.user.id) {
@@ -774,9 +957,13 @@ export class CloudService {
       where: { cloudId, reportedId: userId, messageId: { not: null } },
       select: { messageId: true },
     });
-    const reportedMessageIds = [...new Set(
-      reportedMessages.map((r) => r.messageId).filter((id): id is string => id !== null)
-    )];
+    const reportedMessageIds = [
+      ...new Set(
+        reportedMessages
+          .map((r) => r.messageId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
 
     if (reportedMessageIds.length > 0) {
       await this.prisma.cloudMessage.updateMany({
@@ -832,7 +1019,9 @@ export class CloudService {
     }
 
     if (reportedId === current.user.id) {
-      throw new BadRequestException({ message: 'Você não pode denunciar a si mesmo.' });
+      throw new BadRequestException({
+        message: 'Você não pode denunciar a si mesmo.',
+      });
     }
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -851,7 +1040,9 @@ export class CloudService {
       });
 
       if (!message) {
-        throw new NotFoundException({ message: 'Mensagem não encontrada nesta cloud.' });
+        throw new NotFoundException({
+          message: 'Mensagem não encontrada nesta cloud.',
+        });
       }
     }
 
@@ -863,7 +1054,9 @@ export class CloudService {
     // Allow reporting cloud author or cloud members even if reporter is not a member
     // This enables reporting from the feed before joining the cloud
     if (!reportedMembership && reportedId !== cloud.authorId) {
-      throw new BadRequestException({ message: 'O usuário informado não faz parte desta cloud.' });
+      throw new BadRequestException({
+        message: 'O usuário informado não faz parte desta cloud.',
+      });
     }
 
     await this.prisma.cloudReport.create({
@@ -877,17 +1070,31 @@ export class CloudService {
     });
 
     if (!messageId && this.resend) {
-      const creatorName = cloud.author.profile?.displayName ?? cloud.author.profile?.username ?? 'Usuário';
+      const creatorName =
+        cloud.author.profile?.displayName ??
+        cloud.author.profile?.username ??
+        'Usuário';
       const creatorUsername = cloud.author.profile?.username ?? '';
-      const reporterName = current.user.profile?.displayName ?? current.user.profile?.username ?? 'Usuário';
+      const reporterName =
+        current.user.profile?.displayName ??
+        current.user.profile?.username ??
+        'Usuário';
       const reporterUsername = current.user.profile?.username ?? '';
       const text = `DENÚNCIA DE CLOUD\n\nCloud: ${cloud.title}\nID da Cloud: ${cloud.id}\nCriador: ${creatorName} (@${creatorUsername})\nID do criador: ${cloud.authorId}\nDenunciante: ${reporterName} (@${reporterUsername})\nMotivos: ${reasons.join(', ')}`;
       const { error } = await this.resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL?.trim() || 'Clouds <no-reply@cloudscommunity.com.br>',
-        to: ['cloudscomunidade@gmail.com'], subject: 'DENÚNCIA DE CLOUD', text,
+        from:
+          process.env.RESEND_FROM_EMAIL?.trim() ||
+          'Clouds <no-reply@cloudscommunity.com.br>',
+        to: ['cloudscomunidade@gmail.com'],
+        subject: 'DENÚNCIA DE CLOUD',
+        text,
         html: `<h1>DENÚNCIA DE CLOUD</h1><p><strong>Cloud:</strong> ${this.escapeReportHtml(cloud.title)}<br/><strong>ID da Cloud:</strong> ${cloud.id}</p><p><strong>Criador:</strong> ${this.escapeReportHtml(creatorName)} (@${this.escapeReportHtml(creatorUsername)})<br/><strong>ID do criador:</strong> ${cloud.authorId}</p><p><strong>Denunciante:</strong> ${this.escapeReportHtml(reporterName)} (@${this.escapeReportHtml(reporterUsername)})</p><p><strong>Motivos:</strong> ${reasons.map((reason) => this.escapeReportHtml(reason)).join(', ')}</p>`,
       });
-      if (error) throw new BadRequestException({ message: 'Não foi possível encaminhar a denúncia à plataforma. Tente novamente.' });
+      if (error)
+        throw new BadRequestException({
+          message:
+            'Não foi possível encaminhar a denúncia à plataforma. Tente novamente.',
+        });
     }
 
     const reportedUser = await this.prisma.user.findUnique({
@@ -897,11 +1104,16 @@ export class CloudService {
 
     let messageContent: string | null = messageContentOverride ?? null;
     if (!messageContent && messageId) {
-      const msg = await this.prisma.cloudMessage.findUnique({ where: { id: messageId } });
+      const msg = await this.prisma.cloudMessage.findUnique({
+        where: { id: messageId },
+      });
       messageContent = msg?.content ?? null;
     }
 
-    const reportedName = reportedUser?.profile?.displayName || reportedUser?.profile?.username || 'Usuário';
+    const reportedName =
+      reportedUser?.profile?.displayName ||
+      reportedUser?.profile?.username ||
+      'Usuário';
     const reportedUsername = reportedUser?.profile?.username || '';
     const reportedAvatarUrl = reportedUser?.profile?.avatarUrl ?? null;
 
@@ -918,7 +1130,7 @@ export class CloudService {
 
     // Persist notification for the cloud author
     if (cloud.authorId !== current.user.id) {
-      const notificationBody = messageId 
+      const notificationBody = messageId
         ? `Mensagem de @${reportedUsername || reportedName} foi denunciada: ${reasons.join(', ')}. A plataforma irá analisar o caso e retornará uma resposta em breve.`
         : `Sua Cloud foi denunciada. A plataforma irá analisar o caso e retornará uma resposta em breve.`;
 
@@ -940,7 +1152,21 @@ export class CloudService {
   async getReports(
     token: string | null,
     cloudId: string,
-  ): Promise<{ ok: true; reports: Array<{ id: string; reportedId: string; reportedName: string; reportedUsername: string; reportedAvatarUrl: string | null; messageId: string | null; messageContent: string | null; reasons: string[]; count: number; createdAt: string }> }> {
+  ): Promise<{
+    ok: true;
+    reports: Array<{
+      id: string;
+      reportedId: string;
+      reportedName: string;
+      reportedUsername: string;
+      reportedAvatarUrl: string | null;
+      messageId: string | null;
+      messageContent: string | null;
+      reasons: string[];
+      count: number;
+      createdAt: string;
+    }>;
+  }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -952,7 +1178,9 @@ export class CloudService {
     }
 
     if (cloud.authorId !== current.user.id) {
-      throw new UnauthorizedException({ message: 'Apenas o criador pode ver denúncias.' });
+      throw new UnauthorizedException({
+        message: 'Apenas o criador pode ver denúncias.',
+      });
     }
 
     const raw = await this.prisma.cloudReport.findMany({
@@ -971,25 +1199,37 @@ export class CloudService {
       grouped.set(r.reportedId, arr);
     }
 
-    const messageIds: string[] = [...new Set(raw.flatMap((report) => report.messageId ? [report.messageId as string] : []))];
+    const messageIds: string[] = [
+      ...new Set(
+        raw.flatMap((report) => (report.messageId ? [report.messageId] : [])),
+      ),
+    ];
     const messages = await this.prisma.cloudMessage.findMany({
       where: { id: { in: messageIds } },
       select: { id: true, content: true },
     });
-    const messageContentById = new Map(messages.map((message) => [message.id, message.content]));
+    const messageContentById = new Map(
+      messages.map((message) => [message.id, message.content]),
+    );
 
     const reports = Array.from(grouped.entries()).map(([reportedId, items]) => {
       const user = items[0].reported;
-      const allReasons: string[] = [...new Set(items.flatMap((i) => i.reasons as string[]))];
-      const reportWithMessage = items.find((item) => item.messageId) ?? items[0];
+      const allReasons: string[] = [
+        ...new Set(items.flatMap((i) => i.reasons)),
+      ];
+      const reportWithMessage =
+        items.find((item) => item.messageId) ?? items[0];
       return {
         id: items[0].id,
         reportedId,
-        reportedName: user.profile?.displayName || user.profile?.username || 'Usuário',
+        reportedName:
+          user.profile?.displayName || user.profile?.username || 'Usuário',
         reportedUsername: user.profile?.username || '',
         reportedAvatarUrl: user.profile?.avatarUrl ?? null,
         messageId: reportWithMessage.messageId,
-        messageContent: reportWithMessage.messageId ? (messageContentById.get(reportWithMessage.messageId) ?? null) : null,
+        messageContent: reportWithMessage.messageId
+          ? (messageContentById.get(reportWithMessage.messageId) ?? null)
+          : null,
         reasons: allReasons,
         count: items.length,
         createdAt: items[0].createdAt.toISOString(),
@@ -999,7 +1239,11 @@ export class CloudService {
     return { ok: true, reports };
   }
 
-  async pinMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
+  async pinMessage(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1030,7 +1274,9 @@ export class CloudService {
     });
 
     if (!message) {
-      throw new NotFoundException({ message: 'Comentário não encontrado nesta cloud.' });
+      throw new NotFoundException({
+        message: 'Comentário não encontrado nesta cloud.',
+      });
     }
 
     // Desfixar qualquer mensagem já fixada nesta cloud
@@ -1056,7 +1302,11 @@ export class CloudService {
     return { ok: true };
   }
 
-  async unpinMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
+  async unpinMessage(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1074,7 +1324,8 @@ export class CloudService {
 
     if (cloud.authorId !== current.user.id) {
       throw new UnauthorizedException({
-        message: 'Você não tem permissão para desfixar comentários nesta cloud.',
+        message:
+          'Você não tem permissão para desfixar comentários nesta cloud.',
       });
     }
 
@@ -1087,7 +1338,9 @@ export class CloudService {
     });
 
     if (!message) {
-      throw new NotFoundException({ message: 'Comentário não encontrado nesta cloud.' });
+      throw new NotFoundException({
+        message: 'Comentário não encontrado nesta cloud.',
+      });
     }
 
     await this.prisma.cloudMessage.update({
@@ -1110,7 +1363,10 @@ export class CloudService {
     this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
-    const messageType = body.type === 'audio' || body.type === 'image' || body.type === 'link' ? body.type : 'text';
+    const messageType =
+      body.type === 'audio' || body.type === 'image' || body.type === 'link'
+        ? body.type
+        : 'text';
 
     return {
       ok: true,
@@ -1127,8 +1383,17 @@ export class CloudService {
   async sendAudioMessage(
     token: string | null,
     cloudId: string,
-    body: { clientMessageId?: string; replyToMessageId?: string; isSticker?: boolean },
-    file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
+    body: {
+      clientMessageId?: string;
+      replyToMessageId?: string;
+      isSticker?: boolean;
+    },
+    file?: {
+      mimetype?: string;
+      size: number;
+      buffer: Buffer;
+      originalname?: string | null;
+    },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
@@ -1140,11 +1405,15 @@ export class CloudService {
     }
 
     if (!file.mimetype?.startsWith('audio/')) {
-      throw new BadRequestException({ message: 'O arquivo enviado precisa ser um áudio.' });
+      throw new BadRequestException({
+        message: 'O arquivo enviado precisa ser um áudio.',
+      });
     }
 
     if (file.size > 25 * 1024 * 1024) {
-      throw new BadRequestException({ message: 'O áudio excede o limite permitido.' });
+      throw new BadRequestException({
+        message: 'O áudio excede o limite permitido.',
+      });
     }
 
     return {
@@ -1161,8 +1430,17 @@ export class CloudService {
   async sendImageMessage(
     token: string | null,
     cloudId: string,
-    body: { clientMessageId?: string; replyToMessageId?: string; isSticker?: boolean },
-    file?: { mimetype?: string; size: number; buffer: Buffer; originalname?: string | null },
+    body: {
+      clientMessageId?: string;
+      replyToMessageId?: string;
+      isSticker?: boolean;
+    },
+    file?: {
+      mimetype?: string;
+      size: number;
+      buffer: Buffer;
+      originalname?: string | null;
+    },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
@@ -1174,11 +1452,15 @@ export class CloudService {
     }
 
     if (!file.mimetype?.startsWith('image/')) {
-      throw new BadRequestException({ message: 'O arquivo enviado precisa ser uma imagem.' });
+      throw new BadRequestException({
+        message: 'O arquivo enviado precisa ser uma imagem.',
+      });
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      throw new BadRequestException({ message: 'A imagem excede o limite permitido.' });
+      throw new BadRequestException({
+        message: 'A imagem excede o limite permitido.',
+      });
     }
 
     return {
@@ -1206,10 +1488,14 @@ export class CloudService {
   async saveSticker(token: string | null, mediaUrl?: string) {
     const current = await this.requireSession(token);
     if (!mediaUrl?.startsWith('data:image/')) {
-      throw new BadRequestException({ message: 'A figurinha precisa ser uma imagem válida.' });
+      throw new BadRequestException({
+        message: 'A figurinha precisa ser uma imagem válida.',
+      });
     }
     if (mediaUrl.length > 14 * 1024 * 1024) {
-      throw new BadRequestException({ message: 'A figurinha excede o limite permitido.' });
+      throw new BadRequestException({
+        message: 'A figurinha excede o limite permitido.',
+      });
     }
     // The image itself can be a large data URL, which must not be used as an
     // indexed column in PostgreSQL. Its stable short hash gives each user one
@@ -1228,7 +1514,12 @@ export class CloudService {
     return { ok: true, sticker, alreadySaved: false };
   }
 
-  async editMessage(token: string | null, cloudId: string, messageId: string, content: string): Promise<{ ok: true; message: { id: string; content: string } }> {
+  async editMessage(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+    content: string,
+  ): Promise<{ ok: true; message: { id: string; content: string } }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
@@ -1238,41 +1529,65 @@ export class CloudService {
       where: { id: messageId, cloudId, deletedAt: null },
     });
 
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
     if (message.userId !== current.user.id)
-      throw new UnauthorizedException({ message: 'Você só pode editar suas próprias mensagens.' });
+      throw new UnauthorizedException({
+        message: 'Você só pode editar suas próprias mensagens.',
+      });
     if (message.type !== 'text')
-      throw new BadRequestException({ message: 'Apenas mensagens de texto podem ser editadas.' });
+      throw new BadRequestException({
+        message: 'Apenas mensagens de texto podem ser editadas.',
+      });
 
     const trimmed = (content ?? '').trim();
-    if (!trimmed) throw new BadRequestException({ message: 'O conteúdo não pode ser vazio.' });
+    if (!trimmed)
+      throw new BadRequestException({
+        message: 'O conteúdo não pode ser vazio.',
+      });
 
     const updated = await this.prisma.cloudMessage.update({
       where: { id: messageId },
       data: { content: trimmed },
     });
 
-    return { ok: true, message: { id: updated.id, content: updated.content ?? '' } };
+    return {
+      ok: true,
+      message: { id: updated.id, content: updated.content ?? '' },
+    };
   }
 
-  async deleteMessage(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true }> {
+  async deleteMessage(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+  ): Promise<{ ok: true }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
 
-    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null } });
-    if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+    });
+    if (!cloud)
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: { id: messageId, cloudId, deletedAt: null },
     });
 
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
 
     // Only the message author or the cloud author can delete
-    if (message.userId !== current.user.id && cloud.authorId !== current.user.id)
-      throw new UnauthorizedException({ message: 'Sem permissão para apagar esta mensagem.' });
+    if (
+      message.userId !== current.user.id &&
+      cloud.authorId !== current.user.id
+    )
+      throw new UnauthorizedException({
+        message: 'Sem permissão para apagar esta mensagem.',
+      });
 
     await this.prisma.cloudMessage.update({
       where: { id: messageId },
@@ -1287,9 +1602,14 @@ export class CloudService {
     cloudId: string,
     query: ListCloudMessagesQuery = {},
   ): Promise<{ ok: true; messages: CloudMessagePayload[] }> {
-    const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
-    await this.requireCloudMembership(cloudId, current.user.id);
+    const current = await this.authService.resolveSession(token);
+    if (current) {
+      await this.requireCloudAccess(cloudId, current.user.id);
+      await this.requireCloudMembership(cloudId, current.user.id);
+    } else {
+      const cloud = await this.requireCloudAccess(cloudId);
+      this.requireGuestCloudObservation(cloud);
+    }
 
     const take = this.normalizeTake(query.take);
     const before = query.before ? new Date(query.before) : null;
@@ -1320,7 +1640,11 @@ export class CloudService {
     cloudId: string,
     messageId: string,
     emoji: string,
-  ): Promise<{ ok: true; reaction: CloudMessageReactionPayload; removed: boolean }> {
+  ): Promise<{
+    ok: true;
+    reaction: CloudMessageReactionPayload;
+    removed: boolean;
+  }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
@@ -1407,7 +1731,11 @@ export class CloudService {
     };
   }
 
-  async getMessageReactions(token: string | null, cloudId: string, messageId: string): Promise<{ ok: true; reactions: CloudMessageReactionPayload[] }> {
+  async getMessageReactions(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+  ): Promise<{ ok: true; reactions: CloudMessageReactionPayload[] }> {
     const current = await this.requireSession(token);
     await this.requireCloudAccess(cloudId, current.user.id);
     await this.requireCloudMembership(cloudId, current.user.id);
@@ -1501,14 +1829,30 @@ export class CloudService {
     });
 
     if (!member) {
-      throw new UnauthorizedException({ message: 'Você precisa ser membro desta cloud para realizar esta ação.' });
+      throw new UnauthorizedException({
+        message: 'Você precisa ser membro desta cloud para realizar esta ação.',
+      });
     }
   }
 
   private async requireCloudVisibility(
-    cloud: { id: string; authorId: string; author?: { profile: { isPrivate: boolean } | null } },
+    cloud: {
+      id: string;
+      authorId: string;
+      visibility: CloudVisibility;
+      author?: { profile: { isPrivate: boolean } | null };
+    },
     viewerId: string,
   ) {
+    const ban = await this.prisma.cloudBan.findUnique({
+      where: { cloudId_userId: { cloudId: cloud.id, userId: viewerId } },
+      select: { cloudId: true },
+    });
+
+    if (ban) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
     const block = await this.prisma.userBlock.findFirst({
       where: {
         OR: [
@@ -1523,7 +1867,24 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
-    if (cloud.authorId === viewerId || !cloud.author?.profile?.isPrivate) {
+    if (cloud.authorId === viewerId) {
+      return;
+    }
+
+    // Private Clouds are visible only to the host and explicitly invited
+    // members. A past leave does not revoke an invitation; bans do.
+    if (cloud.visibility === CloudVisibility.private) {
+      const membership = await this.prisma.cloudMember.findFirst({
+        where: { cloudId: cloud.id, userId: viewerId },
+        select: { id: true },
+      });
+      if (!membership) {
+        throw new NotFoundException({ message: 'Cloud não encontrada.' });
+      }
+      return;
+    }
+
+    if (!cloud.author?.profile?.isPrivate) {
       return;
     }
 
@@ -1558,7 +1919,10 @@ export class CloudService {
     const cloud = await this.requireCloudAccess(cloudId, userId);
     this.requireActiveCloud(cloud);
     const replyToMessageId = input.replyToMessageId?.trim() || null;
-    const type = input.type === 'audio' || input.type === 'image' || input.type === 'link' ? input.type : 'text';
+    const type =
+      input.type === 'audio' || input.type === 'image' || input.type === 'link'
+        ? input.type
+        : 'text';
 
     if (replyToMessageId) {
       const replyTarget = await this.prisma.cloudMessage.findFirst({
@@ -1621,7 +1985,10 @@ export class CloudService {
     } as const;
   }
 
-  private mapMessage(message: CloudMessageWithRelations, clientMessageId: string | null = null): CloudMessagePayload {
+  private mapMessage(
+    message: CloudMessageWithRelations,
+    clientMessageId: string | null = null,
+  ): CloudMessagePayload {
     const profile = message.user.profile;
 
     if (!profile) {
@@ -1632,7 +1999,7 @@ export class CloudService {
       id: message.id,
       cloudId: message.cloudId,
       senderId: message.userId,
-      type: message.type as CloudMessagePayload['type'],
+      type: message.type,
       content: message.content,
       mediaUrl: message.mediaUrl,
       isSticker: message.isSticker,
@@ -1650,7 +2017,8 @@ export class CloudService {
       replyTo: message.replyToMessage
         ? {
             id: message.replyToMessage.id,
-            sender: message.replyToMessage.user.profile?.displayName || 'Usuário',
+            sender:
+              message.replyToMessage.user.profile?.displayName || 'Usuário',
             content: message.replyToMessage.content,
           }
         : null,
@@ -1675,18 +2043,18 @@ export class CloudService {
 
   // ── Invite ────────────────────────────────────────────────────────────────
 
-  async createInvite(token: string | null, cloudId: string): Promise<{ ok: true; invite: CloudInvitePayload }> {
-    await this.requireSession(token);
+  async createInvite(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; invite: CloudInvitePayload }> {
+    const current = await this.requireSession(token);
+    const cloud = await this.requireCloudAccess(cloudId, current.user.id);
 
-    const cloud = await this.prisma.cloud.findFirst({
-      where: { id: cloudId, deletedAt: null },
-    });
-
-    if (!cloud) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    // A private invite link can only be generated by its host or an invited
+    // member. This prevents authenticated outsiders from minting links.
+    if (cloud.visibility === CloudVisibility.private) {
+      await this.requireCloudMembership(cloudId, current.user.id);
     }
-
-    // Any member can generate an invite for a private cloud (not just the author)
 
     let inviteToken: string;
 
@@ -1727,13 +2095,17 @@ export class CloudService {
           duration: cloud.duration,
           createdAt: cloud.createdAt.toISOString(),
           authorId: cloud.authorId,
-          visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
+          visibility:
+            cloud.visibility === CloudVisibility.private ? 'private' : 'public',
         },
       },
     };
   }
 
-  async resolveInvite(token: string | null, inviteToken: string): Promise<{ ok: true; invite: CloudInvitePayload }> {
+  async resolveInvite(
+    token: string | null,
+    inviteToken: string,
+  ): Promise<{ ok: true; invite: CloudInvitePayload }> {
     // resolveInvite does NOT require a session — anyone with the link can see the cloud details.
     // The join step enforces authentication.
 
@@ -1741,12 +2113,14 @@ export class CloudService {
     if (inviteToken.startsWith('cid_')) {
       const rawId = inviteToken.slice(4);
       // Reconstruct UUID: 8-4-4-4-12
-      const uuid = `${rawId.slice(0,8)}-${rawId.slice(8,12)}-${rawId.slice(12,16)}-${rawId.slice(16,20)}-${rawId.slice(20)}`;
+      const uuid = `${rawId.slice(0, 8)}-${rawId.slice(8, 12)}-${rawId.slice(12, 16)}-${rawId.slice(16, 20)}-${rawId.slice(20)}`;
       const cloud = await this.prisma.cloud.findFirst({
         where: { id: uuid, deletedAt: null },
       });
       if (!cloud) {
-        throw new NotFoundException({ message: 'Convite inválido ou expirado.' });
+        throw new NotFoundException({
+          message: 'Convite inválido ou expirado.',
+        });
       }
       return {
         ok: true,
@@ -1759,7 +2133,10 @@ export class CloudService {
             duration: cloud.duration,
             createdAt: cloud.createdAt.toISOString(),
             authorId: cloud.authorId,
-            visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
+            visibility:
+              cloud.visibility === CloudVisibility.private
+                ? 'private'
+                : 'public',
           },
         },
       };
@@ -1772,7 +2149,9 @@ export class CloudService {
       });
 
       if (!invite || invite.cloud.deletedAt !== null) {
-        throw new NotFoundException({ message: 'Convite inválido ou expirado.' });
+        throw new NotFoundException({
+          message: 'Convite inválido ou expirado.',
+        });
       }
 
       if (invite.expiresAt && invite.expiresAt < new Date()) {
@@ -1790,12 +2169,18 @@ export class CloudService {
             duration: invite.cloud.duration,
             createdAt: invite.cloud.createdAt.toISOString(),
             authorId: invite.cloud.authorId,
-            visibility: invite.cloud.visibility === CloudVisibility.private ? 'private' : 'public',
+            visibility:
+              invite.cloud.visibility === CloudVisibility.private
+                ? 'private'
+                : 'public',
           },
         },
       };
     } catch (err) {
-      if (err instanceof NotFoundException || err instanceof BadRequestException) {
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
         throw err;
       }
       // Table doesn't exist yet — re-throw as not found
@@ -1808,7 +2193,7 @@ export class CloudService {
   private async createSystemMessage(
     cloudId: string,
     content: string,
-    senderId: string
+    senderId: string,
   ): Promise<CloudMessagePayload> {
     const created = await this.prisma.cloudMessage.create({
       data: {
@@ -1822,26 +2207,75 @@ export class CloudService {
     return this.mapMessage(created, null);
   }
 
-  async createJoinNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
+  async createJoinNotification(
+    cloudId: string,
+    userId: string,
+  ): Promise<CloudMessagePayload> {
     const userWithProfile = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { profile: true },
     });
-    const displayName = userWithProfile?.profile?.displayName || userWithProfile?.profile?.username || 'Usuário';
-    return this.createSystemMessage(cloudId, `${displayName} entrou na cloud`, userId);
+    const displayName =
+      userWithProfile?.profile?.displayName ||
+      userWithProfile?.profile?.username ||
+      'Usuário';
+    return this.createSystemMessage(
+      cloudId,
+      `${displayName} entrou na cloud`,
+      userId,
+    );
   }
 
   private escapeReportHtml(value: string): string {
-    return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] ?? character);
+    return value.replace(
+      /[&<>'"]/g,
+      (character) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          "'": '&#39;',
+          '"': '&quot;',
+        })[character] ?? character,
+    );
   }
 
-  async createLeaveNotification(cloudId: string, userId: string): Promise<CloudMessagePayload> {
-    const userWithProfile = await this.prisma.user.findUnique({ where: { id: userId }, include: { profile: true } });
-    const username = userWithProfile?.profile?.username || userWithProfile?.profile?.displayName || 'usuário';
-    return this.createSystemMessage(cloudId, `@${username} saiu da cloud`, userId);
+  async createLeaveNotification(
+    cloudId: string,
+    userId: string,
+  ): Promise<CloudMessagePayload> {
+    const userWithProfile = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { profile: true },
+    });
+    const username =
+      userWithProfile?.profile?.username ||
+      userWithProfile?.profile?.displayName ||
+      'usuário';
+    return this.createSystemMessage(
+      cloudId,
+      `@${username} saiu da cloud`,
+      userId,
+    );
   }
 
-  async joinCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; entered: boolean }> {
+  /** Public live clouds may be watched from an external invitation without a session. */
+  private requireGuestCloudObservation(cloud: {
+    visibility: CloudVisibility;
+    status: CloudStatus;
+  }) {
+    if (
+      cloud.visibility !== CloudVisibility.public ||
+      cloud.status !== CloudStatus.active
+    ) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+  }
+
+  async joinCloud(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; userId: string; entered: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1859,13 +2293,24 @@ export class CloudService {
       where: { cloudId_userId: { cloudId, userId: current.user.id } },
     });
     if (ban) {
-      throw new UnauthorizedException({ message: 'Você foi banido desta cloud.' });
+      throw new UnauthorizedException({
+        message: 'Você foi banido desta cloud.',
+      });
     }
 
-    // Upsert: rejoin if previously left, or create fresh membership
+    // Private Clouds require a membership granted at creation time. Public
+    // Clouds continue to create membership on entry.
     const existing = await this.prisma.cloudMember.findFirst({
       where: { cloudId, userId: current.user.id },
     });
+
+    if (
+      cloud.visibility === CloudVisibility.private &&
+      cloud.authorId !== current.user.id &&
+      !existing
+    ) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
 
     let membershipChanged = false;
     if (existing) {
@@ -1900,10 +2345,17 @@ export class CloudService {
       select: { id: true },
     });
 
-    return { ok: true, userId: current.user.id, entered: membershipChanged || !hasEntryNotification };
+    return {
+      ok: true,
+      userId: current.user.id,
+      entered: membershipChanged || !hasEntryNotification,
+    };
   }
 
-  async leaveCloud(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; left: boolean }> {
+  async leaveCloud(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; userId: string; left: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -1936,7 +2388,10 @@ export class CloudService {
   /** Records that the author left the conversation without relinquishing
    * ownership. Keeping the same membership transition makes a later entry
    * from the feed observable just like any other member re-entry. */
-  async exitCloudConversation(token: string | null, cloudId: string): Promise<{ ok: true; userId: string; left: boolean }> {
+  async exitCloudConversation(
+    token: string | null,
+    cloudId: string,
+  ): Promise<{ ok: true; userId: string; left: boolean }> {
     return this.leaveCloud(token, cloudId);
   }
 
@@ -1980,7 +2435,9 @@ export class CloudService {
     const now = new Date();
     const durationCutoffs = ALLOWED_DURATIONS.map((duration) => ({
       duration,
-      cutoff: new Date(now.getTime() - (DURATION_TO_SECONDS[duration] ?? 5 * 60) * 1000),
+      cutoff: new Date(
+        now.getTime() - (DURATION_TO_SECONDS[duration] ?? 5 * 60) * 1000,
+      ),
     }));
     const activeClouds = await this.prisma.cloud.findMany({
       where: {
@@ -1997,19 +2454,24 @@ export class CloudService {
       select: { id: true, duration: true, startedAt: true, createdAt: true },
     });
 
-    await Promise.all(activeClouds.map(async (cloud) => {
-      const durationSeconds = DURATION_TO_SECONDS[cloud.duration] ?? 5 * 60;
-      const endTime = new Date((cloud.startedAt ?? cloud.createdAt).getTime() + durationSeconds * 1000);
-      if (now >= endTime) {
-        await this.prisma.cloud.update({
-          where: { id: cloud.id },
-          data: {
-            status: CloudStatus.ended,
-            endedAt: endTime,
-          },
-        });
-      }
-    }));
+    await Promise.all(
+      activeClouds.map(async (cloud) => {
+        const durationSeconds = DURATION_TO_SECONDS[cloud.duration] ?? 5 * 60;
+        const endTime = new Date(
+          (cloud.startedAt ?? cloud.createdAt).getTime() +
+            durationSeconds * 1000,
+        );
+        if (now >= endTime) {
+          await this.prisma.cloud.update({
+            where: { id: cloud.id },
+            data: {
+              status: CloudStatus.ended,
+              endedAt: endTime,
+            },
+          });
+        }
+      }),
+    );
   }
 
   private mapCloud(cloud: CloudWithRelations): CloudPayload {
@@ -2024,7 +2486,8 @@ export class CloudService {
       title: cloud.title,
       description: cloud.content,
       duration: cloud.duration,
-      visibility: cloud.visibility === CloudVisibility.private ? 'private' : 'public',
+      visibility:
+        cloud.visibility === CloudVisibility.private ? 'private' : 'public',
       createdAt: cloud.createdAt.toISOString(),
       updatedAt: cloud.updatedAt.toISOString(),
       endedAt: cloud.endedAt?.toISOString() ?? null,
@@ -2035,12 +2498,13 @@ export class CloudService {
         username: profile.username,
         avatarUrl: profile.avatarUrl,
         location: profile.location,
-        isTestClouder: cloud.author.isTestClouder,
       },
       hypesCount: cloud._count.hypes,
       membersCount: cloud._count.members,
       participantsCount: cloud.members.length,
-      originCloud: cloud.originCloud ? { id: cloud.originCloud.id, title: cloud.originCloud.title } : null,
+      originCloud: cloud.originCloud
+        ? { id: cloud.originCloud.id, title: cloud.originCloud.title }
+        : null,
       members: cloud.members
         .filter((member) => member.leftAt === null)
         .filter((member) => member.user.profile)
@@ -2070,16 +2534,26 @@ export class CloudService {
     };
   }
 
-
   async getActiveMembers(cloudId: string) {
     const members = await this.prisma.cloudMember.findMany({
       where: { cloudId, leftAt: null },
       include: { user: { include: { profile: true } } },
       orderBy: { joinedAt: 'asc' },
     });
-    return members.filter((member) => member.user.profile).map((member) => ({
-      id: member.id, userId: member.userId, role: member.role,
-      user: { id: member.user.id, profile: { displayName: member.user.profile!.displayName, username: member.user.profile!.username, avatarUrl: member.user.profile!.avatarUrl } },
-    }));
+    return members
+      .filter((member) => member.user.profile)
+      .map((member) => ({
+        id: member.id,
+        userId: member.userId,
+        role: member.role,
+        user: {
+          id: member.user.id,
+          profile: {
+            displayName: member.user.profile!.displayName,
+            username: member.user.profile!.username,
+            avatarUrl: member.user.profile!.avatarUrl,
+          },
+        },
+      }));
   }
 }

@@ -10,6 +10,7 @@ import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../com
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
+import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 
 type CloudPayload = {
   id: string;
@@ -1616,6 +1617,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [imageFormatOpen, setImageFormatOpen] = useState(false);
   const [savedStickers, setSavedStickers] = useState<Array<{ id: string; mediaUrl: string }>>([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -1623,6 +1625,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [titleLongPressTimer, setTitleLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [isTitleLongPress, setIsTitleLongPress] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
   const [isDeletingCloud, setIsDeletingCloud] = useState(false);
   const [isManagingMemberId, setIsManagingMemberId] = useState<string | null>(null);
@@ -1721,6 +1725,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [actionMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (titleLongPressTimer) {
+        clearTimeout(titleLongPressTimer);
+      }
+    };
+  }, [titleLongPressTimer]);
 
   const loadCloud = useCallback(async () => {
     setLoadingCloud(true);
@@ -1879,6 +1891,46 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const resolvedTitle = cloud?.title || title || "Cloud";
 
+  const handleTitlePointerDown = useCallback((event: React.PointerEvent) => {
+    // Only enable long press on mobile/touch devices
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      setIsTitleLongPress(false);
+      setTitleLongPressTimer(
+        setTimeout(() => {
+          setIsTitleLongPress(true);
+          setActionMenuOpen(true);
+        }, 500)
+      );
+    }
+  }, []);
+
+  const handleTitlePointerUp = useCallback((event: React.PointerEvent) => {
+    if (titleLongPressTimer) {
+      clearTimeout(titleLongPressTimer);
+      setTitleLongPressTimer(null);
+    }
+    // Prevent click event if it was a long press
+    if (isTitleLongPress) {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsTitleLongPress(false);
+    }
+  }, [titleLongPressTimer, isTitleLongPress]);
+
+  const handleTitlePointerLeave = useCallback(() => {
+    if (titleLongPressTimer) {
+      clearTimeout(titleLongPressTimer);
+      setTitleLongPressTimer(null);
+    }
+  }, [titleLongPressTimer]);
+
+  const handleTitlePointerCancel = useCallback(() => {
+    if (titleLongPressTimer) {
+      clearTimeout(titleLongPressTimer);
+      setTitleLongPressTimer(null);
+    }
+  }, [titleLongPressTimer]);
+
   const minimizeCloud = useCallback(() => {
     window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
@@ -1915,20 +1967,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isManagingMemberId]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user) {
-      return;
-    }
-
     void loadCloud();
     void loadMessages();
-    void loadContacts();
+    if (status === "authenticated" && user) void loadContacts();
   }, [loadCloud, loadContacts, loadMessages, status, user]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user) {
-      return;
-    }
-
+    if (status === "loading") return;
     const socketUrl = resolveSocketUrl();
     if (!socketUrl) {
       setConnectionState("disconnected");
@@ -1951,7 +1996,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     socket.on("connect_error", () => setConnectionState("disconnected"));
 
     socket.on("cloud:message:new", (message: CloudMessagePayload) => {
-      setMessages((prev) => mergeMessage(prev, normalizeMessage(message, user.id)));
+      setMessages((prev) => mergeMessage(prev, normalizeMessage(message, user?.id)));
     });
 
     socket.on("cloud:reaction:changed", (payload: { cloudId: string; messageId: string; reaction: ReactionPayload; removed: boolean }) => {
@@ -1975,7 +2020,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     });
 
     socket.on("cloud:typing", (payload: { cloudId: string; userId: string; isTyping: boolean }) => {
-      if (payload.cloudId !== cloudId || payload.userId === user.id) {
+      if (payload.cloudId !== cloudId || payload.userId === user?.id) {
         return;
       }
 
@@ -2014,6 +2059,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       }
     });
 
+    socket.on("cloud:removed", (payload: { cloudId: string }) => {
+      if (payload.cloudId === cloudId) {
+        router.replace("/");
+      }
+    });
+
     socket.on("cloud:messages:deleted", (payload: { cloudId: string; messageIds: string[] }) => {
       if (payload.cloudId === cloudId) {
         setMessages((prev) => prev.filter((m) => !payload.messageIds.includes(m.id)));
@@ -2043,11 +2094,18 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [cloudId, joinCloud, status, user]);
+  }, [cloudId, joinCloud, router, status, user?.id]);
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (status !== "authenticated" || !user || !socket) {
+    if (status === "loading" || !socket) {
+      return;
+    }
+
+    // Guests can join a public live cloud room only to receive new messages.
+    // Any attempt to interact with the composer opens the registration dialog.
+    if (status !== "authenticated" || !user) {
+      joinCloud(socket, false);
       return;
     }
 
@@ -2547,7 +2605,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   );
   const resolvedParticipants = cloud?.membersCount ?? 0;
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
-  const shareLink = typeof window !== "undefined" ? `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}` : `/cloud/${encodeURIComponent(cloudId)}`;
+  const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
+  const shareLink = `${publicAppUrl || (typeof window !== "undefined" ? window.location.origin : "")}/cloud/${encodeURIComponent(cloudId)}`;
+  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\nClique aqui para participar: ${shareLink}\nJunte-se a mim nessa conversa.`;
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
 
@@ -2579,7 +2639,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </button>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
-          <h1 className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]">
+          <h1
+            className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]"
+            onPointerDown={handleTitlePointerDown}
+            onPointerUp={handleTitlePointerUp}
+            onPointerLeave={handleTitlePointerLeave}
+            onPointerCancel={handleTitlePointerCancel}
+          >
             {resolvedTitle}
           </h1>
           <div className="flex items-center gap-1.5 whitespace-nowrap text-[13px] text-white/50 sm:gap-3 sm:text-[16px]">
@@ -2593,6 +2659,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               <HeaderClockIcon />
               {liveTimer}
             </span>
+            {isCloudAuthor && (
+              <button
+                type="button"
+                aria-label="Excluir cloud"
+                onClick={() => setDeleteConfirmOpen(true)}
+                className="ml-1 flex items-center justify-center text-white/50 transition hover:text-red-400 md:hidden"
+              >
+                <AnimatedTrashIcon s={16} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -2738,19 +2814,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     Denunciar Cloud
                   </button>
                 )}
-                {isCloudAuthor && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActionMenuOpen(false);
-                      setDeleteConfirmOpen(true);
-                    }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 transition hover:bg-white/5 hover:text-red-200 md:hidden"
-                  >
-                    <span className="flex h-6 w-6 items-center justify-center text-red-300"><AnimatedTrashIcon s={19} /></span>
-                    Excluir Cloud
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -2834,6 +2897,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       <div className="border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
         <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
+          {status !== "authenticated" && (
+            <button type="button" aria-label="Cadastrar para participar da cloud" onClick={() => setGuestSignupOpen(true)} className="absolute inset-0 z-20 cursor-text rounded-full" />
+          )}
           {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
             <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
               <div className="flex-1 text-[14px] text-white" style={{ fontFamily: "Arial, sans-serif" }}>
@@ -2971,8 +3037,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       </div>
 
       {shareOpen && (
-        <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} onClose={() => setShareOpen(false)} />
+        <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} externalShareText={externalShareText} onClose={() => setShareOpen(false)} />
       )}
+
+      {guestSignupOpen && <GuestCloudSignupModal cloudTitle={cloud?.title || "esta cloud"} returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestSignupOpen(false)} />}
 
       {imageFormatOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#05020d]/80 p-4 backdrop-blur-md">

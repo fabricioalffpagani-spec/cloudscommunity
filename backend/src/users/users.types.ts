@@ -29,16 +29,21 @@ export type PublicUserProfilePayload = {
     title: string;
     duration: string;
     createdAt: string;
-    visibility: "public" | "private";
+    visibility: 'public' | 'private';
   } | null;
-  participatingNow: { id: string; title: string; duration: string; href: string } | null;
+  participatingNow: {
+    id: string;
+    title: string;
+    duration: string;
+    href: string;
+  } | null;
   activeClouds: Array<{
     id: string;
     title: string;
     description: string | null;
     duration: string;
     createdAt: string;
-    visibility: "public" | "private";
+    visibility: 'public' | 'private';
     href: string;
   }>;
   endedClouds: Array<{
@@ -48,7 +53,7 @@ export type PublicUserProfilePayload = {
     duration: string;
     createdAt: string;
     endedAt: string | null;
-    visibility: "public" | "private";
+    visibility: 'public' | 'private';
     href: string;
   }>;
 };

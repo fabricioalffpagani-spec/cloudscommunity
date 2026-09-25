@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { UsersService } from './users.service';
 
@@ -23,8 +32,16 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('search')
-  async search(@Req() req: Request, @Query('q') q?: string, @Query('limit') limit?: string) {
-    return this.usersService.search(extractSessionToken(req), q ?? '', limit ?? null);
+  async search(
+    @Req() req: Request,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.usersService.search(
+      extractSessionToken(req),
+      q ?? '',
+      limit ?? null,
+    );
   }
 
   @Get('search-history')
@@ -33,17 +50,41 @@ export class UsersController {
   }
 
   @Post('search-history')
-  async saveSearchHistory(@Req() req: Request, @Body() body: { query?: string; kind?: string; targetId?: string; subtitle?: string; avatarUrl?: string | null }) {
+  async saveSearchHistory(
+    @Req() req: Request,
+    @Body()
+    body: {
+      query?: string;
+      kind?: string;
+      targetId?: string;
+      subtitle?: string;
+      avatarUrl?: string | null;
+    },
+  ) {
     return this.usersService.saveSearchHistory(extractSessionToken(req), body);
   }
 
   @Delete('search-history')
-  async clearSearchHistory(@Req() req: Request, @Query('kind') kind?: string, @Query('targetId') targetId?: string) {
-    return kind && targetId ? this.usersService.deleteSearchHistory(extractSessionToken(req), kind, targetId) : this.usersService.clearSearchHistory(extractSessionToken(req));
+  async clearSearchHistory(
+    @Req() req: Request,
+    @Query('kind') kind?: string,
+    @Query('targetId') targetId?: string,
+  ) {
+    return kind && targetId
+      ? this.usersService.deleteSearchHistory(
+          extractSessionToken(req),
+          kind,
+          targetId,
+        )
+      : this.usersService.clearSearchHistory(extractSessionToken(req));
   }
 
   @Get('following')
-  async following(@Req() req: Request, @Query('sort') sort?: string, @Query('limit') limit?: string) {
+  async following(
+    @Req() req: Request,
+    @Query('sort') sort?: string,
+    @Query('limit') limit?: string,
+  ) {
     return this.usersService.following(extractSessionToken(req), sort, limit);
   }
 
@@ -64,7 +105,10 @@ export class UsersController {
 
   @Post('send-invite')
   async sendInvite(@Req() req: Request, @Body() body: { identifier: string }) {
-    return this.usersService.sendInvite(extractSessionToken(req), body.identifier);
+    return this.usersService.sendInvite(
+      extractSessionToken(req),
+      body.identifier,
+    );
   }
 
   @Get(':identifier')
@@ -73,18 +117,33 @@ export class UsersController {
   }
 
   @Get(':identifier/followers')
-  async followers(@Req() req: Request, @Param('identifier') identifier: string) {
+  async followers(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+  ) {
     return this.usersService.getFollowers(extractSessionToken(req), identifier);
   }
 
   @Get(':identifier/following')
-  async getUserFollowing(@Req() req: Request, @Param('identifier') identifier: string) {
-    return this.usersService.getUserFollowing(extractSessionToken(req), identifier);
+  async getUserFollowing(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.usersService.getUserFollowing(
+      extractSessionToken(req),
+      identifier,
+    );
   }
 
   @Get(':identifier/hypes')
-  async receivedHypes(@Req() req: Request, @Param('identifier') identifier: string) {
-    return this.usersService.getReceivedHypes(extractSessionToken(req), identifier);
+  async receivedHypes(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.usersService.getReceivedHypes(
+      extractSessionToken(req),
+      identifier,
+    );
   }
 
   @Post(':identifier/follow')
@@ -93,13 +152,25 @@ export class UsersController {
   }
 
   @Post(':identifier/follow/accept')
-  async acceptFollow(@Req() req: Request, @Param('identifier') identifier: string) {
-    return this.usersService.acceptFollowRequest(extractSessionToken(req), identifier);
+  async acceptFollow(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.usersService.acceptFollowRequest(
+      extractSessionToken(req),
+      identifier,
+    );
   }
 
   @Post(':identifier/follow/decline')
-  async declineFollow(@Req() req: Request, @Param('identifier') identifier: string) {
-    return this.usersService.declineFollowRequest(extractSessionToken(req), identifier);
+  async declineFollow(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.usersService.declineFollowRequest(
+      extractSessionToken(req),
+      identifier,
+    );
   }
 
   @Delete(':identifier/follow')
@@ -118,7 +189,15 @@ export class UsersController {
   }
 
   @Delete(':identifier/followers/:followerId')
-  async removeFollower(@Req() req: Request, @Param('identifier') identifier: string, @Param('followerId') followerId: string) {
-    return this.usersService.removeFollower(extractSessionToken(req), identifier, followerId);
+  async removeFollower(
+    @Req() req: Request,
+    @Param('identifier') identifier: string,
+    @Param('followerId') followerId: string,
+  ) {
+    return this.usersService.removeFollower(
+      extractSessionToken(req),
+      identifier,
+      followerId,
+    );
   }
 }

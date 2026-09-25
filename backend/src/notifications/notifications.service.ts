@@ -1,8 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { UsersService } from '../users/users.service';
-import { NotificationPayload, NotificationsListResponse } from './notifications.types';
+import {
+  NotificationPayload,
+  NotificationsListResponse,
+} from './notifications.types';
 
 @Injectable()
 export class NotificationsService {
@@ -12,7 +20,10 @@ export class NotificationsService {
     private readonly usersService: UsersService,
   ) {}
 
-  async list(token: string | null, includeAll = false): Promise<NotificationsListResponse> {
+  async list(
+    token: string | null,
+    includeAll = false,
+  ): Promise<NotificationsListResponse> {
     const current = await this.requireSession(token);
 
     const items = await this.prisma.notification.findMany({
@@ -21,13 +32,25 @@ export class NotificationsService {
       ...(includeAll ? {} : { take: 10 }),
     });
 
-    const actorIds = [...new Set(items.flatMap((item) => {
-      if (item.type === 'follow' || item.type === 'follow_request') return [item.entityId];
-      if (item.type === 'cloud_continuation' && item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)) {
-        return typeof item.metadata.actorUserId === 'string' ? [item.metadata.actorUserId] : [];
-      }
-      return [];
-    }))];
+    const actorIds = [
+      ...new Set(
+        items.flatMap((item) => {
+          if (item.type === 'follow' || item.type === 'follow_request')
+            return [item.entityId];
+          if (
+            item.type === 'cloud_continuation' &&
+            item.metadata &&
+            typeof item.metadata === 'object' &&
+            !Array.isArray(item.metadata)
+          ) {
+            return typeof item.metadata.actorUserId === 'string'
+              ? [item.metadata.actorUserId]
+              : [];
+          }
+          return [];
+        }),
+      ),
+    ];
 
     const actors = actorIds.length
       ? await this.prisma.user.findMany({
@@ -42,13 +65,18 @@ export class NotificationsService {
           return [];
         }
 
-        return [[user.id, {
-          id: user.id,
-          username: user.profile.username,
-          displayName: user.profile.displayName,
-          avatarUrl: user.profile.avatarUrl,
-          profileUrl: `/users/${user.profile.username}`,
-        }]];
+        return [
+          [
+            user.id,
+            {
+              id: user.id,
+              username: user.profile.username,
+              displayName: user.profile.displayName,
+              avatarUrl: user.profile.avatarUrl,
+              profileUrl: `/users/${user.profile.username}`,
+            },
+          ],
+        ];
       }),
     );
 
@@ -59,16 +87,28 @@ export class NotificationsService {
       entityId: item.entityId,
       title: item.title,
       body: item.body,
-      metadata: item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
-        ? Object.fromEntries(Object.entries(item.metadata).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
-        : null,
+      metadata:
+        item.metadata &&
+        typeof item.metadata === 'object' &&
+        !Array.isArray(item.metadata)
+          ? Object.fromEntries(
+              Object.entries(item.metadata).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[1] === 'string',
+              ),
+            )
+          : null,
       isRead: item.isRead,
       createdAt: item.createdAt.toISOString(),
       actor: actorById.get(item.entityId) ?? null,
     }));
 
     const unreadCount = await this.prisma.notification.count({
-      where: { userId: current.user.id, isRead: false, type: { not: 'direct_message' } },
+      where: {
+        userId: current.user.id,
+        isRead: false,
+        type: { not: 'direct_message' },
+      },
     });
 
     return {
@@ -90,16 +130,25 @@ export class NotificationsService {
   }
 
   async acceptFollowRequest(token: string | null, notificationId: string) {
-    const notification = await this.requireFollowRequestNotification(token, notificationId);
+    const notification = await this.requireFollowRequestNotification(
+      token,
+      notificationId,
+    );
     return this.usersService.acceptFollowRequest(token, notification.entityId);
   }
 
   async declineFollowRequest(token: string | null, notificationId: string) {
-    const notification = await this.requireFollowRequestNotification(token, notificationId);
+    const notification = await this.requireFollowRequestNotification(
+      token,
+      notificationId,
+    );
     return this.usersService.declineFollowRequest(token, notification.entityId);
   }
 
-  private async requireFollowRequestNotification(token: string | null, notificationId: string) {
+  private async requireFollowRequestNotification(
+    token: string | null,
+    notificationId: string,
+  ) {
     const current = await this.requireSession(token);
     const notification = await this.prisma.notification.findFirst({
       where: {

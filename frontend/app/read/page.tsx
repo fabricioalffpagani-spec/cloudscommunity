@@ -41,6 +41,16 @@ export default function ReadPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
 
+  const deleteCloud = async (cloudId: string) => {
+    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const payload = await response.json().catch(() => null) as { message?: string } | null;
+    if (!response.ok) throw new Error(payload?.message ?? "Não foi possível excluir a cloud.");
+    setClouds((current) => current.filter((cloud) => cloud.id !== cloudId));
+  };
+
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +135,7 @@ export default function ReadPage() {
           </div>
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} currentUserId={user?.id} onDelete={deleteCloud} />
           </div>
         )}
       </main>

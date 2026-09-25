@@ -32,19 +32,25 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
-  async signup(@Body() body: Record<string, unknown>, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
+  async signup(
+    @Body() body: Record<string, unknown>,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
+  ) {
     const result = await this.authService.signup(
       {
         email: typeof body.email === 'string' ? body.email : undefined,
         name: typeof body.name === 'string' ? body.name : undefined,
         username: typeof body.username === 'string' ? body.username : undefined,
         password: typeof body.password === 'string' ? body.password : undefined,
-        birthDate: typeof body.birthDate === 'string' ? body.birthDate : undefined,
+        birthDate:
+          typeof body.birthDate === 'string' ? body.birthDate : undefined,
         bio: typeof body.bio === 'string' ? body.bio : undefined,
         location: typeof body.location === 'string' ? body.location : undefined,
         region: typeof body.region === 'string' ? body.region : undefined,
         acceptedTerms: body.acceptedTerms === true,
         acceptedCommunityRules: body.acceptedCommunityRules === true,
+        returnTo: typeof body.returnTo === 'string' ? body.returnTo : undefined,
       },
       {
         ipAddress: req.ip ?? null,
@@ -57,12 +63,16 @@ export class AuthController {
 
   @Post('email-verification/resend')
   async resendEmailVerification(@Body() body: Record<string, unknown>) {
-    return this.authService.resendEmailVerification(typeof body.email === 'string' ? body.email : '');
+    return this.authService.resendEmailVerification(
+      typeof body.email === 'string' ? body.email : '',
+    );
   }
 
   @Post('password-reset/request')
   async requestPasswordReset(@Body() body: Record<string, unknown>) {
-    return this.authService.requestPasswordReset(typeof body.email === 'string' ? body.email : '');
+    return this.authService.requestPasswordReset(
+      typeof body.email === 'string' ? body.email : '',
+    );
   }
 
   @Post('password-reset/confirm')
@@ -74,7 +84,11 @@ export class AuthController {
   }
 
   @Get('verify-email')
-  async verifyEmail(@Query('token') token: string, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
+  async verifyEmail(
+    @Query('token') token: string,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
+  ) {
     const result = await this.authService.verifyEmail(token ?? '', {
       ipAddress: req.ip ?? null,
       userAgent: req.headers['user-agent'] ?? null,
@@ -86,7 +100,11 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() body: Record<string, unknown>, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
+  async login(
+    @Body() body: Record<string, unknown>,
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
+  ) {
     const result = await this.authService.login(
       {
         identifier:
@@ -129,28 +147,54 @@ export class AuthController {
   @Patch('me')
   async updateMe(@Body() body: Record<string, unknown>, @Req() req: Request) {
     return this.authService.updateProfile(extractSessionToken(req), {
-      displayName: typeof body.displayName === 'string' ? body.displayName : undefined,
+      displayName:
+        typeof body.displayName === 'string' ? body.displayName : undefined,
       bio: typeof body.bio === 'string' ? body.bio : undefined,
       location: typeof body.location === 'string' ? body.location : undefined,
-      avatarUrl: typeof body.avatarUrl === 'string' ? body.avatarUrl : undefined,
-      isPrivate: typeof body.isPrivate === 'boolean' ? body.isPrivate : undefined,
-      showHypesCount: typeof body.showHypesCount === 'boolean' ? body.showHypesCount : undefined,
-      showArchivedClouds: typeof body.showArchivedClouds === 'boolean' ? body.showArchivedClouds : undefined,
-      showParticipatingNow: typeof body.showParticipatingNow === 'boolean' ? body.showParticipatingNow : undefined,
-      interests: Array.isArray(body.interests) ? body.interests.filter((interest): interest is string => typeof interest === 'string') : undefined,
+      avatarUrl:
+        typeof body.avatarUrl === 'string' ? body.avatarUrl : undefined,
+      isPrivate:
+        typeof body.isPrivate === 'boolean' ? body.isPrivate : undefined,
+      showHypesCount:
+        typeof body.showHypesCount === 'boolean'
+          ? body.showHypesCount
+          : undefined,
+      showArchivedClouds:
+        typeof body.showArchivedClouds === 'boolean'
+          ? body.showArchivedClouds
+          : undefined,
+      showParticipatingNow:
+        typeof body.showParticipatingNow === 'boolean'
+          ? body.showParticipatingNow
+          : undefined,
+      interests: Array.isArray(body.interests)
+        ? body.interests.filter(
+            (interest): interest is string => typeof interest === 'string',
+          )
+        : undefined,
     });
   }
 
   @Post('me/change-password')
-  async changePassword(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  async changePassword(
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+  ) {
     return this.authService.changePassword(extractSessionToken(req), {
-      currentPassword: typeof body.currentPassword === 'string' ? body.currentPassword : undefined,
-      newPassword: typeof body.newPassword === 'string' ? body.newPassword : undefined,
+      currentPassword:
+        typeof body.currentPassword === 'string'
+          ? body.currentPassword
+          : undefined,
+      newPassword:
+        typeof body.newPassword === 'string' ? body.newPassword : undefined,
     });
   }
 
   @Post('feedback')
-  async sendFeedback(@Body() body: Record<string, unknown>, @Req() req: Request) {
+  async sendFeedback(
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+  ) {
     return this.authService.sendFeedback(
       extractSessionToken(req),
       typeof body.message === 'string' ? body.message : '',

@@ -22,14 +22,16 @@ type Props = {
   forwarded?: boolean;
   contacts: ForwardContact[];
   loading?: boolean;
+  externalShareText?: string;
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, externalShareText, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
 
   const forward = async (contact: ForwardContact) => {
     setSendingTo(contact.id);
@@ -114,6 +116,54 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
     }
   };
 
+  const shareToMobileApp = async (appName: "Instagram" | "TikTok", desktopMessagesUrl: string) => {
+    const text = externalShareText || `${preview || title}\n${url}`;
+    setExternalShareNotice(null);
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+    if (!isMobile) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setExternalShareNotice("Link do convite copiado. Você pode compartilhá-lo com quem quiser — ele continua na sua área de transferência.");
+        window.open(desktopMessagesUrl, "_blank", "noopener,noreferrer");
+      } catch {
+        setExternalShareNotice("Não foi possível copiar o convite automaticamente. Tente novamente.");
+      }
+      return;
+    }
+
+    try {
+      if (!navigator.share || (navigator.canShare && !navigator.canShare({ text }))) {
+        throw new Error("Compartilhamento nativo indisponível");
+      }
+      // Some mobile browsers reject a combined title/text/url payload. The
+      // complete text already contains the public Cloud URL, so this is the
+      // most broadly compatible Web Share payload.
+      await navigator.share({ text });
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setExternalShareNotice(`Não foi possível abrir o compartilhamento do ${appName}. O convite foi copiado para você enviar pelo app.`);
+      } catch {
+        setExternalShareNotice(`Não foi possível abrir o compartilhamento do ${appName} agora.`);
+      }
+    }
+  };
+
+  const shareOnWhatsApp = () => {
+    const text = externalShareText || `${preview || title}\n${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const shareOnX = () => {
+    const text = externalShareText || `${preview || title}\n${url}`;
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const shareOnReddit = () => {
+    window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(preview || title)}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(event) => event.stopPropagation()}>
@@ -122,6 +172,20 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
           <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
         </div>
         {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{preview}</p>}
+        {externalShareText && (
+          <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3">
+            <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={shareOnWhatsApp} className="rounded-full bg-[#25D366] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">WhatsApp</button>
+              <button type="button" onClick={() => void shareToMobileApp("Instagram", "https://www.instagram.com/direct/inbox/")} className="rounded-full bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">Instagram Direct</button>
+              <button type="button" onClick={shareOnX} className="rounded-full bg-black px-3 py-2 text-[12px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10">X</button>
+              <button type="button" onClick={shareOnReddit} className="rounded-full bg-[#FF4500] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">Reddit</button>
+              <button type="button" onClick={() => void shareToMobileApp("TikTok", "https://www.tiktok.com/messages")} className="rounded-full bg-gradient-to-r from-[#25F4EE] via-[#151515] to-[#FE2C55] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">TikTok Mensagens</button>
+            </div>
+            <p className="mt-3 hidden text-[11px] leading-relaxed text-white/45 md:block">No computador, Instagram Direct e TikTok Mensagens copiam o convite e abrem a caixa de mensagens em uma nova aba para você enviar a quem quiser.</p>
+            {externalShareNotice && <p role="status" className="mt-2 text-[11px] font-medium text-[#D8B4FE]">{externalShareNotice}</p>}
+          </section>
+        )}
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Contatos do Messages</p>
         <div className="max-h-56 space-y-2 overflow-y-auto">
           {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : contacts.map((contact) => {

@@ -14,6 +14,7 @@ function VerifyEmailContent() {
 
   useEffect(() => {
     const token = searchParams.get("token");
+    const returnTo = searchParams.get("returnTo");
     if (!token) {
       setState("error");
       setMessage("O link de validação está incompleto.");
@@ -28,7 +29,8 @@ function VerifyEmailContent() {
         setState("success");
         setMessage("Email validado com sucesso. Sua conta está pronta!");
         sessionStorage.setItem("clouds:show-mobile-tutorial", "1");
-        window.setTimeout(() => router.replace("/onboarding"), 1200);
+        const cloudReturnTo = returnTo?.startsWith("/cloud/") ? returnTo : null;
+        window.setTimeout(() => router.replace(cloudReturnTo || "/onboarding"), 1200);
       })
       .catch((error: unknown) => {
         setState("error");

@@ -58,7 +58,10 @@ export class CloudController {
 
   @Get('read')
   async read(@Req() req: Request, @Query('scope') scope?: string) {
-    return this.cloudService.listRead(extractSessionToken(req), scope === 'following' ? 'following' : 'for-you');
+    return this.cloudService.listRead(
+      extractSessionToken(req),
+      scope === 'following' ? 'following' : 'for-you',
+    );
   }
 
   @Get('stickers')
@@ -86,30 +89,54 @@ export class CloudController {
 
   @Get('following')
   async following(@Req() req: Request) {
-    const result = await this.cloudService.listFollowing(extractSessionToken(req));
+    const result = await this.cloudService.listFollowing(
+      extractSessionToken(req),
+    );
     return { ...result, clouds: await this.withLiveCounts(result.clouds) };
   }
 
   @Get('invite/:token')
-  async resolveInvite(@Param('token') inviteToken: string, @Req() req: Request) {
-    return this.cloudService.resolveInvite(extractSessionToken(req), inviteToken);
+  async resolveInvite(
+    @Param('token') inviteToken: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.resolveInvite(
+      extractSessionToken(req),
+      inviteToken,
+    );
   }
 
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
-    const result = await this.cloudService.findById(extractSessionToken(req), id);
+    const result = await this.cloudService.findById(
+      extractSessionToken(req),
+      id,
+    );
     return { ...result, cloud: await this.withLiveCount(result.cloud) };
   }
 
   @Post()
   async create(@Body() body: Record<string, unknown>, @Req() req: Request) {
-    const result = await this.cloudService.create(extractSessionToken(req), {
-      title: typeof body.title === 'string' ? body.title : undefined,
-      description: typeof body.description === 'string' ? body.description : undefined,
-      duration: typeof body.duration === 'string' ? body.duration : undefined,
-      visibility: body.visibility === 'private' ? 'private' : 'public',
-      originCloudId: typeof body.originCloudId === 'string' ? body.originCloudId : undefined,
-    } satisfies CreateCloudInput);
+    const invitedUserIds = Array.isArray(body.invitedUserIds)
+      ? body.invitedUserIds.filter(
+          (id): id is string => typeof id === 'string' && id.trim().length > 0,
+        )
+      : [];
+    const result = await this.cloudService.create(
+      extractSessionToken(req),
+      {
+        title: typeof body.title === 'string' ? body.title : undefined,
+        description:
+          typeof body.description === 'string' ? body.description : undefined,
+        duration: typeof body.duration === 'string' ? body.duration : undefined,
+        visibility: body.visibility === 'private' ? 'private' : 'public',
+        originCloudId:
+          typeof body.originCloudId === 'string'
+            ? body.originCloudId
+            : undefined,
+      } satisfies CreateCloudInput,
+      invitedUserIds,
+    );
     // Creation is independent from Socket.IO presence. The creator is not in
     // the room yet, so the service response correctly starts at zero.
     return result;
@@ -128,20 +155,39 @@ export class CloudController {
     // to inside. Refreshes and tab restores can repeat requests, but cannot
     // be represented as another entry.
     if (result.entered) {
-      const systemMessage = await this.cloudService.createJoinNotification(id, result.userId);
-      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+      const systemMessage = await this.cloudService.createJoinNotification(
+        id,
+        result.userId,
+      );
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        id,
+        systemMessage,
+      );
     }
-    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    const membersCount =
+      await this.cloudMessagesGateway.broadcastMembersUpdated(id);
     return { ok: true, membersCount };
   }
 
   @Post(':id/leave')
   async leaveCloud(@Param('id') id: string, @Req() req: Request) {
-    const result = await this.cloudService.leaveCloud(extractSessionToken(req), id);
+    const result = await this.cloudService.leaveCloud(
+      extractSessionToken(req),
+      id,
+    );
     if (result.left) {
-      const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
-      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
-      const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+      const systemMessage = await this.cloudService.createLeaveNotification(
+        id,
+        result.userId,
+      );
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        id,
+        systemMessage,
+      );
+      const membersCount =
+        await this.cloudMessagesGateway.broadcastMembersUpdated(id);
       return { ok: true, membersCount };
     }
     return { ok: true };
@@ -149,10 +195,23 @@ export class CloudController {
 
   @Post(':id/exit')
   async exitCloudConversation(@Param('id') id: string, @Req() req: Request) {
-    const result = await this.cloudService.exitCloudConversation(extractSessionToken(req), id);
+    const result = await this.cloudService.exitCloudConversation(
+      extractSessionToken(req),
+      id,
+    );
     if (result.left) {
-      const systemMessage = await this.cloudService.createLeaveNotification(id, result.userId);
-      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, systemMessage);
+      const systemMessage = await this.cloudService.createLeaveNotification(
+        id,
+        result.userId,
+      );
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        id,
+        systemMessage,
+      );
+      const membersCount =
+        await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+      return { ok: true, membersCount };
     }
     return { ok: true };
   }
@@ -178,28 +237,56 @@ export class CloudController {
   }
 
   @Delete(':id/members/:userId')
-  async removeMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
-    const result = await this.cloudService.removeMember(extractSessionToken(req), id, userId);
-    const membersCount = await this.cloudMessagesGateway.broadcastMembersUpdated(id);
-    await this.cloudMessagesGateway.broadcastMemberBanned(id, userId, []);
+  async removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Req() req: Request,
+  ) {
+    const result = await this.cloudService.removeMember(
+      extractSessionToken(req),
+      id,
+      userId,
+    );
+    const membersCount =
+      await this.cloudMessagesGateway.broadcastMembersUpdated(id);
+    await this.cloudMessagesGateway.broadcastMemberRemoved(id, userId);
     return { ...result, membersCount };
   }
 
   @Post(':id/members/:userId/ban')
-  async banMember(@Param('id') id: string, @Param('userId') userId: string, @Req() req: Request) {
+  async banMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Req() req: Request,
+  ) {
     const token = extractSessionToken(req);
     const result = await this.cloudService.banMember(token, id, userId);
     // Send system message first so all clients (including the one being banned) see it
-    await this.cloudMessagesGateway.broadcastMessageCreated(null, id, result.systemMessage);
+    await this.cloudMessagesGateway.broadcastMessageCreated(
+      null,
+      id,
+      result.systemMessage,
+    );
     // Then delete reported messages for all clients
-    await this.cloudMessagesGateway.broadcastMemberBanned(id, userId, result.deletedMessageIds);
+    await this.cloudMessagesGateway.broadcastMemberBanned(
+      id,
+      userId,
+      result.deletedMessageIds,
+    );
+    await this.cloudMessagesGateway.broadcastMembersUpdated(id);
     return { ok: true };
   }
 
   @Post(':id/reports')
   async reportUser(
     @Param('id') id: string,
-    @Body() body: { reportedId: string; messageId?: string; messageContent?: string; reasons: string[] },
+    @Body()
+    body: {
+      reportedId: string;
+      messageId?: string;
+      messageContent?: string;
+      reasons: string[];
+    },
     @Req() req: Request,
   ) {
     const result = await this.cloudService.reportUser(
@@ -211,7 +298,10 @@ export class CloudController {
       body.reasons ?? [],
     );
     // Push real-time notification to cloud author
-    await this.cloudMessagesGateway.broadcastReport(result.authorId, result.reportPayload);
+    await this.cloudMessagesGateway.broadcastReport(
+      result.authorId,
+      result.reportPayload,
+    );
     return { ok: true };
   }
 
@@ -221,23 +311,55 @@ export class CloudController {
   }
 
   @Patch(':id/messages/:messageId/pin')
-  async pinMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
-    return this.cloudService.pinMessage(extractSessionToken(req), id, messageId);
+  async pinMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.pinMessage(
+      extractSessionToken(req),
+      id,
+      messageId,
+    );
   }
 
   @Patch(':id/messages/:messageId/unpin')
-  async unpinMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
-    return this.cloudService.unpinMessage(extractSessionToken(req), id, messageId);
+  async unpinMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.unpinMessage(
+      extractSessionToken(req),
+      id,
+      messageId,
+    );
   }
 
   @Post(':id/pin-message')
-  async pinMessagePost(@Param('id') id: string, @Body() body: { messageId: string }, @Req() req: Request) {
-    return this.cloudService.pinMessage(extractSessionToken(req), id, body.messageId);
+  async pinMessagePost(
+    @Param('id') id: string,
+    @Body() body: { messageId: string },
+    @Req() req: Request,
+  ) {
+    return this.cloudService.pinMessage(
+      extractSessionToken(req),
+      id,
+      body.messageId,
+    );
   }
 
   @Post(':id/unpin-message')
-  async unpinMessagePost(@Param('id') id: string, @Body() body: { messageId: string }, @Req() req: Request) {
-    return this.cloudService.unpinMessage(extractSessionToken(req), id, body.messageId);
+  async unpinMessagePost(
+    @Param('id') id: string,
+    @Body() body: { messageId: string },
+    @Req() req: Request,
+  ) {
+    return this.cloudService.unpinMessage(
+      extractSessionToken(req),
+      id,
+      body.messageId,
+    );
   }
 
   @Patch(':id/messages/:messageId')
@@ -247,12 +369,25 @@ export class CloudController {
     @Body() body: { content: string },
     @Req() req: Request,
   ) {
-    return this.cloudService.editMessage(extractSessionToken(req), id, messageId, body.content);
+    return this.cloudService.editMessage(
+      extractSessionToken(req),
+      id,
+      messageId,
+      body.content,
+    );
   }
 
   @Delete(':id/messages/:messageId')
-  async deleteMessage(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
-    return this.cloudService.deleteMessage(extractSessionToken(req), id, messageId);
+  async deleteMessage(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.deleteMessage(
+      extractSessionToken(req),
+      id,
+      messageId,
+    );
   }
 
   @Post(':id/messages')
@@ -264,12 +399,21 @@ export class CloudController {
     const token = extractSessionToken(req);
     const session = await this.authService.resolveSession(token);
     const result = await this.cloudService.createMessage(token, id, body);
-    await this.cloudMessagesGateway.broadcastMessageCreated(session?.user.id ?? null, id, result.message);
+    await this.cloudMessagesGateway.broadcastMessageCreated(
+      session?.user.id ?? null,
+      id,
+      result.message,
+    );
     return result;
   }
 
   @Get(':id/messages')
-  async getMessages(@Param('id') id: string, @Req() req: Request, @Query('take') take?: string, @Query('before') before?: string) {
+  async getMessages(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Query('take') take?: string,
+    @Query('before') before?: string,
+  ) {
     return this.cloudService.getMessages(extractSessionToken(req), id, {
       take: take ? Number(take) : undefined,
       before: before || undefined,
@@ -277,12 +421,14 @@ export class CloudController {
   }
 
   @Post(':id/audio')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(),
-    limits: {
-      fileSize: 25 * 1024 * 1024,
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 25 * 1024 * 1024,
+      },
+    }),
+  )
   async sendAudioMessage(
     @Param('id') id: string,
     @Req() req: Request,
@@ -295,22 +441,34 @@ export class CloudController {
       token,
       id,
       {
-        clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : undefined,
-        replyToMessageId: typeof body.replyToMessageId === 'string' ? body.replyToMessageId : undefined,
+        clientMessageId:
+          typeof body.clientMessageId === 'string'
+            ? body.clientMessageId
+            : undefined,
+        replyToMessageId:
+          typeof body.replyToMessageId === 'string'
+            ? body.replyToMessageId
+            : undefined,
       },
       file as MulterFile,
     );
-    await this.cloudMessagesGateway.broadcastMessageCreated(session?.user.id ?? null, id, result.message);
+    await this.cloudMessagesGateway.broadcastMessageCreated(
+      session?.user.id ?? null,
+      id,
+      result.message,
+    );
     return result;
   }
 
   @Post(':id/image')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(),
-    limits: {
-      fileSize: 10 * 1024 * 1024,
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
   async sendImageMessage(
     @Param('id') id: string,
     @Req() req: Request,
@@ -323,40 +481,86 @@ export class CloudController {
       token,
       id,
       {
-        clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : undefined,
-        replyToMessageId: typeof body.replyToMessageId === 'string' ? body.replyToMessageId : undefined,
+        clientMessageId:
+          typeof body.clientMessageId === 'string'
+            ? body.clientMessageId
+            : undefined,
+        replyToMessageId:
+          typeof body.replyToMessageId === 'string'
+            ? body.replyToMessageId
+            : undefined,
         isSticker: body.isSticker === 'true',
       },
       file as MulterFile,
     );
-    await this.cloudMessagesGateway.broadcastMessageCreated(session?.user.id ?? null, id, result.message);
+    await this.cloudMessagesGateway.broadcastMessageCreated(
+      session?.user.id ?? null,
+      id,
+      result.message,
+    );
     return result;
   }
 
   @Post('stickers')
   async saveSticker(@Req() req: Request, @Body() body: { mediaUrl?: string }) {
-    return this.cloudService.saveSticker(extractSessionToken(req), body.mediaUrl);
+    return this.cloudService.saveSticker(
+      extractSessionToken(req),
+      body.mediaUrl,
+    );
   }
 
   @Post(':id/messages/:messageId/reactions')
-  async addReaction(@Param('id') id: string, @Param('messageId') messageId: string, @Body() body: { emoji: string }, @Req() req: Request) {
+  async addReaction(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Body() body: { emoji: string },
+    @Req() req: Request,
+  ) {
     const token = extractSessionToken(req);
     const session = await this.authService.resolveSession(token);
-    const result = await this.cloudService.addReaction(token, id, messageId, body.emoji);
-    await this.cloudMessagesGateway.broadcastReactionChange(session?.user.id ?? null, id, messageId, result.reaction, result.removed);
+    const result = await this.cloudService.addReaction(
+      token,
+      id,
+      messageId,
+      body.emoji,
+    );
+    await this.cloudMessagesGateway.broadcastReactionChange(
+      session?.user.id ?? null,
+      id,
+      messageId,
+      result.reaction,
+      result.removed,
+    );
     return result;
   }
 
   @Get(':id/messages/:messageId/reactions')
-  async getMessageReactions(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
-    return this.cloudService.getMessageReactions(extractSessionToken(req), id, messageId);
+  async getMessageReactions(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.getMessageReactions(
+      extractSessionToken(req),
+      id,
+      messageId,
+    );
   }
 
-  private async withLiveCount<T extends { id: string; membersCount: number }>(cloud: T): Promise<T> {
-    return { ...cloud, membersCount: await this.cloudMessagesGateway.getConnectedMemberCount(cloud.id) };
+  private async withLiveCount<T extends { id: string; membersCount: number }>(
+    cloud: T,
+  ): Promise<T> {
+    return {
+      ...cloud,
+      membersCount: await this.cloudMessagesGateway.getConnectedMemberCount(
+        cloud.id,
+      ),
+    };
   }
 
-  private async withLiveCounts<T extends { id: string; membersCount: number }>(clouds: T[]): Promise<T[]> {
+  private async withLiveCounts<T extends { id: string; membersCount: number }>(
+    clouds: T[],
+  ): Promise<T[]> {
     return Promise.all(clouds.map((cloud) => this.withLiveCount(cloud)));
   }
 }

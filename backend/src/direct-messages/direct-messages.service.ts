@@ -5,7 +5,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type { Conversation, DirectMessage, MediaAsset, Prisma } from '@prisma/client';
+import type {
+  Conversation,
+  DirectMessage,
+  MediaAsset,
+  Prisma,
+} from '@prisma/client';
 import type { File as MulterFile } from 'multer';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
@@ -48,7 +53,10 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_AUDIO_SIZE_BYTES = 25 * 1024 * 1024;
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
-export function buildConversationKey(participantOneId: string, participantTwoId: string): string {
+export function buildConversationKey(
+  participantOneId: string,
+  participantTwoId: string,
+): string {
   return [participantOneId, participantTwoId].sort().join(':');
 }
 
@@ -65,7 +73,10 @@ export function truncatePreview(value: string, maxLength = 255): string {
 export class DirectMessagesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createOrResolveConversation(userId: string, input: CreateConversationInput): Promise<DirectConversationPayload> {
+  async createOrResolveConversation(
+    userId: string,
+    input: CreateConversationInput,
+  ): Promise<DirectConversationPayload> {
     const peerUserId = input.peerUserId.trim();
 
     if (!peerUserId) {
@@ -82,7 +93,10 @@ export class DirectMessagesService {
     await this.assertCanContact(userId, peerUserId);
 
     const [participantOneId, participantTwoId] = [userId, peerUserId].sort();
-    const conversationKey = buildConversationKey(participantOneId, participantTwoId);
+    const conversationKey = buildConversationKey(
+      participantOneId,
+      participantTwoId,
+    );
 
     const existing = await this.prisma.conversation.findUnique({
       where: { conversationKey },
@@ -113,7 +127,9 @@ export class DirectMessagesService {
     return this.mapConversation(created, userId, peer);
   }
 
-  async listConversations(userId: string): Promise<DirectConversationPayload[]> {
+  async listConversations(
+    userId: string,
+  ): Promise<DirectConversationPayload[]> {
     const conversations = await this.prisma.conversation.findMany({
       where: {
         deletedAt: null,
@@ -129,7 +145,9 @@ export class DirectMessagesService {
     });
     return conversations.map((conversation) => {
       const peerId = this.getPeerId(conversation, userId);
-      const block = blocks.find((entry) => entry.blockerId === peerId || entry.blockedId === peerId);
+      const block = blocks.find(
+        (entry) => entry.blockerId === peerId || entry.blockedId === peerId,
+      );
       return this.mapConversation(conversation, userId, undefined, {
         blockedByPeer: block?.blockerId === peerId,
         blockedByMe: block?.blockerId === userId,
@@ -152,9 +170,10 @@ export class DirectMessagesService {
     const peerIds = new Set<string>();
 
     for (const conversation of conversations) {
-      const peerId = conversation.participantOneId === userId
-        ? conversation.participantTwoId
-        : conversation.participantOneId;
+      const peerId =
+        conversation.participantOneId === userId
+          ? conversation.participantTwoId
+          : conversation.participantOneId;
       peerIds.add(peerId);
     }
 
@@ -190,7 +209,10 @@ export class DirectMessagesService {
     return messages.map((message) => this.mapMessage(message));
   }
 
-  async sendTextMessage(userId: string, input: SendDirectMessageInput): Promise<DirectMessagePayload> {
+  async sendTextMessage(
+    userId: string,
+    input: SendDirectMessageInput,
+  ): Promise<DirectMessagePayload> {
     const content = input.content.replace(/\s+/g, ' ').trim();
 
     if (!content) {
@@ -205,7 +227,10 @@ export class DirectMessagesService {
       });
     }
 
-    const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    const conversation = await this.requireConversationAccess(
+      input.conversationId,
+      userId,
+    );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
@@ -257,8 +282,14 @@ export class DirectMessagesService {
       });
 
       const preview = truncatePreview(content);
-      const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
-      const recipientId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+      const unreadField =
+        conversation.participantOneId === userId
+          ? 'participantTwoUnreadCount'
+          : 'participantOneUnreadCount';
+      const recipientId =
+        conversation.participantOneId === userId
+          ? conversation.participantTwoId
+          : conversation.participantOneId;
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -284,10 +315,16 @@ export class DirectMessagesService {
    * the same conversation bookkeeping as a regular message, but intentionally
    * does not require a browser session for the managed account.
    */
-  async sendAutomatedTextMessage(senderId: string, conversationId: string, rawContent: string): Promise<DirectMessagePayload> {
+  async sendAutomatedTextMessage(
+    senderId: string,
+    conversationId: string,
+    rawContent: string,
+  ): Promise<DirectMessagePayload> {
     const content = rawContent.replace(/\s+/g, ' ').trim();
     if (!content || content.length > MAX_MESSAGE_LENGTH) {
-      throw new BadRequestException({ message: 'A mensagem automática é inválida.' });
+      throw new BadRequestException({
+        message: 'A mensagem automática é inválida.',
+      });
     }
 
     const conversation = await this.prisma.conversation.findFirst({
@@ -308,7 +345,10 @@ export class DirectMessagesService {
         data: { conversationId, senderId, type: 'text', content },
         include: this.messageInclude(),
       });
-      const unreadField = conversation.participantOneId === senderId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      const unreadField =
+        conversation.participantOneId === senderId
+          ? 'participantTwoUnreadCount'
+          : 'participantOneUnreadCount';
       await tx.conversation.update({
         where: { id: conversationId },
         data: {
@@ -348,7 +388,10 @@ export class DirectMessagesService {
       });
     }
 
-    const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    const conversation = await this.requireConversationAccess(
+      input.conversationId,
+      userId,
+    );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
@@ -413,8 +456,14 @@ export class DirectMessagesService {
         include: this.messageInclude(),
       });
 
-      const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
-      const recipientId = conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+      const unreadField =
+        conversation.participantOneId === userId
+          ? 'participantTwoUnreadCount'
+          : 'participantOneUnreadCount';
+      const recipientId =
+        conversation.participantOneId === userId
+          ? conversation.participantTwoId
+          : conversation.participantOneId;
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -458,7 +507,10 @@ export class DirectMessagesService {
       });
     }
 
-    const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    const conversation = await this.requireConversationAccess(
+      input.conversationId,
+      userId,
+    );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
@@ -522,7 +574,10 @@ export class DirectMessagesService {
         include: this.messageInclude(),
       });
 
-      const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      const unreadField =
+        conversation.participantOneId === userId
+          ? 'participantTwoUnreadCount'
+          : 'participantOneUnreadCount';
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -570,7 +625,10 @@ export class DirectMessagesService {
       });
     }
 
-    const conversation = await this.requireConversationAccess(input.conversationId, userId);
+    const conversation = await this.requireConversationAccess(
+      input.conversationId,
+      userId,
+    );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
@@ -625,7 +683,10 @@ export class DirectMessagesService {
         include: this.messageInclude(),
       });
 
-      const unreadField = conversation.participantOneId === userId ? 'participantTwoUnreadCount' : 'participantOneUnreadCount';
+      const unreadField =
+        conversation.participantOneId === userId
+          ? 'participantTwoUnreadCount'
+          : 'participantOneUnreadCount';
 
       await tx.conversation.update({
         where: { id: input.conversationId },
@@ -646,8 +707,14 @@ export class DirectMessagesService {
     return this.mapMessage(message);
   }
 
-  async markConversationRead(userId: string, conversationId: string): Promise<DirectConversationPayload> {
-    const conversation = await this.requireConversationAccess(conversationId, userId);
+  async markConversationRead(
+    userId: string,
+    conversationId: string,
+  ): Promise<DirectConversationPayload> {
+    const conversation = await this.requireConversationAccess(
+      conversationId,
+      userId,
+    );
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
@@ -685,18 +752,33 @@ export class DirectMessagesService {
     return this.getConversationById(userId, conversationId);
   }
 
-  async getConversationById(userId: string, conversationId: string): Promise<DirectConversationPayload> {
-    const conversation = await this.requireConversationAccess(conversationId, userId);
+  async getConversationById(
+    userId: string,
+    conversationId: string,
+  ): Promise<DirectConversationPayload> {
+    const conversation = await this.requireConversationAccess(
+      conversationId,
+      userId,
+    );
     return this.mapConversation(conversation, userId);
   }
 
-  async requireConversationContactAccess(userId: string, conversationId: string): Promise<ConversationWithRelations> {
-    const conversation = await this.requireConversationAccess(conversationId, userId);
+  async requireConversationContactAccess(
+    userId: string,
+    conversationId: string,
+  ): Promise<ConversationWithRelations> {
+    const conversation = await this.requireConversationAccess(
+      conversationId,
+      userId,
+    );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
     return conversation;
   }
 
-  private async requireConversationAccess(conversationId: string, userId: string): Promise<ConversationWithRelations> {
+  private async requireConversationAccess(
+    conversationId: string,
+    userId: string,
+  ): Promise<ConversationWithRelations> {
     const conversation = await this.prisma.conversation.findFirst({
       where: {
         id: conversationId,
@@ -716,19 +798,27 @@ export class DirectMessagesService {
   }
 
   private getPeerId(conversation: ConversationWithRelations, userId: string) {
-    return conversation.participantOneId === userId ? conversation.participantTwoId : conversation.participantOneId;
+    return conversation.participantOneId === userId
+      ? conversation.participantTwoId
+      : conversation.participantOneId;
   }
 
   private async assertCanContact(userId: string, peerUserId: string) {
     const block = await this.prisma.userBlock.findFirst({
-      where: { OR: [{ blockerId: userId, blockedId: peerUserId }, { blockerId: peerUserId, blockedId: userId }] },
+      where: {
+        OR: [
+          { blockerId: userId, blockedId: peerUserId },
+          { blockerId: peerUserId, blockedId: userId },
+        ],
+      },
       select: { blockerId: true },
     });
     if (!block) return;
     throw new ForbiddenException({
-      message: block.blockerId === peerUserId
-        ? 'Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.'
-        : 'Você bloqueou esta pessoa. Desbloqueie-a para enviar mensagens.',
+      message:
+        block.blockerId === peerUserId
+          ? 'Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.'
+          : 'Você bloqueou esta pessoa. Desbloqueie-a para enviar mensagens.',
     });
   }
 
@@ -781,14 +871,22 @@ export class DirectMessagesService {
       include: this.messageInclude(),
     });
 
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
     if (message.senderId !== userId)
-      throw new ForbiddenException({ message: 'Você só pode editar suas próprias mensagens.' });
+      throw new ForbiddenException({
+        message: 'Você só pode editar suas próprias mensagens.',
+      });
     if (message.type !== 'text')
-      throw new BadRequestException({ message: 'Apenas mensagens de texto podem ser editadas.' });
+      throw new BadRequestException({
+        message: 'Apenas mensagens de texto podem ser editadas.',
+      });
 
     const trimmed = (content ?? '').trim();
-    if (!trimmed) throw new BadRequestException({ message: 'O conteúdo não pode ser vazio.' });
+    if (!trimmed)
+      throw new BadRequestException({
+        message: 'O conteúdo não pode ser vazio.',
+      });
 
     const updated = await this.prisma.directMessage.update({
       where: { id: messageId },
@@ -810,9 +908,12 @@ export class DirectMessagesService {
       where: { id: messageId, conversationId, deletedAt: null },
     });
 
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
     if (message.senderId !== userId)
-      throw new ForbiddenException({ message: 'Você só pode apagar suas próprias mensagens.' });
+      throw new ForbiddenException({
+        message: 'Você só pode apagar suas próprias mensagens.',
+      });
 
     await this.prisma.directMessage.update({
       where: { id: messageId },
@@ -831,11 +932,15 @@ export class DirectMessagesService {
     conversation: ConversationWithRelations,
     viewerId: string,
     peerOverride?: UserSummary,
-    blockState: { blockedByPeer: boolean; blockedByMe: boolean } = { blockedByPeer: false, blockedByMe: false },
+    blockState: { blockedByPeer: boolean; blockedByMe: boolean } = {
+      blockedByPeer: false,
+      blockedByMe: false,
+    },
   ): DirectConversationPayload {
     const participantOne = conversation.participantOne;
     const participantTwo = conversation.participantTwo;
-    const participant = participantOne.id === viewerId ? participantTwo : participantOne;
+    const participant =
+      participantOne.id === viewerId ? participantTwo : participantOne;
     const peerProfile = participant.profile ?? peerOverride?.profile;
 
     if (!peerProfile) {
@@ -896,7 +1001,9 @@ export class DirectMessagesService {
         displayName: profile.displayName,
         avatarUrl: profile.avatarUrl,
       },
-      mediaAsset: message.mediaAsset ? this.mapMediaAsset(message.mediaAsset) : null,
+      mediaAsset: message.mediaAsset
+        ? this.mapMediaAsset(message.mediaAsset)
+        : null,
     };
   }
 
@@ -931,14 +1038,21 @@ export class DirectMessagesService {
     if (cleanLabel) {
       // Detect cloud_invitation JSON and return human-readable preview
       try {
-        const parsed = JSON.parse(cleanLabel) as { type?: string; cloudTitle?: string; cloudVisibility?: string };
+        const parsed = JSON.parse(cleanLabel) as {
+          type?: string;
+          cloudTitle?: string;
+          cloudVisibility?: string;
+        };
         if (parsed.type === 'cloud_invitation') {
-          const visibility = parsed.cloudVisibility === 'private' ? 'privada' : 'pública';
+          const visibility =
+            parsed.cloudVisibility === 'private' ? 'privada' : 'pública';
           return parsed.cloudTitle
             ? `Convite: ${parsed.cloudTitle}`
             : `Convite para Cloud ${visibility}`;
         }
-      } catch { /* not JSON, use as-is */ }
+      } catch {
+        /* not JSON, use as-is */
+      }
 
       return truncatePreview(cleanLabel);
     }
