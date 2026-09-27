@@ -1,3 +1,4 @@
+import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   DirectMessagesService,
@@ -6,35 +7,37 @@ import {
 } from './direct-messages.service';
 
 function createPrismaMock() {
-  const prisma: any = {
+  const prisma = {
     userBlock: {
-      findFirst: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue(null),
     },
     user: {
-      findUnique: jest.fn(),
+      findUnique: jest.fn<Promise<unknown>, unknown[]>(),
     },
     conversation: {
-      findUnique: jest.fn(),
-      findFirst: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      findMany: jest.fn(),
+      findUnique: jest.fn<Promise<unknown>, unknown[]>(),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>(),
+      create: jest.fn<Promise<unknown>, unknown[]>(),
+      update: jest.fn<Promise<unknown>, unknown[]>(),
+      findMany: jest.fn<Promise<unknown>, unknown[]>(),
     },
     directMessage: {
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      create: jest.fn(),
-      updateMany: jest.fn(),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>(),
+      findMany: jest.fn<Promise<unknown>, unknown[]>(),
+      create: jest.fn<Promise<unknown>, unknown[]>(),
+      updateMany: jest.fn<Promise<unknown>, unknown[]>(),
     },
     mediaAsset: {
-      create: jest.fn(),
+      create: jest.fn<Promise<unknown>, unknown[]>(),
     },
-    $transaction: jest.fn(async (callback: (tx: any) => Promise<unknown>) =>
+  };
+
+  return {
+    ...prisma,
+    $transaction: jest.fn((callback: (tx: typeof prisma) => Promise<unknown>) =>
       callback(prisma),
     ),
   };
-
-  return prisma;
 }
 
 describe('DirectMessagesService', () => {
@@ -48,7 +51,9 @@ describe('DirectMessagesService', () => {
 
   it('throws when sending an empty message', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
 
     await expect(
       service.sendTextMessage('user-1', {
@@ -60,7 +65,9 @@ describe('DirectMessagesService', () => {
 
   it('sends a message and updates the conversation metadata', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
     const conversation = {
       id: 'conv-1',
       conversationKey: 'a:b',
@@ -119,17 +126,19 @@ describe('DirectMessagesService', () => {
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'conv-1' },
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           lastMessageType: 'text',
           lastMessagePreview: 'oi tudo bem',
-        }),
+        }) as unknown,
       }),
     );
   });
 
   it('sends an audio message and stores the media asset', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
     const conversation = {
       id: 'conv-1',
       conversationKey: 'a:b',
@@ -221,27 +230,29 @@ describe('DirectMessagesService', () => {
     expect(message.mediaAsset?.durationMs).toBe(1200);
     expect(prisma.mediaAsset.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           ownerId: 'user-1',
           mimeType: 'audio/webm',
           durationMs: 1200,
-        }),
+        }) as unknown,
       }),
     );
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'conv-1' },
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           lastMessageType: 'audio',
           lastMessagePreview: 'Áudio · 0:01',
-        }),
+        }) as unknown,
       }),
     );
   });
 
   it('sends an image message and stores the media asset', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
     const conversation = {
       id: 'conv-1',
       conversationKey: 'a:b',
@@ -332,26 +343,28 @@ describe('DirectMessagesService', () => {
     expect(message.mediaAsset?.mimeType).toBe('image/png');
     expect(prisma.mediaAsset.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           ownerId: 'user-1',
           mimeType: 'image/png',
-        }),
+        }) as unknown,
       }),
     );
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'conv-1' },
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           lastMessageType: 'image',
           lastMessagePreview: 'Imagem',
-        }),
+        }) as unknown,
       }),
     );
   });
 
   it('sends a link message and stores the preview', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
     const conversation = {
       id: 'conv-1',
       conversationKey: 'a:b',
@@ -415,17 +428,19 @@ describe('DirectMessagesService', () => {
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'conv-1' },
-        data: expect.objectContaining({
+        data: expect.objectContaining<unknown>({
           lastMessageType: 'link',
           lastMessagePreview: 'Cloud legal',
-        }),
+        }) as unknown,
       }),
     );
   });
 
   it('rejects access to a missing conversation', async () => {
     const prisma = createPrismaMock();
-    const service = new DirectMessagesService(prisma);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+    );
     prisma.conversation.findFirst.mockResolvedValue(null);
 
     await expect(

@@ -613,6 +613,8 @@ export class UsersService {
     sort?: string,
     limit?: string,
   ): Promise<UsersSearchResponse> {
+    void sort;
+    void limit; // Compatibility parameters; the existing query has fixed ordering.
     const current = await this.requireSession(token);
 
     const following = await this.prisma.follow.findMany({
@@ -1116,13 +1118,15 @@ export class UsersService {
         })
       : [];
 
-    const serializedActiveClouds = activeClouds.map((cloud) => ({
+    const serializedActiveClouds = activeClouds.map<
+      PublicUserProfilePayload['activeClouds'][number]
+    >((cloud) => ({
       id: cloud.id,
       title: cloud.title,
       description: cloud.content,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
-      visibility: (cloud.visibility === 'private' ? 'private' : 'public') as 'private' | 'public',
+      visibility: cloud.visibility === 'private' ? 'private' : 'public',
       href: `/cloud/${cloud.id}?source=for-you`,
     }));
 
@@ -1148,14 +1152,16 @@ export class UsersService {
           })
         : [];
 
-    const serializedEndedClouds = endedClouds.map((cloud) => ({
+    const serializedEndedClouds = endedClouds.map<
+      PublicUserProfilePayload['endedClouds'][number]
+    >((cloud) => ({
       id: cloud.id,
       title: cloud.title,
       description: cloud.content,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
       endedAt: cloud.endedAt?.toISOString() ?? null,
-      visibility: (cloud.visibility === 'private' ? 'private' : 'public') as 'private' | 'public',
+      visibility: cloud.visibility === 'private' ? 'private' : 'public',
       href: `/cloud/${cloud.id}/conversation`,
     }));
 
@@ -1269,6 +1275,7 @@ export class UsersService {
     token: string | null,
     identifier: string,
   ): Promise<{ ok: true; inviteUrl: string }> {
+    void identifier; // The current invitation API returns a shared landing URL.
     await this.requireSession(token);
 
     const appUrl =

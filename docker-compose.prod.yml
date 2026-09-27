@@ -1,20 +1,108 @@
-# Explicit production overlay. Do not load docker-compose.override.yml with it.
-# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Independent production file. Never combine with development Compose files.
+# Match COMPOSE_PROJECT_NAME to the existing installation's volume prefix.
+name: ${COMPOSE_PROJECT_NAME:-cloudscommunity}
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    mem_limit: 192m
+    memswap_limit: 384m
+    shm_size: 64m
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=32MB"]
+    environment:
+      POSTGRES_USER: ${PGX_ADMIN_USER:?Set PGX_ADMIN_USER}
+      POSTGRES_PASSWORD: ${PGX_ADMIN_PASS:?Set PGX_ADMIN_PASS}
+      POSTGRES_DB: ${PGX_DB_NAME:?Set PGX_DB_NAME}
+    volumes:
+      - clouds_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [data]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    mem_limit: 80m
+    memswap_limit: 160m
+    # Presence counters have no TTL. Keep existing AOF; never evict counters.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - clouds_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    networks: [data]
+
   backend:
-    build:
-      target: production
+    image: ghcr.io/${GHCR_REPOSITORY:?Set lowercase owner/repository}-backend:${IMAGE_TAG:?Set sha-commit or latest}
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    mem_limit: 320m
+    memswap_limit: 768m
+    stop_grace_period: 30s
     environment:
       NODE_ENV: production
-    volumes: !reset []
+      NODE_OPTIONS: --max-old-space-size=192
+      APP_HTTP_PORT: "3001"
+      APP_WEB_ORIGIN: ${APP_WEB_ORIGIN:?Set explicit HTTPS frontend origins}
+      PGX_CONN_STR: ${PGX_CONN_STR:?Set PostgreSQL URL with postgres hostname}
+      CACHE_NODE_ENDPOINT: redis://redis:6379
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+      PASSWORD_RESET_EXPIRES_MINUTES: ${PASSWORD_RESET_EXPIRES_MINUTES:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports: ["127.0.0.1:${APP_HTTP_PORT:-3001}:3001"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(async r => process.exit(r.ok && (await r.json()).healthy === true ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    networks: [data, web]
+
   frontend:
-    build:
-      dockerfile: Dockerfile.prod
-      args:
-        NEXT_PUBLIC_CLOUDS_SOCKET_URL: ${NEXT_PUBLIC_CLOUDS_SOCKET_URL:-http://localhost:3001}
+    image: ghcr.io/${GHCR_REPOSITORY:?Set lowercase owner/repository}-frontend:${IMAGE_TAG:?Set sha-commit or latest}
+    platform: linux/amd64
+    init: true
+    restart: unless-stopped
+    mem_limit: 256m
+    memswap_limit: 768m
     environment:
       NODE_ENV: production
-      WATCHPACK_POLLING: "false"
-      CHOKIDAR_USEPOLLING: "false"
-    volumes: !reset []
-    command: !reset null
+      NODE_OPTIONS: --max-old-space-size=160
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      CLOUDS_BRIDGE_URL: http://backend:3001
+      SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports: ["127.0.0.1:${UI_HTTP_PORT:-3000}:3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks: [web]
+
+networks:
+  data:
+    internal: true
+  web:
+
+volumes:
+  clouds_postgres_data:
+  clouds_redis_data:

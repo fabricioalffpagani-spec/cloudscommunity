@@ -12,9 +12,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import type { File as MulterFile } from 'multer';
+type MulterFile = Express.Multer.File;
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { FLAT_UPLOAD_FIELD_LIMITS } from '../shared/upload-limits';
 import { AuthService } from '../auth/auth.service';
 import { CloudMessagesGateway } from './cloud.gateway';
 import { CloudService } from './cloud.service';
@@ -426,6 +427,7 @@ export class CloudController {
       storage: memoryStorage(),
       limits: {
         fileSize: 25 * 1024 * 1024,
+        ...FLAT_UPLOAD_FIELD_LIMITS,
       },
     }),
   )
@@ -450,7 +452,7 @@ export class CloudController {
             ? body.replyToMessageId
             : undefined,
       },
-      file as MulterFile,
+      file,
     );
     await this.cloudMessagesGateway.broadcastMessageCreated(
       session?.user.id ?? null,
@@ -466,6 +468,7 @@ export class CloudController {
       storage: memoryStorage(),
       limits: {
         fileSize: 10 * 1024 * 1024,
+        ...FLAT_UPLOAD_FIELD_LIMITS,
       },
     }),
   )
@@ -491,7 +494,7 @@ export class CloudController {
             : undefined,
         isSticker: body.isSticker === 'true',
       },
-      file as MulterFile,
+      file,
     );
     await this.cloudMessagesGateway.broadcastMessageCreated(
       session?.user.id ?? null,

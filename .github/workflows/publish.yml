@@ -1,0 +1,122 @@
+name: Validate, test containers and publish GHCR
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ghcr-main
+  cancel-in-progress: false
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      NEXT_PUBLIC_CLOUDS_SOCKET_URL: ${{ vars.NEXT_PUBLIC_CLOUDS_SOCKET_URL }}
+      NEXT_PUBLIC_APP_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Require public HTTPS build configuration
+        run: node frontend/tools/validate-production-env.mjs
+      - uses: docker/setup-buildx-action@v3
+      - name: Image names
+        id: images
+        shell: bash
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          echo "repository=$repository" >> "$GITHUB_OUTPUT"
+          echo "GHCR_REPOSITORY=$repository" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=sha-$GITHUB_SHA" >> "$GITHUB_ENV"
+      - name: Build backend (no runtime secrets)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          target: production
+          platforms: linux/amd64
+          load: true
+          tags: ghcr.io/${{ steps.images.outputs.repository }}-backend:sha-${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+      - name: Build frontend (public arguments only)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile.prod
+          platforms: linux/amd64
+          load: true
+          tags: ghcr.io/${{ steps.images.outputs.repository }}-frontend:sha-${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_CLOUDS_SOCKET_URL=${{ vars.NEXT_PUBLIC_CLOUDS_SOCKET_URL }}
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_SITE_URL=${{ vars.NEXT_PUBLIC_SITE_URL }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+      - name: Test exact production images against isolated databases
+        env:
+          COMPOSE_PROJECT_NAME: clouds-ci-${{ github.run_id }}
+          # Ephemeral fixture credentials, never used for deployment or image builds.
+          PGX_ADMIN_USER: clouds_ci
+          PGX_ADMIN_PASS: ci_fixture_only
+          PGX_DB_NAME: clouds_ci
+          PGX_CONN_STR: postgresql://clouds_ci:ci_fixture_only@postgres:5432/clouds_ci
+          APP_WEB_ORIGIN: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          SESSION_COOKIE_DOMAIN: ''
+        run: |
+          docker compose --env-file /dev/null -f docker-compose.prod.yml config --quiet
+          docker compose --env-file /dev/null -f docker-compose.prod.yml pull postgres redis
+          docker compose --env-file /dev/null -f docker-compose.prod.yml up -d --no-build --pull never --wait --wait-timeout 300
+          node tools/verify-production.mjs
+          docker compose --env-file /dev/null -f docker-compose.prod.yml exec -T -e DEPLOYMENT_TEST_ONLY=1 backend node < tools/verify-production-auth.cjs
+          docker compose --env-file /dev/null -f docker-compose.prod.yml down
+      - name: Stop isolated test stack on failure
+        if: failure()
+        env:
+          COMPOSE_PROJECT_NAME: clouds-ci-${{ github.run_id }}
+          PGX_ADMIN_USER: clouds_ci
+          PGX_ADMIN_PASS: ci_fixture_only
+          PGX_DB_NAME: clouds_ci
+          PGX_CONN_STR: postgresql://clouds_ci:ci_fixture_only@postgres:5432/clouds_ci
+          APP_WEB_ORIGIN: ${{ vars.NEXT_PUBLIC_APP_URL }}
+        run: docker compose --env-file /dev/null -f docker-compose.prod.yml down
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish validated SHA images then advance latest
+        shell: bash
+        run: |
+          # A retry must not overwrite an already published SHA artifact.
+          for app in backend frontend; do
+            image="ghcr.io/$GHCR_REPOSITORY-$app"
+            if result=$(docker buildx imagetools inspect "$image:$IMAGE_TAG" 2>&1); then
+              echo "::error::Immutable SHA tag already exists: $image:$IMAGE_TAG"
+              exit 1
+            fi
+            if ! grep -qiE '(manifest unknown|name unknown|MANIFEST_UNKNOWN|NAME_UNKNOWN|: not found)' <<< "$result"; then
+              echo "$result"
+              echo "::error::Cannot verify that SHA tag is absent; refusing publication"
+              exit 1
+            fi
+          done
+          for app in backend frontend; do
+            image="ghcr.io/$GHCR_REPOSITORY-$app"
+            docker push "$image:$IMAGE_TAG"
+          done
+          for app in backend frontend; do
+            image="ghcr.io/$GHCR_REPOSITORY-$app"
+            docker tag "$image:$IMAGE_TAG" "$image:latest"
+            docker push "$image:latest"
+          done

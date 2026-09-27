@@ -1,28 +1,25 @@
-FROM node:24-alpine AS builder
-
+FROM node:24-alpine AS dependencies
 WORKDIR /app
-
 COPY package*.json ./
 RUN npm ci
 
+FROM dependencies AS builder
 COPY . .
+ARG NEXT_PUBLIC_CLOUDS_SOCKET_URL
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_SITE_URL
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_CLOUDS_SOCKET_URL=$NEXT_PUBLIC_CLOUDS_SOCKET_URL \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
+RUN node tools/validate-production-env.mjs && npm run build
 
-ARG NEXT_PUBLIC_CLOUDS_SOCKET_URL=http://localhost:3001
-ENV NEXT_PUBLIC_CLOUDS_SOCKET_URL=$NEXT_PUBLIC_CLOUDS_SOCKET_URL
-
-RUN node_modules/.bin/next build
-
-# ── Runtime ──────────────────────────────────────────────────────────────────
 FROM node:24-alpine AS runner
-
 WORKDIR /app
-
-ENV NODE_ENV=production
-
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+USER node
 EXPOSE 3000
-
-CMD ["sh", "-c", "HOSTNAME=0.0.0.0 PORT=${UI_HTTP_PORT:-3000} exec node server.js"]
+CMD ["node", "server.js"]

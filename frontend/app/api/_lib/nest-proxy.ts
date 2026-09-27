@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 const BACKEND_ORIGIN_ENV_NAMES = ["CLOUDS_BRIDGE_URL"] as const;
 
-function resolveBackendOrigin() {
+export function resolveBackendOrigin() {
   const envOrigin = process.env.CLOUDS_BRIDGE_URL?.trim();
 
   if (envOrigin) {

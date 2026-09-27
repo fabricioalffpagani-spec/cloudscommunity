@@ -9,19 +9,17 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import type { IncomingMessage } from 'node:http';
+import { getAllowedOrigins } from '../shared/runtime-env';
 import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
-import {
-  SocketIoRedisService,
-  type RedisAdapter,
-} from '../infrastructure/socket-io-redis/socket-io-redis.service';
+import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
 import { DirectMessagesService } from './direct-messages.service';
 import type {
   ConversationPresencePayload,
   ConversationReadPayload,
   ConversationTypingPayload,
-  DirectConversationPayload,
   DirectMessagePayload,
   SendDirectMessageInput,
 } from './direct-messages.types';
@@ -59,10 +57,15 @@ function extractTokenFromHandshake(socket: Socket): string | null {
 @WebSocketGateway({
   namespace: '/direct-messages',
   cors: {
-    origin:
-      process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ??
-      true,
+    origin: getAllowedOrigins(),
     credentials: true,
+  },
+  allowRequest: (
+    req: IncomingMessage,
+    callback: (error: string | null, allowed: boolean) => void,
+  ) => {
+    const origin = req.headers.origin;
+    callback(null, !origin || getAllowedOrigins().includes(origin));
   },
 })
 export class DirectMessagesGateway
@@ -83,11 +86,12 @@ export class DirectMessagesGateway
     private readonly chatPresenceService: ChatPresenceService,
   ) {}
 
-  async afterInit(server: Server) {
+  afterInit(server: Server) {
     const adapter = this.socketIoRedisService.getAdapter();
     if (adapter) {
       server.adapter(adapter);
     }
+    return Promise.resolve();
   }
 
   async handleConnection(socket: Socket) {
@@ -351,19 +355,21 @@ export class DirectMessagesGateway
       .emit('conversation:updated', recipientConversation);
   }
 
-  async broadcastMessageEdited(
+  broadcastMessageEdited(
     conversationId: string,
     message: DirectMessagePayload,
   ) {
     this.server
       .to(this.conversationRoom(conversationId))
       .emit('message:edited', message);
+    return Promise.resolve();
   }
 
-  async broadcastMessageDeleted(conversationId: string, messageId: string) {
+  broadcastMessageDeleted(conversationId: string, messageId: string) {
     this.server
       .to(this.conversationRoom(conversationId))
       .emit('message:deleted', { messageId });
+    return Promise.resolve();
   }
 
   async broadcastConversationRead(userId: string, conversationId: string) {

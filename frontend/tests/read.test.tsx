@@ -8,26 +8,34 @@ import { SessionUserProvider } from "../app/components/session-user";
 const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock }) }));
 
-const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2026-09-20T12:00:00Z", messagesCount: 18, author: { name: "Maria", username: "maria", avatarUrl: null }, participantProfiles: [] };
+const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2026-09-20T12:00:00Z", messagesCount: 18, author: { id: "user-maria", name: "Maria", username: "maria", avatarUrl: null }, participantProfiles: [] };
+const onDelete = vi.fn<(cloudId: string) => Promise<void>>().mockResolvedValue(undefined);
 
 describe("Read", () => {
   it("shows an empty archive without a join action", () => {
-    render(<ReadFeed clouds={[]} />);
+    render(<ReadFeed clouds={[]} onDelete={onDelete} />);
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
-  it("opens the read-only preview and displays real message counts", () => {
-    render(<ReadFeed clouds={[cloud]} />);
-    expect(screen.getByRole("link", { name: /Ver prévia/ })).toHaveAttribute("href", "/cloud/cloud-1/preview");
+  it("opens the read-only conversation with a mobile swipe and displays real message counts", () => {
+    render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    vi.stubGlobal("PointerEvent", MouseEvent);
+    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Deslize para a esquerda para ler a conversa.`);
+    fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
+    fireEvent.pointerUp(topic, { clientX: 60, clientY: 45 });
+    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation");
     expect(screen.getByText("18 comentários")).toBeVisible();
     expect(screen.queryByText(/Entrar/)).not.toBeInTheDocument();
   });
   it("navigates across archived topics on desktop after the slide transition", async () => {
-    render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} />);
+    const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
     fireEvent.click(screen.getByRole("button", { name: "Próxima Cloud" }));
-    await waitFor(() => expect(screen.getByLabelText("Cloud 2 de 2")).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelectorAll("article")[1]).not.toHaveClass("md:hidden"));
+    expect(container.querySelectorAll("article")[0]).toHaveClass("md:hidden");
     fireEvent.click(screen.getByRole("button", { name: "Cloud anterior" }));
-    await waitFor(() => expect(screen.getByLabelText("Cloud 1 de 2")).toBeInTheDocument());
+    await waitFor(() => expect(container.querySelectorAll("article")[0]).not.toHaveClass("md:hidden"));
+    expect(container.querySelectorAll("article")[1]).toHaveClass("md:hidden");
   });
 });
 

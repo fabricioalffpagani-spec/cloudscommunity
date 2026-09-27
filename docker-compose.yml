@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: clouds-postgres
+    container_name: ${DEV_POSTGRES_CONTAINER_NAME:-clouds-postgres}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PGX_ADMIN_USER}
@@ -10,7 +10,7 @@ services:
     volumes:
       - clouds_postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "${DEV_POSTGRES_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGX_ADMIN_USER} -d ${PGX_DB_NAME}"]
       interval: 5s
@@ -19,13 +19,13 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: clouds-redis
+    container_name: ${DEV_REDIS_CONTAINER_NAME:-clouds-redis}
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - clouds_redis_data:/data
     ports:
-      - "6379:6379"
+      - "${DEV_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -36,7 +36,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: clouds-backend
+      target: development
+    container_name: ${DEV_BACKEND_CONTAINER_NAME:-clouds-backend}
     restart: unless-stopped
     env_file:
       - ./backend/.env
@@ -46,6 +47,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      NODE_ENV: development
       PGX_CONN_STR: ${PGX_CONN_STR}
       CACHE_NODE_ENDPOINT: ${CACHE_NODE_ENDPOINT}
       APP_HTTP_PORT: ${APP_HTTP_PORT}
@@ -72,7 +74,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: clouds-frontend
+    container_name: ${DEV_FRONTEND_CONTAINER_NAME:-clouds-frontend}
     restart: unless-stopped
     depends_on:
       backend:
@@ -80,6 +82,7 @@ services:
     environment:
       CLOUDS_BRIDGE_URL: ${CLOUDS_BRIDGE_URL}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
       NEXT_PUBLIC_CLOUDS_SOCKET_URL: ${NEXT_PUBLIC_CLOUDS_SOCKET_URL:-http://localhost:3001}
       UI_HTTP_PORT: ${UI_HTTP_PORT}
       WATCHPACK_POLLING: "true"

@@ -12,9 +12,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import type { File as MulterFile } from 'multer';
+type MulterFile = Express.Multer.File;
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import { FLAT_UPLOAD_FIELD_LIMITS } from '../shared/upload-limits';
 import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { DirectMessagesGateway } from './direct-messages.gateway';
@@ -164,6 +165,7 @@ export class DirectMessagesController {
       storage: memoryStorage(),
       limits: {
         fileSize: 25 * 1024 * 1024,
+        ...FLAT_UPLOAD_FIELD_LIMITS,
       },
     }),
   )
@@ -220,6 +222,7 @@ export class DirectMessagesController {
       storage: memoryStorage(),
       limits: {
         fileSize: 10 * 1024 * 1024,
+        ...FLAT_UPLOAD_FIELD_LIMITS,
       },
     }),
   )

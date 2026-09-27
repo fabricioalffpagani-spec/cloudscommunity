@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { getPort } from './shared/runtime-env';
+import { getAllowedOrigins, getPort } from './shared/runtime-env';
 import * as express from 'express';
 
 async function bootstrap() {
@@ -11,9 +11,7 @@ async function bootstrap() {
   app.use(express.json({ limit: '5mb' }));
   app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-  const origins = process.env.APP_WEB_ORIGIN?.trim()
-    ? process.env.APP_WEB_ORIGIN.split(',').map((origin) => origin.trim())
-    : true;
+  const origins = getAllowedOrigins();
 
   app.enableCors({
     origin: origins,
@@ -21,6 +19,7 @@ async function bootstrap() {
   });
 
   const port = getPort(process.env.APP_HTTP_PORT ?? process.env.PORT, 3001);
+  app.enableShutdownHooks();
   await app.listen(port, '0.0.0.0');
 }
 bootstrap();

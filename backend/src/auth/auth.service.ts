@@ -94,6 +94,7 @@ export class AuthService {
     input: SignupInput,
     _meta: { ipAddress: string | null; userAgent: string | null },
   ): Promise<SignupPendingResponse> {
+    void _meta; // Signup metadata is reserved for future audit logging.
     const email = validateEmail(input.email ?? '');
     const name = normalizeName(input.name ?? '');
     const username = validateUsername(input.username ?? '');
@@ -886,7 +887,7 @@ export class AuthService {
 
   private escapeHtml(value: string): string {
     return value.replace(
-      /[&<>'\"]/g,
+      /[&<>'"]/g,
       (character) =>
         ({
           '&': '&amp;',

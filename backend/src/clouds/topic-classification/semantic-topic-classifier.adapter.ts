@@ -8,7 +8,7 @@ import type {
  * The deterministic classifier deliberately remains fully functional without it.
  */
 export class NoopSemanticTopicClassifier implements SemanticTopicClassifier {
-  async classify(): Promise<ClassifiedTopic[]> {
-    return [];
+  classify(): Promise<ClassifiedTopic[]> {
+    return Promise.resolve([]);
   }
 }

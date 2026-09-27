@@ -13,7 +13,6 @@ import type { Response } from 'express';
 import {
   MIN_PASSWORD_LENGTH,
   SESSION_COOKIE_NAME,
-  SESSION_TTL_MS,
   USERNAME_PATTERN,
 } from './auth.constants';
 
@@ -240,6 +239,7 @@ export function getSessionCookieOptions(expiresAt: Date) {
   return {
     httpOnly: true,
     secure,
+    domain: process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined,
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
@@ -259,6 +259,7 @@ export function clearSessionCookie(res: Response) {
   res.cookie(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    domain: process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined,
     sameSite: 'lax',
     path: '/',
     expires: new Date(0),
