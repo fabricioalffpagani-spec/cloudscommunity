@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MobileFeedHeader } from "../app/components/MobileAppChrome";
 import { messagesConversationHref, requestedConversationId } from "../app/lib/navigation-memory";
@@ -11,7 +11,9 @@ vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user
 describe("Mobile feed navigation", () => {
   it("replaces the old tabs with Talk, Read and Meet in that order", () => {
     render(<MobileFeedHeader active="following" />);
-    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["Talk", "Read", "Meet"]);
+    const feedNavigation = screen.getByRole("navigation", { name: "Categorias do feed" });
+    expect(within(feedNavigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Talk", "Read", "Meet"]);
+    expect(screen.getByRole("link", { name: "Ir para a página inicial" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Talk" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Read" })).toHaveAttribute("href", "/read");
     expect(screen.getByRole("link", { name: "Meet" })).toHaveAttribute("href", "/meet");

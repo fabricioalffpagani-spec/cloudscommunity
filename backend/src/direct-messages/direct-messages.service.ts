@@ -5,13 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import type {
-  Conversation,
-  DirectMessage,
-  MediaAsset,
-  Prisma,
-} from '@prisma/client';
-import type { File as MulterFile } from 'multer';
+import type { MediaAsset, Prisma } from '@prisma/client';
+type MulterFile = Express.Multer.File;
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import {
   CreateConversationInput,
@@ -286,11 +281,6 @@ export class DirectMessagesService {
         conversation.participantOneId === userId
           ? 'participantTwoUnreadCount'
           : 'participantOneUnreadCount';
-      const recipientId =
-        conversation.participantOneId === userId
-          ? conversation.participantTwoId
-          : conversation.participantOneId;
-
       await tx.conversation.update({
         where: { id: input.conversationId },
         data: {
@@ -460,11 +450,6 @@ export class DirectMessagesService {
         conversation.participantOneId === userId
           ? 'participantTwoUnreadCount'
           : 'participantOneUnreadCount';
-      const recipientId =
-        conversation.participantOneId === userId
-          ? conversation.participantTwoId
-          : conversation.participantOneId;
-
       await tx.conversation.update({
         where: { id: input.conversationId },
         data: {

@@ -33,6 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.production.example
 
 # vercel
 .vercel
@@ -40,7 +41,79 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+/tmp/
+/docs/validation-logs/
 
 #opencode
 .opencode
 .opencode*
+
+# Local dependencies, generated output and caches in any workspace
+**/node_modules/
+**/.next/
+**/dist/
+**/.dev-build/
+**/coverage/
+**/.cache/
+**/.turbo/
+**/.nyc_output/
+*.log
+pnpm-debug.log*
+
+# Runtime environment files; only reviewed templates belong in Git
+.env
+.env.*
+!.env.example
+!.env.production.example
+!frontend/.env.example
+!backend/.env.example
+
+# Private keys and local credentials
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
+secrets
+credentials
+.npmrc
+!.npmrc.example
+**/secrets/
+**/credentials/
+credentials.json
+
+# Backups, database dumps, exported images and local volumes
+**/backups/
+**/dumps/
+**/volumes/
+*.dump
+*.sql.gz
+*.sql.bz2
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.backup
+*.bak
+
+# Machine metadata and temporary files
+**/.idea/
+/.vscode/
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+**/.tmp/
+**/.temp/
+frontend/matches.txt
+/query
+/start
+# Orphan legacy root lock; application locks remain versioned.
+/package-lock.json

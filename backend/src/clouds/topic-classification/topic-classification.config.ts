@@ -18,11 +18,11 @@ const terms = (
   strong: string[],
   characteristic: string[],
 ): Record<string, number> =>
-  Object.fromEntries([
-    ...weak.map((term) => [term, 1]),
-    ...moderate.map((term) => [term, 2]),
-    ...strong.map((term) => [term, 3]),
-    ...characteristic.map((term) => [term, 5]),
+  Object.fromEntries<number>([
+    ...weak.map((term) => [term, 1] as const),
+    ...moderate.map((term) => [term, 2] as const),
+    ...strong.map((term) => [term, 3] as const),
+    ...characteristic.map((term) => [term, 5] as const),
   ]);
 
 /** Single source of truth for deterministic topic signals and their adjustable weights. */

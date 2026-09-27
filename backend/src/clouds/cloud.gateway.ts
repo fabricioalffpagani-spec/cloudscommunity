@@ -9,6 +9,8 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import type { IncomingMessage } from 'node:http';
+import { getAllowedOrigins } from '../shared/runtime-env';
 import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
@@ -50,10 +52,15 @@ function extractTokenFromHandshake(socket: Socket): string | null {
 @WebSocketGateway({
   namespace: '/clouds',
   cors: {
-    origin:
-      process.env.APP_WEB_ORIGIN?.split(',').map((origin) => origin.trim()) ??
-      true,
+    origin: getAllowedOrigins(),
     credentials: true,
+  },
+  allowRequest: (
+    req: IncomingMessage,
+    callback: (error: string | null, allowed: boolean) => void,
+  ) => {
+    const origin = req.headers.origin;
+    callback(null, !origin || getAllowedOrigins().includes(origin));
   },
 })
 export class CloudMessagesGateway
@@ -73,11 +80,12 @@ export class CloudMessagesGateway
     private readonly socketIoRedisService: SocketIoRedisService,
   ) {}
 
-  async afterInit(server: Server) {
+  afterInit(server: Server) {
     const adapter = this.socketIoRedisService.getAdapter();
     if (adapter) {
       server.adapter(adapter);
     }
+    return Promise.resolve();
   }
 
   async handleConnection(socket: Socket) {
@@ -256,13 +264,14 @@ export class CloudMessagesGateway
       .emit('cloud:banned', { cloudId });
   }
 
-  async broadcastMemberRemoved(cloudId: string, removedUserId: string) {
+  broadcastMemberRemoved(cloudId: string, removedUserId: string) {
     this.server
       .to(this.userRoom(removedUserId))
       .emit('cloud:removed', { cloudId });
+    return Promise.resolve();
   }
 
-  async broadcastReport(
+  broadcastReport(
     authorId: string,
     payload: {
       cloudId: string;
@@ -276,6 +285,7 @@ export class CloudMessagesGateway
     },
   ) {
     this.server.to(this.userRoom(authorId)).emit('cloud:report', payload);
+    return Promise.resolve();
   }
 
   async broadcastReactionChange(
@@ -332,7 +342,7 @@ export class CloudMessagesGateway
     this.registerTypingTimer(socket, cloudId);
   }
 
-  private async stopTyping(socket: Socket, cloudId: string) {
+  private stopTyping(socket: Socket, cloudId: string) {
     const userId = this.getUserId(socket);
 
     if (!userId) {
@@ -352,9 +362,10 @@ export class CloudMessagesGateway
       userId,
       isTyping: false,
     });
+    return Promise.resolve();
   }
 
-  private async clearTypingStatesForUser(
+  private clearTypingStatesForUser(
     userId: string,
     joinedCloudIds: Set<string>,
   ) {
@@ -378,6 +389,7 @@ export class CloudMessagesGateway
         });
       }
     }
+    return Promise.resolve();
   }
 
   private getUserId(socket: Socket): string | null {

@@ -1,0 +1,101 @@
+name: Validate application
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [backend, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_CLOUDS_SOCKET_URL: https://api.example.com
+      NEXT_PUBLIC_APP_URL: https://app.example.com
+      NEXT_PUBLIC_SITE_URL: https://app.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+      - run: npm ci
+      - if: matrix.app == 'backend'
+        run: |
+          npm exec -- prisma generate
+          npm exec -- prisma validate
+      - name: Lint (read-only)
+        run: npm run ${{ matrix.app == 'backend' && 'lint:check' || 'lint' }}
+      - name: TypeScript
+        if: ${{ !cancelled() }}
+        run: npm run typecheck
+      - name: Existing unit tests
+        if: ${{ !cancelled() }}
+        run: npm test -- ${{ matrix.app == 'backend' && '--runInBand' || '' }}
+      - name: Audit runtime dependencies
+        if: ${{ !cancelled() }}
+        run: npm audit --omit=dev
+      - name: Audit all dependencies
+        if: ${{ !cancelled() }}
+        run: npm audit
+      - name: Application build
+        if: ${{ !cancelled() }}
+        run: npm run build
+  docker:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: backend
+            file: backend/Dockerfile
+            target: development
+          - app: backend
+            file: backend/Dockerfile
+            target: production
+          - app: frontend
+            file: frontend/Dockerfile
+            target: ''
+          - app: frontend
+            file: frontend/Dockerfile.prod
+            target: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build development and production images without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.app }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            NEXT_PUBLIC_CLOUDS_SOCKET_URL=https://api.example.com
+            NEXT_PUBLIC_APP_URL=https://app.example.com
+            NEXT_PUBLIC_SITE_URL=https://app.example.com
+          cache-from: type=gha,scope=validate-${{ matrix.app }}-${{ strategy.job-index }}
+          cache-to: type=gha,mode=max,scope=validate-${{ matrix.app }}-${{ strategy.job-index }}
+  compose:
+    runs-on: ubuntu-24.04
+    env:
+      GHCR_REPOSITORY: example/cloudscommunity
+      IMAGE_TAG: sha-validation
+      PGX_ADMIN_USER: clouds_ci
+      PGX_ADMIN_PASS: ci_fixture_only
+      PGX_DB_NAME: clouds_ci
+      PGX_CONN_STR: postgresql://clouds_ci:ci_fixture_only@postgres:5432/clouds_ci
+      APP_WEB_ORIGIN: https://app.example.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate independent Compose configurations
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose --env-file .env.example config --quiet
+          docker compose --env-file /dev/null -f docker-compose.prod.yml config --quiet

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
@@ -32,6 +32,10 @@ function GearIcon({ s = 23 }: { s?: number }) {
 }
 
 export default function ReadPage() {
+  return <Suspense fallback={null}><ReadPageContent /></Suspense>;
+}
+
+function ReadPageContent() {
   const searchParams = useSearchParams();
   const { user } = useSessionUser();
   const [clouds, setClouds] = useState<ReadCloud[]>([]);

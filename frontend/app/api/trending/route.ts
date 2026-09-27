@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveBackendOrigin } from "../_lib/nest-proxy";
 
 export const runtime = "nodejs";
 
@@ -44,7 +45,7 @@ function normalizeCountry(value?: string | null): string {
 export async function GET(req: Request) {
   try {
     const scope = new URL(req.url).searchParams.get("scope") === "nearby" ? "nearby" : "world";
-    const backendOrigin = process.env.CLOUDS_BRIDGE_URL?.replace(/\/+$/, "") ?? "http://localhost:3001";
+    const backendOrigin = resolveBackendOrigin();
     const response = await fetch(`${backendOrigin}/clouds`, {
       headers: { cookie: req.headers.get("cookie") ?? "" },
       cache: "no-store",

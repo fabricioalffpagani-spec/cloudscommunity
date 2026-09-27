@@ -3,15 +3,13 @@ export function getRequiredEnv(name: string): string {
   if (!value) {
     // Fallback para desenvolvimento local
     const defaults: Record<string, string> = {
-      PGX_CONN_STR:
-        'postgresql://postgres:root@localhost:5433/clouds?schema=public',
       CACHE_NODE_ENDPOINT: 'redis://localhost:6379',
       APP_HTTP_PORT: '3001',
       APP_WEB_ORIGIN: 'http://localhost:3000',
     };
 
-    if (defaults[name]) {
-      console.warn(`Using default value for ${name}: ${defaults[name]}`);
+    if (process.env.NODE_ENV !== 'production' && defaults[name]) {
+      console.warn(`Using development default for ${name}`);
       return defaults[name];
     }
 
@@ -19,6 +17,28 @@ export function getRequiredEnv(name: string): string {
   }
 
   return value;
+}
+
+export function getAllowedOrigins(): string[] {
+  const origins = getRequiredEnv('APP_WEB_ORIGIN')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (!origins.length)
+    throw new Error('APP_WEB_ORIGIN must list explicit origins');
+  for (const origin of origins) {
+    const url = new URL(origin);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.origin !== origin ||
+      (process.env.NODE_ENV === 'production' && url.protocol !== 'https:')
+    ) {
+      throw new Error(
+        'APP_WEB_ORIGIN must list HTTP origins (HTTPS in production)',
+      );
+    }
+  }
+  return origins;
 }
 
 export function getPort(value: string | undefined, fallback: number): number {

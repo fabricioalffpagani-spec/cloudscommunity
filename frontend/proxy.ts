@@ -49,6 +49,7 @@ function clearSessionCookie(response: NextResponse) {
     path: "/",
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
+    domain: process.env.SESSION_COOKIE_DOMAIN?.trim() || undefined,
     expires: new Date(0),
     maxAge: 0,
   });

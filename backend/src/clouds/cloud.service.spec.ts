@@ -1,3 +1,6 @@
+import type { Prisma } from '@prisma/client';
+import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
 import {
   BadRequestException,
   NotFoundException,
@@ -25,30 +28,58 @@ function setup() {
     members: [],
     _count: { hypes: 0, members: 0, messages: 12 },
   };
-  const prisma: any = {
+  const prisma = {
     cloud: {
-      findMany: jest.fn().mockResolvedValue([]),
-      findFirst: jest.fn().mockResolvedValue(cloud),
-      update: jest.fn(),
+      findMany: jest
+        .fn<Promise<unknown>, [Prisma.CloudFindManyArgs]>()
+        .mockResolvedValue([]),
+      findFirst: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue(cloud),
+      update: jest.fn<Promise<unknown>, unknown[]>(),
     },
     cloudMessage: {
-      findMany: jest.fn().mockResolvedValue([]),
-      create: jest.fn(),
-      update: jest.fn(),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>(),
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+      create: jest.fn<Promise<unknown>, unknown[]>(),
+      update: jest.fn<Promise<unknown>, unknown[]>(),
     },
     userBlock: {
-      findMany: jest.fn().mockResolvedValue([]),
-      findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue(null),
     },
-    cloudHype: { findMany: jest.fn().mockResolvedValue([]) },
-    cloudMember: { create: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
-    cloudBan: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
-    follow: { findMany: jest.fn().mockResolvedValue([]) },
+    cloudHype: {
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+    },
+    cloudMember: {
+      create: jest.fn<Promise<unknown>, unknown[]>(),
+      findFirst: jest.fn<Promise<unknown>, unknown[]>(),
+      update: jest.fn<Promise<unknown>, unknown[]>(),
+    },
+    cloudBan: {
+      findUnique: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue(null),
+      upsert: jest.fn<Promise<unknown>, unknown[]>(),
+    },
+    follow: {
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+    },
   };
-  const auth: any = {
-    resolveSession: jest.fn().mockResolvedValue({ user: { id: 'viewer' } }),
+  const auth = {
+    resolveSession: jest
+      .fn<Promise<unknown>, unknown[]>()
+      .mockResolvedValue({ user: { id: 'viewer' } }),
   };
-  return { service: new CloudService(prisma, auth), prisma, auth, cloud };
+  return {
+    service: new CloudService(
+      prisma as unknown as PrismaService,
+      auth as unknown as AuthService,
+    ),
+    prisma,
+    auth,
+    cloud,
+  };
 }
 
 describe('Talk / Read regression', () => {
@@ -94,7 +125,7 @@ describe('Talk / Read regression', () => {
       authorId: { notIn: ['blocked'] },
       bans: { none: { userId: 'viewer' } },
     });
-    expect(query.where.OR).toContainEqual({
+    expect(query.where?.OR).toContainEqual({
       author: { followers: { some: { followerId: 'viewer' } } },
     });
     expect(result.clouds[0].messagesCount).toBe(12);
@@ -111,7 +142,9 @@ describe('Talk / Read regression', () => {
       where: { followerId: 'viewer' },
       select: { followingId: true },
     });
-    expect(query.where.AND[1]).toEqual({ authorId: { in: ['author'] } });
+    expect((query.where?.AND as Prisma.CloudWhereInput[])[1]).toEqual({
+      authorId: { in: ['author'] },
+    });
     expect(result.clouds).toHaveLength(1);
   });
   it('limits the preview to the earliest 10 non-deleted conversation messages', async () => {
@@ -237,13 +270,13 @@ describe('Talk / Read regression', () => {
     const { service, prisma, cloud } = setup();
     cloud.status = 'active';
     cloud.createdAt = new Date();
-    prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.cloudBan.findUnique.mockResolvedValue(null);
     prisma.cloudMember.findFirst.mockResolvedValue({
       id: 'member',
       leftAt: null,
     });
     prisma.cloudMessage.findFirst = jest
-      .fn()
+      .fn<Promise<unknown>, unknown[]>()
       .mockResolvedValue({ id: 'entry-notification' });
     await expect(service.joinCloud('token', cloudId)).resolves.toEqual({
       ok: true,
@@ -255,7 +288,7 @@ describe('Talk / Read regression', () => {
     const { service, prisma, cloud } = setup();
     cloud.status = 'active';
     cloud.visibility = 'private';
-    prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.cloudBan.findUnique.mockResolvedValue(null);
     prisma.cloudMember.findFirst.mockResolvedValue(null);
     await expect(service.findById('token', cloudId)).rejects.toThrow(
       NotFoundException,
@@ -266,7 +299,7 @@ describe('Talk / Read regression', () => {
     cloud.status = 'active';
     cloud.createdAt = new Date();
     cloud.visibility = 'private';
-    prisma.cloudBan = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.cloudBan.findUnique.mockResolvedValue(null);
     prisma.cloudMember.findFirst.mockResolvedValue(null);
     await expect(service.joinCloud('token', cloudId)).rejects.toThrow(
       NotFoundException,
@@ -279,11 +312,13 @@ describe('Talk / Read regression', () => {
     auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member-record' });
 
-    await expect(service.removeMember('token', cloudId, 'viewer')).resolves.toEqual({ ok: true });
+    await expect(
+      service.removeMember('token', cloudId, 'viewer'),
+    ).resolves.toEqual({ ok: true });
 
     expect(prisma.cloudMember.update).toHaveBeenCalledWith({
       where: { id: 'member-record' },
-      data: { leftAt: expect.any(Date) },
+      data: { leftAt: expect.any(Date) as unknown },
     });
     expect(prisma.cloudBan.upsert).not.toHaveBeenCalled();
   });
