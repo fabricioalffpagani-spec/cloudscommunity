@@ -14,7 +14,7 @@ import {
 } from "../components/session-user";
 import { MobileAppNav } from "../components/MobileAppChrome";
 
-type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "acessibilidade" | "seguranca" | "dados" | "sobre";
+type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aplicativo" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 function SearchIcon({ s = 20 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5"/><path d="M20 20l-3.5-3.5"/></svg>; }
@@ -30,6 +30,7 @@ function DatabaseIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 
 function InfoIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>; }
 function CameraIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></svg>; }
 function DownloadIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v12"/><path d="m7 14 5 5 5-5"/><path d="M5 20h14"/></svg>; }
+function DeviceIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M10 18h4"/></svg>; }
 function TrashIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>; }
 function LogOutIcon({ s = 17 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>; }
 function CheckIcon({ s = 14 }: { s?: number }) { return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>; }
@@ -108,7 +109,11 @@ function PanelConta() {
     setLoggingOut(true);
     try {
       const response = await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" } });
-      if (response.ok) window.location.assign("/login");
+      if (response.ok) {
+        window.localStorage.removeItem("clouds:minimized-cloud");
+        window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+        window.location.assign("/login");
+      }
     } finally {
       setLoggingOut(false);
     }
@@ -403,6 +408,65 @@ function PanelNotificacoes() {
   </div>);
 }
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+function PanelAplicativo() {
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+  const [canInstall, setCanInstall] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [showRemovalInstructions, setShowRemovalInstructions] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setInstalled(isStandalone);
+    setCanInstall(window.isSecureContext || window.location.hostname === "localhost");
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const handleInstalled = () => { setInstalled(true); setInstallPrompt(null); };
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
+  }, []);
+
+  const install = async () => {
+    if (!installPrompt) {
+      setShowInstructions(true);
+      return;
+    }
+    await installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === "accepted") setInstalled(true);
+    setInstallPrompt(null);
+  };
+
+  const isIos = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return <div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Aplicativo</h2>
+    <Card><Sub>Clouds no seu dispositivo</Sub>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-[14px] font-medium text-white">Instalar Clouds</p><p className="mt-1 text-[12px] leading-5 text-white/60">Crie um atalho com ícone na tela inicial ou área de trabalho e abra o Clouds como aplicativo.</p></div>
+        {installed ? <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#9333EA]/20 px-4 py-2.5 text-[13px] font-semibold text-[#E9D5FF]"><CheckIcon />Instalado</span> : <button type="button" onClick={install} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"><DeviceIcon s={16} />Adicionar atalho para o Clouds</button>}
+      </div>
+      {!installed && (isIos || showInstructions) && <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-[12px] leading-5 text-white/65">{isIos ? "No iPhone ou iPad, abra no Safari, toque em Compartilhar e escolha “Adicionar à Tela de Início”." : canInstall ? "No menu do navegador, escolha “Instalar aplicativo” ou “Adicionar à área de trabalho”." : "O atalho será instalado automaticamente quando o Clouds estiver publicado em HTTPS. Enquanto isso, você pode usar o menu do navegador para criar um atalho."}</p>}
+    </Card>
+    <Card className="border-red-500/20"><Sub>Remover do dispositivo</Sub>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-[14px] font-medium text-white">Remover atalho do Clouds</p><p className="mt-1 text-[12px] leading-5 text-white/60">Remove apenas o ícone e o acesso rápido deste dispositivo; sua conta e seus dados não serão apagados.</p></div>
+        <button type="button" onClick={() => setShowRemovalInstructions((open) => !open)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-red-400/40 bg-red-500/10 px-5 py-2.5 text-[13px] font-semibold text-red-200 transition hover:bg-red-500/20"><TrashIcon s={15} />Remover atalho</button>
+      </div>
+      {showRemovalInstructions && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-500/[0.06] px-3 py-2.5 text-[12px] leading-5 text-white/70">{isIos ? "Na Tela de Início, mantenha pressionado o ícone do Clouds e toque em “Remover App”." : "Abra o Clouds instalado, use o menu de três pontos da janela e escolha “Desinstalar Clouds”. No Android, mantenha o ícone pressionado e toque em “Desinstalar” ou “Remover”."}</p>}
+    </Card>
+  </div>;
+}
+
 
 
 function PanelAcessibilidade() {
@@ -623,6 +687,7 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key:"perfil",         label:"Perfil",          icon:<CameraIcon/> },
   { key:"privacidade",    label:"Privacidade",     icon:<EyeIcon/> },
   { key:"notificacoes",   label:"Notificações",    icon:<BellIcon s={17}/> },
+  { key:"aplicativo",     label:"Aplicativo",      icon:<DeviceIcon/> },
   { key:"acessibilidade", label:"Acessibilidade",  icon:<AccessibilityIcon/> },
   { key:"seguranca",      label:"Segurança",       icon:<LockIcon/> },
   { key:"dados",          label:"Dados",           icon:<DatabaseIcon/> },
@@ -655,7 +720,7 @@ export default function SettingsPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const panels: Record<Section, React.ReactNode> = {
     conta:<PanelConta/>, perfil:<PanelPerfil/>, privacidade:<PanelPrivacidade/>,
-    notificacoes:<PanelNotificacoes/>, acessibilidade:<PanelAcessibilidade/>,
+    notificacoes:<PanelNotificacoes/>, aplicativo:<PanelAplicativo/>, acessibilidade:<PanelAcessibilidade/>,
     seguranca:<PanelSeguranca/>, dados:<PanelDados/>, sobre:<PanelSobre/>
   };
   return (

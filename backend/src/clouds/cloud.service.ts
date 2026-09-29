@@ -14,6 +14,7 @@ import * as crypto from 'crypto';
 import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
 import {
   CloudInvitePayload,
@@ -118,6 +119,7 @@ export class CloudService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly pushNotifications: PushNotificationsService,
     private readonly topicClassifier: CloudTopicClassifierService,
   ) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -157,6 +159,12 @@ export class CloudService {
 
     if (!cloud) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.scheduledAt && cloud.scheduledAt.getTime() > Date.now()) {
+      throw new NotFoundException({
+        message: 'Esta Cloud ainda não estreou.',
+      });
     }
 
     if (session) {
@@ -201,6 +209,8 @@ export class CloudService {
         // Clouds privadas só aparecem para o criador ou para quem foi convidado
       },
       include: this.cloudInclude(),
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
 
     // Score = hypeCount * 3 + recency decay (hours since creation, capped at 72h)
@@ -560,6 +570,7 @@ export class CloudService {
     const description = (input.description ?? '').trim();
     const originCloudId = input.originCloudId?.trim() || null;
     const duration = input.duration ?? '';
+    const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
     const visibility =
       input.visibility === 'private'
         ? CloudVisibility.private
@@ -592,6 +603,18 @@ export class CloudService {
       throw new BadRequestException({
         message: 'Duração obrigatória.',
         fieldErrors: { duration: 'Selecione uma duração.' },
+      });
+    }
+
+    if (
+      input.scheduledAt &&
+      (!scheduledAt ||
+        Number.isNaN(scheduledAt.getTime()) ||
+        scheduledAt.getTime() <= Date.now() ||
+        scheduledAt.getTime() > Date.now() + 15 * 24 * 60 * 60 * 1000)
+    ) {
+      throw new BadRequestException({
+        message: 'Escolha uma data e horário futuros para abrir a cloud.',
       });
     }
 
@@ -636,7 +659,8 @@ export class CloudService {
           visibility,
           status: CloudStatus.active,
           duration: normalizedDuration,
-          startedAt: new Date(),
+          scheduledAt,
+          startedAt: scheduledAt ?? new Date(),
           originCloudId,
           primaryTopic: classification.primaryTopic,
           topicScores: classification.topics,
@@ -710,6 +734,89 @@ export class CloudService {
         include: this.cloudInclude(),
       });
     });
+
+    if (origin && origin.authorId !== current.user.id) {
+      const notification = await this.prisma.notification.findFirst({
+        where: {
+          userId: origin.authorId,
+          type: 'cloud_continuation',
+          entityType: 'cloud',
+          entityId: created.id,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (notification) {
+        await this.pushNotifications.send(origin.authorId, {
+          title: notification.title,
+          body: notification.body,
+          url: `/cloud/${created.id}`,
+          tag: notification.id,
+        });
+      }
+    }
+
+    const followers =
+      visibility === CloudVisibility.public
+        ? await this.prisma.follow.findMany({
+            where: { followingId: current.user.id },
+            select: { followerId: true },
+          })
+        : [];
+    const followerIds = new Set(followers.map(({ followerId }) => followerId));
+    await Promise.all(
+      followers.map(async ({ followerId }) => {
+        const notification = await this.prisma.notification.create({
+          data: {
+            userId: followerId,
+            type: 'cloud_comment',
+            entityType: 'cloud',
+            entityId: created.id,
+            title: 'Nova Cloud de alguém que você segue',
+            body: `${current.user.profile?.displayName || 'Alguém'} criou “${created.title}”.`,
+            metadata: { actorUserId: current.user.id },
+          },
+        });
+        await this.pushNotifications.send(followerId, {
+          title: notification.title,
+          body: notification.body,
+          url: `/cloud/${created.id}`,
+          tag: notification.id,
+        });
+      }),
+    );
+
+    if (visibility === CloudVisibility.public && classification.primaryTopic) {
+      const interestedProfiles = await this.prisma.profile.findMany({
+        where: {
+          userId: { not: current.user.id },
+          interests: { has: classification.primaryTopic },
+        },
+        select: { userId: true },
+      });
+      await Promise.all(
+        interestedProfiles
+          .filter(({ userId }) => !followerIds.has(userId))
+          .map(async ({ userId }) => {
+            const notification = await this.prisma.notification.create({
+              data: {
+                userId,
+                type: 'system',
+                entityType: 'cloud',
+                entityId: created.id,
+                title: 'Cloud sugerida para você',
+                body: `“${created.title}” combina com seus interesses.`,
+                metadata: { topic: classification.primaryTopic },
+              },
+            });
+            await this.pushNotifications.send(userId, {
+              title: notification.title,
+              body: notification.body,
+              url: `/cloud/${created.id}`,
+              tag: notification.id,
+            });
+          }),
+      );
+    }
 
     return {
       ok: true,
@@ -1954,6 +2061,39 @@ export class CloudService {
       include: this.messageInclude(),
     });
 
+    const recipients = await this.prisma.cloudMember.findMany({
+      where: { cloudId, leftAt: null, userId: { not: userId } },
+      select: { userId: true },
+    });
+    const senderName =
+      created.user.profile?.displayName ||
+      created.user.profile?.username ||
+      'Alguém';
+    const preview = (created.content || 'enviou uma mensagem')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 140);
+    await Promise.all(
+      recipients.map(async ({ userId: recipientId }) => {
+        const notification = await this.prisma.notification.create({
+          data: {
+            userId: recipientId,
+            type: 'cloud_comment',
+            entityType: 'cloud_message',
+            entityId: created.id,
+            title: `Nova mensagem em ${cloud.title}`,
+            body: `${senderName}: ${preview}`,
+          },
+        });
+        await this.pushNotifications.send(recipientId, {
+          title: notification.title,
+          body: notification.body,
+          url: `/cloud/${cloudId}`,
+          tag: notification.id,
+        });
+      }),
+    );
+
     return this.mapMessage(created, input.clientMessageId?.trim() || null);
   }
 
@@ -2275,7 +2415,7 @@ export class CloudService {
   async joinCloud(
     token: string | null,
     cloudId: string,
-  ): Promise<{ ok: true; userId: string; entered: boolean }> {
+  ): Promise<{ ok: true; userId: string; entered: boolean; waiting: boolean }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -2286,7 +2426,12 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
-    this.requireActiveCloud(cloud);
+    // A scheduled Cloud accepts its waiting list before it opens, but its
+    // chat remains unavailable until the scheduled instant.
+    const waiting = Boolean(
+      cloud.scheduledAt && cloud.scheduledAt.getTime() > Date.now(),
+    );
+    if (!waiting) this.requireActiveCloud(cloud);
 
     // Block banned users
     const ban = await this.prisma.cloudBan.findUnique({
@@ -2345,10 +2490,36 @@ export class CloudService {
       select: { id: true },
     });
 
+    const entered = membershipChanged || !hasEntryNotification;
+    if (entered && !waiting && cloud.authorId !== current.user.id) {
+      const memberName =
+        current.user.profile?.displayName ||
+        current.user.profile?.username ||
+        'Uma pessoa';
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: cloud.authorId,
+          type: 'cloud_member_joined',
+          entityType: 'cloud',
+          entityId: cloudId,
+          title: 'Novo participante na sua Cloud',
+          body: `${memberName} entrou em “${cloud.title}”.`,
+          metadata: { actorUserId: current.user.id },
+        },
+      });
+      await this.pushNotifications.send(cloud.authorId, {
+        title: notification.title,
+        body: notification.body,
+        url: `/cloud/${cloudId}`,
+        tag: notification.id,
+      });
+    }
+
     return {
       ok: true,
       userId: current.user.id,
-      entered: membershipChanged || !hasEntryNotification,
+      entered,
+      waiting,
     };
   }
 
@@ -2491,6 +2662,7 @@ export class CloudService {
       createdAt: cloud.createdAt.toISOString(),
       updatedAt: cloud.updatedAt.toISOString(),
       endedAt: cloud.endedAt?.toISOString() ?? null,
+      scheduledAt: cloud.scheduledAt?.toISOString() ?? null,
       authorId: cloud.authorId,
       author: {
         id: cloud.author.id,

@@ -44,6 +44,23 @@ function formatRelativeTime(value: string) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date);
 }
 
+function vapidKeyToUint8Array(value: string) {
+  const padded = `${value.replace(/-/g, "+").replace(/_/g, "/")}${"=".repeat((4 - (value.length % 4)) % 4)}`;
+  const raw = window.atob(padded);
+  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+}
+
+async function enableNativeNotifications() {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
+  if (await Notification.requestPermission() !== "granted") return;
+  const keyResponse = await fetch("/api/notifications/push-key", { cache: "no-store" });
+  const keyPayload = await keyResponse.json().catch(() => null) as { publicKey?: string | null } | null;
+  if (!keyResponse.ok || !keyPayload?.publicKey) return;
+  const registration = await navigator.serviceWorker.register("/clouds-sw.js");
+  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey) });
+  await fetch("/api/notifications/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
+}
+
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -248,7 +265,11 @@ export function NotificationsBell({
       const response = await fetch("/api/notifications", { cache: "no-store" });
       const payload = await response.json().catch(() => null) as { unreadCount?: number } | null;
       if (response.ok) {
-        setUnreadCount(typeof payload?.unreadCount === "number" ? payload.unreadCount : 0);
+        const count = typeof payload?.unreadCount === "number" ? payload.unreadCount : 0;
+        setUnreadCount(count);
+        const badgeNavigator = navigator as Navigator & { setAppBadge?: (value?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+        if (count > 0) void badgeNavigator.setAppBadge?.(count);
+        else void badgeNavigator.clearAppBadge?.();
       }
     } catch {
       setUnreadCount(0);
@@ -273,7 +294,11 @@ export function NotificationsBell({
         type="button"
         aria-label="Notificações"
         onClick={() => {
+          if ("Notification" in window && Notification.permission !== "denied") {
+            void enableNativeNotifications();
+          }
           setUnreadCount(0);
+          void (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.();
           setOpen(true);
           void fetch("/api/notifications/read", { method: "POST" });
         }}
@@ -281,7 +306,9 @@ export function NotificationsBell({
       >
         <BellIcon s={28} />
         {unreadCount > 0 && (
-          <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#A855F7]" />
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#9333EA] px-1 text-[11px] font-bold leading-none text-white ring-2 ring-[#060410]">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
         )}
       </button>
       {open && (

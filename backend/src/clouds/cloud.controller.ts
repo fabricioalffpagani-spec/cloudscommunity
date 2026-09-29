@@ -135,6 +135,8 @@ export class CloudController {
           typeof body.originCloudId === 'string'
             ? body.originCloudId
             : undefined,
+        scheduledAt:
+          typeof body.scheduledAt === 'string' ? body.scheduledAt : undefined,
       } satisfies CreateCloudInput,
       invitedUserIds,
     );
@@ -155,7 +157,7 @@ export class CloudController {
     // A message is emitted only when membership actually changes from outside
     // to inside. Refreshes and tab restores can repeat requests, but cannot
     // be represented as another entry.
-    if (result.entered) {
+    if (result.entered && !result.waiting) {
       const systemMessage = await this.cloudService.createJoinNotification(
         id,
         result.userId,
@@ -168,7 +170,7 @@ export class CloudController {
     }
     const membersCount =
       await this.cloudMessagesGateway.broadcastMembersUpdated(id);
-    return { ok: true, membersCount };
+    return { ok: true, membersCount, waiting: result.waiting };
   }
 
   @Post(':id/leave')

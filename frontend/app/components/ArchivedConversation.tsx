@@ -31,6 +31,10 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasOlder, setHasOlder] = useState(false);
   const [error, setError] = useState("");
+  const [replyTo, setReplyTo] = useState<ArchivedMessage | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [replyError, setReplyError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollPending = useRef(true);
   const previousScrollHeight = useRef<number | null>(null);
@@ -90,6 +94,23 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
     }
   };
 
+  const sendReply = async () => {
+    if (!replyTo?.sender.id || !replyText.trim()) return;
+    setSendingReply(true); setReplyError("");
+    try {
+      const conversationResponse = await fetch("/api/direct-messages/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ peerUserId: replyTo.sender.id }) });
+      const conversationPayload = await conversationResponse.json().catch(() => null) as { conversation?: { id?: string }; message?: string } | null;
+      const conversationId = conversationPayload?.conversation?.id;
+      if (!conversationResponse.ok || !conversationId) throw new Error(conversationPayload?.message ?? "Não foi possível abrir a conversa.");
+      const originalComment = replyTo.replyTo?.content?.trim() || replyTo.content?.trim() || "Comentário sem texto";
+      const sent = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: JSON.stringify({ type: "cloud_comment_reply", cloudTitle: cloud?.title ?? "Cloud encerrada", comment: originalComment, response: replyText.trim() }), clientMessageId: crypto.randomUUID() }) });
+      const sentPayload = await sent.json().catch(() => null) as { message?: string } | null;
+      if (!sent.ok) throw new Error(sentPayload?.message ?? "Não foi possível enviar a resposta.");
+      setReplyTo(null); setReplyText("");
+    } catch (cause) { setReplyError(cause instanceof Error ? cause.message : "Não foi possível enviar a resposta."); }
+    finally { setSendingReply(false); }
+  };
+
   let previousDate = "";
 
   return <main className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
@@ -118,10 +139,12 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
         previousDate = currentDate;
         return <div key={message.id} className="space-y-4">
           {showDate && <div className="flex justify-center py-1"><span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11px] text-white/40">{dateLabel(message.createdAt)}</span></div>}
-          <ReadOnlyCloudMessage message={message} own={Boolean(user?.id && message.sender.id === user.id)} />
+          <ReadOnlyCloudMessage message={message} own={Boolean(user?.id && message.sender.id === user.id)} onReply={(target) => { setReplyTo(target as ArchivedMessage); setReplyError(""); }} />
         </div>;
       })}
     </section>
+
+    {replyTo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-5"><h2 className="text-lg font-bold">Responder a {replyTo.sender.displayName}</h2><p className="mt-2 break-words rounded-xl bg-white/5 p-3 text-sm text-white/60 [overflow-wrap:anywhere]">Em “{cloud?.title}”: “{replyTo.content ?? "Mensagem"}”</p><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Escreva sua resposta privada..." rows={4} className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-[#A855F7]" />{replyError && <p className="mt-2 text-xs text-red-300">{replyError}</p>}<div className="mt-4 flex justify-end gap-3"><button onClick={() => setReplyTo(null)} className="text-sm text-white/60">Cancelar</button><button disabled={sendingReply || !replyText.trim()} onClick={() => void sendReply()} className="rounded-full bg-[#9333EA] px-4 py-2 text-sm font-semibold disabled:opacity-50">{sendingReply ? "Enviando..." : "Enviar"}</button></div></div></div>}
 
     <footer className="shrink-0 border-t border-white/[0.07] bg-black px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
       <Link href={`/?create=1&originCloudId=${encodeURIComponent(cloudId)}`} className="mx-auto flex min-h-[54px] max-w-3xl items-center justify-center rounded-full bg-[#A855F7] px-7 text-center text-[14px] font-semibold text-white transition hover:bg-[#9333EA]">Continuar essa conversa</Link>

@@ -92,6 +92,7 @@ model User {
   cloudMembers              CloudMember[]
   conversationMembers       ConversationMember[]
   notifications             Notification[]
+  pushSubscriptions         PushSubscription[]
   mediaAssets               MediaAsset[]
   sessions                  Session[]
   emailVerificationTokens   EmailVerificationToken[]
@@ -450,6 +451,30 @@ model Notification {
   @@index([userId, isRead, createdAt])
   @@index([entityType, entityId])
   @@index([type])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @unique @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model CloudPremiereDelivery {
+  id        String   @id @default(uuid()) @db.Uuid
+  cloudId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([cloudId, userId])
+  @@index([userId, createdAt])
 }
 
 model MediaAsset {

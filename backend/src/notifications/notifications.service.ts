@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 import { UsersService } from '../users/users.service';
 import {
   NotificationPayload,
@@ -18,6 +19,7 @@ export class NotificationsService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
+    private readonly pushNotifications: PushNotificationsService,
   ) {}
 
   async list(
@@ -27,9 +29,9 @@ export class NotificationsService {
     const current = await this.requireSession(token);
 
     const items = await this.prisma.notification.findMany({
-      where: { userId: current.user.id, type: { not: 'direct_message' } },
+      where: { userId: current.user.id },
       orderBy: { createdAt: 'desc' },
-      ...(includeAll ? {} : { take: 10 }),
+      take: includeAll ? 100 : 10,
     });
 
     const actorIds = [
@@ -107,7 +109,6 @@ export class NotificationsService {
       where: {
         userId: current.user.id,
         isRead: false,
-        type: { not: 'direct_message' },
       },
     });
 
@@ -126,6 +127,34 @@ export class NotificationsService {
       data: { isRead: true },
     });
 
+    return { ok: true };
+  }
+
+  async pushPublicKey(token: string | null) {
+    await this.requireSession(token);
+    return { ok: true, publicKey: this.pushNotifications.publicKey() };
+  }
+
+  async savePushSubscription(
+    token: string | null,
+    subscription: {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+    },
+  ) {
+    const current = await this.requireSession(token);
+    const endpoint = subscription.endpoint?.trim();
+    const p256dh = subscription.keys?.p256dh?.trim();
+    const auth = subscription.keys?.auth?.trim();
+    if (!endpoint || !p256dh || !auth) {
+      throw new BadRequestException({
+        message: 'Inscrição de notificações inválida.',
+      });
+    }
+    await this.pushNotifications.saveSubscription(current.user.id, {
+      endpoint,
+      keys: { p256dh, auth },
+    });
     return { ok: true };
   }
 

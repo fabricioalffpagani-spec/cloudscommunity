@@ -1439,6 +1439,7 @@ function CloudMessageBubble({
           size={34}
         />
       </Link>}
+      {!showFooter && !own && <div aria-hidden="true" className="w-9 shrink-0" />}
 
       <div className={`flex min-w-0 max-w-[calc(100%_-_2.75rem)] items-end gap-2 sm:max-w-[74%] ${own ? "flex-row-reverse" : "flex-row"}`}>
         <div className={`flex min-w-0 flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>

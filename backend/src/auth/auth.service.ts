@@ -686,6 +686,52 @@ export class AuthService {
     }
 
     const refreshTokenHash = hashSessionToken(token);
+    const session = await this.prisma.session.findFirst({
+      where: { refreshTokenHash, revokedAt: null },
+      select: {
+        userId: true,
+        user: {
+          include: {
+            profile: { select: { username: true, displayName: true } },
+          },
+        },
+      },
+    });
+
+    if (session) {
+      const activeMemberships = await this.prisma.cloudMember.findMany({
+        where: {
+          userId: session.userId,
+          leftAt: null,
+          cloud: { status: 'active' },
+        },
+        select: { id: true, cloudId: true },
+      });
+      if (activeMemberships.length > 0) {
+        const leftAt = new Date();
+        const username =
+          session.user.profile?.username ||
+          session.user.profile?.displayName ||
+          'usuário';
+        await this.prisma.$transaction([
+          this.prisma.cloudMember.updateMany({
+            where: {
+              id: { in: activeMemberships.map((membership) => membership.id) },
+            },
+            data: { leftAt },
+          }),
+          this.prisma.cloudMessage.createMany({
+            data: activeMemberships.map((membership) => ({
+              cloudId: membership.cloudId,
+              userId: session.userId,
+              type: 'system',
+              content: `@${username} saiu da cloud`,
+            })),
+          }),
+        ]);
+      }
+    }
+
     await this.prisma.session.updateMany({
       where: {
         refreshTokenHash,

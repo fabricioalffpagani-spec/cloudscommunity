@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { getAllowedOrigins, getPort } from './shared/runtime-env';
 import * as express from 'express';
+import { createRateLimitMiddleware } from './infrastructure/rate-limit/request-rate-limit';
 
 async function bootstrap() {
   // Disable built-in body parser so we can set our own limit
@@ -17,6 +18,10 @@ async function bootstrap() {
     origin: origins,
     credentials: true,
   });
+
+  const httpServer = app.getHttpAdapter().getInstance() as express.Express;
+  httpServer.set('trust proxy', process.env.TRUST_PROXY === 'true' ? 1 : false);
+  app.use(await createRateLimitMiddleware());
 
   const port = getPort(process.env.APP_HTTP_PORT ?? process.env.PORT, 3001);
   app.enableShutdownHooks();

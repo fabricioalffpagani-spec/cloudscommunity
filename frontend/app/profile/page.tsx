@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { LongPressHint } from "../components/LongPressHint";
@@ -36,6 +37,16 @@ function XIcon() {
     <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M6 6l12 12" />
       <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M6 7l1 13h10l1-13M9 7V4h6v3" />
     </svg>
   );
 }
@@ -227,24 +238,49 @@ type ProfileCloud = {
   visibility: "public" | "private";
   createdAt: string;
   endedAt: string | null;
+  scheduledAt: string | null;
+  participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
+  messagesCount?: number;
   status: "active" | "ended";
   href: string;
 };
 
-function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) {
+function ProfileCloudCard({ cloud, now, viewerId, onDelete, onReminderActivated }: { cloud: ProfileCloud; now: number; viewerId?: string; onDelete?: (cloud: ProfileCloud) => void; onReminderActivated?: (cloud: ProfileCloud) => void }) {
   const createdAt = new Date(cloud.createdAt);
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
   const isEnded = cloud.status === "ended";
+  const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
+  const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > now);
   const isLive = !isEnded && remainingSeconds > 0;
+  const [reminderSet, setReminderSet] = useState(() => Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)));
 
+  useEffect(() => {
+    if (viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)) {
+      setReminderSet(true);
+    }
+  }, [cloud.participantProfiles, viewerId]);
+
+  const activateReminder = async () => {
+    if (reminderSet) return;
+    const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
+    if (response.ok) {
+      setReminderSet(true);
+      onReminderActivated?.(cloud);
+    }
+  };
   return (
-    <article className="cloud-card w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-4 sm:p-6">
+    <article className="cloud-card relative w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#8B5CF6]/30 bg-[#110825] p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
           {cloud.duration}
         </span>
         <div className="flex items-center gap-2">
-          {isLive && (
+          {isScheduled && (
+            <span className="inline-flex items-center rounded-full bg-[#9333EA]/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
+              Agendada
+            </span>
+          )}
+          {isLive && !isScheduled && (
             <span className="inline-flex items-center rounded-full bg-[#A855F7]/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
               Ao vivo
             </span>
@@ -254,23 +290,13 @@ function ProfileCloudCard({ cloud, now }: { cloud: ProfileCloud; now: number }) 
               Encerrada
             </span>
           )}
+          {onDelete && <button type="button" onClick={() => onDelete(cloud)} aria-label={`Excluir cloud ${cloud.title}`} title="Excluir cloud" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/35 transition hover:bg-red-500/10 hover:text-red-300"><TrashIcon /></button>}
         </div>
       </div>
 
-      <h3 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[16px] leading-[1.3]" : "text-[18px] leading-snug"}`} style={{ fontFamily: 'Arial, sans-serif' }}>{cloud.title}</h3>
-      {cloud.description && (
-        <p className="mt-2 line-clamp-2 break-words text-[13px] leading-relaxed text-white/55">
-          {cloud.description}
-        </p>
-      )}
-
-      <div className="mt-4 flex items-center justify-between gap-3 text-[12px] text-white/35">
-        <span>{isEnded ? "Encerrada em" : "Encerra em"}</span>
-        <span className={`rounded-full px-2.5 py-1 font-semibold ${isLive ? "bg-[#A855F7]/12 text-[#D8B4FE]" : "bg-white/[0.05] text-white/45"}`}>
-          {isEnded && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : formatCountdown(remainingSeconds)}
-        </span>
-      </div>
-      <Link href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="mt-5 inline-flex rounded-full bg-[#A855F7] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#9333EA]">{isEnded ? "Ver conversa" : "Participar da Cloud"}</Link>
+      <h3 lang="pt-BR" className={`mt-3 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[16px] leading-[1.3]" : "text-[19px] leading-snug"}`}>{cloud.title}</h3>
+      <div className="mt-3 flex flex-col gap-3 text-[13px] text-white/50 sm:flex-row sm:items-center sm:justify-between"><span className="flex min-w-0 items-center gap-2 break-words">{isScheduled ? <><span className="shrink-0 text-[#C084FC]">▣</span>{scheduledDate?.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {scheduledDate?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</> : <><span className="shrink-0 text-[#C084FC]">◯</span>{cloud.messagesCount ?? cloud.participantProfiles?.length ?? 0} comentário{(cloud.messagesCount ?? cloud.participantProfiles?.length ?? 0) === 1 ? "" : "s"}</>}</span>{isScheduled ? <div className="flex items-center gap-2"><span aria-label="Cloud agendada" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-white"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg></span><button type="button" onClick={() => void activateReminder()} disabled={reminderSet} className={`inline-flex shrink-0 rounded-full px-4 py-2.5 text-[12px] font-semibold transition ${reminderSet ? "bg-[#9333EA] text-white" : "border border-[#9333EA]/80 text-white hover:bg-[#9333EA]/20"}`}>{reminderSet ? "Aguardando" : "Avisar-me"}</button></div> : <Link href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[#9333EA]/80 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-[#9333EA]/20">{isEnded ? "Ler conversa" : "Participar"}<span aria-hidden="true">›</span></Link>}</div>
+      {!isScheduled && <p className="mt-3 text-[12px] text-white/40">{isEnded && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : `Encerra em ${formatCountdown(remainingSeconds)}`}</p>}
     </article>
   );
 }
@@ -279,7 +305,12 @@ export default function ProfilePage() {
   const { user, status, refresh } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
+  const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended">("all");
   const [cloudsLoading, setCloudsLoading] = useState(true);
+  const [cloudToDelete, setCloudToDelete] = useState<ProfileCloud | null>(null);
+  const [queueCloud, setQueueCloud] = useState<ProfileCloud | null>(null);
+  const [deletingCloud, setDeletingCloud] = useState(false);
+  const [deleteCloudError, setDeleteCloudError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [draft, setDraft] = useState({
     name: "",
@@ -409,6 +440,26 @@ export default function ProfilePage() {
     } finally { setLoadingHypes(false); }
   };
 
+  const deleteCloud = async () => {
+    if (!cloudToDelete) return;
+    setDeletingCloud(true);
+    setDeleteCloudError("");
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudToDelete.id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) throw new Error(payload?.message ?? "Não foi possível excluir a cloud.");
+      setClouds((current) => current.filter((cloud) => cloud.id !== cloudToDelete.id));
+      setCloudToDelete(null);
+    } catch (error) {
+      setDeleteCloudError(error instanceof Error ? error.message : "Não foi possível excluir a cloud.");
+    } finally {
+      setDeletingCloud(false);
+    }
+  };
+
   const removeFollower = async (listedUser: FollowListUser) => {
     if (!user) return;
     setActioningUserId(listedUser.id);
@@ -491,6 +542,16 @@ export default function ProfilePage() {
   const followers = user?.followersCount ?? 0;
   const following = user?.followingCount ?? 0;
   const cloudsCount = user?.cloudsCount ?? 0;
+  const filteredClouds = useMemo(() => clouds.filter((cloud) => {
+    const scheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now);
+    return cloudFilter === "all" || (cloudFilter === "scheduled" && scheduled) || (cloudFilter === "ended" && cloud.status === "ended") || (cloudFilter === "active" && cloud.status === "active" && !scheduled);
+  }), [cloudFilter, clouds, now]);
+  const emptyCloudMessage = {
+    all: "Você ainda não publicou nenhuma Cloud.",
+    active: "Não há Clouds ativas no momento.",
+    scheduled: "Não há Clouds agendadas.",
+    ended: "Não há Clouds encerradas.",
+  }[cloudFilter];
   const hypesCount = user?.hypesCount ?? 0;
   const memberSince = formatMemberSince(user?.createdAt);
   const region = user?.location || "Sem região informada";
@@ -584,21 +645,38 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-10">
+          <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">{([['all', 'Todas'], ['active', 'Ativas'], ['scheduled', 'Agendadas'], ['ended', 'Encerradas']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
           {cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>
-          ) : clouds.length > 0 ? (
+          ) : filteredClouds.length > 0 ? (
             <div className="grid gap-3">
-              {clouds.map((cloud) => (
-                <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} />
+              {filteredClouds.map((cloud) => (
+                <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} viewerId={user?.id} onReminderActivated={setQueueCloud} onDelete={(endedCloud) => { setDeleteCloudError(""); setCloudToDelete(endedCloud); }} />
               ))}
             </div>
           ) : (
-            <ProfileEmptyState />
+            <div className="min-h-48 px-4 py-12 text-center"><p className="text-[15px] font-medium text-white">{emptyCloudMessage}</p>{user && (cloudFilter === "scheduled" ? <Link href="/?create=1&schedule=1" className="mt-5 inline-flex rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Agende uma cloud</Link> : <Link href="/?create=1" className="mt-5 inline-flex rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Crie uma cloud</Link>)}</div>
           )}
         </div>
       </div>
+
+      {queueCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5" role="dialog" aria-modal="true" aria-labelledby="queue-cloud-title"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg></div><h2 id="queue-cloud-title" className="text-lg font-bold text-white">Você entrou na fila</h2><p className="mt-1 text-sm leading-relaxed text-white/65">Você será notificado quando “{queueCloud.title}” estrear.</p></div><button type="button" onClick={() => setQueueCloud(null)} aria-label="Fechar" className="text-xl text-white/50">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{[...(queueCloud.participantProfiles ?? []), ...(user?.id && !queueCloud.participantProfiles?.some((participant) => participant.id === user.id) ? [{ id: user.id, name: user.displayName, username: user.username, avatarUrl: user.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setQueueCloud(null)} className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white">Entendi</button></div></div>}
+
+      {cloudToDelete && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
+          <div className="box-border max-h-[calc(100dvh-3rem)] max-w-sm overflow-y-auto rounded-3xl border border-white/10 bg-[#15161C] p-5 shadow-2xl sm:p-6" style={{ width: "calc(100vw - 48px)" }}>
+            <h2 id="delete-cloud-title" className="text-[18px] font-bold text-white">Excluir Cloud?</h2>
+            <p className="mt-2 text-[14px] leading-relaxed text-white/60">“{cloudToDelete.title}” será removida da plataforma, não ficará mais disponível em Read e também será removida permanentemente do seu perfil.</p>
+            {deleteCloudError && <p role="alert" className="mt-3 text-[13px] text-red-300">{deleteCloudError}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" disabled={deletingCloud} onClick={() => setCloudToDelete(null)} className="rounded-full px-4 py-2 text-[13px] font-semibold text-white/65 transition hover:text-white">Cancelar</button>
+              <button type="button" disabled={deletingCloud} onClick={() => void deleteCloud()} className="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-50">{deletingCloud ? "Excluindo..." : "Excluir"}</button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
 
       {followersModalOpen && (
         <FollowListModal

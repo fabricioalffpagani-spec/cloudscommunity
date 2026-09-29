@@ -109,6 +109,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         if (!noteResponse.ok || notePayload?.ok === false) throw new Error(notePayload?.message || "O item foi encaminhado, mas não foi possível enviar o recado.");
       }
       setSentTo((previous) => [...previous, contact.id]);
+      setNote("");
     } catch (forwardError) {
       setError(forwardError instanceof Error ? forwardError.message : "Não foi possível encaminhar.");
     } finally {
@@ -180,7 +181,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
               <button type="button" onClick={() => void shareToMobileApp("Instagram", "https://www.instagram.com/direct/inbox/")} className="rounded-full bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">Instagram Direct</button>
               <button type="button" onClick={shareOnX} className="rounded-full bg-black px-3 py-2 text-[12px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10">X</button>
               <button type="button" onClick={shareOnReddit} className="rounded-full bg-[#FF4500] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">Reddit</button>
-              <button type="button" onClick={() => void shareToMobileApp("TikTok", "https://www.tiktok.com/messages")} className="rounded-full bg-gradient-to-r from-[#25F4EE] via-[#151515] to-[#FE2C55] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">TikTok Mensagens</button>
+              <button type="button" onClick={() => void shareToMobileApp("TikTok", "https://www.tiktok.com/messages")} className="rounded-full border border-cyan-300/30 bg-[#0891B2] px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-[#0E7490]">TikTok Mensagens</button>
             </div>
             <p className="mt-3 hidden text-[11px] leading-relaxed text-white/45 md:block">No computador, Instagram Direct e TikTok Mensagens copiam o convite e abrem a caixa de mensagens em uma nova aba para você enviar a quem quiser.</p>
             {externalShareNotice && <p role="status" className="mt-2 text-[11px] font-medium text-[#D8B4FE]">{externalShareNotice}</p>}
