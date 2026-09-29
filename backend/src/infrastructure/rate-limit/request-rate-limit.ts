@@ -9,7 +9,11 @@ const AUTH_RULE: RateLimitRule = { limit: 12, windowSeconds: 60 };
 const WRITE_RULE: RateLimitRule = { limit: 90, windowSeconds: 60 };
 
 function ruleFor(request: Request): RateLimitRule {
-  if (request.path.startsWith('/auth/login') || request.path.startsWith('/auth/signup') || request.path.includes('password-reset')) {
+  if (
+    request.path.startsWith('/auth/login') ||
+    request.path.startsWith('/auth/signup') ||
+    request.path.includes('password-reset')
+  ) {
     return AUTH_RULE;
   }
   return ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method)
@@ -41,7 +45,9 @@ export async function createRateLimitMiddleware() {
 
   if (endpoint) {
     client = createClient({ url: endpoint });
-    client.on('error', (error) => logger.error(`Redis rate-limit error: ${String(error)}`));
+    client.on('error', (error) =>
+      logger.error(`Redis rate-limit error: ${String(error)}`),
+    );
     try {
       await client.connect();
     } catch (error) {
@@ -64,10 +70,15 @@ export async function createRateLimitMiddleware() {
       const count = await client.incr(key);
       if (count === 1) await client.expire(key, rule.windowSeconds);
       response.setHeader('X-RateLimit-Limit', String(rule.limit));
-      response.setHeader('X-RateLimit-Remaining', String(Math.max(0, rule.limit - count)));
+      response.setHeader(
+        'X-RateLimit-Remaining',
+        String(Math.max(0, rule.limit - count)),
+      );
       if (count > rule.limit) {
         response.setHeader('Retry-After', String(rule.windowSeconds));
-        response.status(429).json({ message: 'Muitas solicitações. Tente novamente em instantes.' });
+        response.status(429).json({
+          message: 'Muitas solicitações. Tente novamente em instantes.',
+        });
         return;
       }
     } catch (error) {
