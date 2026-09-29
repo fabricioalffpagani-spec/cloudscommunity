@@ -8,6 +8,7 @@ import {
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 import {
   MeetResponse,
   PublicUserProfilePayload,
@@ -76,6 +77,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
+    private readonly pushNotifications: PushNotificationsService,
   ) {}
 
   async search(
@@ -440,6 +442,22 @@ export class UsersService {
       requester.profile?.displayName ?? 'Alguém',
     );
     await this.cancelFollowRequest(requester.id, current.user.id);
+    const acceptedNotification = await this.prisma.notification.create({
+      data: {
+        userId: requester.id,
+        type: 'system',
+        entityType: 'user',
+        entityId: current.user.id,
+        title: 'Solicitação aceita',
+        body: `${current.user.profile?.displayName ?? 'A pessoa'} aceitou sua solicitação para seguir.`,
+      },
+    });
+    await this.pushNotifications.send(requester.id, {
+      title: acceptedNotification.title,
+      body: acceptedNotification.body,
+      url: '/notifications',
+      tag: acceptedNotification.id,
+    });
 
     return { ok: true };
   }
@@ -960,7 +978,7 @@ export class UsersService {
       },
     });
 
-    await this.prisma.notification.create({
+    const followNotification = await this.prisma.notification.create({
       data: {
         userId: followingId,
         type: 'follow',
@@ -969,6 +987,12 @@ export class UsersService {
         title: 'Novo seguidor',
         body: `${followerName} começou a seguir você`,
       },
+    });
+    await this.pushNotifications.send(followingId, {
+      title: followNotification.title,
+      body: followNotification.body,
+      url: '/notifications',
+      tag: followNotification.id,
     });
   }
 
@@ -997,7 +1021,7 @@ export class UsersService {
       },
     });
 
-    await this.prisma.notification.create({
+    const requestNotification = await this.prisma.notification.create({
       data: {
         userId: targetId,
         type: 'follow_request',
@@ -1006,6 +1030,12 @@ export class UsersService {
         title: 'Solicitação para seguir',
         body: `${requesterName} quer seguir você`,
       },
+    });
+    await this.pushNotifications.send(targetId, {
+      title: requestNotification.title,
+      body: requestNotification.body,
+      url: '/notifications',
+      tag: requestNotification.id,
     });
   }
 

@@ -75,6 +75,7 @@ export type CloudPayload = {
   createdAt: string;
   updatedAt: string;
   endedAt: string | null;
+  scheduledAt: string | null;
   authorId: string;
   author: CloudAuthorPayload;
   hypesCount: number;
@@ -110,6 +111,7 @@ export type CreateCloudInput = {
   duration?: string;
   visibility?: CloudVisibilityValue;
   originCloudId?: string;
+  scheduledAt?: string;
 };
 
 export type ListCloudMessagesQuery = {

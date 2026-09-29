@@ -282,6 +282,7 @@ describe('Talk / Read regression', () => {
       ok: true,
       userId: 'viewer',
       entered: false,
+      waiting: false,
     });
   });
   it('hides a private cloud from an authenticated user who was not invited', async () => {

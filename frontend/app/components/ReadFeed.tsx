@@ -23,6 +23,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const wheelLocked = useRef(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -50,6 +51,14 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
     }, 260);
   };
 
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (window.matchMedia?.("(max-width: 767px)").matches || clouds.length <= 1 || slideAnim || Math.abs(event.deltaY) < 12 || wheelLocked.current) return;
+    event.preventDefault();
+    wheelLocked.current = true;
+    navigateCloud(event.deltaY > 0 ? 1 : -1);
+    window.setTimeout(() => { wheelLocked.current = false; }, 360);
+  };
+
   const confirmDelete = async () => {
     if (!cloudToDelete) return;
     setDeleting(true);
@@ -69,7 +78,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   }
 
   return (
-    <div className="relative h-full w-full md:flex md:h-auto md:items-center md:justify-center">
+    <div className="relative h-full w-full md:flex md:h-auto md:items-center md:justify-center" onWheel={handleWheel}>
       {clouds.length > 1 && (
         <div className="absolute right-[max(1.5rem,calc(50%-620px))] top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-3 md:flex">
           <button type="button" aria-label="Cloud anterior" onClick={() => navigateCloud(-1)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]">
@@ -132,14 +141,13 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               aria-label={`Cloud ${cloud.title}. Deslize para a esquerda para ler a conversa.`}
             >
               <h2 lang="pt-BR" className={`hyphens-auto break-normal font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
+              <Link href={`/cloud/${cloud.id}/conversation`} className="mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 
-            <div className="flex items-center justify-between gap-2 border-t border-white/[.08] pt-2 text-[12px] text-white/65 md:border-0 md:gap-4 md:px-10 md:pb-6 md:pt-0 md:text-[14px]">
-              <div className="flex items-center gap-3 md:gap-4">
-                <span className="inline-flex shrink-0 items-center gap-1.5"><MessageIcon /><span className="hidden sm:inline">{cloud.messagesCount} comentários</span><span className="sm:hidden">{cloud.messagesCount}</span></span>
-                <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
-              </div>
-              {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="shrink-0 rounded-full border border-red-400/30 px-2.5 py-1 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/10 md:px-3 md:py-1.5 md:text-[12px]">Excluir</button>}
+            <div className="relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-6 md:pt-0 md:text-[14px]">
+              <span className="inline-flex shrink-0 items-center gap-1.5"><MessageIcon /><span className="hidden sm:inline">{cloud.messagesCount} comentários</span><span className="sm:hidden">{cloud.messagesCount}</span></span>
+              <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
+              {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
           </article>
         ))}

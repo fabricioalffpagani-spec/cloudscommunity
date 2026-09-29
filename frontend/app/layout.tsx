@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import { SessionUserProvider } from "./components/session-user";
@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   icons: {
     icon: "/clouds_icon.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#16052F",
 };
 
 export default function RootLayout({

@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { MediaAsset, Prisma } from '@prisma/client';
 type MulterFile = Express.Multer.File;
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
+import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 import {
   CreateConversationInput,
   DirectConversationPayload,
@@ -66,7 +67,10 @@ export function truncatePreview(value: string, maxLength = 255): string {
 
 @Injectable()
 export class DirectMessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pushNotifications: PushNotificationsService,
+  ) {}
 
   async createOrResolveConversation(
     userId: string,
@@ -297,6 +301,12 @@ export class DirectMessagesService {
       return created;
     });
 
+    await this.notifyRecipient(
+      message.id,
+      input.conversationId,
+      userId,
+      message.content,
+    );
     return this.mapMessage(message);
   }
 
@@ -352,6 +362,12 @@ export class DirectMessagesService {
       return created;
     });
 
+    await this.notifyRecipient(
+      message.id,
+      conversationId,
+      senderId,
+      message.content,
+    );
     return this.mapMessage(message);
   }
 
@@ -466,6 +482,12 @@ export class DirectMessagesService {
       return created;
     });
 
+    await this.notifyRecipient(
+      message.id,
+      input.conversationId,
+      userId,
+      message.content,
+    );
     return this.mapMessage(message);
   }
 
@@ -580,6 +602,12 @@ export class DirectMessagesService {
       return created;
     });
 
+    await this.notifyRecipient(
+      message.id,
+      input.conversationId,
+      userId,
+      message.content,
+    );
     return this.mapMessage(message);
   }
 
@@ -689,6 +717,12 @@ export class DirectMessagesService {
       return created;
     });
 
+    await this.notifyRecipient(
+      message.id,
+      input.conversationId,
+      userId,
+      message.content,
+    );
     return this.mapMessage(message);
   }
 
@@ -798,13 +832,36 @@ export class DirectMessagesService {
       },
       select: { blockerId: true },
     });
-    if (!block) return;
-    throw new ForbiddenException({
-      message:
-        block.blockerId === peerUserId
-          ? 'Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.'
-          : 'Você bloqueou esta pessoa. Desbloqueie-a para enviar mensagens.',
+    if (block) {
+      throw new ForbiddenException({
+        message:
+          block.blockerId === peerUserId
+            ? 'Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.'
+            : 'Você bloqueou esta pessoa. Desbloqueie-a para enviar mensagens.',
+      });
+    }
+
+    const peer = await this.prisma.user.findUnique({
+      where: { id: peerUserId },
+      include: { profile: true },
     });
+    if (peer?.profile?.isPrivate) {
+      const followsPeer = await this.prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: userId,
+            followingId: peerUserId,
+          },
+        },
+        select: { followerId: true },
+      });
+      if (!followsPeer) {
+        throw new ForbiddenException({
+          message:
+            'Este perfil é privado. Siga a pessoa primeiro para enviar uma mensagem.',
+        });
+      }
+    }
   }
 
   private async requireUserSummary(userId: string): Promise<UserSummary> {
@@ -903,6 +960,49 @@ export class DirectMessagesService {
     await this.prisma.directMessage.update({
       where: { id: messageId },
       data: { deletedAt: new Date() },
+    });
+  }
+
+  private async notifyRecipient(
+    messageId: string,
+    conversationId: string,
+    senderId: string,
+    content: string | null,
+  ) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { participantOneId: true, participantTwoId: true },
+    });
+    if (!conversation) return;
+    const recipientId =
+      conversation.participantOneId === senderId
+        ? conversation.participantTwoId
+        : conversation.participantOneId;
+    const sender = await this.prisma.user.findUnique({
+      where: { id: senderId },
+      include: { profile: true },
+    });
+    const senderName =
+      sender?.profile?.displayName || sender?.profile?.username || 'Alguém';
+    const preview = (content || 'enviou uma mensagem')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 140);
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId: recipientId,
+        type: 'direct_message',
+        entityType: 'direct_message',
+        entityId: messageId,
+        title: `Nova mensagem de ${senderName}`,
+        body: preview,
+      },
+    });
+    await this.pushNotifications.send(recipientId, {
+      title: notification.title,
+      body: notification.body,
+      url: `/messages?conversation=${conversationId}`,
+      tag: notification.id,
     });
   }
 

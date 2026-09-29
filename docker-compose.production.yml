@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      NODE_ENV: production
+      TRUST_PROXY: "true"
+    ports:
+      - "127.0.0.1:${APP_HTTP_PORT:-3001}:3001"
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      CLOUDS_BRIDGE_URL: http://backend:3001
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+      NEXT_PUBLIC_CLOUDS_SOCKET_URL: ${NEXT_PUBLIC_CLOUDS_SOCKET_URL}
+      UI_HTTP_PORT: 3000
+    ports:
+      - "127.0.0.1:${UI_HTTP_PORT:-3000}:3000"

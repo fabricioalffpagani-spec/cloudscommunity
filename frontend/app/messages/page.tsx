@@ -439,6 +439,19 @@ function mergeMessage(list: Msg[], next: Msg) {
   return [...list, next];
 }
 
+type CloudCommentReference = { cloudTitle: string; comment: string; response?: string; isLegacyReference: boolean };
+
+function parseCloudCommentReference(content: string | null): CloudCommentReference | null {
+  if (!content) return null;
+  try {
+    const parsed = JSON.parse(content) as { type?: string; cloudTitle?: string; comment?: string; response?: string };
+    if ((parsed.type !== "cloud_comment_reference" && parsed.type !== "cloud_comment_reply") || !parsed.cloudTitle || !parsed.comment) return null;
+    return { cloudTitle: parsed.cloudTitle, comment: parsed.comment, response: parsed.type === "cloud_comment_reply" ? parsed.response : undefined, isLegacyReference: parsed.type === "cloud_comment_reference" };
+  } catch {
+    return null;
+  }
+}
+
 function sortConversations(list: Conversation[]) {
   return [...list].sort((a, b) => (new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()));
 }
@@ -1186,6 +1199,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
   const isForwardedMessage = Boolean(forwardedMarkerMatch);
   const visibleTextContent = forwardedMarkerMatch ? textContent?.slice(forwardedMarkerMatch[0].length) ?? "" : textContent;
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
+  const cloudCommentReference = parseCloudCommentReference(textContent);
 
   function handleToggleMenu() {
     if (!menuOpen && triggerRef.current) {
@@ -1197,7 +1211,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
   }
 
   return (
-    <div className={`group flex items-end gap-2.5 ${isRight ? "flex-row-reverse" : "flex-row"}`}>
+    <div className="group flex w-full items-end gap-2.5" style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}>
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">
         <UserAvatar
@@ -1213,6 +1227,14 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
           <ImageMessageBubble msg={msg} />
         ) : msg.kind === "link" ? (
           <LinkMessageBubble msg={msg} />
+        ) : cloudCommentReference ? (
+          <div className={`w-full min-w-[220px] overflow-hidden rounded-3xl text-white ${isRight ? "bg-[#9333EA]" : "bg-[#5B21B6]"}`}>
+            <div className="p-5">
+            <p className="text-[22px] font-bold leading-tight text-white">{cloudCommentReference.cloudTitle}</p>
+            <p className="mt-3 border-t border-white/20 pt-3 text-[14px] leading-relaxed text-white/80">{cloudCommentReference.comment}</p>
+            </div>
+            {cloudCommentReference.response && <div className="border-t border-white/20 bg-black/10 px-5 py-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">Resposta</p><p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-white">{cloudCommentReference.response}</p></div>}
+          </div>
         ) : (
           <div className={`relative rounded-2xl px-4 ${isForwardedMessage ? "min-w-[112px] pb-3 pt-6" : "py-3"} text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
             {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ Encaminhada</span>}
@@ -1293,6 +1315,8 @@ function MessagesPageContent() {
   const [imageUploading, setImageUploading] = useState(false);
   const [linkUploading, setLinkUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [mediaPickerTab, setMediaPickerTab] = useState<"emoji" | "sticker">("emoji");
+  const [savedStickers, setSavedStickers] = useState<Array<{ id: string; mediaUrl: string }>>([]);
   const [emojiCategory, setEmojiCategory] = useState(0);
   const [sharedLink, setSharedLink] = useState<{ url: string; label: string } | null>(null);
   const autoSendRef = useRef(false);
@@ -1304,6 +1328,8 @@ function MessagesPageContent() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
+  const [messageMatchConversationIds, setMessageMatchConversationIds] = useState<Set<string>>(new Set());
+  const [searchingMessages, setSearchingMessages] = useState(false);
   const [messageSearch, setMessageSearch] = useState("");
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [followedUsers, setFollowedUsers] = useState<PublicUserProfile[]>([]);
@@ -1469,6 +1495,10 @@ function MessagesPageContent() {
   }, [emojiOpen]);
 
   useEffect(() => {
+    void fetch("/api/stickers", { cache: "no-store" }).then((response) => response.json()).then((payload: { stickers?: Array<{ id: string; mediaUrl: string }> }) => setSavedStickers(payload.stickers ?? [])).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && messageSearchOpen) {
         setMessageSearch("");
@@ -1627,9 +1657,27 @@ function MessagesPageContent() {
     setDraft((current) => `${current}${emoji}`);
   }, []);
 
+  useEffect(() => {
+    const query = normalizeText(conversationSearch);
+    if (!query) { setMessageMatchConversationIds(new Set()); setSearchingMessages(false); return; }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setSearchingMessages(true);
+      void Promise.all(conversations.map(async (conversation) => {
+        const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversation.id)}/messages?take=100`, { cache: "no-store" });
+        const payload = await response.json().catch(() => null) as { messages?: BackendMessage[] } | null;
+        return Array.isArray(payload?.messages) && payload.messages.some((message) => message.type === "text" && normalizeText(message.content ?? "").includes(query)) ? conversation.id : null;
+      })).then((ids) => {
+        if (!cancelled) setMessageMatchConversationIds(new Set(ids.filter((id): id is string => Boolean(id))));
+      }).catch(() => { if (!cancelled) setMessageMatchConversationIds(new Set()); }).finally(() => { if (!cancelled) setSearchingMessages(false); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [conversationSearch, conversations]);
+
   const filteredConversations = useMemo(() => {
+    if (conversationSearch.trim()) return conversations.filter((conversation) => messageMatchConversationIds.has(conversation.id));
     return buildMessageContactList(conversations, followedUsers, conversationSearch);
-  }, [conversationSearch, conversations, followedUsers]);
+  }, [conversationSearch, conversations, followedUsers, messageMatchConversationIds]);
 
   const forwardContacts = useMemo<ForwardContact[]>(() => {
     const byId = new Map<string, ForwardContact>();
@@ -1674,10 +1722,11 @@ function MessagesPageContent() {
           status: presenceByUserIdRef.current[built.peerId] ?? built.status,
         };
       });
-      conversationsRef.current = mapped;
-      setConversations(mapped);
+      const sortedConversations = sortConversations(mapped);
+      conversationsRef.current = sortedConversations;
+      setConversations(sortedConversations);
       const currentActiveId = activeConversationIdRef.current;
-      const activeConversationStillExists = currentActiveId ? mapped.some((conversation) => conversation.id === currentActiveId) : false;
+      const activeConversationStillExists = currentActiveId ? sortedConversations.some((conversation) => conversation.id === currentActiveId) : false;
       if (currentActiveId && !activeConversationStillExists) {
         activeConversationIdRef.current = null;
         setActiveConversationId(null);
@@ -1741,14 +1790,16 @@ function MessagesPageContent() {
         status: presenceByUserIdRef.current[built.peerId] ?? built.status,
       };
       setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
+      activeConversationIdRef.current = conversation.id;
       setActiveConversationId(conversation.id);
+      window.localStorage.setItem(`clouds-last-message-conversation:${user?.id}`, conversation.id);
       if (!searchParams.get("share")) {
         router.replace(messagesConversationHref(conversation.id), { scroll: false });
       }
     } catch (conversationError) {
       setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
     }
-  }, [router, searchParams]);
+  }, [router, searchParams, user?.id]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
@@ -1763,23 +1814,25 @@ function MessagesPageContent() {
   useEffect(() => {
     if (status !== "authenticated" || !user) return;
     const peerUserId = searchParams.get("id")?.trim();
-    const rememberedConversationId = requestedConversationId(searchParams);
-    if (!peerUserId && !rememberedConversationId) {
-      openedPeerRef.current = null;
-      activeConversationIdRef.current = null;
-      setActiveConversationId(null);
-      return;
-    }
     if (peerUserId) void ensureConversation(peerUserId);
   }, [ensureConversation, searchParams, status, user]);
 
   useEffect(() => {
     const rememberedConversationId = requestedConversationId(searchParams);
-    if (!rememberedConversationId || conversations.length === 0) return;
-    if (!conversations.some((conversation) => conversation.id === rememberedConversationId)) return;
-    activeConversationIdRef.current = rememberedConversationId;
-    setActiveConversationId(rememberedConversationId);
-  }, [conversations, searchParams]);
+    if (conversations.length === 0) return;
+    const requestedConversation = rememberedConversationId && conversations.some((conversation) => conversation.id === rememberedConversationId)
+      ? rememberedConversationId
+      : null;
+    const savedConversationId = window.localStorage.getItem(`clouds-last-message-conversation:${user?.id}`);
+    const savedConversation = savedConversationId && conversations.some((conversation) => conversation.id === savedConversationId)
+      ? savedConversationId
+      : null;
+    const nextConversationId = requestedConversation ?? savedConversation ?? conversations[0].id;
+    if (activeConversationIdRef.current === nextConversationId) return;
+    activeConversationIdRef.current = nextConversationId;
+    setActiveConversationId(nextConversationId);
+    if (!requestedConversation) router.replace(messagesConversationHref(nextConversationId), { scroll: false });
+  }, [conversations, router, searchParams, user?.id]);
 
   useEffect(() => {
     if (!activeConversationId || !autoSendRef.current || !sharedLink) return;
@@ -1975,9 +2028,11 @@ function MessagesPageContent() {
     typingConversationIdRef.current = null;
     setDraft("");
     setEmojiOpen(false);
+    activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
+    window.localStorage.setItem(`clouds-last-message-conversation:${user?.id}`, conversationId);
     router.replace(messagesConversationHref(conversationId), { scroll: false });
-  }, [router]);
+  }, [router, user?.id]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -2244,7 +2299,7 @@ function MessagesPageContent() {
               <SearchIcon s={20} className="text-white" />
               <input
                 ref={sidebarSearchRef}
-                type="search"
+                type="text"
                 value={conversationSearch}
                 onChange={(event) => setConversationSearch(event.target.value)}
                 placeholder="Buscar..."
@@ -2259,9 +2314,9 @@ function MessagesPageContent() {
                     setConversationSearch("");
                     sidebarSearchRef.current?.focus();
                   }}
-                  className="text-[13px] text-white/35 transition hover:text-white/60"
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-white/50 transition hover:bg-white/10 hover:text-white"
                 >
-                  +
+                  <XIcon s={15} />
                 </button>
               )}
             </div>
@@ -2331,7 +2386,7 @@ function MessagesPageContent() {
             {!loadingFollowed && filteredConversations.length === 0 && (
               <p className="px-3 py-6 text-center text-[14px] text-white/40">
                 {conversationSearch.trim()
-                  ? "Nenhuma conversa ou contato encontrado."
+                  ? (searchingMessages ? "Buscando mensagens..." : "Nenhuma mensagem encontrada.")
                   : "Você ainda não possui conversas nem contatos seguidos."}
               </p>
             )}
@@ -2340,7 +2395,7 @@ function MessagesPageContent() {
 
         </aside>
 
-        <main className={`${activeConversationId ? "flex" : "hidden md:flex"} relative flex-1 flex-col overflow-hidden`}>
+        <main className={`${activeConversationId ? "flex" : "hidden md:flex"} relative w-full min-w-0 flex-1 flex-col overflow-hidden md:w-auto`}>
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-3 py-3 sm:px-6 sm:py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
@@ -2414,7 +2469,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto scrollbar-purple px-8 py-6" ref={messagesContainerRef}>
+          <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" ref={messagesContainerRef}>
             <div className="flex min-h-full flex-col justify-end space-y-4">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
@@ -2431,13 +2486,25 @@ function MessagesPageContent() {
                 let previous = "";
                 const messagesToRender = messageSearch.trim() ? filteredMessages : activeMessages;
                 
-                for (const message of messagesToRender) {
+                for (let index = 0; index < messagesToRender.length; index += 1) {
+                  const message = messagesToRender[index];
+                  const cloudReference = parseCloudCommentReference(message.content);
+                  const nextMessage = messagesToRender[index + 1];
+                  const isLegacyCloudReplyPair = cloudReference?.isLegacyReference
+                    && nextMessage?.kind === "text"
+                    && nextMessage.senderId === message.senderId
+                    && !parseCloudCommentReference(nextMessage.content)
+                    && new Date(nextMessage.isoTime).getTime() - new Date(message.isoTime).getTime() < 120_000;
+                  const renderedMessage = isLegacyCloudReplyPair
+                    ? { ...message, content: JSON.stringify({ type: "cloud_comment_reply", cloudTitle: cloudReference.cloudTitle, comment: cloudReference.comment, response: nextMessage.content }) }
+                    : message;
                   const current = new Date(message.isoTime).toDateString();
                   if (current !== previous) {
                     rows.push({ id: `date-${current}`, type: "date", label: dateLabel(message.isoTime) });
                     previous = current;
                   }
-                  rows.push(message);
+                  rows.push(renderedMessage);
+                  if (isLegacyCloudReplyPair) index += 1;
                 }
                 return rows.map((entry) => {
                   if ("type" in entry && entry.type === "date") {
@@ -2518,6 +2585,8 @@ function MessagesPageContent() {
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
+                  <div className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-2"><button type="button" onClick={() => setMediaPickerTab("emoji")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "emoji" ? "bg-white/10 text-white" : "text-white/45"}`}>😊 Emojis</button><button type="button" onClick={() => setMediaPickerTab("sticker")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "sticker" ? "bg-white/10 text-white" : "text-white/45"}`}>◌ Figurinhas</button></div>
+                  {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><p className="mb-2 text-[12px] font-semibold text-white/60">Minhas figurinhas</p>{savedStickers.length ? <div className="flex flex-wrap gap-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }))); setEmojiOpen(false); }} className="h-16 w-16 rounded-xl p-1 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className="h-full w-full object-contain" /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Nenhuma figurinha salva no CloudChat.</p>}</div> : <>
                   {/* Abas de categorias */}
                   <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
                     {EMOJI_CATEGORIES.map((cat, i) => (
@@ -2547,6 +2616,7 @@ function MessagesPageContent() {
                       ))}
                     </div>
                   </div>
+                  </>}
                 </div>
               )}
               {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (

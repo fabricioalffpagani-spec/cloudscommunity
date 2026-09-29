@@ -10,6 +10,11 @@ export type ReadOnlyMessage = {
   content: string | null;
   mediaUrl: string | null;
   createdAt: string;
+  replyTo?: {
+    id: string;
+    sender: string;
+    content: string | null;
+  } | null;
   sender: {
     id?: string;
     displayName: string;
@@ -22,7 +27,16 @@ function timeLabel(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ReadOnlyCloudMessage({ message, own = false }: { message: ReadOnlyMessage; own?: boolean }) {
+function ReplyArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="9 17 4 12 9 7" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </svg>
+  );
+}
+
+export function ReadOnlyCloudMessage({ message, own = false, onReply }: { message: ReadOnlyMessage; own?: boolean; onReply?: (message: ReadOnlyMessage) => void }) {
   const senderName = message.sender?.displayName || message.sender?.username || "Usuário";
   const avatarUser = {
     id: message.sender?.id || message.sender?.username || message.id,
@@ -41,7 +55,7 @@ export function ReadOnlyCloudMessage({ message, own = false }: { message: ReadOn
   }
 
   return (
-    <article className={`flex items-end gap-2.5 ${own ? "flex-row-reverse" : "flex-row"}`} aria-label={`Mensagem de ${senderName}`}>
+    <article className={`group flex items-end gap-2.5 ${own ? "flex-row-reverse" : "flex-row"}`} aria-label={`Mensagem de ${senderName}`}>
       {profileHref ? (
         <Link href={profileHref} aria-label={`Ver perfil de ${senderName}`} className="mb-6 w-9 shrink-0"><UserAvatar user={avatarUser} size={34} /></Link>
       ) : (
@@ -75,16 +89,32 @@ export function ReadOnlyCloudMessage({ message, own = false }: { message: ReadOn
               {message.content}
             </a>
           ) : (
-            <div className={`whitespace-pre-wrap break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            <div className={`max-w-full whitespace-pre-wrap break-all rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
               {message.content}
             </div>
           )}
 
           <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
             <time dateTime={message.createdAt}>{timeLabel(message.createdAt)}</time>
+            {!own && message.sender?.id && onReply && <button type="button" onClick={() => onReply(message)} className="ml-2 text-[#C084FC] transition hover:text-white sm:hidden">Responder</button>}
           </div>
         </div>
       </div>
+
+      {!own && message.sender?.id && onReply && (
+        <div className="ml-1 hidden items-center gap-1 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 sm:flex">
+          {profileHref ? (
+            <Link href={profileHref} aria-label={`Ver perfil de ${senderName}`} className="transition hover:brightness-125">
+              <UserAvatar user={avatarUser} size={24} />
+            </Link>
+          ) : (
+            <UserAvatar user={avatarUser} size={24} />
+          )}
+          <button type="button" onClick={() => onReply(message)} title={`Responder a ${senderName}`} aria-label={`Responder a ${senderName}`} className="flex h-8 w-8 items-center justify-center rounded-full text-[#C084FC] transition hover:bg-white/10 hover:text-white">
+            <ReplyArrowIcon />
+          </button>
+        </div>
+      )}
     </article>
   );
 }

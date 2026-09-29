@@ -55,6 +55,7 @@ type Cloud = {
   authorId?: string;
   participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
   originCloud?: { id: string; title: string } | null;
+  scheduledAt?: string | null;
 };
 
 type PollOption = { id: string; text: string; votes: number };
@@ -106,6 +107,7 @@ type CloudApiPayload = {
   participantsCount: number;
   participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
   originCloud?: { id: string; title: string } | null;
+  scheduledAt: string | null;
   href: string;
 };
 
@@ -147,6 +149,7 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
     authorId: cloud.authorId,
     participantProfiles: cloud.participantProfiles,
     originCloud: cloud.originCloud,
+    scheduledAt: cloud.scheduledAt,
   };
 }
 
@@ -282,11 +285,16 @@ function avatarColor(source: string) {
 }
 
 function getCloudRemainingSeconds(cloud: Cloud) {
-  const elapsed = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
+  if (cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now()) {
+    return parseDurationSeconds(cloud.duration);
+  }
+  const startAt = cloud.scheduledAt ? new Date(cloud.scheduledAt) : cloud.createdAt;
+  const elapsed = Math.floor((Date.now() - startAt.getTime()) / 1000);
   return Math.max(parseDurationSeconds(cloud.duration) - elapsed, 0);
 }
 
 function isCloudActive(cloud: Cloud) {
+  if (cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now()) return true;
   return getCloudRemainingSeconds(cloud) > 0;
 }
 
@@ -377,6 +385,13 @@ function BellIcon({ s = 20 }: { s?: number }) {
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 17H5.5a1 1 0 0 1-.92-1.38l1.42-3.42A5 5 0 0 0 6.4 10V9a5.6 5.6 0 0 1 11.2 0v1c0 .69.14 1.38.4 2l1.42 3.42A1 1 0 0 1 18.5 17H15" />
       <path d="M10 19a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+function CalendarIcon({ s = 18 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" />
     </svg>
   );
 }
@@ -840,18 +855,27 @@ function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; clo
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
 function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: number, wasHyped: boolean) => void }) {
+  const sessionUser = useSessionUser();
+  const currentUser = sessionUser.user;
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [hypeLoading, setHypeLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [showPremiere, setShowPremiere] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderSet, setReminderSet] = useState(() => Boolean(currentUser?.id && cloud.participantProfiles?.some((participant) => participant.id === currentUser.id)));
   const siteOrigin = useSiteOrigin();
 
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
-  const fullShareUrl = `${siteOrigin}${shareUrl}`;  const durationSeconds = parseDurationSeconds(cloud.duration);
+  const fullShareUrl = `${siteOrigin}${shareUrl}`;
+  const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
+  const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > Date.now());
+  const durationSeconds = parseDurationSeconds(cloud.duration);
   const elapsedSeconds = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
   const remainingSeconds = Math.max(durationSeconds - elapsedSeconds, 0);
-  const isLive = remainingSeconds > 0;
-  const countdownLabel = formatCountdown(remainingSeconds);
+  const isLive = !isScheduled && remainingSeconds > 0;
+  const countdownLabel = formatCountdown(isScheduled ? durationSeconds : remainingSeconds);
+  const premiereLabel = scheduledDate ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "";
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
@@ -886,6 +910,20 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
     }
   };
 
+  const activateReminder = async () => {
+    if (reminderLoading || reminderSet) return;
+    setReminderLoading(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
+      if (!response.ok) throw new Error("Reminder request failed");
+      setReminderSet(true);
+    } catch {
+      // The button remains available after a failed request.
+    } finally {
+      setReminderLoading(false);
+    }
+  };
+
   return (
     <article className="cloud-card w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
 
@@ -893,15 +931,16 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-[12px]">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full" style={{ backgroundColor: isLive ? "#22C55E" : "#F87171", opacity: 0.7 }} />
-            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: isLive ? "#22C55E" : "#F87171" }} />
+            <span className={`absolute inline-flex h-full w-full rounded-full ${isScheduled ? "" : "animate-ping"}`} style={{ backgroundColor: isScheduled ? "#A855F7" : isLive ? "#22C55E" : "#F87171", opacity: 0.7 }} />
+            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: isScheduled ? "#A855F7" : isLive ? "#22C55E" : "#F87171" }} />
           </span>
-          <span className={isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
-            {isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
+          <span className={isScheduled ? "text-[#C084FC]" : isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
+            {isScheduled ? "AGENDADA" : isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
           </span>
           <span className="rounded-full bg-white/5 px-2 py-1 text-[13px] font-semibold tabular-nums text-white/70">
-            {isLive ? countdownLabel : "00:00"}
+            {isScheduled || isLive ? countdownLabel : "00:00"}
           </span>
+          {isScheduled && <div className="relative"><button type="button" onClick={() => setShowPremiere(value => !value)} aria-label="Ver data de estreia" className="rounded-full p-1.5 text-[#C084FC] transition hover:bg-[#9333EA]/20"><CalendarIcon s={16} /></button>{showPremiere && <span className="absolute left-0 top-9 z-20 w-52 rounded-lg border border-[#A855F7]/30 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">{premiereLabel}</span>}</div>}
         </div>
         <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
           {cloud.visibility === "public" ? "Público" : "Privado"}
@@ -930,49 +969,50 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
         {/* Left - reaction buttons */}
         <div className="flex items-center gap-2">
 
-          {/* Hypar */}
-          <button
-            type="button"
-            onClick={handleHypar}
-            aria-label="Hypar"
-            className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
-              hyped
-                ? "border-orange-500/40 bg-orange-500/15 text-orange-400"
-                : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
-            }`}
-          >
-            <FireIcon s={24} />
-            {hypes > 0 && <span>{hypes}</span>}
-          </button>
-
-          {/* Compartilhar */}
-          {shareOpen && (
-            <ShareModal
-              cloudTitle={cloud.title}
-              cloudUrl={fullShareUrl}
-              onClose={() => setShareOpen(false)}
-            />
-          )}
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            aria-label="Compartilhar"
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white/70 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
-          >
-            <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
-            </svg>
-            Compartilhar
-          </button>
+          {!isScheduled && <>
+            <button
+              type="button"
+              onClick={handleHypar}
+              aria-label="Hypar"
+              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+                hyped
+                  ? "border-orange-500/40 bg-orange-500/15 text-orange-400"
+                  : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
+              }`}
+            >
+              <FireIcon s={24} />
+              {hypes > 0 && <span>{hypes}</span>}
+            </button>
+            {shareOpen && (
+              <ShareModal
+                cloudTitle={cloud.title}
+                cloudUrl={fullShareUrl}
+                onClose={() => setShareOpen(false)}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              aria-label="Compartilhar"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white/70 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
+            >
+              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
+              </svg>
+              Compartilhar
+            </button>
+          </>}
+          {isScheduled && <button type="button" onClick={activateReminder} disabled={reminderLoading || reminderSet} aria-label={reminderSet ? "Lembrete ativado" : "Avisar na estreia"} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold transition ${reminderSet ? "border-[#A855F7]/60 bg-[#9333EA]/20 text-[#E9D5FF]" : "border-[#A855F7]/40 bg-[#9333EA]/10 text-[#C084FC] hover:bg-[#9333EA]/25"}`}><BellIcon s={16} />{reminderSet ? "Lembrete ativado" : "Avisar-me"}</button>}
+          {isScheduled && cloud.authorId === sessionUser.user?.id && <button type="button" onClick={async () => { if (!window.confirm("Excluir esta Cloud agendada?")) return; const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}`, { method: "DELETE" }); if (response.ok) window.location.reload(); }} aria-label="Excluir Cloud agendada" className="rounded-full border border-red-400/20 p-2 text-red-300 transition hover:bg-red-500/15"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" /></svg></button>}
         </div>
 
         {/* Right — enter */}
-        <Link
+        {isScheduled ? <div className="flex items-center -space-x-2" title="Pessoas aguardando a estreia">{cloud.participantProfiles?.slice(0, 5).map((participant) => participant.avatarUrl ? <Image key={participant.id} src={participant.avatarUrl} alt={participant.name} width={30} height={30} className="h-8 w-8 rounded-full border-2 border-[#111116] object-cover" /> : <span key={participant.id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#111116] bg-[#9333EA] text-[11px] font-bold">{participant.name.charAt(0)}</span>)}</div> : <Link
           href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}&join=1`}
           className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
         >
           Entrar na conversa
-        </Link>
+        </Link>}
       </div>
     </article>
   );
@@ -990,17 +1030,45 @@ function ShareIcon() {
   );
 }
 
-export function CreateCloudModal({
+function CloudsCalendar({ value, onChange, onDaySelect, onTimeComplete }: { value: string; onChange: (value: string) => void; onDaySelect: () => void; onTimeComplete: () => void }) {
+  const initial = value ? new Date(value) : new Date(Date.now() + 3_600_000);
+  const [month, setMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
+  const [hour, setHour] = useState("");
+  const [minute, setMinute] = useState("");
+  const [selectedDay, setSelectedDay] = useState<number | null>(value ? new Date(value).getDate() : null);
+  const days = Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, i) => i + 1);
+  const start = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
+  const latest = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+  const earliest = new Date();
+  const emit = (day: number, nextHour = hour, nextMinute = minute) => onChange(`${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T${nextHour || "00"}:${nextMinute || "00"}`);
+  const choose = (day: number) => { setSelectedDay(day); onDaySelect(); emit(day); };
+  const updateHour = (nextHour: string) => { setHour(nextHour); if (selectedDay !== null) emit(selectedDay, nextHour, minute); if (minute) onTimeComplete(); };
+  const updateMinute = (nextMinute: string) => { setMinute(nextMinute); if (selectedDay !== null) emit(selectedDay, hour, nextMinute); if (hour) onTimeComplete(); };
+  const canAdvance = month.getFullYear() < latest.getFullYear() || month.getMonth() < latest.getMonth();
+  return <div className="rounded-2xl border border-[#A855F7]/40 bg-[#151027] p-3 shadow-2xl"><div className="relative mb-3 flex items-center justify-center"><strong className="text-sm capitalize">{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</strong>{canAdvance && <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="absolute right-0">›</button>}</div><div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/45">{"DSTQQSS".split("").map((d,i)=><span key={i}>{d}</span>)}{days.map(day => { const date = new Date(month.getFullYear(), month.getMonth(), day); return date < new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()) || date > latest ? <span key={day} /> : <button key={day} type="button" onClick={() => choose(day)} className={`h-8 w-8 rounded-full ${selectedDay === day ? "bg-[#9333EA] text-white shadow-[0_0_0_2px_rgba(216,180,254,.35)]" : "hover:bg-white/10"}`}>{day}</button>; })}</div><div className="mt-3 flex items-center justify-between"><span>Horário</span><div className="flex items-center gap-2"><CloudsTimeWheel value={hour} max={23} onChange={updateHour} /><span>:</span><CloudsTimeWheel value={minute} max={59} onChange={updateMinute} /></div></div></div>;
+}
+
+function CloudsTimeWheel({ value, max, onChange }: { value: string; max: number; onChange: (value: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const values = Array.from({ length: max + 1 }, (_, index) => String(index).padStart(2, "0"));
+  if (!open && !value) return <button type="button" onClick={() => setOpen(true)} className="flex h-12 w-14 items-center justify-center rounded-xl border border-white/10 bg-[#252840] text-sm text-white/50">{max === 23 ? "Hr" : "Mn"}</button>;
+  return <div className="h-24 w-14 snap-y snap-mandatory overflow-y-auto rounded-xl border border-white/10 bg-[#252840] text-center scrollbar-none">{values.map((item) => <button key={item} type="button" onClick={() => { onChange(item); setOpen(false); }} className={`block h-8 w-full snap-center text-sm transition ${item === value ? "bg-[#9333EA] font-bold text-white" : "text-white/50 hover:bg-white/10"}`}>{item}</button>)}</div>;
+}
+
+function CreateCloudModal({
   onClose,
   onPublish,
 }: {
   onClose: () => void;
-  onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode">) => Promise<Cloud>;
+  onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode"> & { scheduledAt?: string }) => Promise<Cloud>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [duration, setDuration] = useState(DURATIONS[0]);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [scheduleTimeComplete, setScheduleTimeComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFollowersPopup, setShowFollowersPopup] = useState(false);
@@ -1069,12 +1137,14 @@ export function CreateCloudModal({
 
     try {
       const invitedUserIds = Array.from(selectedFollowers);
+      if (scheduledAt && !scheduleTimeComplete) { setError("Escolha a hora e os minutos para agendar a Cloud."); return; }
       const cloudData = {
         title: title.trim(),
         category: "general",
         description: description.trim() || undefined,
         duration: duration.trim(),
         visibility: "private" as const,
+        scheduledAt: scheduledAt || undefined,
         invitedUserIds,
       };
 
@@ -1115,12 +1185,14 @@ export function CreateCloudModal({
     setError(null);
 
     try {
+      if (scheduledAt && !scheduleTimeComplete) { setError("Escolha a hora e os minutos para agendar a Cloud."); return; }
       const cloudData = {
         title: normalizedTitle,
         category: "general",
         description: normalizedDescription || undefined,
         duration: duration.trim(),
         visibility,
+        scheduledAt: scheduledAt || undefined,
       };
 
       const publishedCloud = await onPublish(cloudData);
@@ -1212,9 +1284,9 @@ export function CreateCloudModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-4 py-4 sm:items-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[480px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-[480px] overflow-y-auto rounded-2xl border border-white/10 bg-[#1C1F2E] p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-[18px] font-bold text-white">Criar nova Cloud</h2>
           <button onClick={onClose} className="text-white/40 hover:text-white p-1"><XIcon s={18} /></button>
@@ -1266,6 +1338,14 @@ export function CreateCloudModal({
                 </button>
               ))}
             </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Lançamento</label>
+            <div className="mb-2 flex gap-2">
+              <button type="button" onClick={() => setScheduledAt("")} className={`rounded-full px-3 py-1.5 text-[12px] ${!scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Abrir agora</button>
+              <button type="button" onClick={() => { setScheduledAt(new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)); setScheduleTimeComplete(false); setCalendarOpen(true); }} className={`rounded-full px-3 py-1.5 text-[12px] ${scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Agendar</button>
+            </div>
+            {scheduledAt && <div className="relative"><button type="button" onClick={() => setCalendarOpen(v => !v)} className="w-full rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-left text-[14px] text-white">{new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</button>{calendarOpen && <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20"><CloudsCalendar value={scheduledAt} onChange={setScheduledAt} onDaySelect={() => setScheduleTimeComplete(false)} onTimeComplete={() => { setScheduleTimeComplete(true); setCalendarOpen(false); }} /></div>}</div>}
           </div>
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Visibilidade</label>
@@ -2069,6 +2149,8 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
         return;
       }
 
+      window.localStorage.removeItem("clouds:minimized-cloud");
+      window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
       router.replace("/login");
       router.refresh();
       onClose();
@@ -2435,9 +2517,14 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
   );
 }
 
-function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cloud[]; onEnter: (cloud: Cloud) => void; onCreate: () => void; onOpenInfo: (cloud: Cloud) => void }) {
+function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo, onDelete }: { clouds: Cloud[]; onEnter: (cloud: Cloud) => void; onCreate: () => void; onOpenInfo: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+  const sessionUser = useSessionUser();
+  const currentUser = sessionUser.user;
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const gestureHandled = useRef(false);
+  const [premiereId, setPremiereId] = useState<string | null>(null);
+  const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
+  const [queueCloud, setQueueCloud] = useState<Cloud | null>(null);
 
   if (clouds.length === 0) {
     return (
@@ -2455,6 +2542,17 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
+        const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
+        const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > Date.now());
+        const premiereLabel = scheduledDate ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "";
+        const activateReminder = async () => {
+          if (remindedIds.has(cloud.id)) return;
+          const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
+          if (response.ok) {
+            setRemindedIds(current => new Set(current).add(cloud.id));
+            setQueueCloud(cloud);
+          }
+        };
         return (
           <article key={cloud.id} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
             <div className="flex items-center justify-between gap-2">
@@ -2462,9 +2560,12 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
                 {profile.avatar ? <img src={profile.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-sm font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
                 <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-none">{profile.name}</p><p className="mt-1 truncate text-[12px] text-white/65">@{profile.handle}</p></div>
               </div>
-              <div className="flex shrink-0 -space-x-2" aria-label={`${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
+              <div className="flex shrink-0 items-center gap-2" aria-label={`${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
+                <div className="flex -space-x-2">
                 {(cloud.participantProfiles ?? []).slice(0, 4).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold">{participant.name.slice(0, 1)}</span>)}
                 {(cloud.participantProfiles ?? []).length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">+{(cloud.participantProfiles ?? []).length - 4}</span>}
+                </div>
+                {isScheduled && cloud.authorId === sessionUser.user?.id && <button type="button" onClick={() => onDelete(cloud.id)} aria-label="Excluir Cloud agendada" className="rounded-full p-1.5 text-white/50 transition hover:bg-red-500/15 hover:text-red-300"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" /></svg></button>}
               </div>
             </div>
             <button
@@ -2479,7 +2580,7 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
                 if (!start) return;
                 const deltaX = event.clientX - start.x;
                 const deltaY = event.clientY - start.y;
-                if (deltaX < -48 && Math.abs(deltaX) > Math.abs(deltaY)) {
+                if (!isScheduled && deltaX < -48 && Math.abs(deltaX) > Math.abs(deltaY)) {
                   gestureHandled.current = true;
                   onEnter(cloud);
                   return;
@@ -2499,16 +2600,18 @@ function MobileCloudFeed({ clouds, onEnter, onCreate, onOpenInfo }: { clouds: Cl
               }}
               className="mx-auto my-auto block max-w-[340px] touch-pan-y select-none text-center"
               style={{ touchAction: "pan-y" }}
-              aria-label={`Detalhes da Cloud ${cloud.title}. Deslize para a esquerda para entrar.`}
+              aria-label={isScheduled ? `Cloud agendada ${cloud.title}. A estreia ainda não começou.` : `Detalhes da Cloud ${cloud.title}. Deslize para a esquerda para entrar.`}
             >
               <span lang="pt-BR" className={`block break-words hyphens-auto font-display font-bold text-white ${cloud.title.length > 68 ? "text-[43px] leading-[1.17] tracking-[-.035em]" : "text-[52px] leading-[1.13] tracking-[-.045em]"}`}>{cloud.title}</span>
             </button>
             <span className="absolute bottom-6 right-6 rounded-full bg-white/[0.07] px-3 py-1.5 text-[14px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(remaining)} restantes`}>
-              {formatCountdown(remaining)}
+              {isScheduled ? formatCountdown(parseDurationSeconds(cloud.duration)) : formatCountdown(remaining)}
             </span>
+            {isScheduled && <div className="absolute bottom-5 left-6 flex items-center gap-2"><div className="relative"><button type="button" onClick={() => setPremiereId(current => current === cloud.id ? null : cloud.id)} aria-label="Ver data de estreia" className="rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><CalendarIcon s={18} /></button>{premiereId === cloud.id && <span className="absolute bottom-11 left-0 z-20 w-52 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">{premiereLabel}</span>}</div><button type="button" onClick={activateReminder} aria-label="Avisar-me na estreia" className={`rounded-full p-2 ${remindedIds.has(cloud.id) ? "bg-[#9333EA] text-white" : "bg-[#9333EA]/20 text-[#D8B4FE]"}`}><BellIcon s={18} /></button></div>}
           </article>
         );
       })}
+      {queueCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={19} /></div><h2 className="text-lg font-bold text-white">Você entrou na fila</h2><p className="mt-1 text-sm leading-relaxed text-white/65">Você será notificado quando “{queueCloud.title}” estrear.</p></div><button type="button" onClick={() => setQueueCloud(null)} aria-label="Fechar" className="text-xl text-white/50">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{[...(queueCloud.participantProfiles ?? []), ...(currentUser?.id && !queueCloud.participantProfiles?.some((participant) => participant.id === currentUser.id) ? [{ id: currentUser.id, name: currentUser.displayName, username: currentUser.username, avatarUrl: currentUser.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setQueueCloud(null)} className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white">Entendi</button></div></div>}
     </div>
   );
 }
@@ -2538,6 +2641,11 @@ function PageContent() {
   const [cloudInfoOpen, setCloudInfoOpen] = useState(false);
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
   const [cloudReportOpen, setCloudReportOpen] = useState(false);
+  const [scheduledQueueOpen, setScheduledQueueOpen] = useState(false);
+  const [scheduledReminderLoading, setScheduledReminderLoading] = useState(false);
+  const [scheduledReminderCloudId, setScheduledReminderCloudId] = useState<string | null>(null);
+  const [scheduledDateOpen, setScheduledDateOpen] = useState(false);
+  const scheduledDateHintRef = useRef<HTMLDivElement | null>(null);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
 
   // Slide animation: "up" = next, "down" = previous, null = settled.
@@ -2726,6 +2834,7 @@ function PageContent() {
         visibility: data.visibility,
         invitedUserIds: data.invitedUserIds,
         originCloudId: originCloudId ?? undefined,
+        scheduledAt: data.scheduledAt,
       }),
     });
 
@@ -2745,6 +2854,26 @@ function PageContent() {
 
   const hyparCloud = (cloudId: string, newCount: number, wasHyped: boolean) => {
     setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: newCount, hyped: !wasHyped } : c));
+  };
+
+  const deleteScheduledCloud = async (cloudId: string) => {
+    if (!window.confirm("Excluir esta Cloud agendada? Ela será removida permanentemente.")) return;
+    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, { method: "DELETE" });
+    if (response.ok) setClouds(current => current.filter((cloud) => cloud.id !== cloudId));
+  };
+
+  const joinScheduledQueue = async (cloudId: string) => {
+    if (scheduledReminderLoading) return;
+    setScheduledReminderLoading(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, { method: "POST" });
+      if (response.ok) {
+        setScheduledReminderCloudId(cloudId);
+        setScheduledQueueOpen(true);
+      }
+    } finally {
+      setScheduledReminderLoading(false);
+    }
   };
 
   const publishPoll = (data: Omit<Poll, "id" | "createdAt" | "votedOptionId">) => {
@@ -2782,6 +2911,23 @@ function PageContent() {
       setExpandedTopicId(null);
     }
   }, [currentCloud, homeStage]);
+
+  useEffect(() => {
+    setScheduledDateOpen(false);
+  }, [currentCloud?.id]);
+
+  useEffect(() => {
+    if (!scheduledDateOpen) return;
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (!scheduledDateHintRef.current?.contains(event.target as Node)) {
+        setScheduledDateOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+  }, [scheduledDateOpen]);
 
   // Aguarda hidratação para evitar flash do feed antes de um possível redirect.
   if (!hydrated) return null;
@@ -2854,7 +3000,20 @@ function PageContent() {
         <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
       </header>
 
-      <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+      <div className="relative">
+        <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+        {!trendingQuery && <div className={`${mobilePreview ? "flex" : "flex md:hidden"} absolute left-3 top-1/2 -translate-y-1/2`}>
+        <button
+          type="button"
+          onClick={() => setFeedOrder((current) => current === "recent" ? "default" : "recent")}
+          aria-pressed={feedOrder === "recent"}
+          className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-bold transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-[#7C3AED] text-white" : "border-white/[0.10] bg-[#100825]/80 text-white/65 hover:border-[#A855F7]/45 hover:text-white"}`}
+        >
+          <span className="text-[11px] leading-none">+</span>
+          Recentes
+        </button>
+        </div>}
+      </div>
 
       <main className={`${mobilePreview ? "flex" : "flex md:hidden"} min-h-0 flex-1 overflow-hidden pb-[calc(76px+env(safe-area-inset-bottom))]`}>
         <MobileCloudFeed
@@ -2866,6 +3025,7 @@ function PageContent() {
             if (index >= 0) setCurrentCloudIndex(index);
             setCloudInfoOpen(true);
           }}
+          onDelete={deleteScheduledCloud}
         />
       </main>
 
@@ -2966,6 +3126,7 @@ function PageContent() {
                     ))}
                     {(currentCloud.participantProfiles?.length ?? 0) > 7 && <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[13px] font-bold text-white">+{(currentCloud.participantProfiles?.length ?? 0) - 7}</span>}
                   </div>
+                  {currentCloud.scheduledAt && new Date(currentCloud.scheduledAt).getTime() > Date.now() && currentCloud.authorId === user?.id && <button type="button" onClick={() => deleteScheduledCloud(currentCloud.id)} aria-label="Excluir Cloud agendada" className="rounded-full p-2 text-white/55 transition hover:bg-red-500/15 hover:text-red-300"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" /></svg></button>}
                   <div className="relative flex items-center">
                     <button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setCloudOptionsOpen((open) => !open); }} className="flex items-center text-white hover:text-white/70 transition">
                       <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
@@ -2995,13 +3156,13 @@ function PageContent() {
 
               {/* Enter button */}
               <div className="flex justify-center px-12 pb-12">
-                <button
+                {currentCloud.scheduledAt && new Date(currentCloud.scheduledAt).getTime() > Date.now() ? <div className="flex items-center gap-3"><div ref={scheduledDateHintRef} onMouseEnter={() => setScheduledDateOpen(true)} onMouseLeave={() => setScheduledDateOpen(false)} className="relative"><button type="button" onClick={() => setScheduledDateOpen((open) => !open)} aria-label="Ver data de estreia" className="rounded-full border border-[#A855F7]/70 bg-[#9333EA] p-4 text-white transition hover:bg-[#7C3AED]"><CalendarIcon s={21} /></button>{scheduledDateOpen && <span className="absolute bottom-full left-1/2 mb-3 hidden w-60 -translate-x-1/2 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-4 py-3 text-sm leading-relaxed text-white shadow-2xl sm:block">Estreia em {new Date(currentCloud.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às {new Date(currentCloud.scheduledAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>}</div><button type="button" onClick={() => joinScheduledQueue(currentCloud.id)} disabled={scheduledReminderLoading || scheduledReminderCloudId === currentCloud.id} aria-label={scheduledReminderCloudId === currentCloud.id ? "Aguardando a estreia" : "Avisar-me na estreia"} className={`inline-flex items-center gap-2 rounded-full border px-12 py-5 text-[18px] font-semibold transition-all duration-300 ease-out ${scheduledReminderCloudId === currentCloud.id ? "scale-105 border-[#A855F7] bg-[#9333EA] text-white shadow-[0_0_24px_rgba(147,51,234,0.5)]" : "border-[#A855F7]/70 bg-transparent text-white hover:bg-[#A855F7]/20"}`}><BellIcon s={20} />{scheduledReminderCloudId === currentCloud.id ? "Aguardando" : "Avisar-me"}</button></div> : <button
                   type="button"
                   onClick={() => enterConversation(currentCloud)}
                   className="rounded-full border border-[#A855F7]/70 bg-transparent px-24 py-5 text-[18px] font-semibold text-white transition hover:bg-[#A855F7]/20"
                 >
                   Entrar na Cloud
-                </button>
+                </button>}
               </div>
               <span className="absolute bottom-8 right-10 rounded-full bg-white/[0.07] px-5 py-2.5 text-[19px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(currentCountdown)} restantes`}>
                 {formatCountdown(currentCountdown)}
@@ -3075,6 +3236,7 @@ function PageContent() {
           onClose={() => setCloudReportOpen(false)}
         />
       )}
+      {scheduledQueueOpen && currentCloud && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#171821] p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><span className="mb-3 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={20} /></span><h2 className="text-xl font-bold text-white">Você entrou na fila</h2><p className="mt-2 text-sm leading-relaxed text-white/65">Você será notificado quando “{currentCloud.title}” estrear.</p></div><button type="button" onClick={() => setScheduledQueueOpen(false)} aria-label="Fechar" className="text-2xl text-white/50 hover:text-white">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-60 space-y-2 overflow-y-auto">{[...(currentCloud.participantProfiles ?? []), ...(user?.id && !currentCloud.participantProfiles?.some((participant) => participant.id === user.id) ? [{ id: user.id, name: user.displayName, username: user.username, avatarUrl: user.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setScheduledQueueOpen(false)} className="mt-6 w-full rounded-full bg-[#9333EA] py-3 text-sm font-semibold text-white">Entendi</button></div></div>}
 
       <nav className={mobilePreview ? "hidden" : "hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block"} aria-label="Navegação inferior">
         <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">

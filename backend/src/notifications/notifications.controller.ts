@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { NotificationsService } from './notifications.service';
@@ -32,6 +32,26 @@ export class NotificationsController {
   @Post('read')
   async markAllAsRead(@Req() req: Request) {
     return this.notificationsService.markAllAsRead(extractSessionToken(req));
+  }
+
+  @Get('push-key')
+  async pushKey(@Req() req: Request) {
+    return this.notificationsService.pushPublicKey(extractSessionToken(req));
+  }
+
+  @Post('push-subscriptions')
+  async subscribe(
+    @Req() req: Request,
+    @Body()
+    subscription: {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+    },
+  ) {
+    return this.notificationsService.savePushSubscription(
+      extractSessionToken(req),
+      subscription,
+    );
   }
 
   @Post(':id/accept')
