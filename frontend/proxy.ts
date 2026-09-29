@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveBackendOrigin } from "./app/api/_lib/nest-proxy";
 
 const PUBLIC_PATHS = ["/login", "/signup", "/verify-email"];
 const PROTECTED_PATH_PREFIXES = [
@@ -30,7 +31,7 @@ function isProtectedPath(pathname: string) {
 
 async function hasValidSession(request: NextRequest) {
   try {
-    const sessionUrl = new URL("/api/auth/session", request.url);
+    const sessionUrl = new URL("/auth/session", `${resolveBackendOrigin()}/`);
     const response = await fetch(sessionUrl, {
       headers: {
         cookie: request.headers.get("cookie") ?? "",
@@ -38,9 +39,11 @@ async function hasValidSession(request: NextRequest) {
       cache: "no-store",
     });
 
-    return response.ok;
+    if (response.ok) return true;
+    if (response.status === 401) return false;
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -70,7 +73,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
-    if (sessionExists && !sessionIsValid) {
+    if (sessionExists && sessionIsValid === false) {
       const response = NextResponse.next();
       clearSessionCookie(response);
       return response;
@@ -84,7 +87,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    if (!sessionIsValid) {
+    if (sessionIsValid === false) {
       const response = NextResponse.redirect(new URL("/login", request.url));
       clearSessionCookie(response);
       return response;
