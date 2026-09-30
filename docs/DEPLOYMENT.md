@@ -1,8 +1,8 @@
 # Desenvolvimento e produção
 
-O checkout foi analisado na branch `dev`; `main` e `dev` apontavam para o mesmo
-conteúdo inicial. As alterações são propostas na `dev`, para revisão e merge em
-`main`. Nenhuma branch remota foi alterada e nenhuma imagem foi publicada nesta sessão.
+As alterações de infraestrutura são preparadas e validadas na branch `dev` antes
+da promoção para `main`. O push em `main` dispara a validação, a publicação das
+imagens e o deploy automático descrito abaixo.
 
 `dev` é desenvolvimento e integração; `main` é a versão estável para produção.
 Os arquivos de produção também ficam na `dev` para serem validados antes da promoção.
@@ -204,7 +204,8 @@ Somente exemplos fictícios são versionados. Não compartilhe a saída de
 Pré-requisitos: Ubuntu 24.04 x86_64, Docker/Compose com suporte a `--wait`, 4 GB de
 swap configurados, espaço em disco para imagens/volumes e um proxy TLS antes de
 servir usuários. A aplicação utiliza cookies `Secure` em produção e requer HTTPS.
-Não foi instalado proxy ou Cloudflare nesta etapa.
+Cloudflare, Nginx, DNS, certificados e firewall existentes permanecem fora deste
+workflow.
 
 Copie `docker-compose.prod.yml` e `.env.production.example` para `/opt/clouds`.
 O arquivo de produção é **independente**: nunca combine com `docker-compose.yml`
