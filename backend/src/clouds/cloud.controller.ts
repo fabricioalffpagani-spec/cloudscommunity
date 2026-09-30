@@ -140,6 +140,18 @@ export class CloudController {
       } satisfies CreateCloudInput,
       invitedUserIds,
     );
+    for (const previousCloudId of result.leftCloudIds) {
+      const systemMessage = await this.cloudService.createLeaveNotification(
+        previousCloudId,
+        result.userId,
+      );
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        previousCloudId,
+        systemMessage,
+      );
+      await this.cloudMessagesGateway.broadcastMembersUpdated(previousCloudId);
+    }
     // Creation is independent from Socket.IO presence. The creator is not in
     // the room yet, so the service response correctly starts at zero.
     return result;
@@ -154,6 +166,18 @@ export class CloudController {
   async joinCloud(@Param('id') id: string, @Req() req: Request) {
     const token = extractSessionToken(req);
     const result = await this.cloudService.joinCloud(token, id);
+    for (const previousCloudId of result.leftCloudIds) {
+      const systemMessage = await this.cloudService.createLeaveNotification(
+        previousCloudId,
+        result.userId,
+      );
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        previousCloudId,
+        systemMessage,
+      );
+      await this.cloudMessagesGateway.broadcastMembersUpdated(previousCloudId);
+    }
     // A message is emitted only when membership actually changes from outside
     // to inside. Refreshes and tab restores can repeat requests, but cannot
     // be represented as another entry.

@@ -89,6 +89,26 @@ export class DirectMessagesController {
     };
   }
 
+  @Post('conversations/:conversationId/read')
+  async markConversationRead(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+  ) {
+    const session = await this.authService.resolveSession(
+      extractSessionToken(req),
+    );
+
+    if (!session) {
+      return { ok: false as const, message: 'Sessão não encontrada.' };
+    }
+
+    await this.directMessagesGateway.broadcastConversationRead(
+      session.user.id,
+      conversationId,
+    );
+    return { ok: true as const };
+  }
+
   @Post('conversations')
   async createOrResolveConversation(
     @Req() req: Request,

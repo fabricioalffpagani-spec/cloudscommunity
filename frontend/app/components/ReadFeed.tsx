@@ -23,6 +23,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const feedRef = useRef<HTMLDivElement | null>(null);
   const wheelLocked = useRef(false);
 
   useEffect(() => {
@@ -51,13 +52,36 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
     }, 260);
   };
 
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (window.matchMedia?.("(max-width: 767px)").matches || clouds.length <= 1 || slideAnim || Math.abs(event.deltaY) < 12 || wheelLocked.current) return;
-    event.preventDefault();
-    wheelLocked.current = true;
-    navigateCloud(event.deltaY > 0 ? 1 : -1);
-    window.setTimeout(() => { wheelLocked.current = false; }, 360);
-  };
+  useEffect(() => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    let settleTimer: number | null = null;
+    const pages = () => Array.from(feed.querySelectorAll<HTMLElement>("[data-cloud-page]"));
+    const topOf = (page: HTMLElement) => page.getBoundingClientRect().top - feed.getBoundingClientRect().top + feed.scrollTop;
+    const nearestPage = () => pages().reduce<HTMLElement | null>((nearest, page) => !nearest || Math.abs(topOf(page) - feed.scrollTop) < Math.abs(topOf(nearest) - feed.scrollTop) ? page : nearest, null);
+    const handleWheel = (event: WheelEvent) => {
+      if (window.matchMedia?.("(max-width: 767px)").matches || Math.abs(event.deltaY) < Math.abs(event.deltaX) || Math.abs(event.deltaY) < 8 || wheelLocked.current) return;
+      event.preventDefault();
+      wheelLocked.current = true;
+      const direction = event.deltaY > 0 ? 1 : -1;
+      const allPages = pages();
+      const currentIndex = Math.max(0, allPages.indexOf(nearestPage() as HTMLElement));
+      const target = allPages[Math.max(0, Math.min(currentIndex + direction, allPages.length - 1))];
+      if (target) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
+      window.setTimeout(() => { wheelLocked.current = false; }, 380);
+    };
+    const handleScroll = () => {
+      if (window.matchMedia?.("(max-width: 767px)").matches) return;
+      if (settleTimer) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        const target = nearestPage();
+        if (target && Math.abs(topOf(target) - feed.scrollTop) > 2) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
+      }, 120);
+    };
+    feed.addEventListener("wheel", handleWheel, { passive: false });
+    feed.addEventListener("scroll", handleScroll, { passive: true });
+    return () => { feed.removeEventListener("wheel", handleWheel); feed.removeEventListener("scroll", handleScroll); if (settleTimer) window.clearTimeout(settleTimer); };
+  }, []);
 
   const confirmDelete = async () => {
     if (!cloudToDelete) return;
@@ -78,23 +102,16 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   }
 
   return (
-    <div className="relative h-full w-full md:flex md:h-auto md:items-center md:justify-center" onWheel={handleWheel}>
-      {clouds.length > 1 && (
-        <div className="absolute right-[max(1.5rem,calc(50%-620px))] top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-3 md:flex">
-          <button type="button" aria-label="Cloud anterior" onClick={() => navigateCloud(-1)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]">
-            <ArrowIcon direction="up" />
-          </button>
-          <button type="button" aria-label="Próxima Cloud" onClick={() => navigateCloud(1)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.10] text-white transition hover:bg-white/[0.20]">
-            <ArrowIcon direction="down" />
-          </button>
-        </div>
-      )}
-
-      <div className="mobile-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-contain md:mr-20 md:flex md:h-auto md:min-w-0 md:max-w-[1100px] md:flex-1 md:flex-col md:gap-4 md:overflow-visible xl:mr-0">
+    <div className="relative h-full w-full md:block">
+      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none">
         {clouds.map((cloud, cloudIndex) => (
-          <article
+          (() => {
+            const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
+            const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
+            return <article
             key={cloud.id}
-            className={`relative min-h-full snap-start flex-col overflow-hidden bg-transparent px-6 pb-3 pt-6 md:min-h-0 md:rounded-3xl md:border md:border-[#A855F7]/[.22] md:bg-[linear-gradient(175deg,rgba(40,15,100,.85)_0%,rgba(15,8,50,.92)_60%,rgba(8,5,30,.95)_100%)] md:px-0 md:pb-0 md:pt-0 md:shadow-[0_40px_100px_rgba(0,0,0,.6),inset_0_1px_0_rgba(255,255,255,.06)] ${cloudIndex === current ? "flex" : "flex md:hidden"}`}
+            data-cloud-page
+            className="relative flex min-h-full snap-start flex-col overflow-hidden bg-transparent px-6 pb-3 pt-6 md:h-full md:min-h-full md:shrink-0 md:px-0 md:pb-0 md:pt-0"
             style={{
               transition: "transform 0.25s ease, opacity 0.25s ease",
               transform: slideAnim === "up" ? "translateY(-36px)" : slideAnim === "down" ? "translateY(36px)" : "translateY(0)",
@@ -114,18 +131,18 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
                 </div>
               </Link>
 
-              <div className="flex shrink-0 -space-x-2 md:-space-x-3" aria-label={`${cloud.participantsCount ?? cloud.participantProfiles.length} participantes da Cloud`}>
-                  {cloud.participantProfiles.slice(0, 7).map((person) => (
+              <div className="flex shrink-0 -space-x-2 md:-space-x-3" aria-label={`${participantsCount} participantes da Cloud`}>
+                  {participants.slice(0, 7).map((person) => (
                     <Link key={person.id} href={`/users/${encodeURIComponent(person.id)}`} aria-label={`Ver perfil de ${person.name}`}>
                       {person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} title={person.name} className="h-8 w-8 rounded-full border-2 border-[#100625] object-cover md:h-11 md:w-11 md:border-[#160a3e]" referrerPolicy="no-referrer" /> : <span title={person.name} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[10px] font-bold text-white md:h-11 md:w-11 md:border-[#160a3e] md:text-[13px]">{person.name.slice(0, 1).toUpperCase()}</span>}
                     </Link>
                   ))}
-                  {(cloud.participantsCount ?? cloud.participantProfiles.length) > 7 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[10px] font-bold text-white md:h-11 md:w-11 md:border-[#160a3e] md:text-[13px]">+{(cloud.participantsCount ?? cloud.participantProfiles.length) - 7}</span>}
+                  {participantsCount > 7 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[10px] font-bold text-white md:h-11 md:w-11 md:border-[#160a3e] md:text-[13px]">+{participantsCount - 7}</span>}
               </div>
             </div>
 
             <div
-              className="my-auto px-0 py-5 text-center md:my-0 md:px-12 md:py-12"
+              className="my-auto flex flex-1 flex-col items-center justify-center px-0 py-5 text-center md:my-0 md:px-12 md:py-10"
               onPointerDown={(event) => { touchStart.current = { x: event.clientX, y: event.clientY }; }}
               onPointerUp={(event) => {
                 const start = touchStart.current;
@@ -140,16 +157,17 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               style={{ touchAction: "pan-y" }}
               aria-label={`Cloud ${cloud.title}. Deslize para a esquerda para ler a conversa.`}
             >
-              <h2 lang="pt-BR" className={`hyphens-auto break-normal font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
+              <h2 lang="pt-BR" className={`max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
               <Link href={`/cloud/${cloud.id}/conversation`} className="mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 
-            <div className="relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-6 md:pt-0 md:text-[14px]">
+            <div className="relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-10 md:pt-0 md:text-[14px]">
               <span className="inline-flex shrink-0 items-center gap-1.5"><MessageIcon /><span className="hidden sm:inline">{cloud.messagesCount} comentários</span><span className="sm:hidden">{cloud.messagesCount}</span></span>
               <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
-          </article>
+          </article>;
+          })()
         ))}
       </div>
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
@@ -162,10 +180,6 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
       </div>}
     </div>
   );
-}
-
-function ArrowIcon({ direction }: { direction: "up" | "down" }) {
-  return <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={direction === "up" ? "m18 15-6-6-6 6" : "m6 9 6 6 6-6"} /></svg>;
 }
 
 function MessageIcon() {

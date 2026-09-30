@@ -68,6 +68,12 @@ export async function proxy(request: NextRequest) {
   const sessionExists = request.cookies.has("cc_session");
   const sessionIsValid = sessionExists ? await hasValidSession(request) : false;
 
+  // Uma Cloud pública pode ser observada por visitantes. O CloudChat apresenta
+  // o cadastro somente quando a pessoa tenta escrever ou enviar uma mensagem.
+  if (pathname.startsWith("/cloud/")) {
+    return NextResponse.next();
+  }
+
   if (PUBLIC_PATHS.includes(pathname)) {
     if (sessionIsValid) {
       return NextResponse.redirect(new URL("/", request.url));

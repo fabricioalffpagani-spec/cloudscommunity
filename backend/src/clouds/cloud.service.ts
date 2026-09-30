@@ -564,7 +564,12 @@ export class CloudService {
     token: string | null,
     input: CreateCloudInput,
     invitedUserIds?: string[],
-  ): Promise<{ ok: true; cloud: CloudPayload }> {
+  ): Promise<{
+    ok: true;
+    userId: string;
+    cloud: CloudPayload;
+    leftCloudIds: string[];
+  }> {
     const current = await this.requireSession(token);
     const title = (input.title ?? '').trim();
     const description = (input.description ?? '').trim();
@@ -648,7 +653,7 @@ export class CloudService {
       description,
     });
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    const creation = await this.prisma.$transaction(async (tx) => {
       const cloud = await tx.cloud.create({
         data: {
           authorId: current.user.id,
@@ -679,6 +684,27 @@ export class CloudService {
           role: 'host',
         },
       });
+
+      const previousMemberships = scheduledAt
+        ? []
+        : await tx.cloudMember.findMany({
+            where: {
+              userId: current.user.id,
+              cloudId: { not: cloud.id },
+              leftAt: null,
+              cloud: { status: CloudStatus.active, deletedAt: null },
+            },
+            select: { cloudId: true },
+          });
+      const leftCloudIds = previousMemberships.map(
+        (membership) => membership.cloudId,
+      );
+      if (leftCloudIds.length > 0) {
+        await tx.cloudMember.updateMany({
+          where: { userId: current.user.id, cloudId: { in: leftCloudIds }, leftAt: null },
+          data: { leftAt: new Date() },
+        });
+      }
 
       // Add invited users as members for private clouds
       if (
@@ -729,11 +755,15 @@ export class CloudService {
         });
       }
 
-      return tx.cloud.findUniqueOrThrow({
-        where: { id: cloud.id },
-        include: this.cloudInclude(),
-      });
+      return {
+        cloud: await tx.cloud.findUniqueOrThrow({
+          where: { id: cloud.id },
+          include: this.cloudInclude(),
+        }),
+        leftCloudIds,
+      };
     });
+    const created = creation.cloud;
 
     if (origin && origin.authorId !== current.user.id) {
       const notification = await this.prisma.notification.findFirst({
@@ -820,7 +850,9 @@ export class CloudService {
 
     return {
       ok: true,
+      userId: current.user.id,
       cloud: this.mapCloud(created),
+      leftCloudIds: creation.leftCloudIds,
     };
   }
 
@@ -2388,13 +2420,13 @@ export class CloudService {
       where: { id: userId },
       include: { profile: true },
     });
-    const username =
-      userWithProfile?.profile?.username ||
+    const displayName =
       userWithProfile?.profile?.displayName ||
-      'usuário';
+      userWithProfile?.profile?.username ||
+      'Usuário';
     return this.createSystemMessage(
       cloudId,
-      `@${username} saiu da cloud`,
+      `${displayName} saiu da cloud`,
       userId,
     );
   }
@@ -2415,7 +2447,13 @@ export class CloudService {
   async joinCloud(
     token: string | null,
     cloudId: string,
-  ): Promise<{ ok: true; userId: string; entered: boolean; waiting: boolean }> {
+  ): Promise<{
+    ok: true;
+    userId: string;
+    entered: boolean;
+    waiting: boolean;
+    leftCloudIds: string[];
+  }> {
     const current = await this.requireSession(token);
 
     const cloud = await this.prisma.cloud.findFirst({
@@ -2477,6 +2515,31 @@ export class CloudService {
       membershipChanged = true;
     }
 
+    // A person may take part in only one live Cloud at a time. Joining a new
+    // live Cloud ends every other active participation before the new entry is
+    // announced. Scheduled Cloud waiting lists are not participation, so they
+    // do not interrupt the current conversation.
+    const previousMemberships = waiting
+      ? []
+      : await this.prisma.cloudMember.findMany({
+          where: {
+            userId: current.user.id,
+            cloudId: { not: cloudId },
+            leftAt: null,
+            cloud: { status: CloudStatus.active, deletedAt: null },
+          },
+          select: { cloudId: true },
+        });
+    const leftCloudIds = previousMemberships.map(
+      (membership) => membership.cloudId,
+    );
+    if (leftCloudIds.length > 0) {
+      await this.prisma.cloudMember.updateMany({
+        where: { userId: current.user.id, cloudId: { in: leftCloudIds }, leftAt: null },
+        data: { leftAt: new Date() },
+      });
+    }
+
     // The author and invited people are pre-created as members. Their first
     // actual visit must still receive an entry message, while reloads must not.
     const hasEntryNotification = await this.prisma.cloudMessage.findFirst({
@@ -2520,6 +2583,7 @@ export class CloudService {
       userId: current.user.id,
       entered,
       waiting,
+      leftCloudIds,
     };
   }
 
@@ -2673,7 +2737,7 @@ export class CloudService {
       },
       hypesCount: cloud._count.hypes,
       membersCount: cloud._count.members,
-      participantsCount: cloud.members.length,
+      participantsCount: cloud._count.members,
       originCloud: cloud.originCloud
         ? { id: cloud.originCloud.id, title: cloud.originCloud.title }
         : null,
@@ -2694,6 +2758,7 @@ export class CloudService {
           },
         })),
       participantProfiles: cloud.members
+        .filter((member) => member.leftAt === null)
         .filter((member) => member.user.profile)
         .map((member) => ({
           id: member.user.id,

@@ -709,10 +709,10 @@ export class AuthService {
       });
       if (activeMemberships.length > 0) {
         const leftAt = new Date();
-        const username =
-          session.user.profile?.username ||
+        const displayName =
           session.user.profile?.displayName ||
-          'usuário';
+          session.user.profile?.username ||
+          'Usuário';
         await this.prisma.$transaction([
           this.prisma.cloudMember.updateMany({
             where: {
@@ -725,7 +725,7 @@ export class AuthService {
               cloudId: membership.cloudId,
               userId: session.userId,
               type: 'system',
-              content: `@${username} saiu da cloud`,
+              content: `${displayName} saiu da cloud`,
             })),
           }),
         ]);

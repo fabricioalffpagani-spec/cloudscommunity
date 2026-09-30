@@ -1188,7 +1188,7 @@ function DmMsgMenu({
   );
 }
 
-function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; searchQuery?: string }) {
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
@@ -1214,13 +1214,12 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
     <div className="group flex w-full items-end gap-2.5" style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}>
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">
-        <UserAvatar
+        {showAvatar && <UserAvatar
           user={{ id: msg.senderId, username: msg.senderId, displayName: msg.senderDisplayName, avatarUrl: msg.senderAvatarUrl }}
           size={34}
-        />
+        />}
       </div>}
-      <div className={`flex flex-col gap-2 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
-        <span className="px-1 text-[12px] font-semibold text-white/40">{msg.sender}</span>
+      <div className={`relative flex flex-col gap-1 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
         {msg.kind === "audio" ? (
           <AudioMessageBubble msg={msg} />
         ) : msg.kind === "image" ? (
@@ -1243,10 +1242,12 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery 
           </div>
         )}
         {/* Action row: reply + three-dot menu */}
-        <div className={`flex items-center gap-1 px-1 ${isRight ? "flex-row-reverse" : ""}`}>
-          <span className="text-[11px] text-white">{msg.time}</span>
-          {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="text-[10px] italic text-white/45">editada</span>}
-          {isRight && <MessageReceipt msg={msg} />}
+        <div className={`${showFooter ? "flex px-1" : "absolute -bottom-1"} items-center gap-1 ${isRight ? "right-0 flex-row-reverse" : "left-0"}`}>
+          {showFooter && <>
+            <span className="text-[11px] text-white">{msg.time}</span>
+            {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="text-[10px] italic text-white/45">editada</span>}
+            {isRight && <MessageReceipt msg={msg} />}
+          </>}
           {/* Actions — visible on hover */}
           <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isRight ? "mr-1.5" : "ml-1.5"}`}>
             <button
@@ -1792,7 +1793,6 @@ function MessagesPageContent() {
       setConversations((prev) => sortConversations(prev.some((item) => item.id === conversation.id) ? prev.map((item) => (item.id === conversation.id ? conversation : item)) : [conversation, ...prev]));
       activeConversationIdRef.current = conversation.id;
       setActiveConversationId(conversation.id);
-      window.localStorage.setItem(`clouds-last-message-conversation:${user?.id}`, conversation.id);
       if (!searchParams.get("share")) {
         router.replace(messagesConversationHref(conversation.id), { scroll: false });
       }
@@ -1819,20 +1819,26 @@ function MessagesPageContent() {
 
   useEffect(() => {
     const rememberedConversationId = requestedConversationId(searchParams);
-    if (conversations.length === 0) return;
-    const requestedConversation = rememberedConversationId && conversations.some((conversation) => conversation.id === rememberedConversationId)
-      ? rememberedConversationId
-      : null;
-    const savedConversationId = window.localStorage.getItem(`clouds-last-message-conversation:${user?.id}`);
-    const savedConversation = savedConversationId && conversations.some((conversation) => conversation.id === savedConversationId)
-      ? savedConversationId
-      : null;
-    const nextConversationId = requestedConversation ?? savedConversation ?? conversations[0].id;
-    if (activeConversationIdRef.current === nextConversationId) return;
-    activeConversationIdRef.current = nextConversationId;
-    setActiveConversationId(nextConversationId);
-    if (!requestedConversation) router.replace(messagesConversationHref(nextConversationId), { scroll: false });
-  }, [conversations, router, searchParams, user?.id]);
+    if (!rememberedConversationId) {
+      // A rota /messages representa sempre a lista. Isso também cobre o toque no
+      // item Mensagens da navegação móvel depois de sair de uma conversa.
+      if (!searchParams.get("id")?.trim()) {
+        activeConversationIdRef.current = null;
+        setActiveConversationId(null);
+      }
+      return;
+    }
+    if (!conversations.some((conversation) => conversation.id === rememberedConversationId)) return;
+    if (activeConversationIdRef.current === rememberedConversationId) return;
+    activeConversationIdRef.current = rememberedConversationId;
+    setActiveConversationId(rememberedConversationId);
+  }, [conversations, searchParams]);
+
+  const returnToConversationList = useCallback(() => {
+    activeConversationIdRef.current = null;
+    setActiveConversationId(null);
+    router.replace("/messages", { scroll: false });
+  }, [router]);
 
   useEffect(() => {
     if (!activeConversationId || !autoSendRef.current || !sharedLink) return;
@@ -1850,6 +1856,13 @@ function MessagesPageContent() {
     if (!activeConversationId) return;
     activeConversationIdRef.current = activeConversationId;
     void loadMessages(activeConversationId);
+    setConversations((previous) => previous.map((conversation) =>
+      conversation.id === activeConversationId ? { ...conversation, unread: 0 } : conversation,
+    ));
+    void fetch(`/api/direct-messages/conversations/${encodeURIComponent(activeConversationId)}/read`, {
+      method: "POST",
+      credentials: "include",
+    });
 
     const socket = socketRef.current;
     if (socket?.connected) {
@@ -2030,9 +2043,8 @@ function MessagesPageContent() {
     setEmojiOpen(false);
     activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
-    window.localStorage.setItem(`clouds-last-message-conversation:${user?.id}`, conversationId);
     router.replace(messagesConversationHref(conversationId), { scroll: false });
-  }, [router, user?.id]);
+  }, [router]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -2399,7 +2411,7 @@ function MessagesPageContent() {
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-3 py-3 sm:px-6 sm:py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
-                <button type="button" aria-label="Voltar às conversas" onClick={() => { activeConversationIdRef.current = null; setActiveConversationId(null); router.replace("/messages", { scroll: false }); }} className="flex h-9 w-9 items-center justify-center text-white/70 md:hidden"><ArrowLeftIcon s={20} /></button>
+                <button type="button" aria-label="Voltar às conversas" onClick={returnToConversationList} className="flex h-9 w-9 items-center justify-center text-white/70 md:hidden"><ArrowLeftIcon s={20} /></button>
                   <Link href={`/users/${activeConversation.peerId}`} className="relative">
                   <UserAvatar user={{ id: activeConversation.peerId, username: activeConversation.peerUsername, displayName: activeConversation.name, avatarUrl: activeConversation.avatarUrl }} size={44} />
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[activeConversation.status]}`} />
@@ -2470,7 +2482,7 @@ function MessagesPageContent() {
           )}
 
           <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" ref={messagesContainerRef}>
-            <div className="flex min-h-full flex-col justify-end space-y-4">
+            <div className="flex min-h-full flex-col justify-end">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
                 <div>
@@ -2506,7 +2518,7 @@ function MessagesPageContent() {
                   rows.push(renderedMessage);
                   if (isLegacyCloudReplyPair) index += 1;
                 }
-                return rows.map((entry) => {
+                return rows.map((entry, index) => {
                   if ("type" in entry && entry.type === "date") {
                     return (
                       <div key={entry.id} className="flex justify-center py-1">
@@ -2515,7 +2527,19 @@ function MessagesPageContent() {
                     );
                   }
 
-                  return <MessageBubble key={entry.id} msg={entry as Msg} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />;
+                  const message = entry as Msg;
+                  const previousEntry = rows[index - 1];
+                  const nextEntry = rows[index + 1];
+                  const previousMessage = previousEntry && !("type" in previousEntry) ? previousEntry as Msg : null;
+                  const nextMessage = nextEntry && !("type" in nextEntry) ? nextEntry as Msg : null;
+                  const continuesPreviousGroup = previousMessage?.senderId === message.senderId;
+                  const continuesNextGroup = nextMessage?.senderId === message.senderId;
+
+                  return (
+                    <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />
+                    </div>
+                  );
                 });
               })()
             )}

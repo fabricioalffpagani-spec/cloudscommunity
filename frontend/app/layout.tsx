@@ -8,6 +8,7 @@ import { InvitePopupLoader } from "./components/InvitePopupLoader";
 import { MobileNavigationTutorial } from "./components/MobileNavigationTutorial";
 import { OnboardingGate } from "./components/OnboardingGate";
 import { MiniCloudDock } from "./components/MiniCloudDock";
+import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -48,6 +49,7 @@ export default function RootLayout({
             <ScrollbarStyles />
             {children}
             <MiniCloudDock />
+            <PwaInstallPrompt />
             <InvitePopupLoader />
             <Suspense fallback={null}><MobileNavigationTutorial /></Suspense>
           </AccessibilityProvider>

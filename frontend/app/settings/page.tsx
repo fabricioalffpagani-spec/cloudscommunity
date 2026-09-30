@@ -201,7 +201,12 @@ function CountryFlag({ country, fallback }: { country: string; fallback: string 
 
 function normalizeCountry(value: string | null | undefined) {
   if (!value) return "";
-  return BR_STATES.includes(value) ? "Brasil" : value;
+  const country = value.split(",")[0]?.trim() || "";
+  return BR_STATES.includes(country) ? "Brasil" : country;
+}
+
+function locationCity(value: string | null | undefined) {
+  return value?.split(",").slice(1).join(",").trim() || "";
 }
 
 function PanelPerfil() {
@@ -210,6 +215,7 @@ function PanelPerfil() {
   const [name, setName] = useState(user?.displayName || user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [pais, setPais] = useState(normalizeCountry(user?.location));
+  const [cidade, setCidade] = useState(locationCity(user?.location));
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -225,13 +231,19 @@ function PanelPerfil() {
     setName(user.displayName || user.name || "");
     setBio(user.bio || "");
     setPais(normalizeCountry(user.location));
+    setCidade(locationCity(user.location));
     setAvatarUrl(user.avatarUrl ?? null);
   }, [user]);
 
   const save = async () => {
+    if ((pais && !cidade.trim()) || (!pais && cidade.trim())) {
+      setError("Informe país e cidade para salvar a região.");
+      return;
+    }
     setSaving(true); setError("");
     try {
-      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, location: pais, avatarUrl }) });
+      const location = pais && cidade.trim() ? `${pais}, ${cidade.trim()}` : "";
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, location, avatarUrl }) });
       if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Não foi possível salvar o perfil.");
       await refresh(); setSaved(true); setTimeout(()=>setSaved(false),2000);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível salvar o perfil."); }
@@ -294,6 +306,11 @@ function PanelPerfil() {
                 </div>
               )}
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Cidade</label>
+            <input value={cidade} onChange={(event) => setCidade(event.target.value)} placeholder="Xanxerê" className="w-full rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none transition focus:border-[#A855F7]" />
+            <span className="text-[11px] text-white/50">A região será exibida como: {pais && cidade.trim() ? `${pais}, ${cidade.trim()}` : "País, cidade"}.</span>
           </div>
           {error && <p className="text-[12px] text-red-400">{error}</p>}
           <div className="flex justify-end"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition disabled:opacity-60">{saved?<><CheckIcon/>Salvo!</>:saving?"Salvando...":"Salvar perfil"}</button></div>
@@ -552,9 +569,12 @@ function PanelDados() {
   const { user } = useSessionUser();
   const [confirm,setConfirm]=useState(false);const [inp,setInp]=useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const exportData = () => {
     if (!user || exporting) return;
     setExporting(true);
+    setExportError("");
+    try {
     const lines = [
       "CLOUDS COMMUNITY - DADOS DA CONTA",
       "",
@@ -573,7 +593,15 @@ function PanelDados() {
       `Seguidores: ${user.followersCount ?? 0}`,
       `Seguindo: ${user.followingCount ?? 0}`,
     ];
-    const escapePdfText = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+    // This lightweight PDF writer uses Helvetica's WinAnsi-safe subset. Keeping
+    // stream data ASCII also makes the byte offsets in the xref table reliable.
+    const escapePdfText = (value: string) => value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\x20-\x7E]/g, "?")
+      .replace(/\\/g, "\\\\")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)");
     const content = ["BT", "/F1 16 Tf", "50 790 Td", `(${escapePdfText(lines[0])}) Tj`, "/F1 10 Tf", ...lines.slice(1).map((line) => `0 -20 Td (${escapePdfText(line)}) Tj`), "ET"].join("\\n");
     const objects = [
       "<< /Type /Catalog /Pages 2 0 R >>",
@@ -590,11 +618,19 @@ function PanelDados() {
     offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \\n`; });
     pdf += `trailer\\n<< /Size ${objects.length + 1} /Root 1 0 R >>\\nstartxref\\n${xref}\\n%%EOF`;
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    const objectUrl = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+    link.href = objectUrl;
     link.download = "clouds-community-dados-da-conta.pdf";
+    link.style.display = "none";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(link.href);
-    setExporting(false);
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+    } catch {
+      setExportError("Não foi possível gerar o PDF. Tente novamente.");
+    } finally {
+      setExporting(false);
+    }
   };
   return (<div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Dados</h2>
     <Card><Sub>Exportar</Sub>
@@ -602,6 +638,7 @@ function PanelDados() {
         <div><p className="text-[14px] font-medium text-white">Exportar meus dados</p><p className="text-[12px] text-white/60">Baixe uma cópia de todas suas informações.</p></div>
         <button onClick={exportData} disabled={!user || exporting} className="inline-flex items-center gap-2 rounded-full border border-white/[0.15] px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-white/[0.05] transition disabled:cursor-not-allowed disabled:opacity-50"><DownloadIcon s={15}/>{exporting ? "Gerando..." : "Exportar PDF"}</button>
       </div>
+      {exportError && <p role="alert" className="mt-3 text-[12px] text-red-300">{exportError}</p>}
     </Card>
     <Card className="border-red-500/20"><Sub>Zona de perigo</Sub>
       {!confirm?(<div className="flex items-center justify-between">
