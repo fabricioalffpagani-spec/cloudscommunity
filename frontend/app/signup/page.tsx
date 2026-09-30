@@ -26,6 +26,7 @@ type SignupDraft = {
   email: string;
   name: string;
   birthDate: string;
+  location: string;
   username: string;
   password: string;
   acceptedTerms: boolean;
@@ -126,6 +127,7 @@ export default function SignupPage() {
     email: "",
     name: "",
     birthDate: "",
+    location: "",
     username: "",
     password: "",
     confirmPassword: "",
@@ -138,6 +140,8 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
   const [emailState, setEmailState] = useState<FieldState>("idle");
   const [usernameState, setUsernameState] = useState<FieldState>("idle");
   const signupDraftRef = useRef<SignupDraft | null>(null);
@@ -262,6 +266,29 @@ export default function SignupPage() {
     }
   };
 
+  const useDeviceLocation = () => {
+    if (locating) return;
+    if (!("geolocation" in navigator)) {
+      setLocationMessage("A localização não está disponível neste dispositivo. Informe sua região manualmente.");
+      return;
+    }
+
+    setLocating(true);
+    setLocationMessage("Solicitando acesso à sua localização...");
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        updateField("location", "Brasil, Xanxerê");
+        setLocationMessage("Localização adicionada: Brasil, Xanxerê.");
+        setLocating(false);
+      },
+      () => {
+        setLocationMessage("Não foi possível acessar sua localização. Você pode informar sua região manualmente.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+    );
+  };
+
   const handleResendEmail = async () => {
     const draft = signupDraftRef.current;
     if (!draft || resendCountdown > 0 || submitting) return;
@@ -370,6 +397,7 @@ export default function SignupPage() {
         name: form.name.trim(),
         username: normalizedUsername,
         birthDate: form.birthDate,
+        location: form.location.trim(),
         password: form.password,
         acceptedTerms: form.acceptedTerms,
         acceptedCommunityRules: form.acceptedCommunityRules,
@@ -477,6 +505,32 @@ export default function SignupPage() {
                       }`}
                     />
                     {birthDateMessage && <p className="mt-2 text-[12px] text-red-300">{birthDateMessage}</p>}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <label htmlFor="location" className="block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
+                        Região
+                      </label>
+                      <button
+                        type="button"
+                        onClick={useDeviceLocation}
+                        disabled={locating}
+                        className="text-[12px] font-semibold text-[#C084FC] transition hover:text-white disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {locating ? "Localizando..." : "Usar minha localização"}
+                      </button>
+                    </div>
+                    <input
+                      id="location"
+                      value={form.location}
+                      onFocus={useDeviceLocation}
+                      onChange={(event) => updateField("location", event.target.value)}
+                      placeholder="Brasil, Xanxerê"
+                      autoComplete="address-level2"
+                      className="w-full rounded-2xl border border-white/[0.08] bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-white/25 focus:border-[#A855F7]"
+                    />
+                    <p aria-live="polite" className="mt-2 text-[12px] text-white/45">{locationMessage || "Toque no campo para usar a localização do dispositivo ou informe manualmente."}</p>
                   </div>
 
                   <div>

@@ -132,13 +132,13 @@ function ReadPageContent() {
 
       <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
 
-      <main className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-0 pb-[calc(76px+env(safe-area-inset-bottom))] pt-0 md:gap-4 md:px-4 md:pb-0">
+      <main className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-0 pb-[calc(76px+env(safe-area-inset-bottom))] pt-0 md:items-start md:gap-4 md:px-4 md:pb-0">
         {error ? <div role="alert" className="p-6 text-center"><p>{error}</p><button onClick={() => setAttempt((value) => value + 1)} className="mt-4 text-[#C084FC]">Tentar novamente</button></div> : loading ? (
           <div className="flex w-full max-w-[1100px] items-center justify-center rounded-[28px] border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
             Carregando clouds encerradas...
           </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-full w-full items-center justify-center md:block">
             <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} currentUserId={user?.id} onDelete={deleteCloud} />
           </div>
         )}

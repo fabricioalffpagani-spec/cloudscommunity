@@ -2130,6 +2130,15 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         credentials: "include",
       }).then((response) => {
         if (response.ok) {
+          const minimized = window.localStorage.getItem("clouds:minimized-cloud");
+          if (minimized) {
+            try {
+              if (JSON.parse(minimized).id !== cloudId) {
+                window.localStorage.removeItem("clouds:minimized-cloud");
+                window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+              }
+            } catch { /* ignore invalid persisted state */ }
+          }
           // The HTTP endpoint already persisted and broadcast the entry
           // message. This call only joins the newly-authorized socket room.
           joinCloud(socket, false);
@@ -2629,7 +2638,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   return (
     <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-      <div className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
+      <div className="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 bg-black px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:grid-cols-[2.25rem_minmax(0,1fr)_auto] sm:gap-x-3 sm:gap-y-1.5 sm:px-4 sm:pb-4 sm:pt-4">
         <button
           type="button"
           aria-label="Minimizar Cloud"
@@ -2639,7 +2648,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           <ArrowLeftIcon s={18} />
         </button>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
+        <div className="min-w-0 overflow-hidden">
           <h1
             className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]"
             onPointerDown={handleTitlePointerDown}
@@ -2649,28 +2658,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           >
             {resolvedTitle}
           </h1>
-          <div className="flex items-center gap-1.5 whitespace-nowrap text-[13px] text-white/50 sm:gap-3 sm:text-[16px]">
-            <span className="flex min-w-0 items-center gap-1">
-              <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#A855F7] animate-pulse sm:h-3 sm:w-3" />
-              <span className="md:hidden">{resolvedParticipants} na conversa</span>
-              <span className="hidden md:inline">{resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa</span>
-            </span>
-            <span className="hidden text-white/20 md:inline">|</span>
-            <span className="flex items-center gap-1 font-sans text-[18px] font-bold text-[#A855F7] sm:text-[24px]" style={{ fontFamily: "Arial, sans-serif" }}>
-              <HeaderClockIcon />
-              {liveTimer}
-            </span>
-            {isCloudAuthor && (
-              <button
-                type="button"
-                aria-label="Excluir cloud"
-                onClick={() => setDeleteConfirmOpen(true)}
-                className="ml-1 flex items-center justify-center text-white/50 transition hover:text-red-400 md:hidden"
-              >
-                <AnimatedTrashIcon s={16} />
-              </button>
-            )}
-          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5">
@@ -2764,19 +2751,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#11141F] shadow-xl"
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActionMenuOpen(false);
-                    setInfoOpen(true);
-                  }}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white"
-                >
-                  <span className="flex h-6 w-6 items-center justify-center text-white/60">
-                    <HeaderInfoIcon />
-                  </span>
-                  Informações da Cloud
-                </button>
                 {isCloudAuthor && (
                   <button
                     type="button"
@@ -2791,7 +2765,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     {reportNotifCount > 0 && <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{reportNotifCount > 9 ? "9+" : reportNotifCount}</span>}
                   </button>
                 )}
-                <button
+                {cloud?.description?.trim() && <button
                   type="button"
                   onClick={() => {
                     setActionMenuOpen(false);
@@ -2800,8 +2774,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white"
                 >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">D</span>
-                  Ler descrição
-                </button>
+                  Ver descrição
+                </button>}
                 {canReportCloud && (
                   <button
                     type="button"
@@ -2818,6 +2792,29 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               </div>
             )}
           </div>
+        </div>
+
+        <div className="col-start-2 col-end-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[13px] text-white/50 sm:gap-3 sm:text-[16px]">
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-[#A855F7] animate-pulse sm:h-3 sm:w-3" />
+            <span className="md:hidden">{resolvedParticipants} na conversa</span>
+            <span className="hidden md:inline">{resolvedParticipants} {resolvedParticipants === 1 ? "pessoa" : "pessoas"} na conversa</span>
+          </span>
+          <span className="hidden text-white/20 md:inline">|</span>
+          <span className="flex shrink-0 items-center gap-1 font-sans text-[18px] font-bold text-[#A855F7] sm:text-[24px]" style={{ fontFamily: "Arial, sans-serif" }}>
+            <HeaderClockIcon />
+            {liveTimer}
+          </span>
+          {isCloudAuthor && (
+            <button
+              type="button"
+              aria-label="Excluir cloud"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="ml-1 flex shrink-0 items-center justify-center text-white/50 transition hover:text-red-400 md:hidden"
+            >
+              <AnimatedTrashIcon s={16} />
+            </button>
+          )}
         </div>
       </div>
 

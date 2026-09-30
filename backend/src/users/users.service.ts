@@ -1144,6 +1144,20 @@ export class UsersService {
             duration: true,
             createdAt: true,
             visibility: true,
+            authorId: true,
+            members: {
+              where: { leftAt: null },
+              take: 4,
+              orderBy: { joinedAt: 'asc' },
+              select: {
+                userId: true,
+                user: {
+                  select: {
+                    profile: { select: { displayName: true, avatarUrl: true } },
+                  },
+                },
+              },
+            },
           },
         })
       : [];
@@ -1156,6 +1170,14 @@ export class UsersService {
       description: cloud.content,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
+      authorId: cloud.authorId,
+      participantProfiles: cloud.members
+        .filter((member) => member.user.profile)
+        .map((member) => ({
+          id: member.userId,
+          name: member.user.profile!.displayName,
+          avatarUrl: member.user.profile!.avatarUrl,
+        })),
       visibility: cloud.visibility === 'private' ? 'private' : 'public',
       href: `/cloud/${cloud.id}?source=for-you`,
     }));
@@ -1178,6 +1200,22 @@ export class UsersService {
               createdAt: true,
               endedAt: true,
               visibility: true,
+              authorId: true,
+              members: {
+                where: { leftAt: null },
+                take: 4,
+                orderBy: { joinedAt: 'asc' },
+                select: {
+                  userId: true,
+                  user: {
+                    select: {
+                      profile: {
+                        select: { displayName: true, avatarUrl: true },
+                      },
+                    },
+                  },
+                },
+              },
             },
           })
         : [];
@@ -1191,6 +1229,14 @@ export class UsersService {
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
       endedAt: cloud.endedAt?.toISOString() ?? null,
+      authorId: cloud.authorId,
+      participantProfiles: cloud.members
+        .filter((member) => member.user.profile)
+        .map((member) => ({
+          id: member.userId,
+          name: member.user.profile!.displayName,
+          avatarUrl: member.user.profile!.avatarUrl,
+        })),
       visibility: cloud.visibility === 'private' ? 'private' : 'public',
       href: `/cloud/${cloud.id}/conversation`,
     }));

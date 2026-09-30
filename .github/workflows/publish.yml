@@ -1,4 +1,4 @@
-name: Validate, test containers and publish GHCR
+name: Validate, publish GHCR and deploy production
 on:
   push:
     branches: [main]
@@ -120,3 +120,57 @@ jobs:
             docker tag "$image:$IMAGE_TAG" "$image:latest"
             docker push "$image:latest"
           done
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [validate, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy published SHA to Oracle
+        shell: bash
+        env:
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_SSH_PORT: ${{ secrets.PROD_SSH_PORT }}
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$PROD_SSH_HOST" && -n "$PROD_SSH_USER" && -n "$PROD_SSH_PRIVATE_KEY" && -n "$PROD_SSH_KNOWN_HOSTS" ]] || {
+            echo 'Required production SSH secrets are missing' >&2
+            exit 1
+          }
+          [[ "$PROD_SSH_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || exit 1
+          [[ "$PROD_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 1
+          port="${PROD_SSH_PORT:-22}"
+          [[ "$port" =~ ^[0-9]{1,5}$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) || exit 1
+          umask 077
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$PROD_SSH_PRIVATE_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$PROD_SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          host_entry="$PROD_SSH_HOST"
+          if [[ "$port" != 22 ]]; then host_entry="[$PROD_SSH_HOST]:$port"; fi
+          ssh-keygen -F "$host_entry" -f "$ssh_dir/known_hosts" >/dev/null || {
+            echo 'Pinned production SSH host key is missing' >&2
+            exit 1
+          }
+          repository="${GITHUB_REPOSITORY,,}"
+          ssh -i "$ssh_dir/key" -p "$port" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            "$PROD_SSH_USER@$PROD_SSH_HOST" \
+            bash -s -- "$GITHUB_SHA" "$repository" < tools/deploy-production.sh
+      - name: Verify public frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontend_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 --retry 3 --retry-delay 5 --retry-all-errors https://cloudscommunity.com.br/)"
+          [[ "$frontend_status" == 200 || "$frontend_status" == 307 ]] || { echo "Unexpected frontend HTTP status: $frontend_status" >&2; exit 1; }
+          api_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 --retry 3 --retry-delay 5 --retry-all-errors https://api.cloudscommunity.com.br/)"
+          [[ "$api_status" == 200 ]] || { echo "Unexpected API HTTP status: $api_status" >&2; exit 1; }
+          echo "Frontend HTTP $frontend_status; API HTTP $api_status"

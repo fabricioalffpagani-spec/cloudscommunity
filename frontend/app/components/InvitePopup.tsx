@@ -146,7 +146,7 @@ export function InvitePopup() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[70] w-full max-w-[360px] animate-in slide-in-from-bottom-4 duration-300 shadow-2xl shadow-black/60 rounded-2xl overflow-hidden">
+    <div className="fixed inset-x-4 bottom-6 z-[70] w-auto max-w-[360px] animate-in slide-in-from-bottom-4 overflow-hidden rounded-2xl shadow-2xl shadow-black/60 duration-300 sm:left-auto sm:right-6 sm:w-full">
       {/* Header */}
       <div className="bg-[#1E1040] px-5 pt-5 pb-4 relative">
         <button

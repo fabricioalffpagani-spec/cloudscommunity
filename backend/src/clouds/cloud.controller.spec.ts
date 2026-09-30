@@ -3,9 +3,11 @@ import { CloudController } from './cloud.controller';
 describe('CloudController', () => {
   it('forwards selected private-cloud invitees to the creation service', async () => {
     const cloudService = {
-      create: jest
-        .fn()
-        .mockResolvedValue({ ok: true, cloud: { id: 'cloud-id' } }),
+      create: jest.fn().mockResolvedValue({
+        ok: true,
+        cloud: { id: 'cloud-id' },
+        leftCloudIds: [],
+      }),
     };
     const controller = new CloudController(
       cloudService as never,

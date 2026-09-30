@@ -14,6 +14,7 @@ import {
   useSessionUser,
 } from "../components/session-user";
 import { MobileAppNav } from "../components/MobileAppChrome";
+import { NotificationsBell } from "../components/NotificationsPanel";
 
 function PencilIcon() {
   return (
@@ -89,6 +90,11 @@ function Field({
       />
     </div>
   );
+}
+
+function hasCountryAndCity(location: string) {
+  const [country, ...cityParts] = location.split(",");
+  return Boolean(country?.trim() && cityParts.join(",").trim());
 }
 
 const DURATION_SECONDS: Record<string, number> = {
@@ -232,6 +238,7 @@ function ProfileEmptyState() {
 
 type ProfileCloud = {
   id: string;
+  authorId: string;
   title: string;
   description: string | null;
   duration: string;
@@ -245,7 +252,9 @@ type ProfileCloud = {
   href: string;
 };
 
-function ProfileCloudCard({ cloud, now, viewerId, onDelete, onReminderActivated }: { cloud: ProfileCloud; now: number; viewerId?: string; onDelete?: (cloud: ProfileCloud) => void; onReminderActivated?: (cloud: ProfileCloud) => void }) {
+const CLOUD_REPORT_REASONS = ["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Conteúdo sexual inapropriado", "Ameaças", "Outro"];
+
+function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onReminderActivated }: { cloud: ProfileCloud; now: number; viewerId?: string; authorAvatarUrl?: string | null; onDelete?: (cloud: ProfileCloud) => void; onReminderActivated?: (cloud: ProfileCloud) => void }) {
   const createdAt = new Date(cloud.createdAt);
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
   const isEnded = cloud.status === "ended";
@@ -253,6 +262,13 @@ function ProfileCloudCard({ cloud, now, viewerId, onDelete, onReminderActivated 
   const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > now);
   const isLive = !isEnded && remainingSeconds > 0;
   const [reminderSet, setReminderSet] = useState(() => Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReasons, setReportReasons] = useState<string[]>([]);
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const isHost = Boolean(viewerId && cloud.authorId === viewerId);
 
   useEffect(() => {
     if (viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)) {
@@ -268,35 +284,47 @@ function ProfileCloudCard({ cloud, now, viewerId, onDelete, onReminderActivated 
       onReminderActivated?.(cloud);
     }
   };
-  return (
-    <article className="cloud-card relative w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-[#8B5CF6]/30 bg-[#110825] p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] sm:p-5">
-      <div className="flex items-center justify-between gap-3">
-        <span className="inline-flex items-center rounded-full bg-white/[0.04] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
-          {cloud.duration}
-        </span>
-        <div className="flex items-center gap-2">
-          {isScheduled && (
-            <span className="inline-flex items-center rounded-full bg-[#9333EA]/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
-              Agendada
-            </span>
-          )}
-          {isLive && !isScheduled && (
-            <span className="inline-flex items-center rounded-full bg-[#A855F7]/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#D8B4FE]">
-              Ao vivo
-            </span>
-          )}
-          {isEnded && (
-            <span className="inline-flex items-center rounded-full bg-white/[0.08] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
-              Encerrada
-            </span>
-          )}
-          {onDelete && <button type="button" onClick={() => onDelete(cloud)} aria-label={`Excluir cloud ${cloud.title}`} title="Excluir cloud" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white/35 transition hover:bg-red-500/10 hover:text-red-300"><TrashIcon /></button>}
-        </div>
-      </div>
 
-      <h3 lang="pt-BR" className={`mt-3 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[16px] leading-[1.3]" : "text-[19px] leading-snug"}`}>{cloud.title}</h3>
-      <div className="mt-3 flex flex-col gap-3 text-[13px] text-white/50 sm:flex-row sm:items-center sm:justify-between"><span className="flex min-w-0 items-center gap-2 break-words">{isScheduled ? <><span className="shrink-0 text-[#C084FC]">▣</span>{scheduledDate?.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })} · {scheduledDate?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</> : <><span className="shrink-0 text-[#C084FC]">◯</span>{cloud.messagesCount ?? cloud.participantProfiles?.length ?? 0} comentário{(cloud.messagesCount ?? cloud.participantProfiles?.length ?? 0) === 1 ? "" : "s"}</>}</span>{isScheduled ? <div className="flex items-center gap-2"><span aria-label="Cloud agendada" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-white"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16" /></svg></span><button type="button" onClick={() => void activateReminder()} disabled={reminderSet} className={`inline-flex shrink-0 rounded-full px-4 py-2.5 text-[12px] font-semibold transition ${reminderSet ? "bg-[#9333EA] text-white" : "border border-[#9333EA]/80 text-white hover:bg-[#9333EA]/20"}`}>{reminderSet ? "Aguardando" : "Avisar-me"}</button></div> : <Link href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[#9333EA]/80 px-4 py-2 text-[12px] font-semibold text-white transition hover:bg-[#9333EA]/20">{isEnded ? "Ler conversa" : "Participar"}<span aria-hidden="true">›</span></Link>}</div>
-      {!isScheduled && <p className="mt-3 text-[12px] text-white/40">{isEnded && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : `Encerra em ${formatCountdown(remainingSeconds)}`}</p>}
+  const sendReport = async () => {
+    if (reportReasons.length === 0 || reporting) return;
+    setReporting(true);
+    setReportError("");
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reportedId: cloud.authorId, messageId: null, messageContent: cloud.title, reasons: reportReasons }),
+      });
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) throw new Error(payload?.message ?? "Não foi possível enviar a denúncia.");
+      setReportOpen(false);
+      setReportReasons([]);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "Não foi possível enviar a denúncia.");
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const statusLabel = isScheduled ? "Agendada" : isLive ? "Ao vivo" : "Encerrada";
+  const statusDetail = isScheduled && scheduledDate
+    ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`
+    : isEnded && cloud.endedAt
+      ? `Encerrada em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`
+      : `Encerra em ${formatCountdown(remainingSeconds)}`;
+  const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
+  const visibleParticipants = participants.slice(0, 3);
+  return (
+    <article className="cloud-card relative flex min-h-[180px] w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">{authorAvatarUrl ? <img src={authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : cloud.title.slice(0, 1).toUpperCase()}</span>
+        <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button><button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
+      </div>
+      <Link href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 lang="pt-BR" className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link>
+      <p className="text-center text-[11px] text-white/50">{statusLabel} {statusDetail}</p>
+      {detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="flex items-center justify-between gap-4"><h2 className="text-[18px] font-bold">Informações da Cloud</h2><button type="button" onClick={() => setDetailsOpen(false)} className="text-xl text-white/50">×</button></div><div className="mt-4 space-y-2 text-[14px] text-white/70"><p><span className="text-white/40">Duração: </span>{cloud.duration}</p><p><span className="text-white/40">Participantes: </span>{cloud.participantProfiles?.length ?? 0}</p><p><span className="text-white/40">Comentários: </span>{cloud.messagesCount ?? 0}</p><p><span className="text-white/40">Status: </span>{statusLabel}</p><p className="whitespace-pre-wrap"><span className="text-white/40">Descrição: </span>{cloud.description?.trim() || "Sem descrição."}</p></div></div></div>}
+      {reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="flex items-center justify-between gap-4"><h2 className="text-[18px] font-bold">Denunciar Cloud</h2><button type="button" onClick={() => setReportOpen(false)} className="text-xl text-white/50">×</button></div><p className="mt-2 text-[13px] leading-relaxed text-white/60">Selecione os motivos. A denúncia será encaminhada para cloudscomunidade@gmail.com.</p><div className="mt-4 space-y-2">{CLOUD_REPORT_REASONS.map((reason) => <label key={reason} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] text-white/80"><input type="checkbox" checked={reportReasons.includes(reason)} onChange={() => setReportReasons((current) => current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason])} className="h-4 w-4 accent-[#A855F7]" />{reason}</label>)}</div>{reportError && <p role="alert" className="mt-3 text-[13px] text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setReportOpen(false)} className="rounded-full px-4 py-2 text-[13px] text-white/70">Cancelar</button><button type="button" disabled={reportReasons.length === 0 || reporting} onClick={() => void sendReport()} className="rounded-full bg-red-500 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}
     </article>
   );
 }
@@ -352,8 +380,8 @@ export default function ProfilePage() {
 
     let cancelled = false;
 
-    const loadClouds = async () => {
-      setCloudsLoading(true);
+    const loadClouds = async (showLoading = true) => {
+      if (showLoading) setCloudsLoading(true);
 
       try {
         const response = await fetch("/api/clouds/mine", {
@@ -369,16 +397,18 @@ export default function ProfilePage() {
           setClouds([]);
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && showLoading) {
           setCloudsLoading(false);
         }
       }
     };
 
     void loadClouds();
+    const refreshTimer = window.setInterval(() => void loadClouds(false), 10_000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
     };
   }, [user]);
 
@@ -508,6 +538,11 @@ export default function ProfilePage() {
   };
 
   const saveProfile = async () => {
+    const location = draft.location.trim();
+    if (location && !hasCountryAndCity(location)) {
+      setProfileError("Informe a região no formato País, cidade.");
+      return;
+    }
     setSavingProfile(true);
     setProfileError(null);
 
@@ -518,7 +553,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           displayName: draft.name.trim(),
           bio: draft.bio.trim(),
-          location: draft.location.trim(),
+          location,
           avatarUrl: draft.avatarUrl,
         }),
       });
@@ -566,9 +601,12 @@ export default function ProfilePage() {
           <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <BackIcon s={20} />
           </Link>
-          <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
-            <GearIcon s={20} />
-          </Link>
+          <div className="flex items-center gap-3">
+            <NotificationsBell buttonClassName="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
+            <Link href="/settings" aria-label="Configurações" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+              <GearIcon s={20} />
+            </Link>
+          </div>
         </div>
         <div className="mx-auto max-w-[680px] px-5 pb-32 pt-10">
           <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-8 text-center text-white/55">
@@ -588,7 +626,8 @@ export default function ProfilePage() {
         </Link>
         <div className="flex items-center gap-4">
           {/* <SessionUserLink showLabel className="hidden sm:inline-flex" /> */}
-          <Link href="/settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
+          <NotificationsBell buttonClassName="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
+          <Link href="/settings" aria-label="Configurações" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <GearIcon s={20} />
           </Link>
         </div>
@@ -653,7 +692,7 @@ export default function ProfilePage() {
           ) : filteredClouds.length > 0 ? (
             <div className="grid gap-3">
               {filteredClouds.map((cloud) => (
-                <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} viewerId={user?.id} onReminderActivated={setQueueCloud} onDelete={(endedCloud) => { setDeleteCloudError(""); setCloudToDelete(endedCloud); }} />
+                <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} viewerId={user?.id} authorAvatarUrl={user?.avatarUrl} onReminderActivated={setQueueCloud} onDelete={(endedCloud) => { setDeleteCloudError(""); setCloudToDelete(endedCloud); }} />
               ))}
             </div>
           ) : (
@@ -731,8 +770,9 @@ export default function ProfilePage() {
                 label="Região"
                 value={draft.location}
                 onChange={(value) => setDraft({ ...draft, location: value })}
-                placeholder="Sua região"
+                placeholder="País, cidade"
               />
+              <p className="-mt-2 text-[12px] text-white/45">Use o formato País, cidade. Ex.: Brasil, Xanxerê.</p>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
               <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-lg font-bold text-white">

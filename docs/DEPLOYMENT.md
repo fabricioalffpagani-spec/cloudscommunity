@@ -1,8 +1,8 @@
 # Desenvolvimento e produção
 
-O checkout foi analisado na branch `dev`; `main` e `dev` apontavam para o mesmo
-conteúdo inicial. As alterações são propostas na `dev`, para revisão e merge em
-`main`. Nenhuma branch remota foi alterada e nenhuma imagem foi publicada nesta sessão.
+As alterações de infraestrutura são preparadas e validadas na branch `dev` antes
+da promoção para `main`. O push em `main` dispara a validação, a publicação das
+imagens e o deploy automático descrito abaixo.
 
 `dev` é desenvolvimento e integração; `main` é a versão estável para produção.
 Os arquivos de produção também ficam na `dev` para serem validados antes da promoção.
@@ -77,8 +77,9 @@ As demais validações continuam após um erro de lint, mas o job permanece repr
 `publish.yml` roda na `main` e aceita execução manual somente nessa branch. Só após
 validação aprovada constrói as duas imagens `linux/amd64`, inicia a configuração
 real de produção contra volumes exclusivos do runner, verifica saúde, BFF, CORS,
-Socket.IO e isolamento, e publica os mesmos artefatos testados. Não compila na Oracle.
-Não há deploy SSH automático ou transmissão de secrets da Oracle pelo workflow.
+Socket.IO e isolamento, e publica os mesmos artefatos testados. O job `deploy` só
+começa após `validate` e `publish` concluírem com sucesso; a concorrência
+`ghcr-main` impede dois deploys simultâneos. A Oracle não compila imagens.
 
 Repository **Variables** obrigatórias para produção:
 
@@ -93,10 +94,54 @@ no CI. O Dockerfile rejeita valores ausentes, localhost, HTTP, credenciais ou pa
 Socket.IO recebe uma origem `https://`; a biblioteca negocia polling HTTPS e upgrade
 WebSocket WSS. Não use `wss://` como origem desse cliente Socket.IO.
 
-Repository **Secrets** adicionais: nenhum para construir/publicar. O workflow usa
-o `GITHUB_TOKEN` automático com `packages: write`. Não crie secrets de banco, JWT ou
-Resend para build. **Environment Secrets**: não necessários neste fluxo; se no futuro
-houver um job de deployment protegido, configure-os nesse environment, sem build args.
+Repository **Secrets** para o job de deploy (obrigatórios, exceto a porta):
+
+| Nome | Valor a configurar no GitHub |
+| --- | --- |
+| `PROD_SSH_HOST` | Host/IP da VM Oracle |
+| `PROD_SSH_USER` | Usuário SSH com acesso a `/opt/clouds` e Docker |
+| `PROD_SSH_PRIVATE_KEY` | Chave privada dedicada ao deploy, sem passphrase interativa |
+| `PROD_SSH_KNOWN_HOSTS` | Linha `known_hosts` verificada da VM, incluindo hostname/IP e chave pública |
+| `PROD_SSH_PORT` | Porta SSH; opcional, padrão 22 |
+
+Crie uma chave SSH exclusiva para o GitHub Actions. Instale somente sua chave
+**pública** em `~/.ssh/authorized_keys` do usuário da VM. Cadastre a privada no
+secret `PROD_SSH_PRIVATE_KEY`; nunca a coloque no repositório. Obtenha a chave
+pública do host de uma fonte confiável ou compare o fingerprint com uma sessão
+SSH já confiável antes de preencher `PROD_SSH_KNOWN_HOSTS`. Não use `ssh-keyscan`
+isoladamente como prova de identidade. Para porta diferente de 22, a linha deve
+identificar `[host]:porta`. O job exige validação estrita da chave do host.
+O SSH da VM precisa aceitar conexões dos runners hospedados pelo GitHub, cujos
+IPs podem mudar. Se a porta 22 for restringida futuramente, o deploy poderá
+falhar até haver um runner com acesso autorizado; este workflow não altera
+firewall nem Security Lists da Oracle.
+
+O workflow usa o `GITHUB_TOKEN` automático com `packages: write` somente na
+publicação. Não crie secrets de banco, JWT ou Resend para o build ou deploy; os
+segredos de runtime continuam exclusivamente no `.env` da VM. O Docker login da
+VM já deve conseguir ler os packages no GHCR. Se forem privados, configure na VM
+um token de menor privilégio com `read:packages`, conforme abaixo; o job não
+transmite esse token pelo SSH.
+
+O deploy executa `git fetch origin main` e `git merge --ff-only` na VM, exigindo
+checkout limpo e `main` remoto exatamente no SHA publicado. Atualiza somente
+`IMAGE_TAG=sha-<SHA completo>` em `/opt/clouds/.env`, mantendo as outras linhas e
+permissões, e recusa entradas duplicadas. Depois roda `docker compose pull` apenas
+para `backend` e `frontend` e `up -d --no-build --no-deps --wait` para esses dois
+serviços. PostgreSQL e Redis permanecem em execução e seus volumes não são
+removidos. O job confirma saúde de todos os quatro serviços e verifica a tag das
+imagens efetivamente usadas por backend e frontend. Por fim, exige HTTP 200 ou
+307 do frontend público e HTTP 200 da API pública. Falhas deixam o workflow
+reprovado; não há rollback automático destrutivo.
+
+Para identificar o SHA em produção, consulte a linha `IMAGE_TAG` no `.env` da VM
+(sem imprimir o arquivo inteiro) e compare com `docker inspect --format
+'{{.Config.Image}}'` dos containers backend e frontend. Para rollback manual,
+selecione uma tag `sha-<SHA anterior>` ainda publicada no GHCR, altere somente
+`IMAGE_TAG` no `.env`, execute `docker compose --env-file .env -f
+docker-compose.prod.yml pull backend frontend` e `up -d --no-build --no-deps
+--wait backend frontend`, e confira saúde e endpoints. Revise antes a
+compatibilidade das migrations: reverter a imagem não reverte o banco.
 
 Imagens para o remote atual (o workflow calcula o nome em minúsculas):
 
@@ -159,7 +204,8 @@ Somente exemplos fictícios são versionados. Não compartilhe a saída de
 Pré-requisitos: Ubuntu 24.04 x86_64, Docker/Compose com suporte a `--wait`, 4 GB de
 swap configurados, espaço em disco para imagens/volumes e um proxy TLS antes de
 servir usuários. A aplicação utiliza cookies `Secure` em produção e requer HTTPS.
-Não foi instalado proxy ou Cloudflare nesta etapa.
+Cloudflare, Nginx, DNS, certificados e firewall existentes permanecem fora deste
+workflow.
 
 Copie `docker-compose.prod.yml` e `.env.production.example` para `/opt/clouds`.
 O arquivo de produção é **independente**: nunca combine com `docker-compose.yml`

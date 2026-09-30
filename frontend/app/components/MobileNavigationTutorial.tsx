@@ -11,6 +11,7 @@ export function MobileNavigationTutorial() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     if (!user || pathname !== "/" || typeof window === "undefined") return;
@@ -20,6 +21,7 @@ export function MobileNavigationTutorial() {
     const isMobile = window.matchMedia("(max-width: 767px)").matches;
 
     if (isMobile && (wasJustCreated || !hasSeen)) {
+      setStep(0);
       setOpen(true);
       sessionStorage.removeItem("clouds:show-mobile-tutorial");
     }
@@ -33,31 +35,32 @@ export function MobileNavigationTutorial() {
   if (!open) return null;
 
   const steps = [
-    ["↑", "Role para ver mais tópicos", "Use a rolagem vertical para explorar novas Clouds."],
-    ["←", "Deslize para a esquerda", "Arraste o título da Cloud para entrar e participar da conversa."],
-    ["◉", "Toque no título", "Veja a descrição, informações ou denuncie uma Cloud."],
+    { icon: "☁", title: "Talk: Clouds ao vivo", description: "Na aba Talk, role verticalmente para descobrir conversas acontecendo agora." },
+    { icon: "☝", title: "Entre na conversa", description: "Toque uma vez no título para ver detalhes. Toque duas vezes para entrar na Cloud e participar do chat." },
+    { icon: "+", title: "Crie sua própria Cloud", description: "Use o botão central da barra inferior para começar uma conversa com a sua comunidade." },
+    { icon: "▤", title: "Read: converse no seu ritmo", description: "Na aba Read, veja Clouds encerradas e leia a conversa completa quando quiser." },
+    { icon: "⌁", title: "Meet: descubra pessoas", description: "Na aba Meet, encontre perfis, siga pessoas e amplie sua comunidade." },
+    { icon: "✉", title: "Mensagens e Em alta", description: "Use Mensagens para conversas privadas. Em alta mostra os assuntos e Clouds que estão ganhando destaque." },
+    { icon: "◌", title: "Seu Perfil e notificações", description: "No Perfil, edite suas informações, acompanhe suas Clouds e toque no sino para ver novas mensagens, seguidores e avisos." },
   ];
+  const currentStep = steps[step];
+  const isLastStep = step === steps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[300] overflow-y-auto bg-[#080315]/85 p-4 py-7 backdrop-blur-md">
-      <section className="relative mx-auto w-full max-w-md rounded-[32px] border border-[#8B5CF6]/50 bg-[radial-gradient(circle_at_0_0,rgba(109,40,217,.25),transparent_34%),linear-gradient(145deg,#090912,#111027)] p-6 pb-7 shadow-[0_0_70px_rgba(109,40,217,.38)]">
+    <div className="fixed inset-0 z-[300] flex items-center bg-[#080315]/85 p-5 backdrop-blur-md">
+      <section className="relative mx-auto w-full max-w-md overflow-hidden rounded-[32px] border border-[#8B5CF6]/50 bg-[radial-gradient(circle_at_0_0,rgba(109,40,217,.25),transparent_34%),linear-gradient(145deg,#090912,#111027)] p-6 pb-7 shadow-[0_0_70px_rgba(109,40,217,.38)]">
         <button type="button" onClick={close} aria-label="Fechar tutorial" className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/[.08] text-3xl font-light text-white/85">×</button>
-        <div className="mx-auto flex h-16 w-20 items-center justify-center text-5xl text-white" aria-hidden="true">☁</div>
-        <h1 className="mt-3 text-center text-[36px] font-extrabold leading-none text-white">Bem-vindo ao Clouds!</h1>
-        <p className="mt-3 text-center text-[20px] leading-snug text-[#B7B5DC]">Conversas em tempo real,<br />do seu jeito.</p>
-        <div className="mt-6 space-y-3">
-          {steps.map(([gesture, title, description], index) => (
-            <div key={title} className="flex min-h-28 items-center gap-4 rounded-[24px] border border-white/[.09] bg-black/25 p-4">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#2D126C]/70 text-[42px] font-light text-[#B844FF] shadow-[0_0_26px_rgba(168,85,247,.42)]">{gesture}</div>
-              <div>
-                <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-[#392081] px-2 text-sm font-bold text-white">{index + 1}</span>
-                <h2 className="mt-1 text-[20px] font-bold leading-tight text-white">{title}</h2>
-                <p className="mt-1 text-[15px] leading-snug text-[#AAA7CD]">{description}</p>
-              </div>
-            </div>
-          ))}
+        <p className="pr-10 text-[13px] font-bold uppercase tracking-[0.18em] text-[#C084FC]">Passo {step + 1} de {steps.length}</p>
+        <div key={currentStep.title} className="mt-8 min-h-64 animate-[pulse_180ms_ease-out] text-center">
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[30px] bg-[#2D126C]/70 text-5xl font-light text-[#D8B4FE] shadow-[0_0_35px_rgba(168,85,247,.42)]" aria-hidden="true">{currentStep.icon}</div>
+          <h1 className="mt-7 text-[30px] font-extrabold leading-tight text-white">{currentStep.title}</h1>
+          <p className="mx-auto mt-4 max-w-sm text-[17px] leading-relaxed text-[#B7B5DC]">{currentStep.description}</p>
         </div>
-        <button type="button" onClick={close} className="mt-7 w-full rounded-full bg-gradient-to-r from-[#6935FF] to-[#9B36FF] py-4 text-[21px] font-bold text-white shadow-[0_12px_35px_rgba(112,47,255,.38)]">Entendi</button>
+        <div className="mt-6 flex justify-center gap-2" aria-label={`Passo ${step + 1} de ${steps.length}`}>{steps.map((item, index) => <span key={item.title} className={`h-2 rounded-full transition-all ${index === step ? "w-7 bg-[#B44DFF]" : "w-2 bg-white/20"}`} />)}</div>
+        <div className="mt-7 flex items-center gap-3">
+          {step > 0 ? <button type="button" onClick={() => setStep((current) => current - 1)} className="rounded-full px-5 py-3 text-[15px] font-bold text-white/65 transition hover:text-white">Voltar</button> : <button type="button" onClick={close} className="rounded-full px-3 py-3 text-[15px] font-bold text-white/65 transition hover:text-white">Pular tutorial</button>}
+          <button type="button" onClick={() => isLastStep ? close() : setStep((current) => current + 1)} className="ml-auto rounded-full bg-gradient-to-r from-[#6935FF] to-[#9B36FF] px-7 py-3.5 text-[16px] font-bold text-white shadow-[0_12px_35px_rgba(112,47,255,.38)]">{isLastStep ? "Começar" : "Próximo"}</button>
+        </div>
       </section>
     </div>
   );
