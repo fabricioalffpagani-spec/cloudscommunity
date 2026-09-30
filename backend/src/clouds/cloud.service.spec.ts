@@ -293,16 +293,27 @@ describe('Talk / Read regression', () => {
     cloud.status = 'active';
     cloud.createdAt = new Date();
     prisma.cloudBan.findUnique.mockResolvedValue(null);
-    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'current-member', leftAt: null });
-    prisma.cloudMember.findMany.mockResolvedValue([{ cloudId: 'previous-cloud' }]);
-    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'entry-notification' });
+    prisma.cloudMember.findFirst.mockResolvedValue({
+      id: 'current-member',
+      leftAt: null,
+    });
+    prisma.cloudMember.findMany.mockResolvedValue([
+      { cloudId: 'previous-cloud' },
+    ]);
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'entry-notification',
+    });
 
     await expect(service.joinCloud('token', cloudId)).resolves.toMatchObject({
       ok: true,
       leftCloudIds: ['previous-cloud'],
     });
     expect(prisma.cloudMember.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'viewer', cloudId: { in: ['previous-cloud'] }, leftAt: null },
+      where: {
+        userId: 'viewer',
+        cloudId: { in: ['previous-cloud'] },
+        leftAt: null,
+      },
       data: { leftAt: expect.any(Date) as unknown },
     });
   });

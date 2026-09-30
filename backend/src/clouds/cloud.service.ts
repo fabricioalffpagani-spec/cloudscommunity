@@ -701,7 +701,11 @@ export class CloudService {
       );
       if (leftCloudIds.length > 0) {
         await tx.cloudMember.updateMany({
-          where: { userId: current.user.id, cloudId: { in: leftCloudIds }, leftAt: null },
+          where: {
+            userId: current.user.id,
+            cloudId: { in: leftCloudIds },
+            leftAt: null,
+          },
           data: { leftAt: new Date() },
         });
       }
@@ -2535,7 +2539,11 @@ export class CloudService {
     );
     if (leftCloudIds.length > 0) {
       await this.prisma.cloudMember.updateMany({
-        where: { userId: current.user.id, cloudId: { in: leftCloudIds }, leftAt: null },
+        where: {
+          userId: current.user.id,
+          cloudId: { in: leftCloudIds },
+          leftAt: null,
+        },
         data: { leftAt: new Date() },
       });
     }

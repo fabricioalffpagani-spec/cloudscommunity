@@ -44,7 +44,11 @@ export type PublicUserProfilePayload = {
     duration: string;
     createdAt: string;
     authorId: string;
-    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    participantProfiles: Array<{
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    }>;
     visibility: 'public' | 'private';
     href: string;
   }>;
@@ -56,7 +60,11 @@ export type PublicUserProfilePayload = {
     createdAt: string;
     endedAt: string | null;
     authorId: string;
-    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    participantProfiles: Array<{
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    }>;
     visibility: 'public' | 'private';
     href: string;
   }>;

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReadFeed, type ReadCloud } from "../app/components/ReadFeed";
 import { CloudPreview } from "../app/components/CloudPreview";
@@ -28,14 +28,16 @@ describe("Read", () => {
     expect(screen.getByText("18 comentários")).toBeVisible();
     expect(screen.queryByText(/Entrar/)).not.toBeInTheDocument();
   });
-  it("navigates across archived topics on desktop after the slide transition", async () => {
+  it("scrolls across archived topics on desktop", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
-    fireEvent.click(screen.getByRole("button", { name: "Próxima Cloud" }));
-    await waitFor(() => expect(container.querySelectorAll("article")[1]).not.toHaveClass("md:hidden"));
-    expect(container.querySelectorAll("article")[0]).toHaveClass("md:hidden");
-    fireEvent.click(screen.getByRole("button", { name: "Cloud anterior" }));
-    await waitFor(() => expect(container.querySelectorAll("article")[0]).not.toHaveClass("md:hidden"));
-    expect(container.querySelectorAll("article")[1]).toHaveClass("md:hidden");
+    const feed = container.querySelector(".desktop-cloud-feed") as HTMLDivElement;
+    const scrollTo = vi.fn();
+    feed.scrollTo = scrollTo;
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    expect(container.querySelectorAll("article")).toHaveLength(2);
+    expect(screen.getByText("Outro assunto")).toBeVisible();
+    fireEvent.wheel(feed, { deltaY: 100, deltaX: 0 });
+    expect(scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: "smooth" });
   });
 });
 
