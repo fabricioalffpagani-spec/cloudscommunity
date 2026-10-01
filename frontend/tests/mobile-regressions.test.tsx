@@ -4,6 +4,7 @@ import { installCloudPageScroll } from "../app/lib/cloud-page-scroll";
 import { MessagesNavLink } from "../app/components/MessagesNavLink";
 import { MobileAppNav, useMobileFeedTabSwipe } from "../app/components/MobileAppChrome";
 import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
+import { installComposerPanLock } from "../app/lib/composer-pan-lock";
 
 const navigation = vi.hoisted(() => ({ pathname: "/", push: vi.fn(), prefetch: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -27,6 +28,28 @@ afterEach(() => {
 });
 
 describe("mobile regressions", () => {
+  it("blocks dragging the composer while preserving picker scrolling", () => {
+    const footer = document.createElement("div");
+    const input = document.createElement("textarea");
+    const picker = document.createElement("div");
+    picker.dataset.emojiPicker = "true";
+    footer.append(input, picker);
+    const cleanup = installComposerPanLock(footer);
+
+    const composerDrag = new Event("touchmove", { bubbles: true, cancelable: true });
+    input.dispatchEvent(composerDrag);
+    expect(composerDrag.defaultPrevented).toBe(true);
+
+    const pickerScroll = new Event("touchmove", { bubbles: true, cancelable: true });
+    picker.dispatchEvent(pickerScroll);
+    expect(pickerScroll.defaultPrevented).toBe(false);
+
+    cleanup();
+    const afterUnmount = new Event("touchmove", { bubbles: true, cancelable: true });
+    input.dispatchEvent(afterUnmount);
+    expect(afterUnmount.defaultPrevented).toBe(false);
+  });
+
   it("shows unread conversations on the mobile Messages icon", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ conversations: [{ id: "a", unreadCount: 2 }] }) }));
     render(<MobileAppNav force />);

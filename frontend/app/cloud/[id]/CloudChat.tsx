@@ -11,6 +11,7 @@ import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendI
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
+import { useComposerPanLock } from "../../lib/composer-pan-lock";
 
 type CloudPayload = {
   id: string;
@@ -1583,6 +1584,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const composerFooterRef = useComposerPanLock();
   const hasJoinedRef = useRef(false);
   const messagesLoadRequestRef = useRef(0);
   const audioRecorder = useAudioRecorder((recording) => {
@@ -2642,7 +2644,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }
 
   return (
-    <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+    <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] flex-col overflow-hidden overscroll-none text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <div className="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 bg-black px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:grid-cols-[2.25rem_minmax(0,1fr)_auto] sm:gap-x-3 sm:gap-y-1.5 sm:px-4 sm:pb-4 sm:pt-4">
         <button
           type="button"
@@ -2901,7 +2903,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         <div ref={bottomRef} />
       </div>
 
-      <div className="shrink-0 border-t border-white/[0.07] bg-[#000000] px-4 pb-[env(safe-area-inset-bottom)] pt-4 sm:px-5 sm:pb-0 sm:pt-4">
+      <div ref={composerFooterRef} className="shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5">
         <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
           {status !== "authenticated" && (
             <button type="button" aria-label="Cadastrar para participar da cloud" onClick={() => setGuestSignupOpen(true)} className="absolute inset-0 z-20 cursor-text rounded-full" />

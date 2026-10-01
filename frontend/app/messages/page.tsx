@@ -11,6 +11,7 @@ import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
 import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
 import { buildMessageContactList } from "../lib/message-contacts";
+import { useComposerPanLock } from "../lib/composer-pan-lock";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -1330,6 +1331,7 @@ function MessagesPageContent() {
   const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const composerFooterRef = useComposerPanLock();
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
   const [messageMatchConversationIds, setMessageMatchConversationIds] = useState<Set<string>>(new Set());
   const [searchingMessages, setSearchingMessages] = useState(false);
@@ -2300,7 +2302,7 @@ function MessagesPageContent() {
 
   return (
     <div
-      className="flex h-[100dvh] flex-col overflow-hidden text-white"
+      className="flex h-[100dvh] flex-col overflow-hidden overscroll-none text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -2610,7 +2612,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className={`relative z-30 shrink-0 border-t border-white/[0.07] bg-[#000000] px-5 pb-[env(safe-area-inset-bottom)] pt-4`}>
+          <div ref={composerFooterRef} className="relative z-30 shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
