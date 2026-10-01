@@ -932,7 +932,7 @@ export class DirectMessagesService {
 
     const updated = await this.prisma.directMessage.update({
       where: { id: messageId },
-      data: { content: trimmed },
+      data: { content: trimmed, editedAt: new Date() },
       include: this.messageInclude(),
     });
 
@@ -1077,6 +1077,7 @@ export class DirectMessagesService {
       clientMessageId: message.clientMessageId,
       replyToMessageId: message.replyToMessageId,
       readAt: message.readAt?.toISOString() ?? null,
+      editedAt: message.editedAt?.toISOString() ?? null,
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt.toISOString(),
       deletedAt: message.deletedAt?.toISOString() ?? null,

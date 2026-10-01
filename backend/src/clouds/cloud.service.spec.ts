@@ -85,14 +85,23 @@ function setup() {
 }
 
 describe('Talk / Read regression', () => {
-  it('keeps Talk restricted to active public clouds', async () => {
+  it('lists active public clouds and private clouds for invited members', async () => {
     const { service, prisma } = setup();
     await service.listFeed('token');
     expect(prisma.cloud.findMany.mock.calls[1][0].where).toMatchObject({
       status: 'active',
-      visibility: 'public',
       deletedAt: null,
     });
+    expect(prisma.cloud.findMany.mock.calls[1][0].where?.OR).toEqual(
+      expect.arrayContaining([
+        { authorId: 'viewer' },
+        {
+          visibility: 'private',
+          members: { some: { userId: 'viewer' } },
+        },
+        expect.objectContaining({ visibility: 'public' }),
+      ]),
+    );
   });
   it('filters active Talk clouds to followed authors and excludes inaccessible clouds', async () => {
     const { service, prisma, cloud } = setup();

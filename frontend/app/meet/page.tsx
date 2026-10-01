@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { NotificationsBell } from "../components/NotificationsPanel";
 import { MessagesNavLink } from "../components/MessagesNavLink";
-import { MobileAppNav, MobileFeedHeader } from "../components/MobileAppChrome";
+import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 
 type PublicUserProfile = {
   id: string;
@@ -177,7 +178,14 @@ function ProfileRow({
 }
 
 export default function MeetPage() {
+  return <Suspense fallback={null}><MeetPageContent /></Suspense>;
+}
+
+function MeetPageContent() {
   const { user } = useSessionUser();
+  const router = useRouter();
+  const mobileFeedTabSwipe = useMobileFeedTabSwipe();
+  const meetSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<PublicUserProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -296,7 +304,7 @@ export default function MeetPage() {
 
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
       <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2"><HeaderBrand /></Link>
@@ -313,7 +321,26 @@ export default function MeetPage() {
         </div>
       </header>
       <MobileFeedHeader active="meet" />
-      <main className="mx-auto w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-28 pt-6 md:px-6 md:pb-28 md:pt-8">
+      <main
+        className="mx-auto w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-28 pt-6 md:px-6 md:pb-28 md:pt-8"
+        onTouchStart={(event) => {
+          const touch = event.touches[0];
+          if (touch) meetSwipeStart.current = { x: touch.clientX, y: touch.clientY };
+        }}
+        onTouchEnd={(event) => {
+          const start = meetSwipeStart.current;
+          meetSwipeStart.current = null;
+          const touch = event.changedTouches[0];
+          if (!start || !touch || !window.matchMedia("(max-width: 767px)").matches) return;
+          const deltaX = touch.clientX - start.x;
+          const deltaY = touch.clientY - start.y;
+          if (deltaX > 48 && deltaX > Math.abs(deltaY)) {
+            event.stopPropagation();
+            router.push("/read");
+          }
+        }}
+        onTouchCancel={() => { meetSwipeStart.current = null; }}
+      >
         <div className="mb-6">
           <h1 className="text-[32px] font-bold tracking-tight text-white md:text-[42px]">Meet</h1>
           <p className="mt-1 text-[16px] text-[#9b98ed]">Encontre pessoas para conhecer e acompanhar.</p>
@@ -360,7 +387,7 @@ export default function MeetPage() {
             </div>
             <section>
               <div className="mb-7 flex items-center justify-between gap-5">
-                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes." : "Perfis que seus seguidores também acompanham."}</h2>
+                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes em suas clouds." : "Perfis que seus seguidores também acompanham."}</h2>
                 {meetCategory === "popular" && <div className="flex shrink-0 rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1 text-[15px] font-semibold"><button type="button" onClick={() => setHypePeriod("recent")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "recent" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>24h</button><button type="button" onClick={() => setHypePeriod("all")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "all" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>Geral</button></div>}
               </div>
               <div className="flex flex-col gap-4">

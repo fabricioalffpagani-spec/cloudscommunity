@@ -9,6 +9,7 @@ import { MobileNavigationTutorial } from "./components/MobileNavigationTutorial"
 import { OnboardingGate } from "./components/OnboardingGate";
 import { MiniCloudDock } from "./components/MiniCloudDock";
 import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
+import { NativeNotificationPermission } from "./components/NativeNotificationPermission";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -50,6 +51,7 @@ export default function RootLayout({
             {children}
             <MiniCloudDock />
             <PwaInstallPrompt />
+            <NativeNotificationPermission />
             <InvitePopupLoader />
             <Suspense fallback={null}><MobileNavigationTutorial /></Suspense>
           </AccessibilityProvider>

@@ -27,6 +27,7 @@ export type DirectMessagePayload = {
   clientMessageId: string | null;
   replyToMessageId: string | null;
   readAt: string | null;
+  editedAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

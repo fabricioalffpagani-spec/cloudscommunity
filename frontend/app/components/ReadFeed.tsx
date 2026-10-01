@@ -23,6 +23,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const wheelLocked = useRef(false);
 
@@ -103,9 +104,8 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
 
   return (
     <div className="relative h-full w-full md:block">
-      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none">
-        {clouds.map((cloud, cloudIndex) => (
-          (() => {
+      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-auto md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none">
+        {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
             return <article
@@ -126,8 +126,8 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-base font-bold text-white md:h-16 md:w-16 md:text-xl md:ring-2 md:ring-white/10">{cloud.author.name.slice(0, 1).toUpperCase()}</span>
                 )}
                 <div className="min-w-0">
-                  <p className="truncate text-[18px] font-bold leading-none text-white md:font-semibold md:leading-normal">{cloud.author.name}</p>
-                  <p className="mt-1 truncate text-[13px] text-white/65 md:mt-0 md:text-[14px] md:text-white/45">@{cloud.author.username}</p>
+                  <p className="truncate text-[18px] font-bold leading-[1.25] text-white md:font-semibold md:leading-normal">{cloud.author.name}</p>
+                  <p className="mt-0.5 truncate text-[13px] leading-[1.25] text-white/65 md:mt-0 md:text-[14px] md:leading-normal md:text-white/45">@{cloud.author.username}</p>
                 </div>
               </Link>
 
@@ -151,11 +151,18 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
                 if (!start || !isMobile) return;
                 const deltaX = event.clientX - start.x;
                 const deltaY = event.clientY - start.y;
-                if (deltaX < -48 && Math.abs(deltaX) > Math.abs(deltaY)) router.push(`/cloud/${cloud.id}/conversation`);
+                if (Math.abs(deltaX) > 18 || Math.abs(deltaY) > 18) return;
+                const now = Date.now();
+                if (titleTap.current?.cloudId === cloud.id && now - titleTap.current.at < 350) {
+                  titleTap.current = null;
+                  router.push(`/cloud/${cloud.id}/conversation`);
+                } else {
+                  titleTap.current = { cloudId: cloud.id, at: now };
+                }
               }}
               onPointerCancel={() => { touchStart.current = null; }}
               style={{ touchAction: "pan-y" }}
-              aria-label={`Cloud ${cloud.title}. Deslize para a esquerda para ler a conversa.`}
+              aria-label={`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`}
             >
               <h2 lang="pt-BR" className={`max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
               <Link href={`/cloud/${cloud.id}/conversation`} className="mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
@@ -167,8 +174,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
           </article>;
-          })()
-        ))}
+        })}
       </div>
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">

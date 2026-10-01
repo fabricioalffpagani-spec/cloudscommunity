@@ -199,11 +199,23 @@ export class CloudService {
       where: {
         deletedAt: null,
         status: CloudStatus.active,
-        visibility: CloudVisibility.public,
         OR: [
           { authorId: current.user.id },
-          { author: { profile: { is: { isPrivate: false } } } },
-          { author: { followers: { some: { followerId: current.user.id } } } },
+          {
+            visibility: CloudVisibility.private,
+            members: { some: { userId: current.user.id } },
+          },
+          {
+            visibility: CloudVisibility.public,
+            OR: [
+              { author: { profile: { is: { isPrivate: false } } } },
+              {
+                author: {
+                  followers: { some: { followerId: current.user.id } },
+                },
+              },
+            ],
+          },
         ],
         // Clouds públicas aparecem para todos, independente do tipo de perfil do criador
         // Clouds privadas só aparecem para o criador ou para quem foi convidado

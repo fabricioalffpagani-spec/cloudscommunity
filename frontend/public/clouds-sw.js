@@ -1,3 +1,13 @@
+self.addEventListener("install", (event) => {
+  // Ativa a versão nova assim que o PWA for aberto, sem conservar a interface
+  // anterior (que ainda exibia o filtro textual "+ Recentes").
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   const tasks = [self.registration.showNotification(data.title || "Clouds", {

@@ -56,7 +56,8 @@ async function enableNativeNotifications() {
   const keyResponse = await fetch("/api/notifications/push-key", { cache: "no-store" });
   const keyPayload = await keyResponse.json().catch(() => null) as { publicKey?: string | null } | null;
   if (!keyResponse.ok || !keyPayload?.publicKey) return;
-  const registration = await navigator.serviceWorker.register("/clouds-sw.js");
+  const registration = await navigator.serviceWorker.register("/clouds-sw.js", { updateViaCache: "none" });
+  await registration.update();
   const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey) });
   await fetch("/api/notifications/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
 }

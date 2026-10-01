@@ -17,16 +17,27 @@ describe("Read", () => {
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
-  it("opens the read-only conversation with a mobile swipe and displays real message counts", () => {
+  it("does not open the read-only conversation with a mobile swipe", () => {
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     vi.stubGlobal("PointerEvent", MouseEvent);
-    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Deslize para a esquerda para ler a conversa.`);
+    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`);
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 60, clientY: 45 });
-    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation");
+    expect(pushMock).not.toHaveBeenCalled();
     expect(screen.getByText("18 comentários")).toBeVisible();
     expect(screen.queryByText(/Entrar/)).not.toBeInTheDocument();
+  });
+  it("opens the archived conversation after a double tap in the title area on mobile", () => {
+    render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+    vi.stubGlobal("PointerEvent", MouseEvent);
+    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`);
+    fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
+    fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
+    fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
+    fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
+    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation");
   });
   it("scrolls across archived topics on desktop", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);

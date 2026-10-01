@@ -62,7 +62,23 @@ export default function InvitePage() {
         }
         return data.invite.cloud as InviteCloud;
       })
-      .then((c) => setCloud(c))
+      .then(async (c) => {
+        // The author may reach this URL from their own private Cloud. They are
+        // already authorized and should enter directly, without an invite CTA.
+        const sessionResponse = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" }).catch(() => null);
+        const session = sessionResponse ? await sessionResponse.json().catch(() => null) as { user?: { id?: string } } | null : null;
+        if (session?.user?.id === c.authorId) {
+          const query = new URLSearchParams({
+            title: c.title,
+            duration: c.duration,
+            createdAt: c.createdAt,
+            visibility: c.visibility,
+          });
+          window.location.replace(`/cloud/${encodeURIComponent(c.id)}?${query.toString()}`);
+          return;
+        }
+        setCloud(c);
+      })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "Erro ao carregar convite.");
       })

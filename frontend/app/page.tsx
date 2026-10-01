@@ -19,7 +19,7 @@ import { FlameIcon } from "./components/FlameIcon";
 import { NotificationsBell } from "./components/NotificationsPanel";
 import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import { MessagesNavLink } from "./components/MessagesNavLink";
-import { MobileAppNav } from "./components/MobileAppChrome";
+import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import { SearchModal } from "./components/SearchModal";
 import {
@@ -1052,6 +1052,15 @@ function CloudsCalendar({ value, onChange, onDaySelect, onTimeComplete }: { valu
   return <div className="rounded-2xl border border-[#A855F7]/40 bg-[#151027] p-3 shadow-2xl"><div className="relative mb-3 flex items-center justify-center"><strong className="text-sm capitalize">{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</strong>{canAdvance && <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="absolute right-0">›</button>}</div><div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/45">{"DSTQQSS".split("").map((d,i)=><span key={i}>{d}</span>)}{days.map(day => { const date = new Date(month.getFullYear(), month.getMonth(), day); return date < new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()) || date > latest ? <span key={day} /> : <button key={day} type="button" onClick={() => choose(day)} className={`h-8 w-8 rounded-full ${selectedDay === day ? "bg-[#9333EA] text-white shadow-[0_0_0_2px_rgba(216,180,254,.35)]" : "hover:bg-white/10"}`}>{day}</button>; })}</div><div className="mt-3 flex items-center justify-between"><span>Horário</span><div className="flex items-center gap-2"><CloudsTimeWheel value={hour} max={23} onChange={updateHour} /><span>:</span><CloudsTimeWheel value={minute} max={59} onChange={updateMinute} /></div></div></div>;
 }
 
+function toLocalDateTimeValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function toScheduledInstant(value: string) {
+  return value ? new Date(value).toISOString() : undefined;
+}
+
 function CloudsTimeWheel({ value, max, onChange }: { value: string; max: number; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const values = Array.from({ length: max + 1 }, (_, index) => String(index).padStart(2, "0"));
@@ -1148,7 +1157,7 @@ function CreateCloudModal({
         description: description.trim() || undefined,
         duration: duration.trim(),
         visibility: "private" as const,
-        scheduledAt: scheduledAt || undefined,
+        scheduledAt: toScheduledInstant(scheduledAt),
         invitedUserIds,
       };
 
@@ -1196,7 +1205,7 @@ function CreateCloudModal({
         description: normalizedDescription || undefined,
         duration: duration.trim(),
         visibility,
-        scheduledAt: scheduledAt || undefined,
+        scheduledAt: toScheduledInstant(scheduledAt),
       };
 
       const publishedCloud = await onPublish(cloudData);
@@ -1229,9 +1238,9 @@ function CreateCloudModal({
     }
 
     const origin = typeof window !== "undefined" ? window.location.origin : "https://clouds.community";
-    const shareUrl = inviteToken
-      ? `${origin}/invite/${inviteToken}`
-      : `${origin}/cloud/${cloudId}`;
+    // Invited users are already Cloud members. Open the Cloud directly so a
+    // stale or unavailable invite token cannot block their entry.
+    const shareUrl = `${origin}/cloud/${cloudId}?join=1`;
 
     for (const followerId of followerIds) {
       try {
@@ -1347,7 +1356,7 @@ function CreateCloudModal({
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Lançamento</label>
             <div className="mb-2 flex gap-2">
               <button type="button" onClick={() => setScheduledAt("")} className={`rounded-full px-3 py-1.5 text-[12px] ${!scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Abrir agora</button>
-              <button type="button" onClick={() => { setScheduledAt(new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)); setScheduleTimeComplete(false); setCalendarOpen(true); }} className={`rounded-full px-3 py-1.5 text-[12px] ${scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Agendar</button>
+              <button type="button" onClick={() => { setScheduledAt(toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000))); setScheduleTimeComplete(false); setCalendarOpen(true); }} className={`rounded-full px-3 py-1.5 text-[12px] ${scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Agendar</button>
             </div>
             {scheduledAt && <div className="relative"><button type="button" onClick={() => setCalendarOpen(v => !v)} className="w-full rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-left text-[14px] text-white">{new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</button>{calendarOpen && <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20"><CloudsCalendar value={scheduledAt} onChange={setScheduledAt} onDaySelect={() => setScheduleTimeComplete(false)} onTimeComplete={() => { setScheduleTimeComplete(true); setCalendarOpen(false); }} /></div>}</div>}
           </div>
@@ -1387,8 +1396,10 @@ function CreateCloudModal({
 
       {/* Followers Popup */}
       {showFollowersPopup && (
-        <div className="absolute right-0 top-0 w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl z-50" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-[110] flex items-end p-3 sm:items-center sm:justify-center sm:p-6" onClick={(event) => { event.stopPropagation(); setShowFollowersPopup(false); }}>
+          <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
+          <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] flex-col rounded-2xl border border-white/10 bg-[#1C1F2E] p-4 shadow-2xl sm:max-h-[min(640px,calc(100dvh-3rem))] sm:p-6" onClick={event => event.stopPropagation()}>
+          <div className="mb-4 flex shrink-0 items-center justify-between">
             <h3 className="text-[16px] font-bold text-white">Convidar seguidores</h3>
             <button 
               onClick={() => setShowFollowersPopup(false)}
@@ -1398,7 +1409,7 @@ function CreateCloudModal({
             </button>
           </div>
           
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+          <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-3">
             <span className="text-[13px] text-white/60">Participantes: {selectedFollowers.size}</span>
             <button
               onClick={async () => {
@@ -1415,7 +1426,7 @@ function CreateCloudModal({
                 }
               }}
               disabled={selectedFollowers.size === 0 || submitting}
-              className="px-4 py-2 rounded-full bg-[#9333EA] text-white text-[13px] font-medium hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed"
+              className="shrink-0 rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-[13px]"
             >
               {submitting ? "Criando..." : "Confirmar convidados"}
             </button>
@@ -1428,7 +1439,7 @@ function CreateCloudModal({
           ) : followers.length === 0 ? (
             <p className="text-[13px] text-white/50 text-center py-4">Você ainda não segue ninguém.</p>
           ) : (
-            <div className="max-h-64 overflow-y-auto space-y-2">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
               {followers.map(follower => (
                 <div 
                   key={follower.id}
@@ -1466,6 +1477,7 @@ function CreateCloudModal({
               ))}
             </div>
           )}
+        </div>
         </div>
       )}
     </div>
@@ -2578,10 +2590,10 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
   })}</div></div>;
 }
 
-function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; onEnter: (cloud: Cloud) => void; onCreate: () => void; onOpenInfo: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const sessionUser = useSessionUser();
   const currentUser = sessionUser.user;
-  const titleTapRef = useRef<{ cloudId: string; at: number; timer: number | null } | null>(null);
+  const titleTapRef = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const cloudRefs = useRef<Record<string, HTMLElement | null>>({});
   const [premiereId, setPremiereId] = useState<string | null>(null);
@@ -2595,10 +2607,6 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, 
     document.addEventListener("click", closeOptions);
     return () => document.removeEventListener("click", closeOptions);
   }, [optionsCloudId]);
-
-  useEffect(() => () => {
-    if (titleTapRef.current?.timer) window.clearTimeout(titleTapRef.current.timer);
-  }, []);
 
   useEffect(() => {
     if (!focusCloudId) return;
@@ -2623,7 +2631,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, 
   }
 
   return (
-    <div ref={feedRef} className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain">
+    <div ref={feedRef} className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-auto">
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
@@ -2643,7 +2651,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, 
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 {profile.avatar ? <img src={profile.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-sm font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-none">{profile.name}</p><p className="mt-1 truncate text-[12px] text-white/65">@{profile.handle}</p></div>
+                <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-[1.25]">{profile.name}</p><p className="mt-0.5 truncate text-[12px] leading-[1.25] text-white/65">@{profile.handle}</p></div>
               </div>
               <div className="flex shrink-0 items-center gap-2" aria-label={`${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
                 <div className="flex -space-x-2">
@@ -2655,31 +2663,19 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, 
             <button
               type="button"
               onClick={() => {
-                if (isScheduled || !window.matchMedia("(max-width: 767px)").matches) {
-                  onOpenInfo(cloud);
-                  return;
-                }
+                if (isScheduled) return;
 
                 const now = Date.now();
                 const previousTap = titleTapRef.current;
                 if (previousTap?.cloudId === cloud.id && now - previousTap.at < 300) {
-                  if (previousTap.timer) window.clearTimeout(previousTap.timer);
                   titleTapRef.current = null;
                   onEnter(cloud);
                   return;
                 }
 
-                if (previousTap?.timer) window.clearTimeout(previousTap.timer);
-                titleTapRef.current = {
-                  cloudId: cloud.id,
-                  at: now,
-                  timer: window.setTimeout(() => {
-                    titleTapRef.current = null;
-                    onOpenInfo(cloud);
-                  }, 300),
-                };
+                titleTapRef.current = { cloudId: cloud.id, at: now };
               }}
-              className="mx-auto my-auto block max-w-[340px] touch-pan-y select-none text-center"
+              className="flex flex-1 items-center justify-center px-5 text-center touch-pan-y select-none"
               style={{ touchAction: "pan-y" }}
               aria-label={isScheduled ? `Cloud agendada ${cloud.title}. A estreia ainda não começou.` : `Detalhes da Cloud ${cloud.title}. Toque duas vezes para entrar.`}
             >
@@ -2702,6 +2698,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onOpenInfo, 
 function PageContent() {
   const { user, refresh, incrementCloudCount } = useSessionUser();
   const router = useRouter();
+  const mobileFeedTabSwipe = useMobileFeedTabSwipe();
   const searchParams = useSearchParams();
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
   const requestedCloudId = searchParams.get("cloud");
@@ -2722,7 +2719,6 @@ function PageContent() {
   const [recentNoticeVisible, setRecentNoticeVisible] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
   const [cloudOptionsOpen, setCloudOptionsOpen] = useState(false);
-  const [cloudInfoOpen, setCloudInfoOpen] = useState(false);
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
   const [cloudReportOpen, setCloudReportOpen] = useState(false);
   const [scheduledQueueOpen, setScheduledQueueOpen] = useState(false);
@@ -2874,9 +2870,9 @@ function PageContent() {
         const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: CloudApiPayload[] } | null;
         const serverClouds = response.ok && Array.isArray(payload?.clouds)
           ? payload.clouds.map(mapApiCloudToCloud).filter(cloud => {
-              // Clouds privadas só aparecem para o criador
+              // Clouds privadas só aparecem para o criador e convidados.
               if (cloud.visibility === "private") {
-                return cloud.authorId === user?.id;
+                return cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id);
               }
               return true;
             })
@@ -2913,7 +2909,7 @@ function PageContent() {
         if (!response.ok || !Array.isArray(payload?.clouds)) return;
         const refreshedClouds = payload.clouds
           .map(mapApiCloudToCloud)
-          .filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id);
+          .filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id));
         setClouds(refreshedClouds);
       } catch {
         // Keep the last successfully rendered feed while the refresh fails.
@@ -3067,7 +3063,7 @@ function PageContent() {
 
   return (
     <div className={`flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white ${mobilePreview ? "mx-auto max-w-[430px] border-x border-white/[.08] shadow-[0_0_80px_rgba(115,45,255,.35)]" : ""}`}
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
 
       {/* ── Modals ── */}
       {modal === "search"        && <SearchModal onClose={closeModal} />}
@@ -3158,11 +3154,6 @@ function PageContent() {
           focusCloudId={mobileFocusCloudId}
           onEnter={enterConversation}
           onCreate={() => setModal("create")}
-          onOpenInfo={(cloud) => {
-            const index = activeClouds.findIndex((item) => item.id === cloud.id);
-            if (index >= 0) setCurrentCloudIndex(index);
-            setCloudInfoOpen(true);
-          }}
           onDescription={(cloud) => {
             const index = activeClouds.findIndex((item) => item.id === cloud.id);
             if (index >= 0) setCurrentCloudIndex(index);
@@ -3377,7 +3368,6 @@ function PageContent() {
         )}
       </main>
 
-      {cloudInfoOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Informações da Cloud</h3><button onClick={() => setCloudInfoOpen(false)} className="text-white/50 hover:text-white">×</button></div><div className="space-y-3 text-[14px] text-white/70"><p><span className="text-white/40">Título: </span>{currentCloud.title}</p><p><span className="text-white/40">Duração: </span>{currentCloud.duration}</p><p><span className="text-white/40">Participantes: </span>{formatParticipantCount(currentCloud.liveParticipants ?? 0)}</p></div></div></div>}
       {cloudDescriptionOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex items-center justify-between"><h3 className="text-[18px] font-bold">Descrição da Cloud</h3><button onClick={() => setCloudDescriptionOpen(false)} className="text-white/50 hover:text-white">×</button></div><p className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/75">{currentCloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p></div></div>}
       {cloudReportOpen && currentCloud && currentCloud.authorId && (
         <CloudReportModal

@@ -1968,10 +1968,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isManagingMemberId]);
 
   useEffect(() => {
-    void loadCloud();
-    void loadMessages();
+    // For an explicit entry, wait until the join request confirms membership.
+    if (!joinOnEntry) {
+      void loadCloud();
+      void loadMessages();
+    }
     if (status === "authenticated" && user) void loadContacts();
-  }, [loadCloud, loadContacts, loadMessages, status, user]);
+  }, [joinOnEntry, loadCloud, loadContacts, loadMessages, status, user]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -2142,6 +2145,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           // The HTTP endpoint already persisted and broadcast the entry
           // message. This call only joins the newly-authorized socket room.
           joinCloud(socket, false);
+          void loadCloud();
           void loadMessages();
         } else {
           hasJoinedRef.current = false;
@@ -2765,6 +2769,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     {reportNotifCount > 0 && <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{reportNotifCount > 9 ? "9+" : reportNotifCount}</span>}
                   </button>
                 )}
+                {isCloudAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setDeleteConfirmOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 transition hover:bg-red-500/10 hover:text-red-200 md:hidden"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center"><AnimatedTrashIcon s={16} /></span>
+                    Excluir Cloud
+                  </button>
+                )}
                 {cloud?.description?.trim() && <button
                   type="button"
                   onClick={() => {
@@ -2805,16 +2822,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             <HeaderClockIcon />
             {liveTimer}
           </span>
-          {isCloudAuthor && (
-            <button
-              type="button"
-              aria-label="Excluir cloud"
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="ml-1 flex shrink-0 items-center justify-center text-white/50 transition hover:text-red-400 md:hidden"
-            >
-              <AnimatedTrashIcon s={16} />
-            </button>
-          )}
         </div>
       </div>
 
