@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,6 +12,7 @@ export type PushMessage = {
 
 @Injectable()
 export class PushNotificationsService {
+  private readonly logger = new Logger(PushNotificationsService.name);
   private readonly enabled: boolean;
 
   constructor(private readonly prisma: PrismaService) {
@@ -21,6 +22,10 @@ export class PushNotificationsService {
       process.env.VAPID_SUBJECT?.trim() || 'mailto:suporte@clouds.community';
     this.enabled = Boolean(publicKey && privateKey);
     if (this.enabled) webpush.setVapidDetails(subject, publicKey!, privateKey!);
+    else
+      this.logger.warn(
+        'VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY ausentes; push externo desativado.',
+      );
   }
 
   publicKey() {
@@ -52,7 +57,7 @@ export class PushNotificationsService {
     const [subscriptions, badgeCount] = await Promise.all([
       this.prisma.pushSubscription.findMany({ where: { userId } }),
       this.prisma.notification.count({
-        where: { userId, isRead: false },
+        where: { userId, isRead: false, type: { not: 'direct_message' } },
       }),
     ]);
     const payload = JSON.stringify({ ...message, badgeCount });
@@ -76,6 +81,10 @@ export class PushNotificationsService {
             await this.prisma.pushSubscription
               .delete({ where: { id: subscription.id } })
               .catch(() => undefined);
+          } else {
+            this.logger.warn(
+              `Falha no envio push (HTTP ${statusCode ?? 'desconhecido'}).`,
+            );
           }
         }
       }),

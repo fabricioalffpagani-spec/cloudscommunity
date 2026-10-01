@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 type Conversation = { id: string; unreadCount: number };
 type ConversationsResponse = { conversations?: Conversation[] };
 
-export function MessagesNavLink({ active = false }: { active?: boolean }) {
+export function MessagesNavLink({ active = false, iconOnly = false, href = "/messages" }: { active?: boolean; iconOnly?: boolean; href?: string }) {
   const [unreadContacts, setUnreadContacts] = useState(0);
 
   const loadUnreadContacts = useCallback(async () => {
@@ -30,9 +30,13 @@ export function MessagesNavLink({ active = false }: { active?: boolean }) {
     void loadUnreadContacts();
     const refresh = () => void loadUnreadContacts();
     window.addEventListener("focus", refresh);
-    const intervalId = window.setInterval(refresh, 30_000);
+    window.addEventListener("direct-message-received", refresh);
+    window.addEventListener("direct-message-read", refresh);
+    const intervalId = window.setInterval(refresh, 10_000);
     return () => {
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("direct-message-received", refresh);
+      window.removeEventListener("direct-message-read", refresh);
       window.clearInterval(intervalId);
     };
   }, [loadUnreadContacts]);
@@ -43,7 +47,7 @@ export function MessagesNavLink({ active = false }: { active?: boolean }) {
 
   return (
     <Link
-      href="/messages"
+      href={href}
       aria-label={label}
       className={`flex flex-col items-center gap-2 transition hover:text-[#A855F7] ${active ? "text-[#A855F7]" : "text-white"}`}
     >
@@ -57,7 +61,7 @@ export function MessagesNavLink({ active = false }: { active?: boolean }) {
           </span>
         )}
       </span>
-      <span className="text-[13px] font-semibold">Messages</span>
+      {!iconOnly && <span className="text-[13px] font-semibold">Messages</span>}
     </Link>
   );
 }

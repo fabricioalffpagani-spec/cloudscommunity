@@ -852,9 +852,8 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   }
 
   if (isCloudInvite) {
-    const inviteUrl = cloudInviteData.inviteToken
-      ? `/invite/${cloudInviteData.inviteToken}`
-      : msg.linkUrl || `/cloud/${cloudInviteData.cloudId}`;
+    // Recipients of this direct invitation are already Cloud members.
+    const inviteUrl = `/cloud/${encodeURIComponent(cloudInviteData.cloudId)}?join=1`;
     const isPrivate = cloudInviteData.cloudVisibility === "private";
     const senderFirstName = msg.side === "right" ? "Você" : (msg.senderDisplayName || msg.sender).split(" ")[0];
     const inviteText = msg.side === "right"
@@ -1867,6 +1866,7 @@ function MessagesPageContent() {
       method: "POST",
       credentials: "include",
     });
+    window.dispatchEvent(new Event("direct-message-read"));
 
     const socket = socketRef.current;
     if (socket?.connected) {
@@ -1932,6 +1932,7 @@ function MessagesPageContent() {
     });
 
     socket.on("message:new", (message: BackendMessage) => {
+      window.dispatchEvent(new Event("direct-message-received"));
       const mapped = buildMessage(message, user);
       setMessagesByConversation((prev) => ({
         ...prev,
@@ -2013,7 +2014,7 @@ function MessagesPageContent() {
   }, [status, user]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: "smooth" });
   }, [activeMessages, activeConversationId, isActiveConversationTyping, isTypingLocally]);
 
   useEffect(() => {
@@ -2279,7 +2280,7 @@ function MessagesPageContent() {
     audioRecorder.cancel();
   }, [audioRecorder]);
 
-  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendText();
@@ -2485,7 +2486,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" ref={messagesContainerRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" ref={messagesContainerRef}>
             <div className="flex min-h-full flex-col justify-end">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
@@ -2609,7 +2610,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className={`relative z-30 border-t border-white/[0.07] bg-[#000000] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4`}>
+          <div className={`relative z-30 shrink-0 border-t border-white/[0.07] bg-[#000000] px-5 pb-[env(safe-area-inset-bottom)] pt-4`}>
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
@@ -2648,12 +2649,12 @@ function MessagesPageContent() {
                 </div>
               )}
               {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
-                <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
-                  <div className="flex-1 text-[14px] text-white" style={{ fontFamily: 'Arial, sans-serif' }}>
+                <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-white/[0.06] bg-black px-2 py-2.5 sm:flex-nowrap sm:rounded-full sm:px-4">
+                  <div className="min-w-0 flex-1 text-[12px] text-white sm:text-[14px]" style={{ fontFamily: 'Arial, sans-serif' }}>
                     {audioRecorder.state === "paused" ? "Pausado" : "Gravando…"} {formatDuration(audioRecorder.seconds * 1000) || "0:00"}
                   </div>
-                  <Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} />
-                  <div className="flex items-center gap-2">
+                  <div className="hidden min-w-0 sm:block"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
+                  <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                     <button type="button" aria-label={audioRecorder.state === "paused" ? "Retomar" : "Pausar"} onClick={audioRecorder.state === "paused" ? audioRecorder.resume : audioRecorder.pause}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
                       {audioRecorder.state === "paused" ? <PlayIcon s={16} /> : <PauseIcon s={16} />}
@@ -2721,14 +2722,16 @@ function MessagesPageContent() {
                     >
                       <PlusIcon s={18} />
                     </button>
-                    <input
-                      type="text"
+                    <textarea
+                      rows={1}
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
+                      onInput={(event) => { event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`; }}
                       onKeyDown={handleKeyDown}
                       placeholder={isConversationBlocked ? "Envio de mensagens indisponível" : activeConversationId ? "Mensagem..." : "Selecione uma conversa para começar"}
                       disabled={!activeConversationId || isAudioBusy || isConversationBlocked}
-                      className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-white placeholder:text-white outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ maxHeight: 120, fieldSizing: "content" }}
                     />
                     {draft.trim() ? (
                       <button type="button" aria-label="Enviar" onClick={sendText} disabled={isConversationBlocked} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40">

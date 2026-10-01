@@ -1,5 +1,7 @@
 "use client";
 
+import { installCloudPageScroll } from "../lib/cloud-page-scroll";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -25,7 +27,6 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
-  const wheelLocked = useRef(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -56,32 +57,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   useEffect(() => {
     const feed = feedRef.current;
     if (!feed) return;
-    let settleTimer: number | null = null;
-    const pages = () => Array.from(feed.querySelectorAll<HTMLElement>("[data-cloud-page]"));
-    const topOf = (page: HTMLElement) => page.getBoundingClientRect().top - feed.getBoundingClientRect().top + feed.scrollTop;
-    const nearestPage = () => pages().reduce<HTMLElement | null>((nearest, page) => !nearest || Math.abs(topOf(page) - feed.scrollTop) < Math.abs(topOf(nearest) - feed.scrollTop) ? page : nearest, null);
-    const handleWheel = (event: WheelEvent) => {
-      if (window.matchMedia?.("(max-width: 767px)").matches || Math.abs(event.deltaY) < Math.abs(event.deltaX) || Math.abs(event.deltaY) < 8 || wheelLocked.current) return;
-      event.preventDefault();
-      wheelLocked.current = true;
-      const direction = event.deltaY > 0 ? 1 : -1;
-      const allPages = pages();
-      const currentIndex = Math.max(0, allPages.indexOf(nearestPage() as HTMLElement));
-      const target = allPages[Math.max(0, Math.min(currentIndex + direction, allPages.length - 1))];
-      if (target) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
-      window.setTimeout(() => { wheelLocked.current = false; }, 380);
-    };
-    const handleScroll = () => {
-      if (window.matchMedia?.("(max-width: 767px)").matches) return;
-      if (settleTimer) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => {
-        const target = nearestPage();
-        if (target && Math.abs(topOf(target) - feed.scrollTop) > 2) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
-      }, 120);
-    };
-    feed.addEventListener("wheel", handleWheel, { passive: false });
-    feed.addEventListener("scroll", handleScroll, { passive: true });
-    return () => { feed.removeEventListener("wheel", handleWheel); feed.removeEventListener("scroll", handleScroll); if (settleTimer) window.clearTimeout(settleTimer); };
+    return installCloudPageScroll(feed);
   }, []);
 
   const confirmDelete = async () => {
@@ -104,7 +80,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
 
   return (
     <div className="relative h-full w-full md:block">
-      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-auto md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none">
+      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none" style={{ touchAction: "pan-x" }}>
         {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));

@@ -988,21 +988,12 @@ export class DirectMessagesService {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 140);
-    const notification = await this.prisma.notification.create({
-      data: {
-        userId: recipientId,
-        type: 'direct_message',
-        entityType: 'direct_message',
-        entityId: messageId,
-        title: `Nova mensagem de ${senderName}`,
-        body: preview,
-      },
-    });
+    // Direct messages belong to the Messages badge, not the activity bell.
     await this.pushNotifications.send(recipientId, {
-      title: notification.title,
-      body: notification.body,
+      title: `Nova mensagem de ${senderName}`,
+      body: preview,
       url: `/messages?conversation=${conversationId}`,
-      tag: notification.id,
+      tag: `direct-message-${messageId}`,
     });
   }
 

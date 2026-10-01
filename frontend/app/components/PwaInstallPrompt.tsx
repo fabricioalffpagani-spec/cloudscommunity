@@ -16,6 +16,11 @@ function isInstalled() {
     || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+function isMobileDevice() {
+  return window.matchMedia("(max-width: 767px) and (pointer: coarse)").matches
+    || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function PwaInstallPrompt() {
   const { user, status } = useSessionUser();
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
@@ -49,7 +54,7 @@ export function PwaInstallPrompt() {
   }, []);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user || !installPrompt || isInstalled()) return;
+    if (status !== "authenticated" || !user || !installPrompt || isInstalled() || !isMobileDevice()) return;
     if (window.localStorage.getItem(declinedKey(user.id)) === "1") return;
     setOpen(true);
   }, [installPrompt, status, user]);

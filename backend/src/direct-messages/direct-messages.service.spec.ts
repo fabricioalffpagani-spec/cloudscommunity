@@ -41,6 +41,44 @@ function createPrismaMock() {
 }
 
 describe('DirectMessagesService', () => {
+  it('sends message push without adding an activity-bell notification', async () => {
+    const send = jest.fn().mockResolvedValue(undefined);
+    const notificationCreate = jest.fn();
+    const prisma = {
+      conversation: {
+        findUnique: jest.fn().mockResolvedValue({
+          participantOneId: 'sender',
+          participantTwoId: 'recipient',
+        }),
+      },
+      user: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ profile: { displayName: 'Vicente' } }),
+      },
+      notification: { create: notificationCreate },
+    };
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+      { send } as never,
+    );
+    await (
+      service as unknown as {
+        notifyRecipient: (
+          messageId: string,
+          conversationId: string,
+          senderId: string,
+          content: string,
+        ) => Promise<void>;
+      }
+    ).notifyRecipient('message', 'conversation', 'sender', 'Olá');
+    expect(notificationCreate).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(
+      'recipient',
+      expect.objectContaining({ url: '/messages?conversation=conversation' }),
+    );
+  });
+
   it('builds a deterministic conversation key', () => {
     expect(buildConversationKey('b', 'a')).toBe('a:b');
   });

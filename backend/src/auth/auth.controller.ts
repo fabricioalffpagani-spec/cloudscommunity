@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -142,6 +143,16 @@ export class AuthController {
   @Get('me')
   async me(@Req() req: Request) {
     return this.authService.me(extractSessionToken(req));
+  }
+
+  @Delete('me')
+  async deleteMe(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.deleteAccount(extractSessionToken(req));
+    clearSessionCookie(res);
+    return { ok: true as const };
   }
 
   @Patch('me')

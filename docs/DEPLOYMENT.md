@@ -124,10 +124,13 @@ um token de menor privilégio com `read:packages`, conforme abaixo; o job não
 transmite esse token pelo SSH.
 
 O deploy executa `git fetch origin main` e `git merge --ff-only` na VM, exigindo
-checkout limpo e `main` remoto exatamente no SHA publicado. Atualiza somente
+checkout limpo e `main` remoto exatamente no SHA publicado. Atualiza
 `IMAGE_TAG=sha-<SHA completo>` em `/opt/clouds/.env`, mantendo as outras linhas e
-permissões, e recusa entradas duplicadas. Depois roda `docker compose pull` apenas
-para `backend` e `frontend` e `up -d --no-build --no-deps --wait` para esses dois
+permissões, e recusa entradas duplicadas. Baixa as imagens de `backend` e
+`frontend`. Se o par VAPID estiver ausente, gera
+as chaves uma única vez com a imagem validada e as grava apenas no `.env` da VM.
+Um par parcial ou duplicado interrompe o deploy; um par existente é preservado.
+Depois roda `docker compose up -d --no-build --no-deps --wait` para esses dois
 serviços. PostgreSQL e Redis permanecem em execução e seus volumes não são
 removidos. O job confirma saúde de todos os quatro serviços e verifica a tag das
 imagens efetivamente usadas por backend e frontend. Por fim, exige HTTP 200 ou

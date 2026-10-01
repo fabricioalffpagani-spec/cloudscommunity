@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FlameIcon } from "./FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "./session-user";
 import { LongPressHint } from "./LongPressHint";
+import { MessagesNavLink } from "./MessagesNavLink";
 
 type FeedTab = "for-you" | "following" | "meet";
+
+function isTextInput(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest("input, textarea, select"));
+}
 
 /** Horizontal mobile navigation that leaves vertical scrolling and controls alone. */
 export function useMobileFeedTabSwipe() {
@@ -17,13 +22,12 @@ export function useMobileFeedTabSwipe() {
   const start = useRef<{ x: number; y: number } | null>(null);
   const swipeHandled = useRef(false);
   // Links and buttons deliberately participate: a confirmed swipe cancels their click below.
-  const isTextInput = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest("input, textarea, select"));
 
   useEffect(() => {
     ["/", "/read", "/meet"].filter((page) => page !== pathname).forEach((page) => router.prefetch(page));
   }, [pathname, router]);
 
-  const completeSwipe = (target: EventTarget | null, x: number, y: number) => {
+  const completeSwipe = useCallback((target: EventTarget | null, x: number, y: number) => {
     const initial = start.current;
     start.current = null;
     if (swipeHandled.current || !initial || isTextInput(target) || !window.matchMedia("(max-width: 767px)").matches) return;
@@ -41,26 +45,38 @@ export function useMobileFeedTabSwipe() {
       swipeHandled.current = false;
       delete document.documentElement.dataset.mobileTabTransition;
     }, 360);
-  };
+  }, [pathname, router, searchParams]);
+
+  useEffect(() => {
+    // Capture native touch events so a feed scroller cannot swallow the swipe.
+    const onStart = (event: TouchEvent) => {
+      const target = event.target;
+      if (isTextInput(target) || (target instanceof Element && target.closest('[role="dialog"]'))) return;
+      const touch = event.touches[0];
+      if (touch) start.current = { x: touch.clientX, y: touch.clientY };
+    };
+    const onEnd = (event: TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (touch) completeSwipe(event.target, touch.clientX, touch.clientY);
+    };
+    document.addEventListener("touchstart", onStart, { capture: true, passive: true });
+    document.addEventListener("touchend", onEnd, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("touchstart", onStart, true);
+      document.removeEventListener("touchend", onEnd, true);
+    };
+  }, [completeSwipe]);
 
   return {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
-      if (isTextInput(event.target)) return;
+      if (event.pointerType !== "mouse" || isTextInput(event.target)) return;
       start.current = { x: event.clientX, y: event.clientY };
     },
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType !== "mouse") return;
       completeSwipe(event.target, event.clientX, event.clientY);
     },
-    onPointerCancel: () => { start.current = null; },
-    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
-      if (isTextInput(event.target)) return;
-      const touch = event.touches[0];
-      if (touch) start.current = { x: touch.clientX, y: touch.clientY };
-    },
-    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
-      const touch = event.changedTouches[0];
-      if (touch) completeSwipe(event.target, touch.clientX, touch.clientY);
-    },
+    onPointerCancel: (event: React.PointerEvent<HTMLElement>) => { if (event.pointerType === "mouse") start.current = null; },
     onTouchCancel: () => { start.current = null; },
     onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
       if (!swipeHandled.current) return;
@@ -95,10 +111,6 @@ function SearchIcon() {
 
 function HomeIcon() {
   return <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></svg>;
-}
-
-function MessageIcon() {
-  return <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
 }
 
 export function MobileFeedHeader(props: Parameters<typeof MobileFeedHeaderContent>[0]) {
@@ -143,7 +155,7 @@ function MobileAppNavContent({ active, force = false }: { active?: "home" | "mes
   return (
     <nav className={`fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 items-center border-t border-white/[.08] bg-[#060410]/95 px-4 py-4 backdrop-blur-md ${force ? "" : "md:hidden"}`} aria-label="Navegação móvel">
       <Link href={`/${previewSuffix}`} aria-label="Início" className={`mx-auto ${color("home")}`}><HomeIcon /></Link>
-      <Link href={`/messages${previewSuffix}`} aria-label="Mensagens" className={`mx-auto ${color("messages")}`}><MessageIcon /></Link>
+      <div className={`mx-auto ${color("messages")}`}><MessagesNavLink iconOnly active={isActive("messages")} href={`/messages${previewSuffix}`} /></div>
       <Link href={`/?create=1${previewSuffix ? "&mobilePreview=1" : ""}`} aria-label="Criar Cloud" className="mx-auto flex h-12 w-12 items-center justify-center"><img src="/ChatGPT%20Image%2024%20de%20set.%20de%202026%2C%2009_40_30.png" alt="" className="h-12 w-12 object-contain drop-shadow-[0_0_0.2px_white]" /></Link>
       <Link href={`/trending${previewSuffix}`} aria-label="Em alta" className={`mx-auto ${color("trending")}`}><FlameIcon s={27} /></Link>
       <Link href={`/profile${previewSuffix}`} aria-label="Meu perfil" className={`mx-auto overflow-hidden rounded-full ${color("profile")}`}><SessionUserAvatar user={user} size={35} className="rounded-full" /></Link>

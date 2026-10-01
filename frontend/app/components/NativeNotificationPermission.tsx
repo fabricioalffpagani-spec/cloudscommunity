@@ -14,7 +14,7 @@ async function subscribeToPushNotifications() {
 
   const keyResponse = await fetch("/api/notifications/push-key", { cache: "no-store" });
   const keyPayload = await keyResponse.json().catch(() => null) as { publicKey?: string | null } | null;
-  if (!keyResponse.ok || !keyPayload?.publicKey) return;
+  if (!keyResponse.ok || !keyPayload?.publicKey) throw new Error("Notificações push não estão configuradas no servidor.");
 
   const registration = await navigator.serviceWorker.register("/clouds-sw.js", { updateViaCache: "none" });
   await registration.update();
@@ -24,11 +24,12 @@ async function subscribeToPushNotifications() {
       applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey),
     });
 
-  await fetch("/api/notifications/push-subscriptions", {
+  const response = await fetch("/api/notifications/push-subscriptions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(subscription),
   });
+  if (!response.ok) throw new Error("Não foi possível registrar este dispositivo para notificações.");
 }
 
 async function requestNativePermission() {
@@ -52,8 +53,10 @@ export function NativeNotificationPermission() {
     // Quem já permitiu pelo Android também precisa estar inscrito no push para
     // que o ícone apareça na barra de status, mesmo sem tocar no sino.
     if (Notification.permission === "granted") {
-      void subscribeToPushNotifications();
-      return;
+      const subscribe = () => { void subscribeToPushNotifications().catch((error) => console.warn("Push indisponível:", error)); };
+      subscribe();
+      window.addEventListener("focus", subscribe);
+      return () => window.removeEventListener("focus", subscribe);
     }
 
     if (Notification.permission !== "default") return;
@@ -61,7 +64,7 @@ export function NativeNotificationPermission() {
     const prompt = () => {
       if (promptStarted.current) return;
       promptStarted.current = true;
-      void requestNativePermission();
+      void requestNativePermission().catch((error) => console.warn("Push indisponível:", error));
     };
 
     window.addEventListener("click", prompt, { once: true, capture: true });
