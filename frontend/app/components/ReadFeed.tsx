@@ -105,8 +105,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   return (
     <div className="relative h-full w-full md:block">
       <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-auto md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none">
-        {clouds.map((cloud, cloudIndex) => (
-          (() => {
+        {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
             return <article
@@ -175,8 +174,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
           </article>;
-          })()
-        ))}
+        })}
       </div>
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">
