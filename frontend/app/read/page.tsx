@@ -10,7 +10,7 @@ import { ReadFeed, type ReadCloud } from "../components/ReadFeed";
 import { SearchModal } from "../components/SearchModal";
 import { NotificationsBell } from "../components/NotificationsPanel";
 import { MessagesNavLink } from "../components/MessagesNavLink";
-import { MobileAppNav, MobileFeedHeader } from "../components/MobileAppChrome";
+import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
 
 function SearchIcon({ s = 23 }: { s?: number }) {
@@ -37,6 +37,7 @@ export default function ReadPage() {
 
 function ReadPageContent() {
   const searchParams = useSearchParams();
+  const mobileFeedTabSwipe = useMobileFeedTabSwipe();
   const { user } = useSessionUser();
   const [clouds, setClouds] = useState<ReadCloud[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,7 @@ function ReadPageContent() {
   }, [attempt, cloudScope]);
 
   return (
-    <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+    <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">

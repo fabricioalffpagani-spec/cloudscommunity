@@ -224,7 +224,8 @@ textarea {
   html,
   body {
     min-height: 100dvh;
-    overscroll-behavior: none;
+    /* Permite o controle nativo do navegador de puxar para atualizar. */
+    overscroll-behavior-y: auto;
   }
 
   .mobile-cloud-feed {
@@ -242,5 +243,25 @@ textarea {
   textarea,
   select {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-mobile-tab-transition="forward"] body > * {
+    animation: mobile-tab-enter-forward 300ms cubic-bezier(0.22, 0.8, 0.25, 1) both;
+  }
+
+  html[data-mobile-tab-transition="back"] body > * {
+    animation: mobile-tab-enter-back 300ms cubic-bezier(0.22, 0.8, 0.25, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes mobile-tab-enter-forward {
+    from { opacity: 0.45; transform: translateX(18px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes mobile-tab-enter-back {
+    from { opacity: 0.45; transform: translateX(-18px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 }

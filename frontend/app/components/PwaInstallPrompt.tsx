@@ -34,7 +34,13 @@ export function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/clouds-sw.js").catch(() => undefined);
+      // O PWA não pode manter uma interface antiga depois de uma atualização.
+      // A busca sem cache garante que o service worker recém-publicado seja
+      // verificado em toda abertura do aplicativo instalado.
+      void navigator.serviceWorker
+        .register("/clouds-sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => undefined);
     }
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);

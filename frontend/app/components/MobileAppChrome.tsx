@@ -1,13 +1,93 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FlameIcon } from "./FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "./session-user";
 import { LongPressHint } from "./LongPressHint";
 
 type FeedTab = "for-you" | "following" | "meet";
+
+/** Horizontal mobile navigation that leaves vertical scrolling and controls alone. */
+export function useMobileFeedTabSwipe() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const swipeHandled = useRef(false);
+  // Links and buttons deliberately participate: a confirmed swipe cancels their click below.
+  const isTextInput = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest("input, textarea, select"));
+
+  useEffect(() => {
+    ["/", "/read", "/meet"].filter((page) => page !== pathname).forEach((page) => router.prefetch(page));
+  }, [pathname, router]);
+
+  const completeSwipe = (target: EventTarget | null, x: number, y: number) => {
+    const initial = start.current;
+    start.current = null;
+    if (swipeHandled.current || !initial || isTextInput(target) || !window.matchMedia("(max-width: 767px)").matches) return;
+    const deltaX = x - initial.x;
+    const deltaY = y - initial.y;
+    if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    const pages = ["/", "/read", "/meet"];
+    const currentIndex = pages.indexOf(pathname);
+    const nextIndex = currentIndex + (deltaX < 0 ? 1 : -1);
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= pages.length) return;
+    swipeHandled.current = true;
+    document.documentElement.dataset.mobileTabTransition = deltaX < 0 ? "forward" : "back";
+    router.push(`${pages[nextIndex]}${searchParams.get("mobilePreview") === "1" ? "?mobilePreview=1" : ""}`);
+    window.setTimeout(() => {
+      swipeHandled.current = false;
+      delete document.documentElement.dataset.mobileTabTransition;
+    }, 360);
+  };
+
+  return {
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if (isTextInput(event.target)) return;
+      start.current = { x: event.clientX, y: event.clientY };
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+      completeSwipe(event.target, event.clientX, event.clientY);
+    },
+    onPointerCancel: () => { start.current = null; },
+    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
+      if (isTextInput(event.target)) return;
+      const touch = event.touches[0];
+      if (touch) start.current = { x: touch.clientX, y: touch.clientY };
+    },
+    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
+      const touch = event.changedTouches[0];
+      if (touch) completeSwipe(event.target, touch.clientX, touch.clientY);
+    },
+    onTouchCancel: () => { start.current = null; },
+    onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
+      if (!swipeHandled.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+  };
+}
+
+/** Desktop links remain immediate; the generous mobile title area opens after a double tap. */
+export function MobileCloudEntryLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+  const router = useRouter();
+  const lastTap = useRef(0);
+
+  return <Link href={href} className={className} onClick={(event) => {
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    const now = Date.now();
+    if (now - lastTap.current < 350) {
+      lastTap.current = 0;
+      event.preventDefault();
+      router.push(href);
+      return;
+    }
+    lastTap.current = now;
+    event.preventDefault();
+  }}>{children}</Link>;
+}
 
 function SearchIcon() {
   return <svg viewBox="0 0 24 24" width="27" height="27" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7.5" /><path d="m20 20-3.5-3.5" /></svg>;

@@ -40,8 +40,9 @@ type BackendMessage = {
   type: MessageKind;
   content: string | null;
   clientMessageId: string | null;
-    createdAt: string;
-    updatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  editedAt: string | null;
   readAt: string | null;
   mediaAsset: {
     id: string;
@@ -96,8 +97,9 @@ type Msg = {
   kind: MessageKind;
   content: string;
   time: string;
-    isoTime: string;
-    updatedAt?: string;
+  isoTime: string;
+  updatedAt?: string;
+  editedAt?: string | null;
   readAt: string | null;
   mediaUrl: string | null;
   mediaFileName?: string | null;
@@ -418,6 +420,7 @@ function buildMessage(
     time: timeLabel(payload.createdAt),
       isoTime: payload.createdAt,
       updatedAt: payload.updatedAt,
+      editedAt: payload.editedAt,
     readAt: payload.readAt,
     mediaUrl: payload.mediaAsset?.url ?? null,
     mediaFileName: payload.mediaAsset?.originalFileName ?? null,
@@ -1245,7 +1248,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
         <div className={`${showFooter ? "flex px-1" : "absolute -bottom-1"} items-center gap-1 ${isRight ? "right-0 flex-row-reverse" : "left-0"}`}>
           {showFooter && <>
             <span className="text-[11px] text-white">{msg.time}</span>
-            {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="text-[10px] italic text-white/45">editada</span>}
+            {msg.editedAt && <span className="text-[10px] italic text-white/45">editada</span>}
             {isRight && <MessageReceipt msg={msg} />}
           </>}
           {/* Actions — visible on hover */}
@@ -1794,7 +1797,8 @@ function MessagesPageContent() {
       activeConversationIdRef.current = conversation.id;
       setActiveConversationId(conversation.id);
       if (!searchParams.get("share")) {
-        router.replace(messagesConversationHref(conversation.id), { scroll: false });
+    // Preserve the list route in history so the device Back button returns to it.
+    router.push(messagesConversationHref(conversation.id), { scroll: false });
       }
     } catch (conversationError) {
       setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
@@ -2043,7 +2047,7 @@ function MessagesPageContent() {
     setEmojiOpen(false);
     activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
-    router.replace(messagesConversationHref(conversationId), { scroll: false });
+    router.push(messagesConversationHref(conversationId), { scroll: false });
   }, [router]);
 
   useEffect(() => {
@@ -2295,10 +2299,10 @@ function MessagesPageContent() {
 
   return (
     <div
-      className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
+      className="flex h-[100dvh] flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}
     >
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <aside className={`${activeConversationId ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col border-r border-white/[0.07] bg-transparent md:w-[400px]`}>
           <div className="flex flex-col gap-3 bg-transparent px-4 py-5 sm:px-6">
             <div className="flex items-center gap-4">
@@ -2407,7 +2411,7 @@ function MessagesPageContent() {
 
         </aside>
 
-        <main className={`${activeConversationId ? "flex" : "hidden md:flex"} relative w-full min-w-0 flex-1 flex-col overflow-hidden md:w-auto`}>
+        <main className={`${activeConversationId ? "flex" : "hidden md:flex"} relative min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:w-auto`}>
           <div className="flex items-center justify-between border-b border-white/[0.07] bg-[#000000] px-3 py-3 sm:px-6 sm:py-4">
             {activeConversation ? (
               <div className="flex items-center gap-3">
@@ -2605,7 +2609,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className={`border-t border-white/[0.07] bg-[#000000] px-5 py-4 relative z-30`}>
+          <div className={`relative z-30 border-t border-white/[0.07] bg-[#000000] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4`}>
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
