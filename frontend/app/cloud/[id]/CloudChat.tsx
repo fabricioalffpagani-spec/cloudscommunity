@@ -2674,7 +2674,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             onPointerLeave={handleTitlePointerLeave}
             onPointerCancel={handleTitlePointerCancel}
           >
-            {resolvedTitle}
+            {shouldScrollTitle ? <><span>{resolvedTitle}</span><span aria-hidden="true">{resolvedTitle}</span></> : resolvedTitle}
           </h1>
         </div>
 

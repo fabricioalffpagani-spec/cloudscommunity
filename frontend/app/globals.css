@@ -239,10 +239,11 @@ textarea {
 
   @media (prefers-reduced-motion: no-preference) {
     .cloud-title-marquee {
-      display: inline-block;
+      display: flex;
+      gap: 3rem;
       min-width: max-content;
       white-space: nowrap;
-      animation: cloud-title-marquee 11s ease-in-out 900ms infinite alternate;
+      animation: cloud-title-marquee 18s linear 1s infinite;
       will-change: transform;
     }
 
@@ -270,7 +271,7 @@ textarea {
 
 @keyframes cloud-title-marquee {
   from { transform: translateX(0); }
-  to { transform: translateX(-100%); }
+  to { transform: translateX(calc(-50% - 1.5rem)); }
 }
 
 @keyframes cloud-share-pulse {
