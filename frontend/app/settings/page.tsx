@@ -260,7 +260,7 @@ function PanelPerfil() {
     reader.onload = () => { setAvatarUrl(typeof reader.result === "string" ? reader.result : null); setError(""); };
     reader.readAsDataURL(file);
   };
-  const useDeviceLocation = async () => {
+  const handleDeviceLocation = async () => {
     if (!navigator.geolocation) { setError("A localização não é suportada neste dispositivo."); return; }
     setLocating(true); setError("");
     navigator.geolocation.getCurrentPosition(async ({ coords }) => {
@@ -330,7 +330,7 @@ function PanelPerfil() {
             <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Localização</label>
             <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-white">
               <span className={pais && cidade ? "truncate" : "text-white/40"}>{pais && cidade ? `${pais}, ${cidade}` : "Use a localização do dispositivo"}</span>
-              <button type="button" onClick={() => void useDeviceLocation()} disabled={locating} className="shrink-0 rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold disabled:opacity-60">{locating ? "Localizando…" : "Usar localização"}</button>
+              <button type="button" onClick={() => void handleDeviceLocation()} disabled={locating} className="shrink-0 rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold disabled:opacity-60">{locating ? "Localizando…" : "Usar localização"}</button>
             </div>
             <span className="text-[11px] text-white/50">A cidade é definida pela localização nativa do dispositivo.</span>
           </div>
