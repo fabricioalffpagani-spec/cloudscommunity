@@ -920,7 +920,10 @@ export class CloudService {
     // A repeated tap is idempotent and must not create duplicate alerts. The
     // cloud's own host also never receives a notification about their own hype.
     if (!existing && cloud.authorId !== current.user.id) {
-      const actorName = current.user.profile?.displayName || current.user.profile?.username || 'Alguém';
+      const actorName =
+        current.user.profile?.displayName ||
+        current.user.profile?.username ||
+        'Alguém';
       const notification = await this.prisma.notification.create({
         data: {
           userId: cloud.authorId,
