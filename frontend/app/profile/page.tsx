@@ -316,10 +316,10 @@ function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onR
   const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
   const visibleParticipants = participants.slice(0, 3);
   return (
-    <article className="cloud-card relative flex min-h-[180px] w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm">
+    <article className={`cloud-card relative flex min-h-[180px] w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${menuOpen ? "z-30" : "z-0"}`}>
       <div className="flex items-center justify-between gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">{authorAvatarUrl ? <img src={authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : cloud.title.slice(0, 1).toUpperCase()}</span>
-        <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-20 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button><button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
+        <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button><button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
       </div>
       <MobileCloudEntryLink href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 lang="pt-BR" className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></MobileCloudEntryLink>
       <p className="text-center text-[11px] text-white/50">{statusLabel} {statusDetail}</p>
@@ -520,8 +520,8 @@ export default function ProfilePage() {
       setProfileError("Escolha uma imagem para a foto de perfil.");
       return;
     }
-    if (file.size > 3 * 1024 * 1024) {
-      setProfileError("A foto deve ter no máximo 3 MB.");
+    if (file.size > 2_800_000) {
+      setProfileError("A foto deve ter no máximo 2,8 MB.");
       return;
     }
 
@@ -766,13 +766,12 @@ export default function ProfilePage() {
                   className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#22124a] px-4 py-3 text-[14px] text-white outline-none transition focus:border-[#9333EA]"
                 />
               </div>
-              <Field
-                label="Região"
-                value={draft.location}
-                onChange={(value) => setDraft({ ...draft, location: value })}
-                placeholder="País, cidade"
-              />
-              <p className="-mt-2 text-[12px] text-white/45">Use o formato País, cidade. Ex.: Brasil, Xanxerê.</p>
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Região</p>
+                <p className="mt-1 text-[14px] text-white/75">{draft.location || "Não definida"}</p>
+                <p className="mt-1 text-[12px] text-white/45">A cidade é definida pela localização nativa do dispositivo.</p>
+                <Link href="/settings" className="mt-2 inline-block text-[12px] font-semibold text-[#C084FC] hover:text-white">Definir localização nas configurações</Link>
+              </div>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
               <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-lg font-bold text-white">
@@ -785,7 +784,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold text-white">Foto de perfil</p>
-                  <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 3 MB.</p>
+                  <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 2,8 MB.</p>
                 </div>
                 <button type="button" onClick={() => photoInputRef.current?.click()} className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</button>
               </div>

@@ -1310,6 +1310,11 @@ function CreateCloudModal({
             <input
               autoFocus
               type="text"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="sentences"
+              spellCheck={false}
+              inputMode="text"
               value={title}
               onChange={e => setTitle(e.target.value.slice(0, 30))}
               onKeyDown={e => e.key === "Enter" && !isPrivateVisibility && handlePublish()}
@@ -2575,7 +2580,19 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     return () => { feed.removeEventListener("wheel", handleWheel); feed.removeEventListener("scroll", handleScroll); if (settleTimer) window.clearTimeout(settleTimer); };
   }, []);
 
-  if (clouds.length === 0) return <div className="flex h-full flex-col items-center justify-center gap-5 text-center"><p className="text-[18px] font-semibold text-white/80">Sem Clouds ativas no momento.</p></div>;
+  if (clouds.length === 0) return (
+    <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/empty-clouds-available.png"
+        alt="Sem clouds ativas"
+        className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
+        style={{ aspectRatio: "1536 / 1024" }}
+        draggable={false}
+      />
+      <p className="text-[18px] font-semibold text-white/80">Sem Clouds ativas no momento.</p>
+    </div>
+  );
 
   return <div ref={feedRef} className="desktop-cloud-feed h-full overflow-y-auto px-8"><div className="mx-auto flex h-full max-w-[1100px] flex-col">{clouds.map((cloud) => {
     const profile = getTopicProfile(cloud, 0);
@@ -3175,7 +3192,7 @@ function PageContent() {
           aria-label={feedOrder === "recent" ? "Exibindo Clouds mais recentes" : "Exibir Clouds mais recentes"}
           aria-pressed={feedOrder === "recent"}
           title={feedOrder === "recent" ? "Exibindo as Clouds mais recentes primeiro" : "Exibir as Clouds mais recentes primeiro"}
-          className={`absolute left-8 top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7] shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45"}`}
+          className={`absolute left-[max(2rem,calc(50%-608px))] top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7] shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45"}`}
         >
           <ClockIcon s={18} />
         </button>}

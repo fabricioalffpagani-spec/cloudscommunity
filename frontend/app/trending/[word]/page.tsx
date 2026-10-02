@@ -255,7 +255,7 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
           </div>
         </div>
       </header>
-      <MobileFeedHeader active="for-you" onSearch={() => setSearchOpen(true)} />
+      <MobileFeedHeader onSearch={() => setSearchOpen(true)} />
 
       {/* ── Main ── */}
       <main className="flex flex-1 flex-col overflow-y-auto">

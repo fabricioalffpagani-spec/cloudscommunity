@@ -136,7 +136,7 @@ export default function TrendingPage() {
           </div>
         </div>
       </header>
-      <MobileFeedHeader active="for-you" onSearch={() => setSearchOpen(true)} />
+      <MobileFeedHeader onSearch={() => setSearchOpen(true)} />
 
       {/* ── Main Content ── */}
       <main className="flex flex-1 flex-col overflow-y-auto">

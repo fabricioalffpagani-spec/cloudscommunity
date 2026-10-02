@@ -12,8 +12,10 @@ self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   const tasks = [self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
-    icon: "/logo_ico.png",
-    badge: "/logo_ico.png",
+    // `icon` is the full-color app mark in the notification drawer; `badge`
+    // is the transparent monochrome mark used by Android's status bar.
+    icon: "/pwa-192x192.png",
+    badge: "/clouds-notification-badge.svg",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
   })];

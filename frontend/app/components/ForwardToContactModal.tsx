@@ -151,6 +151,23 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
     }
   };
 
+  const shareNatively = async () => {
+    const text = externalShareText || `${preview || title}\n${url}`;
+    setExternalShareNotice(null);
+    try {
+      if (!navigator.share) throw new Error("Compartilhamento nativo indisponível");
+      await navigator.share({ title: preview || title, text, url });
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setExternalShareNotice("O compartilhamento nativo não está disponível. O convite foi copiado.");
+      } catch {
+        setExternalShareNotice("Não foi possível abrir o compartilhamento nativo agora.");
+      }
+    }
+  };
+
   const shareOnWhatsApp = () => {
     const text = externalShareText || `${preview || title}\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
@@ -174,7 +191,14 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         </div>
         {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{preview}</p>}
         {externalShareText && (
-          <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3">
+          <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:hidden">
+            <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
+            <button type="button" onClick={() => void shareNatively()} className="mt-3 w-full rounded-full bg-[#9333EA] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Compartilhar com…</button>
+            {externalShareNotice && <p role="status" className="mt-2 text-[11px] font-medium text-[#D8B4FE]">{externalShareNotice}</p>}
+          </section>
+        )}
+        {externalShareText && (
+          <section className="mb-5 hidden rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:block">
             <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" onClick={shareOnWhatsApp} className="rounded-full bg-[#25D366] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">WhatsApp</button>

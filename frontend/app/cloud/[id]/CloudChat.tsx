@@ -1091,13 +1091,13 @@ function AudioBubble({ msg, own }: { msg: ChatMessage; own?: boolean }) {
 function ImageBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className={`relative ${msg.isSticker ? "w-fit" : ""}`}>
-    <a href={msg.mediaUrl || "#"} target="_blank" rel="noreferrer" className={`block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] ${msg.isSticker ? "border-0 bg-transparent" : ""}`}>
+    <div className={`block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] ${msg.isSticker ? "border-0 bg-transparent" : ""}`}>
       {msg.mediaUrl ? (
         <img src={msg.mediaUrl} alt={msg.isSticker ? "Figurinha enviada" : "Imagem enviada"} className={msg.isSticker ? "h-36 w-36 object-contain" : "max-h-[320px] max-w-full object-contain"} />
       ) : (
         <div className="px-4 py-8 text-[14px] text-white/50">Imagem indisponível</div>
       )}
-    </a>
+    </div>
     </div>
   );
 }
@@ -1495,6 +1495,12 @@ function CloudMessageBubble({
               {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="italic">editada</span>}
               {own && !msg.pending && <MessageReceipt />}
             </div>
+            <div className="relative sm:hidden">
+              <button ref={dotsButtonRef} type="button" aria-label="Mais opções da mensagem" onClick={handleToggleMsgMenu} className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white">
+                <CloudDotsIcon />
+              </button>
+              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onClose={() => setMsgMenuOpen(false)} />}
+            </div>
           </div>}
         </div>
 
@@ -1891,6 +1897,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
   const resolvedTitle = cloud?.title || title || "Cloud";
+  const shouldScrollTitle = resolvedTitle.length > 28;
 
   const handleTitlePointerDown = useCallback((event: React.PointerEvent) => {
     // Only enable long press on mobile/touch devices
@@ -1935,6 +1942,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const minimizeCloud = useCallback(() => {
     window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
     router.push("/");
   }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router]);
 
@@ -1986,7 +1997,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
     const socket = io(`${socketUrl}/clouds`, {
       withCredentials: true,
-      transports: ["polling", "websocket"],
+      transports: ["websocket", "polling"],
     });
 
     socketRef.current = socket;
@@ -2654,7 +2665,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
         <div className="min-w-0 overflow-hidden">
           <h1
-            className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]"
+            className={`${shouldScrollTitle ? "cloud-title-marquee md:truncate" : "truncate"} text-[22px] font-bold leading-tight text-white sm:text-[28px]`}
             onPointerDown={handleTitlePointerDown}
             onPointerUp={handleTitlePointerUp}
             onPointerLeave={handleTitlePointerLeave}
@@ -2702,7 +2713,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 type="button"
                 aria-label="Encaminhar"
                 onClick={() => setShareOpen(true)}
-                className="group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
+                className="cloud-share-pulse group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
               >
                 <HeaderForwardIcon />
               </button>

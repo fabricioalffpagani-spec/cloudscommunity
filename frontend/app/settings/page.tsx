@@ -217,6 +217,7 @@ function PanelPerfil() {
   const [pais, setPais] = useState(normalizeCountry(user?.location));
   const [cidade, setCidade] = useState(locationCity(user?.location));
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
@@ -251,10 +252,28 @@ function PanelPerfil() {
   };
   const choosePhoto = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > 3_000_000) { setError("Escolha uma imagem de até 3 MB."); return; }
+    // Base64 expands the original image before it is persisted. Keep the
+    // source below the server's 4 MB payload ceiling so a valid selection
+    // cannot fail only when the user saves the profile.
+    if (!file.type.startsWith("image/") || file.size > 2_800_000) { setError("Escolha uma imagem de até 2,8 MB."); return; }
     const reader = new FileReader();
     reader.onload = () => { setAvatarUrl(typeof reader.result === "string" ? reader.result : null); setError(""); };
     reader.readAsDataURL(file);
+  };
+  const useDeviceLocation = async () => {
+    if (!navigator.geolocation) { setError("A localização não é suportada neste dispositivo."); return; }
+    setLocating(true); setError("");
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&zoom=10&addressdetails=1`);
+        const payload = await response.json() as { address?: { country?: string; city?: string; town?: string; village?: string; municipality?: string } };
+        const address = payload.address;
+        const city = address?.city ?? address?.town ?? address?.village ?? address?.municipality;
+        if (!address?.country || !city) throw new Error("Não foi possível identificar cidade e país.");
+        setPais(address.country); setCidade(city);
+      } catch (locationError) { setError(locationError instanceof Error ? locationError.message : "Não foi possível identificar sua localização."); }
+      finally { setLocating(false); }
+    }, (positionError) => { setError(positionError.code === positionError.PERMISSION_DENIED ? "Permita a localização para definir sua cidade." : "Não foi possível obter sua localização."); setLocating(false); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   };
   return (
     <div className="flex flex-col gap-6">
@@ -308,9 +327,12 @@ function PanelPerfil() {
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Cidade</label>
-            <input value={cidade} onChange={(event) => setCidade(event.target.value)} placeholder="Xanxerê" className="w-full rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-white placeholder:text-[#6B7280] outline-none transition focus:border-[#A855F7]" />
-            <span className="text-[11px] text-white/50">A região será exibida como: {pais && cidade.trim() ? `${pais}, ${cidade.trim()}` : "País, cidade"}.</span>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Localização</label>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-3 text-[14px] text-white">
+              <span className={pais && cidade ? "truncate" : "text-white/40"}>{pais && cidade ? `${pais}, ${cidade}` : "Use a localização do dispositivo"}</span>
+              <button type="button" onClick={() => void useDeviceLocation()} disabled={locating} className="shrink-0 rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold disabled:opacity-60">{locating ? "Localizando…" : "Usar localização"}</button>
+            </div>
+            <span className="text-[11px] text-white/50">A cidade é definida pela localização nativa do dispositivo.</span>
           </div>
           {error && <p className="text-[12px] text-red-400">{error}</p>}
           <div className="flex justify-end"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition disabled:opacity-60">{saved?<><CheckIcon/>Salvo!</>:saving?"Salvando...":"Salvar perfil"}</button></div>

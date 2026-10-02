@@ -88,7 +88,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     void loadNotifications();
-    const timer = window.setInterval(() => void loadNotifications(), 30000);
+    const timer = window.setInterval(() => void loadNotifications(), 5000);
     const handleFocus = () => void loadNotifications();
     window.addEventListener("focus", handleFocus);
 
@@ -279,7 +279,7 @@ export function NotificationsBell({
 
   useEffect(() => {
     void loadUnread();
-    const timer = window.setInterval(() => void loadUnread(), 30000);
+    const timer = window.setInterval(() => void loadUnread(), 5000);
     const handleFocus = () => void loadUnread();
     window.addEventListener("focus", handleFocus);
 
@@ -303,7 +303,7 @@ export function NotificationsBell({
           setOpen(true);
           void fetch("/api/notifications/read", { method: "POST" });
         }}
-        className={buttonClassName ?? "relative flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"}
+        className={`relative ${buttonClassName ?? "flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"}`}
       >
         <BellIcon s={28} />
         {unreadCount > 0 && (

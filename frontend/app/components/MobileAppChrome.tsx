@@ -105,7 +105,7 @@ export function MobileFeedHeader(props: Parameters<typeof MobileFeedHeaderConten
   return <Suspense fallback={null}><MobileFeedHeaderContent {...props} /></Suspense>;
 }
 
-function MobileFeedHeaderContent({ active, onSearch }: { active: FeedTab; onSearch?: () => void }) {
+function MobileFeedHeaderContent({ active, onSearch }: { active?: FeedTab; onSearch?: () => void }) {
   const searchParams = useSearchParams();
   const previewSuffix = searchParams.get("mobilePreview") === "1" ? "?mobilePreview=1" : "";
   const tabs: Array<{ id: FeedTab; label: string; href: string; hint: string }> = [
