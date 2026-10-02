@@ -58,8 +58,10 @@ async function enableNativeNotifications() {
   if (!keyResponse.ok || !keyPayload?.publicKey) return;
   const registration = await navigator.serviceWorker.register("/clouds-sw.js", { updateViaCache: "none" });
   await registration.update();
-  const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey) });
-  await fetch("/api/notifications/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
+  const subscription = await registration.pushManager.getSubscription()
+    ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey) });
+  const response = await fetch("/api/notifications/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
+  if (!response.ok) throw new Error("Não foi possível registrar as notificações push.");
 }
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {

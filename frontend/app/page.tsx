@@ -1,5 +1,7 @@
 "use client";
 
+import { installCloudPageScroll } from "./lib/cloud-page-scroll";
+
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
@@ -1220,23 +1222,6 @@ function CreateCloudModal({
   const sendCloudInvitations = async (cloudData: { title: string; duration: string; visibility: string }, cloudId: string) => {
     const followerIds = Array.from(selectedFollowers);
 
-    // For private clouds, generate an invite token first so recipients go through /invite/[token]
-    let inviteToken: string | null = null;
-    if (cloudData.visibility === "private") {
-      try {
-        const tokenRes = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/invite`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json().catch(() => null) as { invite?: { token: string } } | null;
-          inviteToken = tokenData?.invite?.token ?? null;
-        }
-      } catch {
-        // non-critical — fall back to direct cloud URL
-      }
-    }
-
     const origin = typeof window !== "undefined" ? window.location.origin : "https://clouds.community";
     // Invited users are already Cloud members. Open the Cloud directly so a
     // stale or unavailable invite token cannot block their entry.
@@ -1270,7 +1255,6 @@ function CreateCloudModal({
         const invitationContent = JSON.stringify({
           type: "cloud_invitation",
           cloudId: cloudId,
-          inviteToken: inviteToken ?? null,
           cloudTitle: cloudData.title,
           cloudDuration: cloudData.duration,
           cloudVisibility: cloudData.visibility,
@@ -2541,7 +2525,6 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
 function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
-  const wheelLocked = useRef(false);
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2553,31 +2536,7 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
   useEffect(() => {
     const feed = feedRef.current;
     if (!feed) return;
-    let settleTimer: number | null = null;
-    const pages = () => Array.from(feed.querySelectorAll<HTMLElement>("[data-cloud-page]"));
-    const topOf = (page: HTMLElement) => page.getBoundingClientRect().top - feed.getBoundingClientRect().top + feed.scrollTop;
-    const nearestPage = () => pages().reduce<HTMLElement | null>((nearest, page) => !nearest || Math.abs(topOf(page) - feed.scrollTop) < Math.abs(topOf(nearest) - feed.scrollTop) ? page : nearest, null);
-    const handleWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) < Math.abs(event.deltaX) || Math.abs(event.deltaY) < 8 || wheelLocked.current) return;
-      event.preventDefault();
-      wheelLocked.current = true;
-      const direction = event.deltaY > 0 ? 1 : -1;
-      const allPages = pages();
-      const currentIndex = Math.max(0, allPages.indexOf(nearestPage() as HTMLElement));
-      const target = allPages[Math.max(0, Math.min(currentIndex + direction, allPages.length - 1))];
-      if (target) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
-      window.setTimeout(() => { wheelLocked.current = false; }, 380);
-    };
-    const handleScroll = () => {
-      if (settleTimer) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => {
-        const target = nearestPage();
-        if (target && Math.abs(topOf(target) - feed.scrollTop) > 2) feed.scrollTo({ top: topOf(target), behavior: "smooth" });
-      }, 120);
-    };
-    feed.addEventListener("wheel", handleWheel, { passive: false });
-    feed.addEventListener("scroll", handleScroll, { passive: true });
-    return () => { feed.removeEventListener("wheel", handleWheel); feed.removeEventListener("scroll", handleScroll); if (settleTimer) window.clearTimeout(settleTimer); };
+    return installCloudPageScroll(feed);
   }, []);
 
   if (clouds.length === 0) return (
@@ -2648,7 +2607,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
   }
 
   return (
-    <div ref={feedRef} className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-auto">
+    <div ref={feedRef} className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain" style={{ touchAction: "pan-x" }}>
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);

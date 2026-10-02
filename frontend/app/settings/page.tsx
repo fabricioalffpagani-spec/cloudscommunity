@@ -590,6 +590,24 @@ function PanelSeguranca() {
 function PanelDados() {
   const { user } = useSessionUser();
   const [confirm,setConfirm]=useState(false);const [inp,setInp]=useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
+  const deleteAccount = async () => {
+    if (inp !== "excluir minha conta" || deletingAccount) return;
+    setDeletingAccount(true);
+    setDeleteAccountError("");
+    try {
+      const response = await fetch("/api/auth/me", { method: "DELETE", credentials: "include" });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message ?? "Não foi possível excluir a conta.");
+      }
+      window.location.replace("/login");
+    } catch (error) {
+      setDeleteAccountError(error instanceof Error ? error.message : "Não foi possível excluir a conta.");
+      setDeletingAccount(false);
+    }
+  };
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const exportData = () => {
@@ -673,8 +691,9 @@ function PanelDados() {
         </div>
         <div className="flex gap-3 justify-end">
           <button onClick={()=>{setConfirm(false);setInp("");}} className="rounded-full bg-[#1a0e3d] border border-white/[0.08] px-5 py-2.5 text-[13px] text-white/80 hover:text-white transition">Cancelar</button>
-          <button disabled={inp!=="excluir minha conta"} className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition"><TrashIcon s={15}/>Confirmar</button>
+          <button type="button" onClick={() => void deleteAccount()} disabled={inp!=="excluir minha conta" || deletingAccount} className="inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition"><TrashIcon s={15}/>{deletingAccount ? "Excluindo..." : "Confirmar"}</button>
         </div>
+        {deleteAccountError && <p role="alert" className="text-[12px] text-red-300">{deleteAccountError}</p>}
       </div>)}
     </Card>
   </div>);

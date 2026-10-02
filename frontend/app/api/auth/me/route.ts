@@ -11,3 +11,7 @@ export async function PATCH(req: Request) {
   return proxyJsonRequest(req, "/auth/me");
 }
 
+export async function DELETE(req: Request) {
+  return proxyJsonRequest(req, "/auth/me");
+}
+

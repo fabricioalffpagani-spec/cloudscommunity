@@ -209,7 +209,11 @@ export class CloudService {
             visibility: CloudVisibility.public,
             OR: [
               { author: { profile: { is: { isPrivate: false } } } },
-              { author: { followers: { some: { followerId: current.user.id } } } },
+              {
+                author: {
+                  followers: { some: { followerId: current.user.id } },
+                },
+              },
             ],
           },
         ],

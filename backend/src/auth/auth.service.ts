@@ -90,6 +90,13 @@ export class AuthService {
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
 
+  async deleteAccount(token: string | null): Promise<void> {
+    const current = await this.resolveSession(token);
+    if (!current)
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    await this.prisma.user.delete({ where: { id: current.user.id } });
+  }
+
   async signup(
     input: SignupInput,
     _meta: { ipAddress: string | null; userAgent: string | null },

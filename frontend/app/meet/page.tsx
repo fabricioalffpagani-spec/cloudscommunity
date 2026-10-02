@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
@@ -178,6 +178,10 @@ function ProfileRow({
 }
 
 export default function MeetPage() {
+  return <Suspense fallback={null}><MeetPageContent /></Suspense>;
+}
+
+function MeetPageContent() {
   const { user } = useSessionUser();
   const router = useRouter();
   const mobileFeedTabSwipe = useMobileFeedTabSwipe();

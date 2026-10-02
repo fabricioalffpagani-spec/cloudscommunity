@@ -11,6 +11,7 @@ import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendI
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
+import { useComposerPanLock } from "../../lib/composer-pan-lock";
 
 type CloudPayload = {
   id: string;
@@ -1588,6 +1589,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const composerFooterRef = useComposerPanLock();
   const hasJoinedRef = useRef(false);
   const messagesLoadRequestRef = useRef(0);
   const audioRecorder = useAudioRecorder((recording) => {
@@ -2174,7 +2177,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     if (messages.length > 0) {
-      bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+      messagesScrollRef.current?.scrollTo({ top: messagesScrollRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [isLocallyTyping, messages, typingUserIds]);
 
@@ -2475,7 +2478,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [handleImageFile]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendText();
@@ -2652,7 +2655,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }
 
   return (
-    <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
+    <div onClick={() => setActionMenuOpen(false)} className="flex h-[100dvh] flex-col overflow-hidden overscroll-none text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
       <div className="grid shrink-0 grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 bg-black px-4 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:grid-cols-[2.25rem_minmax(0,1fr)_auto] sm:gap-x-3 sm:gap-y-1.5 sm:px-4 sm:pb-4 sm:pt-4">
         <button
           type="button"
@@ -2856,7 +2859,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         );
       })()}
 
-      <div className="flex-1 overflow-y-auto scrollbar-purple px-3 py-4 sm:px-8 sm:py-6">
+      <div ref={messagesScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6">
         {loadingMessages && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
         ) : messages.length === 0 ? (
@@ -2911,18 +2914,18 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
+      <div ref={composerFooterRef} className="shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5">
         <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
           {status !== "authenticated" && (
             <button type="button" aria-label="Cadastrar para participar da cloud" onClick={() => setGuestSignupOpen(true)} className="absolute inset-0 z-20 cursor-text rounded-full" />
           )}
           {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (
-            <div className="flex items-center gap-3 rounded-full border border-white/[0.06] bg-black px-4 py-2.5">
-              <div className="flex-1 text-[14px] text-white" style={{ fontFamily: "Arial, sans-serif" }}>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-white/[0.06] bg-black px-2 py-2.5 sm:flex-nowrap sm:rounded-full sm:px-4">
+              <div className="min-w-0 flex-1 text-[12px] text-white sm:text-[14px]" style={{ fontFamily: "Arial, sans-serif" }}>
                 {audioRecorder.state === "paused" ? "Pausado" : "Gravando…"} {formatDurationMs(audioRecorder.seconds * 1000) || "0:00"}
               </div>
-              <Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} />
-              <div className="flex items-center gap-2">
+              <div className="hidden min-w-0 sm:block"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
+              <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <button type="button" aria-label={audioRecorder.state === "paused" ? "Retomar" : "Pausar"} onClick={audioRecorder.state === "paused" ? audioRecorder.resume : audioRecorder.pause} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10">
                   {audioRecorder.state === "paused" ? <PlayIcon s={16} /> : <PauseIcon s={16} />}
                 </button>
@@ -3001,14 +3004,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   >
                     <PlusIcon s={18} />
                   </button>
-                  <input
-                    type="text"
+                  <textarea
+                    rows={1}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
+                    onInput={(event) => { event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`; }}
                     onKeyDown={handleKeyDown}
                     placeholder="Mensagem..."
                     disabled={isAudioBusy}
-                    className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/50 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-white placeholder:text-white/50 outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ maxHeight: 120, fieldSizing: "content" }}
                   />
                   {draft.trim() ? (
                     <button type="button" aria-label="Enviar" onClick={() => void sendText()} className="flex h-10 w-10 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9]">
