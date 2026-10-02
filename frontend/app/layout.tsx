@@ -10,6 +10,7 @@ import { OnboardingGate } from "./components/OnboardingGate";
 import { MiniCloudDock } from "./components/MiniCloudDock";
 import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 import { NativeNotificationPermission } from "./components/NativeNotificationPermission";
+import { MobileLaunchScreen } from "./components/MobileLaunchScreen";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -47,6 +48,7 @@ export default function RootLayout({
         <SessionUserProvider>
           <OnboardingGate />
           <AccessibilityProvider>
+            <MobileLaunchScreen />
             <ScrollbarStyles />
             {children}
             <MiniCloudDock />

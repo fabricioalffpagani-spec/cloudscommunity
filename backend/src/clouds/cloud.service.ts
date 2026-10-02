@@ -904,13 +904,41 @@ export class CloudService {
     cloudId: string,
   ): Promise<{ ok: true; hypesCount: number }> {
     const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const cloud = await this.requireCloudAccess(cloudId, current.user.id);
+
+    const existing = await this.prisma.cloudHype.findUnique({
+      where: { cloudId_userId: { cloudId, userId: current.user.id } },
+      select: { cloudId: true },
+    });
 
     await this.prisma.cloudHype.upsert({
       where: { cloudId_userId: { cloudId, userId: current.user.id } },
       create: { cloudId, userId: current.user.id },
       update: {},
     });
+
+    // A repeated tap is idempotent and must not create duplicate alerts. The
+    // cloud's own host also never receives a notification about their own hype.
+    if (!existing && cloud.authorId !== current.user.id) {
+      const actorName = current.user.profile?.displayName || current.user.profile?.username || 'Alguém';
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: cloud.authorId,
+          type: 'cloud_hype',
+          entityType: 'cloud',
+          entityId: cloudId,
+          title: 'Novo hype na sua Cloud',
+          body: `${actorName} deu hype em “${cloud.title}”.`,
+          metadata: { actorUserId: current.user.id },
+        },
+      });
+      await this.pushNotifications.send(cloud.authorId, {
+        title: notification.title,
+        body: notification.body,
+        url: `/cloud/${cloudId}`,
+        tag: notification.id,
+      });
+    }
 
     const hypesCount = await this.prisma.cloudHype.count({
       where: { cloudId },
