@@ -1771,7 +1771,13 @@ function MessagesPageContent() {
         return;
       }
       const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
-      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: payload.messages.map((message) => buildMessage(message, user)) }));
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] ?? []).reduce(
+          (list, message) => mergeMessage(list, message),
+          payload.messages.map((message) => buildMessage(message, user)),
+        ),
+      }));
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as mensagens.");
     } finally {
@@ -1895,10 +1901,12 @@ function MessagesPageContent() {
 
     socket.on("connect", () => {
       setConnectionState("connected");
+      void loadConversations();
       const conversationId = activeConversationIdRef.current;
       if (conversationId) {
         socket.emit("conversation:join", { conversationId });
         socket.emit("conversation:read", { conversationId });
+        void loadMessages(conversationId);
       }
     });
 
@@ -2013,7 +2021,7 @@ function MessagesPageContent() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [status, user]);
+  }, [status, user, loadConversations, loadMessages]);
 
   useEffect(() => {
     messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: "smooth" });

@@ -2607,7 +2607,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
   }
 
   return (
-    <div ref={feedRef} className="mobile-cloud-feed flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain" style={{ touchAction: "pan-x" }}>
+    <div ref={feedRef} className="mobile-cloud-feed min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain" style={{ touchAction: "pan-y" }}>
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);

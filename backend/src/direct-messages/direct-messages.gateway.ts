@@ -344,8 +344,11 @@ export class DirectMessagesGateway
         conversationId,
       );
 
+    // Every authenticated device joins its user room. Conversation rooms are
+    // joined only for the active chat, so they cannot deliver to an idle peer.
     this.server
-      .to(this.conversationRoom(conversationId))
+      .to(this.userRoom(userId))
+      .to(this.userRoom(senderConversation.participant.id))
       .emit('message:new', message);
     this.server
       .to(this.userRoom(userId))

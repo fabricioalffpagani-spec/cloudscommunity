@@ -1639,7 +1639,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [isTitleLongPress, setIsTitleLongPress] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
   const [isDeletingCloud, setIsDeletingCloud] = useState(false);
-  const [isManagingMemberId, setIsManagingMemberId] = useState<string | null>(null);
   const [isBanningMemberId, setIsBanningMemberId] = useState<string | null>(null);
   const [reportingMsg, setReportingMsg] = useState<ChatMessage | null>(null);
   const [cloudReports, setCloudReports] = useState<Array<{ id: string; reportedId: string; reportedName: string; reportedUsername: string; reportedAvatarUrl: string | null; messageId: string | null; messageContent: string | null; reasons: string[]; count: number }>>([]);
@@ -1951,35 +1950,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
     router.push("/");
   }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router]);
-
-  const handleRemoveMember = useCallback(async (memberId: string) => {
-    if (!cloud || !isCloudAuthor || isManagingMemberId) {
-      return;
-    }
-
-    setIsManagingMemberId(memberId);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/members/${encodeURIComponent(memberId)}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      await readJson<{ ok: true }>(response);
-      setCloud((current) =>
-        current
-          ? {
-              ...current,
-              members: current.members?.filter((member) => member.userId !== memberId) ?? [],
-            }
-          : current,
-      );
-    } catch (memberError) {
-      setError(memberError instanceof Error ? memberError.message : "Não foi possível remover o membro.");
-    } finally {
-      setIsManagingMemberId(null);
-    }
-  }, [cloud, cloudId, isCloudAuthor, isManagingMemberId]);
 
   useEffect(() => {
     // For an explicit entry, wait until the join request confirms membership.
@@ -3366,7 +3336,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                       </div>
                       {member.userId !== user?.id && (
                         <div className="flex items-center gap-2 shrink-0">
-                          {hasReport && (
                             <button
                               type="button"
                               onClick={() => void handleBanMember(member.userId)}
@@ -3375,15 +3344,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                             >
                               {isBanningMemberId === member.userId ? "Banindo…" : "Banir"}
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveMember(member.userId)}
-                            disabled={isManagingMemberId === member.userId}
-                            className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-white/70 transition hover:bg-white/[0.12] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isManagingMemberId === member.userId ? "Removendo…" : "Remover"}
-                          </button>
                         </div>
                       )}
                     </div>
