@@ -1,10 +1,21 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
+import { fixupPluginRules } from "@eslint/compat";
+import nextConfig from "eslint-config-next";
 import nextTs from "eslint-config-next/typescript";
 
 const eslintConfig = defineConfig([
-  ...nextVitals,
+  ...nextConfig.map((config) => config.plugins?.["@next/next"] ? {
+    ...config,
+    plugins: { ...config.plugins, "@next/next": fixupPluginRules(config.plugins["@next/next"]) },
+  } : config),
   ...nextTs,
+  // Keep the Core Web Vitals rules with the audited plugin version.
+  {
+    rules: {
+      "@next/next/no-html-link-for-pages": "error",
+      "@next/next/no-sync-scripts": "error",
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
