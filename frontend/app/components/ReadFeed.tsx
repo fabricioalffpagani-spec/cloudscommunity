@@ -1,7 +1,5 @@
 "use client";
 
-import { installCloudPageScroll } from "../lib/cloud-page-scroll";
-
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -26,7 +24,6 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   const [deleteError, setDeleteError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
-  const feedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -54,12 +51,6 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
     }, 260);
   };
 
-  useEffect(() => {
-    const feed = feedRef.current;
-    if (!feed) return;
-    return installCloudPageScroll(feed);
-  }, []);
-
   const confirmDelete = async () => {
     if (!cloudToDelete) return;
     setDeleting(true);
@@ -79,15 +70,15 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
   }
 
   return (
-    <div className="relative h-full w-full md:block">
-      <div ref={feedRef} className="mobile-cloud-feed desktop-cloud-feed h-full snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:flex md:max-w-[1100px] md:flex-col md:snap-none" style={{ touchAction: "pan-x" }}>
+    <div className="relative flex min-h-0 h-full w-full flex-col">
+      <div className="mobile-cloud-feed desktop-cloud-feed min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:w-full md:max-w-[1100px] md:snap-none" style={{ touchAction: "pan-y" }}>
         {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
             return <article
             key={cloud.id}
             data-cloud-page
-            className="relative flex min-h-full snap-start flex-col overflow-hidden bg-transparent px-6 pb-3 pt-6 md:h-full md:min-h-full md:shrink-0 md:px-0 md:pb-0 md:pt-0"
+            className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6 md:px-0 md:pb-0 md:pt-0"
             style={{
               transition: "transform 0.25s ease, opacity 0.25s ease",
               transform: slideAnim === "up" ? "translateY(-36px)" : slideAnim === "down" ? "translateY(36px)" : "translateY(0)",

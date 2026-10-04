@@ -2545,7 +2545,7 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
 
 
   if (clouds.length === 0) return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 text-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/empty-clouds-available.png"
@@ -2558,17 +2558,17 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     </div>
   );
 
-  return <div className="desktop-cloud-feed h-full snap-y snap-proximity overflow-y-auto px-8"><div className="mx-auto flex h-full max-w-[1100px] flex-col">{clouds.map((cloud) => {
+  return <div className="desktop-cloud-feed min-h-0 flex-1 overflow-y-auto overscroll-contain px-8" style={{ touchAction: "pan-y" }}>{clouds.map((cloud) => {
     const profile = getTopicProfile(cloud, 0);
     const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
     const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
-    return <article key={cloud.id} data-cloud-page className="relative flex h-full min-h-full shrink-0 snap-start flex-col overflow-visible">
+    return <article key={cloud.id} data-cloud-page className="relative mx-auto flex min-h-full w-full max-w-[1100px] flex-col">
       <div className="flex items-center justify-between gap-6 px-12 pb-7 pt-10"><div className="flex min-w-0 items-center gap-5"><span className="relative shrink-0">{profile.avatar ? <img src={profile.avatar} alt="" className="h-20 w-20 rounded-full object-cover ring-2 ring-white/10" referrerPolicy="no-referrer" /> : <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-2xl font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}<span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" /></span><div className="min-w-0"><p className="truncate text-[21px] font-semibold text-white">{profile.name}</p><p className="text-[16px] text-white/45">@{profile.handle}</p></div></div><div className="flex shrink-0 items-center gap-6"><div className="flex -space-x-4" aria-label={`${participants.length} participantes da Cloud`}>{participants.slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold">{participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">+{participants.length - 7}</span>}</div><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((current) => current === cloud.id ? null : cloud.id); }} className="p-2 text-[26px] leading-none text-white/80 hover:text-white">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}<button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>{cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div></div></div>
       <div className="flex flex-1 flex-col items-center justify-center px-12 py-10 text-center"><h2 lang="pt-BR" className="max-w-[90%] hyphens-auto break-normal text-[72px] font-extrabold leading-[1.06] tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2></div>
       <div className="flex justify-center px-12 pb-16"><button type="button" onClick={() => !isScheduled && onEnter(cloud)} disabled={isScheduled} className="rounded-full border border-[#A855F7]/70 bg-transparent px-28 py-6 text-[21px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:cursor-default disabled:opacity-60">{isScheduled ? "Em breve" : "Entrar na Cloud"}</button></div>
       <span className="absolute bottom-9 right-12 rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white">{formatCountdown(getTopicCountdown(cloud))}</span>
     </article>;
-  })}</div></div>;
+  })}</div>;
 }
 
 function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
@@ -3120,7 +3120,7 @@ function PageContent() {
         />
       </main>
 
-      {homeStage === "topics" && !mobilePreview && <main className="relative hidden min-h-0 flex-1 md:block">
+      {homeStage === "topics" && !mobilePreview && <main className="relative hidden min-h-0 flex-1 overflow-hidden md:flex">
         {!trendingQuery && <button
           type="button"
           onClick={toggleRecentClouds}

@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { installCloudPageScroll } from "../app/lib/cloud-page-scroll";
 import { MessagesNavLink } from "../app/components/MessagesNavLink";
 import { MobileAppNav, useMobileFeedTabSwipe } from "../app/components/MobileAppChrome";
 import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
@@ -91,29 +90,4 @@ describe("mobile regressions", () => {
     expect(navigation.push).toHaveBeenCalledWith("/meet");
   });
 
-  it("moves exactly one Cloud per wheel burst and per touch gesture", () => {
-    vi.useFakeTimers();
-    const feed = document.createElement("div");
-    Object.defineProperty(feed, "scrollTop", { value: 0, writable: true });
-    feed.getBoundingClientRect = () => ({ top: 0 } as DOMRect);
-    const scrollTo = vi.fn(({ top }: { top: number }) => { feed.scrollTop = top; });
-    feed.scrollTo = scrollTo as unknown as typeof feed.scrollTo;
-    for (let i = 0; i < 4; i += 1) {
-      const page = document.createElement("article");
-      page.dataset.cloudPage = "";
-      page.getBoundingClientRect = () => ({ top: i * 500 - feed.scrollTop } as DOMRect);
-      feed.appendChild(page);
-    }
-    const cleanup = installCloudPageScroll(feed);
-    for (let i = 0; i < 5; i += 1) feed.dispatchEvent(new WheelEvent("wheel", { deltaY: 700, cancelable: true }));
-    expect(feed.scrollTop).toBe(500);
-    vi.advanceTimersByTime(700);
-    feed.dispatchEvent(new WheelEvent("wheel", { deltaY: 700, cancelable: true }));
-    expect(feed.scrollTop).toBe(1000);
-    fireEvent.touchStart(feed, { touches: [{ clientY: 250 }] });
-    fireEvent.touchEnd(feed, { changedTouches: [{ clientY: 100 }] });
-    expect(feed.scrollTop).toBe(1500);
-    expect(scrollTo).toHaveBeenCalledTimes(3);
-    cleanup();
-  });
 });

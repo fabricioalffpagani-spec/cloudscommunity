@@ -139,7 +139,7 @@ function ReadPageContent() {
             Carregando clouds encerradas...
           </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center md:block">
+          <div className="flex h-full min-h-0 flex-1 items-center justify-center md:block">
             <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} currentUserId={user?.id} onDelete={deleteCloud} />
           </div>
         )}

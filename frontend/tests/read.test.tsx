@@ -39,16 +39,17 @@ describe("Read", () => {
     fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
     expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation");
   });
-  it("scrolls across archived topics on desktop", () => {
+  it("leaves desktop wheel scrolling native across archived topics", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
     const feed = container.querySelector(".desktop-cloud-feed") as HTMLDivElement;
     const scrollTo = vi.fn();
     feed.scrollTo = scrollTo;
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     expect(container.querySelectorAll("article")).toHaveLength(2);
     expect(screen.getByText("Outro assunto")).toBeVisible();
-    fireEvent.wheel(feed, { deltaY: 100, deltaX: 0 });
-    expect(scrollTo).toHaveBeenCalledWith({ top: expect.any(Number), behavior: "smooth" });
+    expect(feed).toHaveClass("min-h-0", "flex-1", "overflow-y-auto", "overscroll-contain");
+    expect(feed.style.touchAction).toBe("pan-y");
+    expect(fireEvent.wheel(feed, { deltaY: 100, deltaX: 0, cancelable: true })).toBe(true);
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
 
