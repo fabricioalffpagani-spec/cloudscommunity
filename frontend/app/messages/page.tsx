@@ -9,10 +9,12 @@ import { socketAuth } from "../lib/socket-auth";
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
+import { MessageDotsIcon } from "../components/MessageDotsIcon";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
 import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
 import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
+import { isConversationForViewer } from "../lib/direct-conversation";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -352,7 +354,8 @@ function dateLabel(iso: string) {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-function buildConversation(payload: BackendConversation): Conversation {
+function buildConversation(payload: BackendConversation, viewerId: string): Conversation | null {
+  if (!isConversationForViewer(payload, viewerId)) return null;
   const name = payload.participant.displayName || payload.participant.username;
   return {
     id: payload.id,
@@ -984,16 +987,6 @@ function DmReplyIcon() {
   );
 }
 
-function DmDotsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={15} height={15} fill="currentColor" aria-hidden="true">
-      <circle cx="5" cy="12" r="2" />
-      <circle cx="12" cy="12" r="2" />
-      <circle cx="19" cy="12" r="2" />
-    </svg>
-  );
-}
-
 function TypingDots() {
   return (
     <span className="typing-ellipsis inline-flex items-end gap-[3px] px-0.5" aria-label="Digitando">
@@ -1252,7 +1245,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
             {isRight && <MessageReceipt msg={msg} />}
           </>}
           {/* Actions — visible on hover */}
-          <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isRight ? "mr-1.5" : "ml-1.5"}`}>
+          <div className={`flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${isRight ? "mr-1.5" : "ml-1.5"}`}>
             <button
               type="button"
               onClick={() => onReply?.(msg)}
@@ -1266,10 +1259,11 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
                 ref={triggerRef}
                 type="button"
                 onClick={handleToggleMenu}
+                aria-label="Mais opções da mensagem"
                 title="Mais opções"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-white/70"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
               >
-                <DmDotsIcon />
+                <MessageDotsIcon />
               </button>
               {menuOpen && (
                 <DmMsgMenu
@@ -1717,17 +1711,19 @@ function MessagesPageContent() {
   const isConversationBlocked = Boolean(activeConversation?.blockedByPeer || activeConversation?.blockedByMe);
 
   const loadConversations = useCallback(async () => {
+    if (!user?.id) return;
     setLoadingConversations(true);
     setError(null);
     try {
       const response = await fetch("/api/direct-messages/conversations", { cache: "no-store" });
       const payload = await readJson<{ ok: true; conversations: BackendConversation[] }>(response);
-      const mapped = payload.conversations.map((conversation) => {
-        const built = buildConversation(conversation);
-        return {
+      const mapped = payload.conversations.flatMap((conversation) => {
+        const built = buildConversation(conversation, user.id);
+        if (!built) return [];
+        return [{
           ...built,
           status: presenceByUserIdRef.current[built.peerId] ?? built.status,
-        };
+        }];
       });
       const sortedConversations = sortConversations(mapped);
       conversationsRef.current = sortedConversations;
@@ -1737,7 +1733,7 @@ function MessagesPageContent() {
     } finally {
       setLoadingConversations(false);
     }
-  }, []);
+  }, [user?.id]);
 
   const loadFollowedUsers = useCallback(async () => {
     setLoadingFollowed(true);
@@ -1790,7 +1786,7 @@ function MessagesPageContent() {
   }, [user?.id]);
 
   const ensureConversation = useCallback(async (peerUserId: string) => {
-    if (!peerUserId || openedPeerRef.current === peerUserId) return;
+    if (!user?.id || !peerUserId || openedPeerRef.current === peerUserId) return;
     openedPeerRef.current = peerUserId;
     try {
       const response = await fetch("/api/direct-messages/conversations", {
@@ -1799,7 +1795,8 @@ function MessagesPageContent() {
         body: JSON.stringify({ peerUserId }),
       });
       const payload = await readJson<{ ok: true; conversation: BackendConversation }>(response);
-      const built = buildConversation(payload.conversation);
+      const built = buildConversation(payload.conversation, user.id);
+      if (!built) throw new Error("Conversa inválida para o usuário atual.");
       const conversation = {
         ...built,
         status: presenceByUserIdRef.current[built.peerId] ?? built.status,
@@ -2006,7 +2003,8 @@ function MessagesPageContent() {
     });
 
     socket.on("conversation:updated", (conversation: BackendConversation) => {
-      const built = buildConversation(conversation);
+      const built = buildConversation(conversation, user.id);
+      if (!built) return;
       const mapped = {
         ...built,
         status: presenceByUserIdRef.current[built.peerId] ?? built.status,

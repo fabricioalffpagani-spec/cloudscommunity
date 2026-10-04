@@ -367,9 +367,14 @@ export class DirectMessagesGateway
     this.server
       .to(this.userRoom(userId))
       .emit('conversation:updated', conversation);
+    const peerConversation =
+      await this.directMessagesService.getConversationById(
+        conversation.participant.id,
+        conversationId,
+      );
     this.server
       .to(this.userRoom(conversation.participant.id))
-      .emit('conversation:updated', conversation);
+      .emit('conversation:updated', peerConversation);
 
     return { ok: true as const, data: conversation };
   }
@@ -452,9 +457,14 @@ export class DirectMessagesGateway
     this.server
       .to(this.userRoom(userId))
       .emit('conversation:updated', conversation);
+    const peerConversation =
+      await this.directMessagesService.getConversationById(
+        conversation.participant.id,
+        conversationId,
+      );
     this.server
       .to(this.userRoom(conversation.participant.id))
-      .emit('conversation:updated', conversation);
+      .emit('conversation:updated', peerConversation);
   }
 
   async broadcastTyping(

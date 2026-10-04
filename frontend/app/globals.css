@@ -216,6 +216,39 @@ textarea {
   scrollbar-width: none;
 }
 
+.cloud-feed-main {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.cloud-feed-scroller {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-type: y mandatory;
+  touch-action: pan-y;
+}
+
+@media (min-width: 768px) {
+  .cloud-feed-main {
+    padding-bottom: 0;
+  }
+  .talk-card-header { padding-top: clamp(0.5rem, 3dvh, 2.5rem); padding-bottom: clamp(0.5rem, 2dvh, 1.75rem); }
+  .talk-card-avatar { width: clamp(2.75rem, 8dvh, 5rem); height: clamp(2.75rem, 8dvh, 5rem); }
+  .talk-card-title { padding-top: clamp(0.5rem, 3dvh, 2.5rem); padding-bottom: clamp(0.5rem, 3dvh, 2.5rem); }
+  .talk-card-title h2 { font-size: clamp(2.5rem, 6.5dvh, 4.5rem); }
+  .talk-card-actions { padding-bottom: clamp(0.75rem, 5dvh, 4rem); }
+  .talk-card-actions button { padding-top: clamp(0.5rem, 2dvh, 1.5rem); padding-bottom: clamp(0.5rem, 2dvh, 1.5rem); }
+  .talk-card-countdown { bottom: clamp(0.75rem, 3dvh, 2.25rem); }
+  .desktop-cloud-feed .read-card-header { padding-top: clamp(0.5rem, 3dvh, 2rem); padding-bottom: clamp(0.5rem, 2dvh, 1.25rem); }
+  .desktop-cloud-feed .read-card-center { padding-top: clamp(0.5rem, 3dvh, 2.5rem); padding-bottom: clamp(0.5rem, 3dvh, 2.5rem); }
+  .desktop-cloud-feed .read-card-action { margin-top: clamp(0.75rem, 3dvh, 2rem); padding-top: clamp(0.5rem, 1.5dvh, 1rem); padding-bottom: clamp(0.5rem, 1.5dvh, 1rem); }
+  .desktop-cloud-feed .read-card-footer { padding-bottom: clamp(0.5rem, 3dvh, 2.5rem); }
+}
+
 .desktop-cloud-feed::-webkit-scrollbar {
   display: none;
 }

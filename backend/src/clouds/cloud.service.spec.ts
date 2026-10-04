@@ -51,6 +51,9 @@ function setup() {
     cloudHype: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
+    profile: {
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+    },
     cloudMember: {
       create: jest.fn<Promise<unknown>, unknown[]>(),
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
@@ -83,6 +86,67 @@ function setup() {
     cloud,
   };
 }
+
+describe('structured Cloud mentions', () => {
+  const memberId = '11111111-1111-4111-8111-111111111111';
+  const followedId = '22222222-2222-4222-8222-222222222222';
+  const outsiderId = '33333333-3333-4333-8333-333333333333';
+  const validate = (
+    service: CloudService,
+    content: string,
+    mentions: Array<{
+      userId: string;
+      username: string;
+      start: number;
+      end: number;
+    }>,
+  ) =>
+    (
+      service as unknown as {
+        validateMentions: (
+          cloud: { id: string; authorId: string },
+          authorId: string,
+          content: string,
+          mentions: typeof mentions,
+        ) => Promise<typeof mentions>;
+      }
+    ).validateMentions(
+      { id: cloudId, authorId: 'author' },
+      'viewer',
+      content,
+      mentions,
+    );
+
+  it('accepts a Cloud member and a followed user outside the Cloud in one message', async () => {
+    const { service, prisma } = setup();
+    prisma.profile.findMany.mockResolvedValue([
+      { userId: memberId, username: 'member' },
+      { userId: followedId, username: 'followed' },
+    ]);
+    prisma.cloudMember.findMany.mockResolvedValue([{ userId: memberId }]);
+    prisma.follow.findMany.mockResolvedValue([{ followingId: followedId }]);
+    const content = '@member e @followed';
+    const mentions = [
+      { userId: memberId, username: 'member', start: 0, end: 7 },
+      { userId: followedId, username: 'followed', start: 10, end: 19 },
+    ];
+    await expect(validate(service, content, mentions)).resolves.toEqual(
+      mentions,
+    );
+  });
+
+  it('rejects an unrelated user even when the username exists', async () => {
+    const { service, prisma } = setup();
+    prisma.profile.findMany.mockResolvedValue([
+      { userId: outsiderId, username: 'outsider' },
+    ]);
+    await expect(
+      validate(service, '@outsider', [
+        { userId: outsiderId, username: 'outsider', start: 0, end: 9 },
+      ]),
+    ).rejects.toThrow(BadRequestException);
+  });
+});
 
 describe('Talk / Read regression', () => {
   it('lists active public clouds and private clouds for invited members', async () => {

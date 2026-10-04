@@ -1,12 +1,14 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MiniCloudDock } from "../app/components/MiniCloudDock";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user: { id: "viewer" } }) }));
-vi.mock("socket.io-client", () => ({ io: () => ({ on: vi.fn(), emit: vi.fn(), removeAllListeners: vi.fn(), disconnect: vi.fn() }) }));
+const { socketHandlers } = vi.hoisted(() => ({ socketHandlers: new Map<string, (payload: unknown) => void>() }));
+vi.mock("socket.io-client", () => ({ io: () => ({ on: (event: string, callback: (payload: unknown) => void) => { socketHandlers.set(event, callback); }, emit: vi.fn(), removeAllListeners: vi.fn(), disconnect: vi.fn() }) }));
 
 beforeEach(() => {
+  socketHandlers.clear();
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   localStorage.clear();
   localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1", title: "Teste", isAuthor: false, ownerUserId: "viewer" }));
@@ -51,7 +53,7 @@ describe("Mini Cloud leave", () => {
     render(<MiniCloudDock />);
     expect(screen.queryByText("Privada")).not.toBeInTheDocument();
   });
-  it("uses a compact mobile size without desktop resize or PiP controls", async () => {
+  it("keeps a compact mobile dock draggable and explains unavailable external PiP", async () => {
     const originalWidth = window.innerWidth;
     const originalHeight = window.innerHeight;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
@@ -64,12 +66,45 @@ describe("Mini Cloud leave", () => {
       const dock = (await screen.findByRole("button", { name: "Expandir Cloud" })).closest("aside");
       expect(dock).toHaveStyle({ width: "280px", height: "268px" });
       expect(screen.queryByRole("separator", { name: "Redimensionar Mini Cloud" })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
+      const pipButton = screen.getByRole("button", { name: "Abrir Mini Cloud fora da aba" });
+      fireEvent.click(pipButton);
+      expect(screen.getByRole("alert")).toHaveTextContent("não permite Mini Cloud fora do app");
+      const handle = dock?.firstElementChild as HTMLElement;
+      handle.setPointerCapture = vi.fn();
+      fireEvent.pointerDown(handle, { pointerId: 1, clientX: 300, clientY: 600 });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100, clientY: 400 });
+      fireEvent.pointerUp(handle, { pointerId: 1 });
+      expect(dock).toHaveStyle({ transform: "translate(-102px,-200px)" });
+      const messageScroller = dock?.querySelector(".overflow-y-auto") as HTMLElement;
+      fireEvent.pointerDown(messageScroller, { pointerId: 2, clientX: 120, clientY: 500 });
+      fireEvent.pointerMove(messageScroller, { pointerId: 2, clientX: 120, clientY: 300 });
+      expect(dock).toHaveStyle({ transform: "translate(-102px,-200px)" });
       expect(screen.getByRole("textbox")).toBeVisible();
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
       Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
     }
+  });
+
+  it("renders Cloud system messages with the shared CloudChat component", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => ({ json: async () => input.endsWith("/messages?take=30") ? { messages: [{ id: "event-1", cloudId: "cloud-1", type: "system", content: "Ana entrou na cloud", createdAt: new Date().toISOString(), sender: { id: "ana", displayName: "Ana", avatarUrl: null } }] } : { cloud: { createdAt: new Date().toISOString(), duration: "30min" } } })));
+    render(<MiniCloudDock />);
+    expect(await screen.findByText("Ana entrou na cloud")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Ver perfil de Ana" })).toHaveAttribute("href", "/users/ana");
+  });
+
+  it("adds entry and exit system events from the live socket without reloading", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+    render(<MiniCloudDock />);
+    await screen.findByRole("textbox");
+    const onMessage = socketHandlers.get("cloud:message:new");
+    expect(onMessage).toBeDefined();
+    act(() => {
+      onMessage?.({ id: "join-1", cloudId: "cloud-1", type: "system", content: "Ana entrou na cloud", createdAt: new Date().toISOString(), sender: { id: "ana", displayName: "Ana", avatarUrl: null } });
+      onMessage?.({ id: "leave-1", cloudId: "cloud-1", type: "system", content: "Ana saiu da cloud", createdAt: new Date().toISOString(), sender: { id: "ana", displayName: "Ana", avatarUrl: null } });
+    });
+    expect(screen.getByText("Ana entrou na cloud")).toBeVisible();
+    expect(screen.getByText("Ana saiu da cloud")).toBeVisible();
   });
 
   it("keeps the Cloud usable after a failed leave and allows retry without reload", async () => {

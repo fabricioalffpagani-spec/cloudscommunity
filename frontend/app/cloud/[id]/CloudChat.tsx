@@ -10,9 +10,12 @@ import { FlameIcon } from "../../components/FlameIcon";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
+import { CloudSystemMessage } from "../../components/CloudSystemMessage";
+import { MessageDotsIcon } from "../../components/MessageDotsIcon";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
+import { buildMentionCandidates } from "../../lib/mention-candidates";
 
 type CloudPayload = {
   id: string;
@@ -898,16 +901,6 @@ function CloudReplyIcon() {
   );
 }
 
-function CloudDotsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true">
-      <circle cx="5" cy="12" r="2" />
-      <circle cx="12" cy="12" r="2" />
-      <circle cx="19" cy="12" r="2" />
-    </svg>
-  );
-}
-
 function CloudMsgMenu({
   msg,
   isRight,
@@ -1154,36 +1147,6 @@ async function makeStickerFile(file: File): Promise<File> {
   } finally {
     URL.revokeObjectURL(sourceUrl);
   }
-}
-
-function SystemMessageBubble({ msg }: { msg: ChatMessage }) {
-  return (
-    <div className="flex justify-center py-1.5 w-full">
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.05]">
-        {msg.senderAvatarUrl && (
-          <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`}>
-            <UserAvatar
-              user={{
-                id: msg.senderId,
-                username: msg.senderId,
-                displayName: msg.senderName,
-                avatarUrl: msg.senderAvatarUrl,
-              }}
-              size={20}
-            />
-          </Link>
-        )}
-        {!msg.senderAvatarUrl && (
-          <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-[#7C3AED]">
-            {msg.senderName.charAt(0).toUpperCase()}
-          </Link>
-        )}
-        <span className="text-[12px] text-white/60 font-medium">
-          {msg.content}
-        </span>
-      </div>
-    </div>
-  );
 }
 
 type ReportNotifPayload = {
@@ -1529,7 +1492,7 @@ function CloudMessageBubble({
             </div>
             <div className="relative sm:hidden">
               <button ref={dotsButtonRef} type="button" aria-label="Mais opções da mensagem" onClick={handleToggleMsgMenu} className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white">
-                <CloudDotsIcon />
+                <MessageDotsIcon />
               </button>
               {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onClose={() => setMsgMenuOpen(false)} />}
             </div>
@@ -1590,7 +1553,7 @@ function CloudMessageBubble({
               onClick={handleToggleMsgMenu}
               className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
             >
-              <CloudDotsIcon />
+              <MessageDotsIcon />
             </button>
             {msgMenuOpen && (
               <CloudMsgMenu
@@ -2278,10 +2241,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const mentionMatch = draft.slice(0, caretIndex).match(/(?:^|\s)@([\p{L}\p{N}_.]*)$/u);
   const mentionQuery = mentionMatch?.[1]?.toLocaleLowerCase("pt-BR") ?? null;
-  const mentionCandidates = mentionQuery === null ? [] : [
-    ...(cloud ? [{ userId: cloud.authorId, username: cloud.author.username, displayName: cloud.author.name }] : []),
-    ...(cloud?.members ?? []).map((member) => ({ userId: member.userId, username: member.user.username, displayName: member.user.displayName })),
-  ].filter((member, index, all) => all.findIndex((other) => other.userId === member.userId) === index && member.username.toLocaleLowerCase("pt-BR").includes(mentionQuery)).slice(0, 6);
+  const cloudPeople = [
+    ...(cloud ? [{ userId: cloud.authorId, username: cloud.author.username, displayName: cloud.author.name, inCloud: true }] : []),
+    ...(cloud?.members ?? []).map((member) => ({ userId: member.userId, username: member.user.username, displayName: member.user.displayName, inCloud: true })),
+  ];
+  const mentionCandidates = buildMentionCandidates(
+    mentionQuery,
+    cloudPeople,
+    contacts.map((contact) => ({ userId: contact.id, username: contact.username, displayName: contact.displayName, inCloud: false })),
+    user?.id,
+  );
   const selectMention = (member: { userId: string; username: string }) => {
     if (!mentionMatch) return;
     const start = caretIndex - mentionMatch[1].length - 1;
@@ -2935,7 +2904,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
               const msg = entry as ChatMessage;
               if (msg.kind === "system") {
-                return <SystemMessageBubble key={msg.id} msg={msg} />;
+                return <CloudSystemMessage key={msg.id} message={msg} />;
               }
 
               const messageIndex = messages.findIndex((item) => item.id === msg.id);
@@ -2994,8 +2963,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               )}
 
               <div className="flex flex-col gap-3">
-                {mentionCandidates.length > 0 && !editingMsg && <div role="listbox" aria-label="Mencionar membro da Cloud" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20 max-h-52 overflow-y-auto rounded-2xl border border-[#A855F7]/40 bg-[#171325] p-1 shadow-2xl">
-                  {mentionCandidates.map((member) => <button key={member.userId} type="button" role="option" aria-selected={false} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(member)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] text-white hover:bg-white/[0.08]"><span className="font-semibold">{member.displayName}</span><span className="text-white/55">@{member.username}</span></button>)}
+                {mentionCandidates.length > 0 && !editingMsg && <div role="listbox" aria-label="Mencionar pessoa" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20 max-h-52 overflow-y-auto rounded-2xl border border-[#A855F7]/40 bg-[#171325] p-1 shadow-2xl">
+                  {mentionCandidates.map((member) => <button key={member.userId} type="button" role="option" aria-selected={false} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(member)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] text-white hover:bg-white/[0.08]"><span className="font-semibold">{member.displayName}</span><span className="text-white/55">@{member.username}</span><span className="ml-auto text-[11px] text-[#D8B4FE]">{member.inCloud ? "Na Cloud" : "Seguindo"}</span></button>)}
                 </div>}
                 {editingMsg && (
                   <div className="flex items-center gap-2 rounded-2xl border border-[#7C3AED]/40 bg-white/[0.04] px-3 py-2">

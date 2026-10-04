@@ -33,6 +33,9 @@ function setup() {
           : [{ userId: mentionedId }, { userId: otherId }];
       }),
     },
+    follow: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     cloudMessage: {
       findFirst: jest.fn(),
       create: jest.fn((input: { data: Record<string, unknown> }) => ({
@@ -90,6 +93,29 @@ function setup() {
 }
 
 describe('Cloud structured mentions', () => {
+  it('notifies a followed user outside the Cloud without duplicating recipients', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudMember.findMany.mockImplementation(
+      (query: { where: { userId?: { in: string[] } } }) =>
+        query.where.userId?.in ? [] : [{ userId: otherId }],
+    );
+    prisma.follow.findMany.mockResolvedValue([{ followingId: mentionedId }]);
+    const result = await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Olá @beta',
+      mentions: [{ userId: mentionedId, username: 'beta', start: 4, end: 9 }],
+    });
+    expect(result.message.mentions).toEqual([
+      { userId: mentionedId, username: 'beta', start: 4, end: 9 },
+    ]);
+    expect(
+      prisma.notification.create.mock.calls.map(([input]) => input.data.userId),
+    ).toEqual([otherId, mentionedId]);
+    expect(prisma.notification.create.mock.calls[1][0].data.type).toBe(
+      'cloud_mention',
+    );
+  });
+
   it('rejects offsets that do not point at the selected username', async () => {
     const { service, prisma } = setup();
     await expect(

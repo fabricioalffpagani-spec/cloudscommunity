@@ -71,7 +71,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
 
   return (
     <div className="relative flex min-h-0 h-full w-full flex-col">
-      <div className="mobile-cloud-feed desktop-cloud-feed min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain md:mx-auto md:w-full md:max-w-[1100px] md:snap-none" style={{ touchAction: "pan-y" }}>
+      <div className="mobile-cloud-feed desktop-cloud-feed cloud-feed-scroller md:mx-auto md:w-full md:max-w-[1100px]">
         {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
@@ -85,7 +85,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               opacity: slideAnim ? 0.15 : 1,
             }}
           >
-            <div className="flex items-center justify-between gap-3 md:px-10 md:pb-5 md:pt-8">
+            <div className="read-card-header flex items-center justify-between gap-3 md:px-10 md:pb-5 md:pt-8">
               <Link href={`/users/${encodeURIComponent(cloud.author.username)}`} aria-label={`Ver perfil de ${cloud.author.name}`} className="flex min-w-0 items-center gap-3 md:gap-4">
                 {cloud.author.avatarUrl ? (
                   <img src={cloud.author.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover md:h-16 md:w-16 md:ring-2 md:ring-white/10" referrerPolicy="no-referrer" />
@@ -109,7 +109,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
             </div>
 
             <div
-              className="my-auto flex flex-1 flex-col items-center justify-center px-0 py-5 text-center md:my-0 md:px-12 md:py-10"
+              className="read-card-center my-auto flex flex-1 flex-col items-center justify-center px-0 py-5 text-center md:my-0 md:px-12 md:py-10"
               onPointerDown={(event) => { touchStart.current = { x: event.clientX, y: event.clientY }; }}
               onPointerUp={(event) => {
                 const start = touchStart.current;
@@ -132,10 +132,10 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               aria-label={`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`}
             >
               <h2 lang="pt-BR" className={`max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
-              <Link href={`/cloud/${cloud.id}/conversation`} className="mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
+              <Link href={`/cloud/${cloud.id}/conversation`} className="read-card-action mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 
-            <div className="relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-10 md:pt-0 md:text-[14px]">
+            <div className="read-card-footer relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-10 md:pt-0 md:text-[14px]">
               <span className="inline-flex shrink-0 items-center gap-1.5"><MessageIcon /><span className="hidden sm:inline">{cloud.messagesCount} comentários</span><span className="sm:hidden">{cloud.messagesCount}</span></span>
               <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}

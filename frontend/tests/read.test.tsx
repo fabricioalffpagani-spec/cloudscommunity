@@ -46,8 +46,8 @@ describe("Read", () => {
     feed.scrollTo = scrollTo;
     expect(container.querySelectorAll("article")).toHaveLength(2);
     expect(screen.getByText("Outro assunto")).toBeVisible();
-    expect(feed).toHaveClass("min-h-0", "flex-1", "overflow-y-auto", "overscroll-contain");
-    expect(feed.style.touchAction).toBe("pan-y");
+    expect(feed).toHaveClass("cloud-feed-scroller");
+    expect(container.querySelectorAll("article.snap-start")).toHaveLength(2);
     expect(fireEvent.wheel(feed, { deltaY: 100, deltaX: 0, cancelable: true })).toBe(true);
     expect(scrollTo).not.toHaveBeenCalled();
   });

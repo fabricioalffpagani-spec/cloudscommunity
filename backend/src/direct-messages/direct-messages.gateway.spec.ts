@@ -28,4 +28,55 @@ describe('DirectMessagesGateway message delivery', () => {
     expect(emit).toHaveBeenCalledWith('message:new', message);
     expect(to).not.toHaveBeenCalledWith('conversation:conversation-1');
   });
+
+  it('sends each reader update with the other participant for that viewer', async () => {
+    const emissions: Array<{
+      room: string;
+      event: string;
+      participantId?: string;
+    }> = [];
+    const server = {
+      to: (room: string) => ({
+        emit: (event: string, payload: { participant?: { id: string } }) => {
+          emissions.push({
+            room,
+            event,
+            participantId: payload.participant?.id,
+          });
+        },
+      }),
+    };
+    const readerConversation = { participant: { id: 'sender' } };
+    const peerConversation = { participant: { id: 'reader' } };
+    const getConversationById = jest.fn().mockResolvedValue(peerConversation);
+    const gateway = Object.create(
+      DirectMessagesGateway.prototype,
+    ) as DirectMessagesGateway;
+    Reflect.set(gateway, 'server', server);
+    Reflect.set(gateway, 'directMessagesService', {
+      markConversationRead: jest.fn().mockResolvedValue(readerConversation),
+      getConversationById,
+    });
+
+    await gateway.broadcastConversationRead('reader', 'conversation-1');
+
+    expect(getConversationById).toHaveBeenCalledWith(
+      'sender',
+      'conversation-1',
+    );
+    expect(emissions).toEqual(
+      expect.arrayContaining([
+        {
+          room: 'user:reader',
+          event: 'conversation:updated',
+          participantId: 'sender',
+        },
+        {
+          room: 'user:sender',
+          event: 'conversation:updated',
+          participantId: 'reader',
+        },
+      ]),
+    );
+  });
 });

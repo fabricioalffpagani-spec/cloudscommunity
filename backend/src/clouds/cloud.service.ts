@@ -2117,6 +2117,7 @@ export class CloudService {
       type === 'text'
         ? await this.validateMentions(
             cloud,
+            userId,
             input.content ?? '',
             input.mentions,
           )
@@ -2161,8 +2162,9 @@ export class CloudService {
     const recipientIds = new Set(
       recipients.map((recipient) => recipient.userId),
     );
-    if (mentionedIds.has(cloud.authorId) && cloud.authorId !== userId)
-      recipientIds.add(cloud.authorId);
+    for (const mentionedId of mentionedIds) {
+      if (mentionedId !== userId) recipientIds.add(mentionedId);
+    }
     const senderName =
       created.user.profile?.displayName ||
       created.user.profile?.username ||
@@ -2207,6 +2209,7 @@ export class CloudService {
 
   private async validateMentions(
     cloud: { id: string; authorId: string },
+    authorId: string,
     content: string,
     input?: CloudMention[],
   ): Promise<CloudMention[]> {
@@ -2239,7 +2242,7 @@ export class CloudService {
     }
     if (!mentions.length) return [];
     const ids = Array.from(new Set(mentions.map((mention) => mention.userId)));
-    const [profiles, members] = await Promise.all([
+    const [profiles, members, follows] = await Promise.all([
       this.prisma.profile.findMany({
         where: { userId: { in: ids } },
         select: { userId: true, username: true },
@@ -2248,6 +2251,10 @@ export class CloudService {
         where: { cloudId: cloud.id, userId: { in: ids }, leftAt: null },
         select: { userId: true },
       }),
+      this.prisma.follow.findMany({
+        where: { followerId: authorId, followingId: { in: ids } },
+        select: { followingId: true },
+      }),
     ]);
     const names = new Map(
       profiles.map((profile) => [profile.userId, profile.username]),
@@ -2255,6 +2262,7 @@ export class CloudService {
     const allowed = new Set([
       cloud.authorId,
       ...members.map((member) => member.userId),
+      ...follows.map((follow) => follow.followingId),
     ]);
     if (
       mentions.some(
@@ -2264,7 +2272,7 @@ export class CloudService {
       )
     ) {
       throw new BadRequestException({
-        message: 'Mencione apenas membros atuais da Cloud.',
+        message: 'Mencione membros da Cloud ou pessoas que você segue.',
       });
     }
     return mentions;
