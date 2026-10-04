@@ -12,6 +12,7 @@ import { Server, Socket } from 'socket.io';
 import type { IncomingMessage } from 'node:http';
 import { getAllowedOrigins } from '../shared/runtime-env';
 import { AuthService } from '../auth/auth.service';
+import { SocketTicketService } from '../auth/socket-ticket.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
 import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
@@ -78,9 +79,14 @@ export class DirectMessagesGateway
     string,
     ReturnType<typeof setTimeout>
   >();
+  private readonly presenceTimers = new Map<
+    string,
+    ReturnType<typeof setInterval>
+  >();
 
   constructor(
     private readonly authService: AuthService,
+    private readonly socketTicketService: SocketTicketService,
     private readonly directMessagesService: DirectMessagesService,
     private readonly socketIoRedisService: SocketIoRedisService,
     private readonly chatPresenceService: ChatPresenceService,
@@ -95,7 +101,13 @@ export class DirectMessagesGateway
   }
 
   async handleConnection(socket: Socket) {
-    const token = extractTokenFromHandshake(socket);
+    const ticket =
+      typeof socket.handshake.auth?.ticket === 'string'
+        ? socket.handshake.auth.ticket
+        : null;
+    const token = ticket
+      ? await this.socketTicketService.consume(ticket)
+      : extractTokenFromHandshake(socket);
     const session = await this.authService.resolveSession(token);
 
     if (!session) {
@@ -112,21 +124,68 @@ export class DirectMessagesGateway
     };
 
     await socket.join(this.userRoom(userId));
-    const shouldBroadcast = await this.chatPresenceService.markOnline(userId);
+    const shouldBroadcast = await this.chatPresenceService.markOnline(
+      userId,
+      socket.id,
+    );
     if (shouldBroadcast) {
       await this.broadcastPresence(userId, 'online');
     }
+    const timer = setInterval(() => {
+      void this.chatPresenceService
+        .renew(userId, socket.id)
+        .then((wasOffline) => {
+          if (wasOffline) return this.broadcastPresence(userId, 'online');
+        })
+        .catch(() => undefined);
+    }, 25_000);
+    this.presenceTimers.set(socket.id, timer);
+    socket.emit('session:ready', { userId });
+  }
+
+  @SubscribeMessage('presence:lookup')
+  async lookupPresence(
+    @MessageBody() body: { userIds?: string[] },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    if (!this.getUserId(socket))
+      return { ok: false as const, message: 'Socket não autenticado.' };
+    const ids = Array.from(
+      new Set(
+        (body?.userIds ?? []).filter(
+          (id): id is string =>
+            typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id),
+        ),
+      ),
+    ).slice(0, 100);
+    const entries = await Promise.all(
+      ids.map(
+        async (id) =>
+          [
+            id,
+            (await this.chatPresenceService.isOnline(id))
+              ? 'online'
+              : 'offline',
+          ] as const,
+      ),
+    );
+    return { ok: true as const, data: Object.fromEntries(entries) };
   }
 
   async handleDisconnect(socket: Socket) {
+    const timer = this.presenceTimers.get(socket.id);
+    if (timer) clearInterval(timer);
+    this.presenceTimers.delete(socket.id);
     const userId = (socket.data as ChatSocketData).userId;
     const joinedConversationIds =
       (socket.data as ChatSocketData).joinedConversationIds ??
       new Set<string>();
 
     if (userId) {
-      const shouldBroadcast =
-        await this.chatPresenceService.markOffline(userId);
+      const shouldBroadcast = await this.chatPresenceService.markOffline(
+        userId,
+        socket.id,
+      );
       if (shouldBroadcast) {
         await this.broadcastPresence(userId, 'offline');
       }
@@ -320,7 +379,7 @@ export class DirectMessagesGateway
     status: ConversationPresencePayload['status'],
   ) {
     const peerIds =
-      await this.directMessagesService.listConversationPeerIds(userId);
+      await this.directMessagesService.listPresenceWatcherIds(userId);
     const payload: ConversationPresencePayload = { userId, status };
 
     for (const peerId of peerIds) {

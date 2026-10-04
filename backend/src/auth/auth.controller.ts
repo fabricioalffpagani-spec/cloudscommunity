@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { SocketTicketService } from './socket-ticket.service';
 import { SESSION_COOKIE_NAME } from './auth.constants';
 import { clearSessionCookie, setSessionCookie } from './auth.utils';
 
@@ -30,7 +31,20 @@ function extractSessionToken(req: Request): string | null {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly socketTicketService: SocketTicketService,
+  ) {}
+
+  @Get('socket-ticket')
+  async socketTicket(@Req() req: Request) {
+    const ticket = await this.socketTicketService.issue(
+      extractSessionToken(req),
+    );
+    if (!ticket)
+      return { ok: false as const, message: 'Sessão não encontrada.' };
+    return { ok: true as const, ticket };
+  }
 
   @Post('signup')
   async signup(

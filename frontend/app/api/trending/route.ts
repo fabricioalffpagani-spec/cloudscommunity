@@ -60,7 +60,7 @@ export async function GET(req: Request) {
 
     // Filtra apenas clouds ativas e públicas
     let activeClouds = clouds.filter(
-      (c) => c.visibility === "public" && isCloudActive(c),
+      (c) => c.visibility === "public" && isCloudActive(c) && c.hypesCount > 0,
     );
 
     let nearbyUnavailable = false;
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
 
     // Hype é o sinal principal. Em empate, a Cloud mais recente aparece primeiro.
     const rankedClouds = activeClouds
-      .sort((a, b) => b.hypesCount - a.hypesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort((a, b) => b.hypesCount - a.hypesCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id))
       .slice(0, 25)
       .map((cloud, index) => ({ ...cloud, rank: index + 1 }));
 

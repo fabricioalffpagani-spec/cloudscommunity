@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
+import { socketAuth } from "../../lib/socket-auth";
 
 import { FlameIcon } from "../../components/FlameIcon";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
@@ -78,6 +79,7 @@ type ReactionPayload = {
   };
   createdAt: string;
 };
+type CloudMention = { userId: string; username: string; start: number; end: number };
 
 type CloudMessagePayload = {
   id: string;
@@ -85,6 +87,7 @@ type CloudMessagePayload = {
   senderId: string;
   type: "text" | "audio" | "image" | "link" | "system";
   content: string | null;
+  mentions: CloudMention[];
   mediaUrl: string | null;
   isSticker: boolean;
   clientMessageId: string | null;
@@ -148,6 +151,7 @@ type ChatMessage = {
   side: "left" | "right";
   kind: "text" | "audio" | "image" | "link" | "system";
   content: string;
+  mentions?: CloudMention[];
   mediaUrl: string | null;
   isSticker?: boolean;
   replyTo: {
@@ -391,6 +395,32 @@ function mergeMessage(list: ChatMessage[], next: ChatMessage) {
   return [...list, next];
 }
 
+function shiftMentions(mentions: CloudMention[], previous: string, next: string): CloudMention[] {
+  let prefix = 0;
+  while (prefix < previous.length && prefix < next.length && previous[prefix] === next[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < previous.length - prefix && suffix < next.length - prefix && previous[previous.length - suffix - 1] === next[next.length - suffix - 1]) suffix += 1;
+  const changedEnd = previous.length - suffix;
+  const delta = next.length - previous.length;
+  return mentions.flatMap((mention) => {
+    const shifted = mention.end <= prefix ? mention : mention.start >= changedEnd ? { ...mention, start: mention.start + delta, end: mention.end + delta } : null;
+    return shifted && next.slice(shifted.start, shifted.end) === `@${shifted.username}` ? [shifted] : [];
+  });
+}
+
+function MentionedText({ content, mentions = [] }: { content: string; mentions?: CloudMention[] }) {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const mention of [...mentions].sort((a, b) => a.start - b.start)) {
+    if (mention.start < cursor || content.slice(mention.start, mention.end) !== `@${mention.username}`) continue;
+    parts.push(content.slice(cursor, mention.start));
+    parts.push(<Link key={`${mention.userId}:${mention.start}`} href={`/users/${encodeURIComponent(mention.userId)}`} className="font-bold text-[#E9D5FF] hover:underline">@{mention.username}</Link>);
+    cursor = mention.end;
+  }
+  parts.push(content.slice(cursor));
+  return <>{parts}</>;
+}
+
 function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string | null): ChatMessage {
   const isOwn = Boolean(currentUserId && payload.senderId === currentUserId);
   const isSystem = payload.type === 'system';
@@ -404,6 +434,7 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     side: isSystem ? "left" : isOwn ? "right" : "left",
     kind: payload.type,
     content: payload.content || "",
+    mentions: payload.mentions || [],
     mediaUrl: payload.mediaUrl,
     isSticker: payload.isSticker,
     replyTo: payload.replyTo,
@@ -870,9 +901,9 @@ function CloudReplyIcon() {
 function CloudDotsIcon() {
   return (
     <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true">
-      <circle cx="12" cy="5" r="2" />
+      <circle cx="5" cy="12" r="2" />
       <circle cx="12" cy="12" r="2" />
-      <circle cx="12" cy="19" r="2" />
+      <circle cx="19" cy="12" r="2" />
     </svg>
   );
 }
@@ -1466,7 +1497,7 @@ function CloudMessageBubble({
             </div>
           ) : (
             <div className={`break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-              {msg.content}
+              <MentionedText content={msg.content} mentions={msg.mentions} />
               {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
             </div>
           )}
@@ -1590,6 +1621,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const targetScrolledRef = useRef(false);
   const composerFooterRef = useComposerPanLock();
   const hasJoinedRef = useRef(false);
   const messagesLoadRequestRef = useRef(0);
@@ -1600,6 +1632,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [cloud, setCloud] = useState<ReturnType<typeof normalizeCloud> | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
+  const [draftMentions, setDraftMentions] = useState<CloudMention[]>([]);
+  const [caretIndex, setCaretIndex] = useState(0);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stickerSaveNotice, setStickerSaveNotice] = useState<string | null>(null);
   const [loadingCloud, setLoadingCloud] = useState(true);
@@ -1666,6 +1701,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     activeCloudIdRef.current = cloudId;
+    targetScrolledRef.current = false;
     const minimized = window.localStorage.getItem("clouds:minimized-cloud");
     if (minimized) {
       try {
@@ -1942,14 +1978,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [titleLongPressTimer]);
 
   const minimizeCloud = useCallback(() => {
-    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
+    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push("/");
-  }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router]);
+  }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router, user?.id]);
 
   useEffect(() => {
     // For an explicit entry, wait until the join request confirms membership.
@@ -1969,6 +2005,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
 
     const socket = io(`${socketUrl}/clouds`, {
+      auth: socketAuth,
       withCredentials: true,
       transports: ["websocket", "polling"],
     });
@@ -1976,7 +2013,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     socketRef.current = socket;
     setConnectionState("connecting");
 
-    socket.on("connect", () => {
+    socket.on("session:ready", () => {
       setConnectionState("connected");
     });
 
@@ -2146,6 +2183,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloudId, connectionState, joinCloud, joinOnEntry, status, user]);
 
   useEffect(() => {
+    const targetId = new URLSearchParams(window.location.search).get("message");
+    if (targetId && !targetScrolledRef.current && messages.some((message) => message.id === targetId)) {
+      messagesScrollRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(targetId)}"]`)?.scrollIntoView({ block: "center" });
+      targetScrolledRef.current = true;
+      return;
+    }
+    if (targetId && !targetScrolledRef.current) return;
     if (messages.length > 0) {
       messagesScrollRef.current?.scrollTo({ top: messagesScrollRef.current.scrollHeight, behavior: "smooth" });
     }
@@ -2232,6 +2276,23 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [cloudId]);
 
+  const mentionMatch = draft.slice(0, caretIndex).match(/(?:^|\s)@([\p{L}\p{N}_.]*)$/u);
+  const mentionQuery = mentionMatch?.[1]?.toLocaleLowerCase("pt-BR") ?? null;
+  const mentionCandidates = mentionQuery === null ? [] : [
+    ...(cloud ? [{ userId: cloud.authorId, username: cloud.author.username, displayName: cloud.author.name }] : []),
+    ...(cloud?.members ?? []).map((member) => ({ userId: member.userId, username: member.user.username, displayName: member.user.displayName })),
+  ].filter((member, index, all) => all.findIndex((other) => other.userId === member.userId) === index && member.username.toLocaleLowerCase("pt-BR").includes(mentionQuery)).slice(0, 6);
+  const selectMention = (member: { userId: string; username: string }) => {
+    if (!mentionMatch) return;
+    const start = caretIndex - mentionMatch[1].length - 1;
+    const replacement = `@${member.username}`;
+    const next = `${draft.slice(0, start)}${replacement} ${draft.slice(caretIndex)}`;
+    setDraftMentions((current) => [...shiftMentions(current, draft, next), { userId: member.userId, username: member.username, start, end: start + replacement.length }]);
+    setDraft(next);
+    setCaretIndex(start + replacement.length + 1);
+    requestAnimationFrame(() => { composerRef.current?.focus(); composerRef.current?.setSelectionRange(start + replacement.length + 1, start + replacement.length + 1); });
+  };
+
   const sendText = useCallback(async () => {
     if (!draft.trim() || !user) {
       return;
@@ -2247,6 +2308,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       side: "right",
       kind: "text",
       content: draft.trim(),
+      mentions: draftMentions,
       mediaUrl: null,
       replyTo: replyingTo ? { id: replyingTo.id, sender: replyingTo.senderName, content: replyingTo.content } : null,
       reactions: [],
@@ -2257,7 +2319,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     };
 
     const nextDraft = draft;
+    const leadingSpaces = nextDraft.length - nextDraft.trimStart().length;
+    const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingSpaces, end: mention.end - leadingSpaces })).filter((mention) => mention.start >= 0 && nextDraft.trim().slice(mention.start, mention.end) === `@${mention.username}`);
     setDraft("");
+    setDraftMentions([]);
+    setCaretIndex(0);
     setReplyingTo(null);
     setMessages((prev) => mergeMessage(prev, optimistic));
 
@@ -2268,6 +2334,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         body: JSON.stringify({
           type: "text",
           content: nextDraft.trim(),
+          mentions,
           clientMessageId,
           replyToMessageId: replyingTo?.id ?? null,
         }),
@@ -2279,7 +2346,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
       setMessages((prev) => prev.filter((message) => message.clientMessageId !== clientMessageId));
     }
-  }, [cloudId, draft, user]);
+  }, [cloudId, draft, draftMentions, replyingTo, user]);
 
   const handleAudioRecordingStop = useCallback(async (recording: RecordedAudio) => {
     if (!user) {
@@ -2448,12 +2515,17 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [handleImageFile]);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionCandidates.length && (event.key === "Enter" || event.key === "Tab") && !event.shiftKey) {
+      event.preventDefault();
+      selectMention(mentionCandidates[0]);
+      return;
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendText();
     }
-  }, [sendText]);
+  };
 
   const handlePin = useCallback((msg: ChatMessage) => {
     setPinnedMessageId((prev) => prev === msg.id ? null : msg.id);
@@ -2872,7 +2944,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               const grouped = Boolean(previousMessage && previousMessage.kind !== "system" && previousMessage.senderId === msg.senderId && new Date(msg.isoTime).getTime() - new Date(previousMessage.isoTime).getTime() < 5 * 60_000);
               const showFooter = !nextMessage || nextMessage.kind === "system" || nextMessage.senderId !== msg.senderId || new Date(nextMessage.isoTime).getTime() - new Date(msg.isoTime).getTime() >= 5 * 60_000;
 
-              return <CloudMessageBubble key={msg.id} msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter} />;
+              return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter} /></div>;
             });
           })()
         )}
@@ -2922,6 +2994,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               )}
 
               <div className="flex flex-col gap-3">
+                {mentionCandidates.length > 0 && !editingMsg && <div role="listbox" aria-label="Mencionar membro da Cloud" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20 max-h-52 overflow-y-auto rounded-2xl border border-[#A855F7]/40 bg-[#171325] p-1 shadow-2xl">
+                  {mentionCandidates.map((member) => <button key={member.userId} type="button" role="option" aria-selected={false} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(member)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[13px] text-white hover:bg-white/[0.08]"><span className="font-semibold">{member.displayName}</span><span className="text-white/55">@{member.username}</span></button>)}
+                </div>}
                 {editingMsg && (
                   <div className="flex items-center gap-2 rounded-2xl border border-[#7C3AED]/40 bg-white/[0.04] px-3 py-2">
                     <div className="min-w-0 flex-1">
@@ -2975,9 +3050,15 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     <PlusIcon s={18} />
                   </button>
                   <textarea
+                    ref={composerRef}
+                    name="cloud-message"
+                    autoComplete="off"
+                    inputMode="text"
                     rows={1}
                     value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
+                    onChange={(event) => { setDraftMentions((current) => shiftMentions(current, draft, event.target.value)); setDraft(event.target.value); setCaretIndex(event.target.selectionStart); }}
+                    onClick={(event) => setCaretIndex(event.currentTarget.selectionStart)}
+                    onKeyUp={(event) => setCaretIndex(event.currentTarget.selectionStart)}
                     onInput={(event) => { event.currentTarget.style.height = "auto"; event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 120)}px`; }}
                     onKeyDown={handleKeyDown}
                     placeholder="Mensagem..."

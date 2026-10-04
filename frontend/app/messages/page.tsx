@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
+import { socketAuth } from "../lib/socket-auth";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
@@ -284,8 +285,7 @@ function avatarColor(source: string) {
 }
 
 function mapStatus(status: string): Status {
-  if (status === "active") return "online";
-  if (status === "pending") return "busy";
+  if (status === "online") return "online";
   return "offline";
 }
 
@@ -1302,6 +1302,8 @@ function MessagesPageContent() {
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const presenceByUserIdRef = useRef<Record<string, Status>>({});
+  const followingIdsRef = useRef<string[]>([]);
+  const [presenceByUserId, setPresenceByUserId] = useState<Record<string, Status>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const openedPeerRef = useRef<string | null>(null);
   const sidebarSearchRef = useRef<HTMLInputElement | null>(null);
@@ -1730,12 +1732,6 @@ function MessagesPageContent() {
       const sortedConversations = sortConversations(mapped);
       conversationsRef.current = sortedConversations;
       setConversations(sortedConversations);
-      const currentActiveId = activeConversationIdRef.current;
-      const activeConversationStillExists = currentActiveId ? sortedConversations.some((conversation) => conversation.id === currentActiveId) : false;
-      if (currentActiveId && !activeConversationStillExists) {
-        activeConversationIdRef.current = null;
-        setActiveConversationId(null);
-      }
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as conversas.");
     } finally {
@@ -1750,7 +1746,15 @@ function MessagesPageContent() {
       const response = await fetch("/api/users/following", { cache: "no-store" });
       const payload = await readJson<{ ok: true; users: PublicUserProfile[] }>(response);
       // Exclude current user
-      setFollowedUsers(payload.users.filter(u => u.id !== user?.id));
+      const following = payload.users.filter(u => u.id !== user?.id);
+      followingIdsRef.current = following.map((person) => person.id);
+      setFollowedUsers(following);
+      const socket = socketRef.current;
+      if (socket?.connected) socket.emit("presence:lookup", { userIds: followingIdsRef.current }, (result: { ok: boolean; data?: Record<string, Status> }) => {
+        if (!result.ok || !result.data) return;
+        presenceByUserIdRef.current = { ...presenceByUserIdRef.current, ...result.data };
+        setPresenceByUserId(presenceByUserIdRef.current);
+      });
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar os contatos seguidos.");
       setFollowedUsers([]);
@@ -1828,12 +1832,18 @@ function MessagesPageContent() {
     if (peerUserId) void ensureConversation(peerUserId);
   }, [ensureConversation, searchParams, status, user]);
 
+  const routeConversationId = requestedConversationId(searchParams);
+  const routePeerId = searchParams.get("id")?.trim() ?? "";
+  const lastRouteRef = useRef<string | null>(null);
   useEffect(() => {
-    const rememberedConversationId = requestedConversationId(searchParams);
+    const rememberedConversationId = routeConversationId;
+    const routeKey = `${rememberedConversationId ?? ""}:${routePeerId}`;
+    const routeChanged = lastRouteRef.current !== routeKey;
+    lastRouteRef.current = routeKey;
     if (!rememberedConversationId) {
       // A rota /messages representa sempre a lista. Isso também cobre o toque no
       // item Mensagens da navegação móvel depois de sair de uma conversa.
-      if (!searchParams.get("id")?.trim()) {
+      if (!routePeerId && routeChanged) {
         activeConversationIdRef.current = null;
         setActiveConversationId(null);
       }
@@ -1843,7 +1853,7 @@ function MessagesPageContent() {
     if (activeConversationIdRef.current === rememberedConversationId) return;
     activeConversationIdRef.current = rememberedConversationId;
     setActiveConversationId(rememberedConversationId);
-  }, [conversations, searchParams]);
+  }, [conversations, routeConversationId, routePeerId]);
 
   const returnToConversationList = useCallback(() => {
     activeConversationIdRef.current = null;
@@ -1892,6 +1902,7 @@ function MessagesPageContent() {
     }
 
     const socket = io(`${socketUrl}/direct-messages`, {
+      auth: socketAuth,
       withCredentials: true,
       transports: ["polling", "websocket"],
     });
@@ -1899,9 +1910,12 @@ function MessagesPageContent() {
     socketRef.current = socket;
     setConnectionState("connecting");
 
-    socket.on("connect", () => {
+    socket.on("session:ready", () => {
+      presenceByUserIdRef.current = {};
+      setPresenceByUserId({});
       setConnectionState("connected");
       void loadConversations();
+      void loadFollowedUsers();
       const conversationId = activeConversationIdRef.current;
       if (conversationId) {
         socket.emit("conversation:join", { conversationId });
@@ -1910,7 +1924,7 @@ function MessagesPageContent() {
       }
     });
 
-    socket.on("disconnect", () => setConnectionState("disconnected"));
+    socket.on("disconnect", () => { setConnectionState("disconnected"); presenceByUserIdRef.current = {}; setPresenceByUserId({}); });
     socket.on("connect_error", () => setConnectionState("disconnected"));
 
     socket.on("presence:update", (payload: { userId: string; status: "online" | "offline" }) => {
@@ -1918,6 +1932,7 @@ function MessagesPageContent() {
         ...presenceByUserIdRef.current,
         [payload.userId]: payload.status === "online" ? "online" : "offline",
       };
+      setPresenceByUserId(presenceByUserIdRef.current);
 
       setConversations((prev) =>
         sortConversations(
@@ -2021,7 +2036,7 @@ function MessagesPageContent() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [status, user, loadConversations, loadMessages]);
+  }, [status, user, loadConversations, loadFollowedUsers, loadMessages]);
 
   useEffect(() => {
     messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: "smooth" });
@@ -2394,7 +2409,7 @@ function MessagesPageContent() {
                     >
                       <div className="relative shrink-0">
                         <UserAvatar user={{ id: followedUser.id, username: followedUser.username, displayName: followedUser.displayName, avatarUrl: followedUser.avatarUrl }} size={44} />
-                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[followedUser.isPrivate ? "offline" : "online"]}`} />
+                        <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#000000] ${statusDot[presenceByUserId[followedUser.id] ?? "offline"]}`} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
@@ -2733,6 +2748,9 @@ function MessagesPageContent() {
                       <PlusIcon s={18} />
                     </button>
                     <textarea
+                      name="direct-message"
+                      autoComplete="off"
+                      inputMode="text"
                       rows={1}
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}

@@ -10,19 +10,33 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
-  const tasks = [self.registration.showNotification(data.title || "Clouds", {
+  event.waitUntil((async () => {
+    if (data.kind === "cloud_message" && data.cloudId) {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const watching = await Promise.all(windows.map((client) => new Promise((resolve) => {
+        const channel = new MessageChannel();
+        const timeout = setTimeout(() => resolve(false), 500);
+        channel.port1.onmessage = (reply) => {
+          clearTimeout(timeout);
+          resolve(reply.data?.watching === true);
+        };
+        client.postMessage({ type: "clouds:mini-cloud-watching", cloudId: data.cloudId }, [channel.port2]);
+      })));
+      if (watching.some(Boolean)) return;
+    }
+    await self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
     // `icon` is the full-color app mark in the notification drawer; `badge`
     // is the transparent monochrome mark used by Android's status bar.
-    icon: "/clouds-notification-icon.png",
+    icon: "/clouds-notification-icon.png?v=2",
     badge: "/clouds-notification-badge.svg",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
-  })];
-  if (data.badgeCount && self.navigator.setAppBadge) {
-    tasks.push(self.navigator.setAppBadge(data.badgeCount).catch(() => undefined));
-  }
-  event.waitUntil(Promise.all(tasks));
+    });
+    if (data.badgeCount && self.navigator.setAppBadge) {
+      await self.navigator.setAppBadge(data.badgeCount).catch(() => undefined);
+    }
+  })());
 });
 
 self.addEventListener("notificationclick", (event) => {

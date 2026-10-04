@@ -11,6 +11,7 @@ import { MiniCloudDock } from "./components/MiniCloudDock";
 import { PwaInstallPrompt } from "./components/PwaInstallPrompt";
 import { NativeNotificationPermission } from "./components/NativeNotificationPermission";
 import { MobileLaunchScreen } from "./components/MobileLaunchScreen";
+import { PresenceConnection } from "./components/PresenceConnection";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -46,6 +47,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-[var(--bg-root)] text-[var(--text-primary)]">
         <SessionUserProvider>
+          <PresenceConnection />
           <OnboardingGate />
           <AccessibilityProvider>
             <MobileLaunchScreen />

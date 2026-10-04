@@ -15,10 +15,12 @@ import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
+import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
 import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
 import {
   CloudInvitePayload,
   CloudMessagePayload,
+  CloudMention,
   CloudMessageReactionPayload,
   CloudPayload,
   CreateCloudInput,
@@ -121,6 +123,7 @@ export class CloudService {
     private readonly authService: AuthService,
     private readonly pushNotifications: PushNotificationsService,
     private readonly topicClassifier: CloudTopicClassifierService,
+    private readonly chatPresenceService?: ChatPresenceService,
   ) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     this.resend = apiKey ? new Resend(apiKey) : null;
@@ -1559,6 +1562,7 @@ export class CloudService {
       message: await this.createCloudMessage(current.user.id, cloudId, {
         type: messageType,
         content: body.content,
+        mentions: body.mentions,
         mediaUrl: body.mediaUrl,
         replyToMessageId: body.replyToMessageId,
         clientMessageId: body.clientMessageId,
@@ -1734,7 +1738,7 @@ export class CloudService {
 
     const updated = await this.prisma.cloudMessage.update({
       where: { id: messageId },
-      data: { content: trimmed },
+      data: { content: trimmed, mentions: [] },
     });
 
     return {
@@ -2109,6 +2113,14 @@ export class CloudService {
       input.type === 'audio' || input.type === 'image' || input.type === 'link'
         ? input.type
         : 'text';
+    const mentions =
+      type === 'text'
+        ? await this.validateMentions(
+            cloud,
+            input.content ?? '',
+            input.mentions,
+          )
+        : [];
 
     if (replyToMessageId) {
       const replyTarget = await this.prisma.cloudMessage.findFirst({
@@ -2133,6 +2145,7 @@ export class CloudService {
         userId,
         type,
         content: input.content ?? null,
+        mentions,
         mediaUrl: input.mediaUrl ?? null,
         isSticker: input.isSticker === true,
         replyToMessageId,
@@ -2144,6 +2157,12 @@ export class CloudService {
       where: { cloudId, leftAt: null, userId: { not: userId } },
       select: { userId: true },
     });
+    const mentionedIds = new Set(mentions.map((mention) => mention.userId));
+    const recipientIds = new Set(
+      recipients.map((recipient) => recipient.userId),
+    );
+    if (mentionedIds.has(cloud.authorId) && cloud.authorId !== userId)
+      recipientIds.add(cloud.authorId);
     const senderName =
       created.user.profile?.displayName ||
       created.user.profile?.username ||
@@ -2153,27 +2172,102 @@ export class CloudService {
       .trim()
       .slice(0, 140);
     await Promise.all(
-      recipients.map(async ({ userId: recipientId }) => {
+      Array.from(recipientIds, async (recipientId) => {
+        const watchingThisCloud = await this.chatPresenceService
+          ?.isWatchingCloud(recipientId, cloudId)
+          .catch(() => false);
+        if (watchingThisCloud) return;
+        const mentioned = mentionedIds.has(recipientId);
         const notification = await this.prisma.notification.create({
           data: {
             userId: recipientId,
-            type: 'cloud_comment',
+            type: mentioned ? 'cloud_mention' : 'cloud_comment',
             entityType: 'cloud_message',
             entityId: created.id,
-            title: `Nova mensagem em ${cloud.title}`,
-            body: `${senderName}: ${preview}`,
+            metadata: { cloudId, messageId: created.id },
+            title: mentioned
+              ? `${senderName} mencionou você na Cloud ${cloud.title}`
+              : `Nova mensagem em ${cloud.title}`,
+            body: mentioned ? preview : `${senderName}: ${preview}`,
           },
         });
         await this.pushNotifications.send(recipientId, {
           title: notification.title,
           body: notification.body,
-          url: `/cloud/${cloudId}`,
+          url: `/cloud/${cloudId}?message=${created.id}`,
           tag: notification.id,
+          kind: 'cloud_message',
+          cloudId,
         });
       }),
     );
 
     return this.mapMessage(created, input.clientMessageId?.trim() || null);
+  }
+
+  private async validateMentions(
+    cloud: { id: string; authorId: string },
+    content: string,
+    input?: CloudMention[],
+  ): Promise<CloudMention[]> {
+    if (input === undefined) return [];
+    if (!Array.isArray(input) || input.length > 20)
+      throw new BadRequestException({ message: 'Menções inválidas.' });
+    const mentions = input.map((item) => ({
+      userId: item?.userId,
+      username: item?.username,
+      start: item?.start,
+      end: item?.end,
+    }));
+    mentions.sort((a, b) => a.start - b.start);
+    let lastEnd = 0;
+    for (const mention of mentions) {
+      if (
+        typeof mention.userId !== 'string' ||
+        typeof mention.username !== 'string' ||
+        !/^[0-9a-f-]{36}$/i.test(mention.userId) ||
+        !Number.isInteger(mention.start) ||
+        !Number.isInteger(mention.end) ||
+        mention.start < lastEnd ||
+        mention.end <= mention.start ||
+        mention.end > content.length ||
+        content.slice(mention.start, mention.end) !== `@${mention.username}`
+      ) {
+        throw new BadRequestException({ message: 'Menções inválidas.' });
+      }
+      lastEnd = mention.end;
+    }
+    if (!mentions.length) return [];
+    const ids = Array.from(new Set(mentions.map((mention) => mention.userId)));
+    const [profiles, members] = await Promise.all([
+      this.prisma.profile.findMany({
+        where: { userId: { in: ids } },
+        select: { userId: true, username: true },
+      }),
+      this.prisma.cloudMember.findMany({
+        where: { cloudId: cloud.id, userId: { in: ids }, leftAt: null },
+        select: { userId: true },
+      }),
+    ]);
+    const names = new Map(
+      profiles.map((profile) => [profile.userId, profile.username]),
+    );
+    const allowed = new Set([
+      cloud.authorId,
+      ...members.map((member) => member.userId),
+    ]);
+    if (
+      mentions.some(
+        (mention) =>
+          names.get(mention.userId) !== mention.username ||
+          !allowed.has(mention.userId),
+      )
+    ) {
+      throw new BadRequestException({
+        message: 'Mencione apenas membros atuais da Cloud.',
+      });
+    }
+    return mentions;
   }
 
   private messageInclude() {
@@ -2220,6 +2314,17 @@ export class CloudService {
       senderId: message.userId,
       type: message.type,
       content: message.content,
+      mentions: Array.isArray(message.mentions)
+        ? message.mentions.filter(
+            (item): item is CloudMention =>
+              typeof item === 'object' &&
+              item !== null &&
+              'userId' in item &&
+              'start' in item &&
+              'end' in item &&
+              'username' in item,
+          )
+        : [],
       mediaUrl: message.mediaUrl,
       isSticker: message.isSticker,
       clientMessageId,

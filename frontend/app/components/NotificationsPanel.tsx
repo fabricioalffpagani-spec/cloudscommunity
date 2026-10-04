@@ -162,14 +162,19 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
             <div className="flex flex-col">
               {notifications.map((notification) => {
                 const initials = (notification.actor?.displayName ?? notification.title).trim().charAt(0).toUpperCase() || "C";
-                const href = notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
+                const messageCloudId = notification.metadata?.cloudId;
+                const messageId = notification.metadata?.messageId ?? notification.entityId;
+                const cloudMessageHref = messageCloudId && (notification.type === "cloud_mention" || notification.type === "cloud_comment")
+                  ? `/cloud/${encodeURIComponent(messageCloudId)}?message=${encodeURIComponent(messageId)}`
+                  : null;
+                const href = cloudMessageHref ?? notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
                 const alreadyFollowingBack = followingBack.has(notification.id);
                 const continuation = notification.type === "cloud_continuation" ? notification.metadata : null;
 
                 return (
                   <div key={notification.id} className="border-b border-white/[0.05] px-4 py-3 last:border-b-0">
                     <div className="flex items-start gap-3">
-                      <Link href={href} onClick={onClose} className="mt-0.5 shrink-0">
+                      <Link href={href} className="mt-0.5 shrink-0">
                         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">
                           {notification.actor?.avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -180,13 +185,17 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                         </div>
                       </Link>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-semibold text-white">{notification.title}</p>
+                        {cloudMessageHref ? (
+                          <Link href={cloudMessageHref} className="text-[13px] font-semibold text-white hover:underline">{notification.title}</Link>
+                        ) : (
+                          <p className="text-[13px] font-semibold text-white">{notification.title}</p>
+                        )}
                         {continuation?.continuationCloudId && continuation?.originCloudId ? (
                           <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">
                             Criou a Cloud{" "}
-                            <Link href={`/?cloud=${encodeURIComponent(continuation.continuationCloudId)}`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.continuationCloudTitle ?? "continuação"}</Link>{" "}
+                            <Link href={`/?cloud=${encodeURIComponent(continuation.continuationCloudId)}`} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.continuationCloudTitle ?? "continuação"}</Link>{" "}
                             com base em{" "}
-                            <Link href={`/read?cloud=${encodeURIComponent(continuation.originCloudId)}`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.originCloudTitle ?? "sua Cloud"}</Link>.
+                            <Link href={`/read?cloud=${encodeURIComponent(continuation.originCloudId)}`} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.originCloudTitle ?? "sua Cloud"}</Link>.
                           </p>
                         ) : <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">{notification.body}</p>}
                         <p className="mt-1 text-[11px] text-white/30">{formatRelativeTime(notification.createdAt)}</p>

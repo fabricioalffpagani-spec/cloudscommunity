@@ -1,4 +1,5 @@
 import { io, type Socket } from "socket.io-client";
+import { socketAuth } from "./socket-auth";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || "";
 
@@ -18,6 +19,7 @@ export function subscribeToCloudPresence(onUpdate: (update: CloudPresenceUpdate)
   if (!socketUrl) return () => undefined;
 
   const socket: Socket = io(`${socketUrl}/clouds`, {
+    auth: socketAuth,
     withCredentials: true,
     transports: ["polling", "websocket"],
   });

@@ -8,6 +8,8 @@ export type PushMessage = {
   url?: string;
   tag?: string;
   badgeCount?: number;
+  kind?: 'cloud_message';
+  cloudId?: string;
 };
 
 @Injectable()

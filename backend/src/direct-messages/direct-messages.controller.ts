@@ -20,6 +20,7 @@ import { AuthService } from '../auth/auth.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { DirectMessagesGateway } from './direct-messages.gateway';
 import { DirectMessagesService } from './direct-messages.service';
+import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
 
 function extractSessionToken(req: Request): string | null {
   const rawCookie = req.headers.cookie ?? '';
@@ -41,6 +42,7 @@ export class DirectMessagesController {
     private readonly authService: AuthService,
     private readonly directMessagesService: DirectMessagesService,
     private readonly directMessagesGateway: DirectMessagesGateway,
+    private readonly chatPresenceService: ChatPresenceService,
   ) {}
 
   @Get('conversations')
@@ -53,10 +55,23 @@ export class DirectMessagesController {
       return { ok: false as const, message: 'Sessão não encontrada.' };
     }
 
+    const conversations = await this.directMessagesService.listConversations(
+      session.user.id,
+    );
     return {
       ok: true as const,
-      conversations: await this.directMessagesService.listConversations(
-        session.user.id,
+      conversations: await Promise.all(
+        conversations.map(async (conversation) => ({
+          ...conversation,
+          participant: {
+            ...conversation.participant,
+            status: (await this.chatPresenceService.isOnline(
+              conversation.participant.id,
+            ))
+              ? 'online'
+              : 'offline',
+          },
+        })),
       ),
     };
   }
@@ -125,15 +140,24 @@ export class DirectMessagesController {
     const peerUserId =
       typeof body.peerUserId === 'string' ? body.peerUserId : '';
 
+    const conversation =
+      await this.directMessagesService.createOrResolveConversation(
+        session.user.id,
+        { peerUserId },
+      );
     return {
       ok: true as const,
-      conversation:
-        await this.directMessagesService.createOrResolveConversation(
-          session.user.id,
-          {
-            peerUserId,
-          },
-        ),
+      conversation: {
+        ...conversation,
+        participant: {
+          ...conversation.participant,
+          status: (await this.chatPresenceService.isOnline(
+            conversation.participant.id,
+          ))
+            ? 'online'
+            : 'offline',
+        },
+      },
     };
   }
 

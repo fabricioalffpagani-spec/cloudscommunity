@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../infrastructure/prisma/prisma.module';
 import { PushNotificationsModule } from '../infrastructure/push/push-notifications.module';
 import { SocketIoRedisModule } from '../infrastructure/socket-io-redis/socket-io-redis.module';
+import { ChatPresenceModule } from '../infrastructure/chat-presence/chat-presence.module';
 import { CloudController } from './cloud.controller';
 import { CloudPremiereNotificationsService } from './cloud-premiere-notifications.service';
 import { CloudMessagesGateway } from './cloud.gateway';
@@ -15,6 +16,7 @@ import { CloudTopicClassifierService } from './topic-classification/cloud-topic-
     AuthModule,
     SocketIoRedisModule,
     PushNotificationsModule,
+    ChatPresenceModule,
   ],
   controllers: [CloudController],
   providers: [

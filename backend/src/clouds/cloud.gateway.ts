@@ -12,8 +12,10 @@ import { Server, Socket } from 'socket.io';
 import type { IncomingMessage } from 'node:http';
 import { getAllowedOrigins } from '../shared/runtime-env';
 import { AuthService } from '../auth/auth.service';
+import { SocketTicketService } from '../auth/socket-ticket.service';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { SocketIoRedisService } from '../infrastructure/socket-io-redis/socket-io-redis.service';
+import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
 import { CloudService } from './cloud.service';
 import type {
   CloudMessagePayload,
@@ -25,6 +27,7 @@ type CloudSocketData = {
   sessionId?: string;
   guest?: boolean;
   joinedCloudIds?: Set<string>;
+  watchedCloudId?: string;
 };
 
 function extractTokenFromHandshake(socket: Socket): string | null {
@@ -73,11 +76,17 @@ export class CloudMessagesGateway
     string,
     ReturnType<typeof setTimeout>
   >();
+  private readonly miniWatchTimers = new Map<
+    string,
+    ReturnType<typeof setInterval>
+  >();
 
   constructor(
     private readonly authService: AuthService,
+    private readonly socketTicketService: SocketTicketService,
     private readonly cloudService: CloudService,
     private readonly socketIoRedisService: SocketIoRedisService,
+    private readonly chatPresenceService: ChatPresenceService,
   ) {}
 
   afterInit(server: Server) {
@@ -89,7 +98,13 @@ export class CloudMessagesGateway
   }
 
   async handleConnection(socket: Socket) {
-    const token = extractTokenFromHandshake(socket);
+    const ticket =
+      typeof socket.handshake.auth?.ticket === 'string'
+        ? socket.handshake.auth.ticket
+        : null;
+    const token = ticket
+      ? await this.socketTicketService.consume(ticket)
+      : extractTokenFromHandshake(socket);
     const session = await this.authService.resolveSession(token);
 
     socket.data = {
@@ -101,10 +116,21 @@ export class CloudMessagesGateway
     };
 
     if (session) await socket.join(this.userRoom(session.user.id));
+    socket.emit('session:ready', { userId: session?.user.id ?? null });
   }
 
   async handleDisconnect(socket: Socket) {
     const userId = (socket.data as CloudSocketData).userId;
+    const watchedCloudId = (socket.data as CloudSocketData).watchedCloudId;
+    const watchTimer = this.miniWatchTimers.get(socket.id);
+    if (watchTimer) clearInterval(watchTimer);
+    this.miniWatchTimers.delete(socket.id);
+    if (userId && watchedCloudId)
+      await this.chatPresenceService.unwatchCloud(
+        userId,
+        watchedCloudId,
+        socket.id,
+      );
     const joinedCloudIds =
       (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
 
@@ -172,6 +198,45 @@ export class CloudMessagesGateway
     await this.stopTyping(socket, cloudId);
     await this.broadcastMembersUpdated(cloudId);
     return { ok: true as const, data: { cloudId } };
+  }
+
+  @SubscribeMessage('cloud:mini:watch')
+  async watchMiniCloud(
+    @MessageBody() body: { cloudId?: string | null },
+    @ConnectedSocket() socket: Socket,
+  ) {
+    const data = socket.data as CloudSocketData;
+    const userId = data.userId;
+    if (!userId)
+      return { ok: false as const, message: 'Socket não autenticado.' };
+    const nextCloudId = body?.cloudId?.trim() || null;
+    if (nextCloudId && !data.joinedCloudIds?.has(nextCloudId))
+      return {
+        ok: false as const,
+        message: 'Entre na Cloud antes de acompanhá-la.',
+      };
+    const timer = this.miniWatchTimers.get(socket.id);
+    if (timer) clearInterval(timer);
+    this.miniWatchTimers.delete(socket.id);
+    if (data.watchedCloudId)
+      await this.chatPresenceService.unwatchCloud(
+        userId,
+        data.watchedCloudId,
+        socket.id,
+      );
+    data.watchedCloudId = nextCloudId ?? undefined;
+    if (nextCloudId) {
+      await this.chatPresenceService.watchCloud(userId, nextCloudId, socket.id);
+      this.miniWatchTimers.set(
+        socket.id,
+        setInterval(() => {
+          void this.chatPresenceService
+            .watchCloud(userId, nextCloudId, socket.id)
+            .catch(() => undefined);
+        }, 25_000),
+      );
+    }
+    return { ok: true as const };
   }
 
   @SubscribeMessage('cloud:typing')

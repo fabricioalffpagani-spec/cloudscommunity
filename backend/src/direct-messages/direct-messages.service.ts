@@ -179,6 +179,19 @@ export class DirectMessagesService {
     return Array.from(peerIds);
   }
 
+  async listPresenceWatcherIds(userId: string): Promise<string[]> {
+    const [peers, followers] = await Promise.all([
+      this.listConversationPeerIds(userId),
+      this.prisma.follow.findMany({
+        where: { followingId: userId },
+        select: { followerId: true },
+      }),
+    ]);
+    return Array.from(
+      new Set([...peers, ...followers.map((follow) => follow.followerId)]),
+    );
+  }
+
   async listMessages(
     userId: string,
     conversationId: string,

@@ -47,12 +47,20 @@ export type CloudMessageAuthorPayload = {
   avatarUrl: string | null;
 };
 
+export type CloudMention = {
+  userId: string;
+  username: string;
+  start: number;
+  end: number;
+};
+
 export type CloudMessagePayload = {
   id: string;
   cloudId: string;
   senderId: string;
   type: 'text' | 'audio' | 'image' | 'link' | 'system';
   content: string | null;
+  mentions: CloudMention[];
   mediaUrl: string | null;
   isSticker: boolean;
   clientMessageId: string | null;
@@ -122,6 +130,7 @@ export type ListCloudMessagesQuery = {
 export type CreateCloudMessageInput = {
   type: 'text' | 'audio' | 'image' | 'link';
   content?: string;
+  mentions?: CloudMention[];
   mediaUrl?: string;
   isSticker?: boolean;
   clientMessageId?: string;

@@ -1,6 +1,5 @@
 "use client";
 
-import { installCloudPageScroll } from "./lib/cloud-page-scroll";
 
 import Link from "next/link";
 import Image from "next/image";
@@ -1294,6 +1293,7 @@ function CreateCloudModal({
             <input
               autoFocus
               type="text"
+              name="cloud-title"
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="sentences"
@@ -1311,6 +1311,8 @@ function CreateCloudModal({
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Descrição (opcional)</label>
             <textarea
+              name="cloud-description"
+              autoComplete="off"
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, 2000))}
               placeholder="Conte sobre o assunto, contexto ou objetivo da Cloud..."
@@ -1840,6 +1842,9 @@ function CreatePollModal({
             <input
               autoFocus
               type="text"
+              name="poll-question"
+              autoComplete="off"
+              inputMode="text"
               value={question}
               onChange={e => setQuestion(e.target.value.slice(0, 120))}
               placeholder="O que você quer perguntar?"
@@ -1860,6 +1865,9 @@ function CreatePollModal({
                   </span>
                   <input
                     type="text"
+                    name={`poll-option-${i}`}
+                    autoComplete="off"
+                    inputMode="text"
                     value={opt}
                     onChange={e => updateOption(i, e.target.value)}
                     placeholder={`Opção ${String.fromCharCode(65 + i)}`}
@@ -2028,7 +2036,10 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
           <SearchIcon s={18} />
           <input
             autoFocus
-            type="text"
+            type="search"
+            name="cloud-search"
+            autoComplete="off"
+            inputMode="search"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") saveSearch(query); }}
@@ -2524,7 +2535,6 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
 
 function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
-  const feedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2533,11 +2543,6 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     return () => document.removeEventListener("click", closeOptions);
   }, [optionsCloudId]);
 
-  useEffect(() => {
-    const feed = feedRef.current;
-    if (!feed) return;
-    return installCloudPageScroll(feed);
-  }, []);
 
   if (clouds.length === 0) return (
     <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
@@ -2553,7 +2558,7 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     </div>
   );
 
-  return <div ref={feedRef} className="desktop-cloud-feed h-full overflow-y-auto px-8"><div className="mx-auto flex h-full max-w-[1100px] flex-col">{clouds.map((cloud) => {
+  return <div className="desktop-cloud-feed h-full snap-y snap-proximity overflow-y-auto px-8"><div className="mx-auto flex h-full max-w-[1100px] flex-col">{clouds.map((cloud) => {
     const profile = getTopicProfile(cloud, 0);
     const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
     const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
@@ -2607,7 +2612,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
   }
 
   return (
-    <div ref={feedRef} className="mobile-cloud-feed min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto overscroll-contain" style={{ touchAction: "pan-y" }}>
+    <div ref={feedRef} className="mobile-cloud-feed min-h-0 flex-1 snap-y snap-proximity overflow-y-auto overscroll-contain" style={{ touchAction: "pan-y" }}>
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
@@ -2705,8 +2710,6 @@ function PageContent() {
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
 
   // Slide animation: "up" = next, "down" = previous, null = settled.
-  const [slideAnim, setSlideAnim] = useState<"up" | "down" | null>(null);
-  const cloudWheelLocked = useRef(false);
   const recentNoticeTimers = useRef<number[]>([]);
 
   const toggleRecentClouds = useCallback(() => {
@@ -2781,23 +2784,6 @@ function PageContent() {
     if (index >= 0) setCurrentCloudIndex(index);
   }, [orderedClouds, requestedCloudId]);
 
-  const navigateCloud = (direction: number) => {
-    const activeClouds = orderedClouds.filter(isCloudActive);
-    if (activeClouds.length <= 1) return;
-
-    const dir = direction > 0 ? "up" : "down";
-    setSlideAnim(dir);
-    setTimeout(() => {
-      setCurrentCloudIndex(prev => {
-        const newIndex = prev + direction;
-        if (newIndex < 0) return activeClouds.length - 1;
-        if (newIndex >= activeClouds.length) return 0;
-        return newIndex;
-      });
-      setSlideAnim(null);
-    }, 260);
-  };
-
   const enterConversation = (cloud: Cloud) => {
     const params = new URLSearchParams({
       title: cloud.title,
@@ -2808,16 +2794,6 @@ function PageContent() {
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
-
-  const handleDesktopCloudWheel = (event: React.WheelEvent<HTMLElement>) => {
-    if (homeStage !== "topics" || Math.abs(event.deltaY) < Math.abs(event.deltaX) || event.deltaY === 0) return;
-    event.preventDefault();
-    if (cloudWheelLocked.current) return;
-    cloudWheelLocked.current = true;
-    navigateCloud(event.deltaY > 0 ? 1 : -1);
-    window.setTimeout(() => { cloudWheelLocked.current = false; }, 320);
-  };
-
 
   useEffect(() => {
     let cancelled = false;
@@ -3166,7 +3142,7 @@ function PageContent() {
       </main>}
 
       {/* ── Main: vertical-scroll carousel ── */}
-      <main onWheel={handleDesktopCloudWheel} className={mobilePreview || homeStage === "topics" ? "hidden" : "relative hidden flex-1 items-center justify-center overflow-hidden px-4 md:flex"}>
+      <main className={mobilePreview || homeStage === "topics" ? "hidden" : "relative hidden min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-6 md:flex"}>
         {homeStage === "topics" ? (
           <>
             {trendingQuery ? (
@@ -3201,9 +3177,6 @@ function PageContent() {
                 background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
                 border: "1px solid rgba(168,85,247,0.22)",
                 boxShadow: "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
-                transition: "transform 0.25s ease, opacity 0.25s ease",
-                transform: slideAnim === "up" ? "translateY(-36px)" : slideAnim === "down" ? "translateY(36px)" : "translateY(0)",
-                opacity: slideAnim ? 0.15 : 1,
               }}
             >
               {/* Card header */}
