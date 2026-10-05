@@ -16,7 +16,7 @@ import { PresenceConnection } from "./components/PresenceConnection";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Clouds Community",
-  description: "Interface front-end da rede social Clouds Community.",
+  description: "Clouds Community.",
   icons: {
     icon: "/clouds_icon.png",
   },

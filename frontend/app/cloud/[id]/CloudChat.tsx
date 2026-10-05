@@ -1867,7 +1867,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const handleCopyShareLink = useCallback(async () => {
     try {
-      const shareUrl = `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}`;
+      const shareUrl = `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}?join=1`;
       await navigator.clipboard.writeText(shareUrl);
       setError(null);
     } catch {
@@ -2645,8 +2645,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const resolvedParticipants = cloud?.membersCount ?? 0;
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
-  const shareLink = `${publicAppUrl || (typeof window !== "undefined" ? window.location.origin : "")}/cloud/${encodeURIComponent(cloudId)}`;
-  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\nClique aqui para participar: ${shareLink}\nJunte-se a mim nessa conversa.`;
+  const shareLink = `${publicAppUrl || (typeof window !== "undefined" ? window.location.origin : "")}/cloud/${encodeURIComponent(cloudId)}?join=1`;
+  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\nJunte-se a mim nessa conversa: ${shareLink}`;
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
 

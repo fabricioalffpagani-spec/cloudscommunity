@@ -23,6 +23,7 @@ import { MessagesNavLink } from "./components/MessagesNavLink";
 import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import { SearchModal } from "./components/SearchModal";
+import { InviteCloudsButton } from "./components/InviteCloudsButton";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -3063,6 +3064,7 @@ function PageContent() {
 
           {/* Right icons */}
           <div className="flex items-center justify-self-end gap-4 pb-2">
+            <InviteCloudsButton />
             <button type="button" aria-label="Buscar" onClick={() => setModal("search")}
               className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <SearchIcon s={28} />
@@ -3096,6 +3098,9 @@ function PageContent() {
 
       <div className="relative">
         <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+        <div className="absolute left-1/2 top-1/2 ml-[104px] -translate-y-1/2 md:hidden">
+          <InviteCloudsButton compact />
+        </div>
         {!trendingQuery && <div className={`${mobilePreview ? "flex" : "flex md:hidden"} absolute left-6 top-1/2 -translate-y-1/2`}>
         <button
           type="button"
