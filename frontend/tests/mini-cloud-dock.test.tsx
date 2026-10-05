@@ -8,6 +8,18 @@ const { socketHandlers } = vi.hoisted(() => ({ socketHandlers: new Map<string, (
 vi.mock("socket.io-client", () => ({ io: () => ({ on: (event: string, callback: (payload: unknown) => void) => { socketHandlers.set(event, callback); }, emit: vi.fn(), removeAllListeners: vi.fn(), disconnect: vi.fn() }) }));
 
 beforeEach(() => {
+  if (typeof localStorage.clear !== "function") {
+    const values = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+  }
   socketHandlers.clear();
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   localStorage.clear();
@@ -15,37 +27,13 @@ beforeEach(() => {
 });
 
 describe("Mini Cloud leave", () => {
-  it("moves the dock into Document PiP when the browser grants a window", async () => {
+  it("keeps navigation and leave controls together without the external-window control", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
-    const pipDocument = document.implementation.createHTMLDocument("Mini Cloud");
-    const pipWindow = { document: pipDocument, closed: false, addEventListener: vi.fn(), close: vi.fn() } as unknown as Window;
-    const requestWindow = vi.fn(async () => pipWindow);
-    Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: { requestWindow } });
-
-    try {
-      render(<MiniCloudDock />);
-      fireEvent.click(await screen.findByRole("button", { name: "Abrir Mini Cloud fora da aba" }));
-      await waitFor(() => expect(requestWindow).toHaveBeenCalledWith({ width: 384, height: 480 }));
-      await waitFor(() => expect(pipDocument.body.textContent).toContain("Teste"));
-      expect(document.body.querySelector("aside")).not.toBeInTheDocument();
-    } finally {
-      delete (window as Window & { documentPictureInPicture?: unknown }).documentPictureInPicture;
-    }
-  });
-
-  it("keeps the normal dock usable when Document PiP is rejected", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
-    Object.defineProperty(window, "documentPictureInPicture", { configurable: true, value: { requestWindow: vi.fn().mockRejectedValue(new Error("unsupported")) } });
-
-    try {
-      render(<MiniCloudDock />);
-      fireEvent.click(await screen.findByRole("button", { name: "Abrir Mini Cloud fora da aba" }));
-      expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível abrir fora da aba");
-      expect(screen.getByRole("textbox")).toBeEnabled();
-      expect(screen.getByRole("button", { name: "Expandir Cloud" })).toBeEnabled();
-    } finally {
-      delete (window as Window & { documentPictureInPicture?: unknown }).documentPictureInPicture;
-    }
+    render(<MiniCloudDock />);
+    const expand = await screen.findByRole("button", { name: "Expandir Cloud" });
+    expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
+    expect(expand.parentElement).toHaveTextContent(/\d+:\d+/);
   });
 
   it("does not restore a Cloud minimized by another account", () => {
@@ -53,7 +41,7 @@ describe("Mini Cloud leave", () => {
     render(<MiniCloudDock />);
     expect(screen.queryByText("Privada")).not.toBeInTheDocument();
   });
-  it("keeps a compact mobile dock draggable and explains unavailable external PiP", async () => {
+  it("keeps a compact mobile dock draggable without an external-window control", async () => {
     const originalWidth = window.innerWidth;
     const originalHeight = window.innerHeight;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
@@ -66,9 +54,7 @@ describe("Mini Cloud leave", () => {
       const dock = (await screen.findByRole("button", { name: "Expandir Cloud" })).closest("aside");
       expect(dock).toHaveStyle({ width: "280px", height: "268px" });
       expect(screen.queryByRole("separator", { name: "Redimensionar Mini Cloud" })).not.toBeInTheDocument();
-      const pipButton = screen.getByRole("button", { name: "Abrir Mini Cloud fora da aba" });
-      fireEvent.click(pipButton);
-      expect(screen.getByRole("alert")).toHaveTextContent("não permite Mini Cloud fora do app");
+      expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
       const handle = dock?.firstElementChild as HTMLElement;
       handle.setPointerCapture = vi.fn();
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 300, clientY: 600 });

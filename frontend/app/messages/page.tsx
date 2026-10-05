@@ -1188,7 +1188,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
+  const [actionsVisible, setActionsVisible] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const textContent = msg.kind === "text" ? msg.content : null;
   const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
@@ -1206,8 +1208,31 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
     setMenuOpen((o) => !o);
   }
 
+  function clearLongPress() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function startLongPress(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch") return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      setActionsVisible(true);
+      longPressTimerRef.current = null;
+    }, 500);
+  }
+
   return (
-    <div className="group flex w-full items-end gap-2.5" style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}>
+    <div
+      className="group flex w-full items-end gap-2.5"
+      style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}
+      onPointerDown={startLongPress}
+      onPointerUp={clearLongPress}
+      onPointerCancel={clearLongPress}
+      onPointerLeave={clearLongPress}
+    >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">
         {showAvatar && <UserAvatar
@@ -1245,7 +1270,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
             {isRight && <MessageReceipt msg={msg} />}
           </>}
           {/* Actions — visible on hover */}
-          <div className={`flex items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${isRight ? "mr-1.5" : "ml-1.5"}`}>
+          <div className={`pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity sm:pointer-events-auto sm:group-hover:opacity-100 ${actionsVisible ? "pointer-events-auto opacity-100" : ""} ${isRight ? "mr-1.5" : "ml-1.5"}`}>
             <button
               type="button"
               onClick={() => onReply?.(msg)}

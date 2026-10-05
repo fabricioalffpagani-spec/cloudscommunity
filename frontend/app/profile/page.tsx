@@ -786,7 +786,17 @@ export default function ProfilePage() {
                   <p className="text-[13px] font-semibold text-white">Foto de perfil</p>
                   <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 2,8 MB.</p>
                 </div>
-                <button type="button" onClick={() => photoInputRef.current?.click()} className="shrink-0 rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => photoInputRef.current?.click()} className="rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</button>
+                  <button
+                    type="button"
+                    onClick={saveProfile}
+                    disabled={savingProfile}
+                    className="rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingProfile ? "Salvando..." : "Salvar"}
+                  </button>
+                </div>
               </div>
               {profileError && <p className="text-[13px] text-red-300" role="alert">{profileError}</p>}
             </div>
