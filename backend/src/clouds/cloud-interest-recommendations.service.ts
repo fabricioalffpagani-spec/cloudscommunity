@@ -72,7 +72,11 @@ export class CloudInterestRecommendationsService
       });
       await Promise.all(
         profiles.map((profile) =>
-          this.sendRecommendationForUser(profile.userId, profile.interests, slot),
+          this.sendRecommendationForUser(
+            profile.userId,
+            profile.interests,
+            slot,
+          ),
         ),
       );
     } finally {
@@ -89,11 +93,15 @@ export class CloudInterestRecommendationsService
       where: { followerId: userId },
       select: { followingId: true },
     });
-    const excludedAuthorIds = [userId, ...followed.map(({ followingId }) => followingId)];
-    const previous = await this.prisma.cloudInterestRecommendationDelivery.findMany({
-      where: { userId },
-      select: { cloudId: true },
-    });
+    const excludedAuthorIds = [
+      userId,
+      ...followed.map(({ followingId }) => followingId),
+    ];
+    const previous =
+      await this.prisma.cloudInterestRecommendationDelivery.findMany({
+        where: { userId },
+        select: { cloudId: true },
+      });
     const cloud = await this.prisma.cloud.findFirst({
       where: {
         authorId: { notIn: excludedAuthorIds },
