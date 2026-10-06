@@ -3098,7 +3098,7 @@ function PageContent() {
 
       <div className="relative">
         <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
-        <div className="absolute left-1/2 top-1/2 ml-[104px] -translate-y-1/2 md:hidden">
+        <div className="absolute right-7 top-1/2 -translate-y-1/2 md:hidden">
           <InviteCloudsButton compact />
         </div>
         {!trendingQuery && <div className={`${mobilePreview ? "flex" : "flex md:hidden"} absolute left-6 top-1/2 -translate-y-1/2`}>

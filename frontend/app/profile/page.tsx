@@ -15,6 +15,7 @@ import {
 } from "../components/session-user";
 import { MobileAppNav, MobileCloudEntryLink } from "../components/MobileAppChrome";
 import { NotificationsBell } from "../components/NotificationsPanel";
+import { ProfilePhotoCropper } from "../components/ProfilePhotoCropper";
 
 function PencilIcon() {
   return (
@@ -348,6 +349,7 @@ export default function ProfilePage() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [cropSource, setCropSource] = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [followersModalOpen, setFollowersModalOpen] = useState(false);
   const [followingModalOpen, setFollowingModalOpen] = useState(false);
@@ -516,25 +518,25 @@ export default function ProfilePage() {
     event.target.value = "";
 
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
       setProfileError("Escolha uma imagem para a foto de perfil.");
       return;
     }
-    if (file.size > 2_800_000) {
-      setProfileError("A foto deve ter no máximo 2,8 MB.");
+    if (file.size > 10_000_000) {
+      setProfileError("A foto deve ter no máximo 10 MB.");
       return;
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const imageData = reader.result;
-      if (typeof imageData === "string") {
-        setDraft((current) => ({ ...current, avatarUrl: imageData }));
-        setProfileError(null);
-      }
-    };
-    reader.onerror = () => setProfileError("Não foi possível ler essa imagem.");
-    reader.readAsDataURL(file);
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSource(URL.createObjectURL(file));
+    setProfileError(null);
+  };
+  const closeCropper = () => {
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSource(null);
+  };
+  const confirmCrop = (avatarUrl: string) => {
+    setDraft((current) => ({ ...current, avatarUrl }));
+    closeCropper();
   };
 
   const saveProfile = async () => {
@@ -750,7 +752,7 @@ export default function ProfilePage() {
           <div className="w-full max-w-[520px] rounded-t-3xl border border-white/[0.06] bg-[#1a0e3d] p-6 sm:rounded-2xl">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="text-[17px] font-bold">Edit profile</h3>
-              <button onClick={() => setEditing(false)} className="text-white/40 transition hover:text-white">
+              <button onClick={() => { closeCropper(); setEditing(false); }} className="text-white/40 transition hover:text-white">
                 <XIcon />
               </button>
             </div>
@@ -772,7 +774,7 @@ export default function ProfilePage() {
                 <p className="mt-1 text-[12px] text-white/45">A cidade é definida pela localização nativa do dispositivo.</p>
                 <Link href="/settings" className="mt-2 inline-block text-[12px] font-semibold text-[#C084FC] hover:text-white">Definir localização nas configurações</Link>
               </div>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={photoInputRef} id="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handlePhotoChange} />
               <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-lg font-bold text-white">
                   {draft.avatarUrl ? (
@@ -784,10 +786,10 @@ export default function ProfilePage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold text-white">Foto de perfil</p>
-                  <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 2,8 MB.</p>
+                  <p className="mt-0.5 text-[12px] text-white/50">JPG, PNG ou WebP de até 10 MB.</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => photoInputRef.current?.click()} className="rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</button>
+                  <label htmlFor="profile-avatar-input" className="cursor-pointer rounded-full border border-white/15 px-3 py-2 text-[12px] font-semibold text-white/80 transition hover:border-[#A855F7] hover:text-white">Alterar</label>
                   <button
                     type="button"
                     onClick={saveProfile}
@@ -803,7 +805,7 @@ export default function ProfilePage() {
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={() => setEditing(false)}
+                onClick={() => { closeCropper(); setEditing(false); }}
                 className="flex-1 rounded-full border border-white/10 py-3 text-[14px] font-semibold text-white/70 transition hover:bg-white/5"
               >
                 Cancel
@@ -820,6 +822,7 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+      <ProfilePhotoCropper source={cropSource} onCancel={closeCropper} onConfirm={confirmCrop} />
       <MobileAppNav active="profile" />
     </div>
   );

@@ -1189,6 +1189,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
   const [actionsVisible, setActionsVisible] = useState(false);
+  const [openedFromLongPress, setOpenedFromLongPress] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1199,13 +1200,28 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
   const cloudCommentReference = parseCloudCommentReference(textContent);
 
-  function handleToggleMenu() {
-    if (!menuOpen && triggerRef.current) {
+  function openMenu() {
+    if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       // Open upward if less than 220px below the button
       setOpenUpward(window.innerHeight - rect.bottom < 220);
     }
-    setMenuOpen((o) => !o);
+    setMenuOpen(true);
+  }
+
+  function handleToggleMenu() {
+    if (menuOpen) {
+      setMenuOpen(false);
+      setOpenedFromLongPress(false);
+      return;
+    }
+    setOpenedFromLongPress(false);
+    openMenu();
+  }
+
+  function closeMenu() {
+    setMenuOpen(false);
+    setOpenedFromLongPress(false);
   }
 
   function clearLongPress() {
@@ -1219,7 +1235,11 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
     if (event.pointerType !== "touch") return;
     clearLongPress();
     longPressTimerRef.current = setTimeout(() => {
-      setActionsVisible(true);
+      // On touch, open the actual action menu immediately instead of merely
+      // revealing its three-dot trigger.
+      setActionsVisible(false);
+      setOpenedFromLongPress(true);
+      openMenu();
       longPressTimerRef.current = null;
     }, 500);
   }
@@ -1269,8 +1289,8 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
             {msg.editedAt && <span className="text-[10px] italic text-white/45">editada</span>}
             {isRight && <MessageReceipt msg={msg} />}
           </>}
-          {/* Actions — visible on hover */}
-          <div className={`pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity sm:pointer-events-auto sm:group-hover:opacity-100 ${actionsVisible ? "pointer-events-auto opacity-100" : ""} ${isRight ? "mr-1.5" : "ml-1.5"}`}>
+          {/* Actions — visible on hover, or directly as a menu after a touch hold. */}
+          <div className={`pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity sm:pointer-events-auto sm:group-hover:opacity-100 ${actionsVisible || menuOpen ? "pointer-events-auto opacity-100" : ""} ${isRight ? "mr-1.5" : "ml-1.5"}`}>
             <button
               type="button"
               onClick={() => onReply?.(msg)}
@@ -1286,7 +1306,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
                 onClick={handleToggleMenu}
                 aria-label="Mais opções da mensagem"
                 title="Mais opções"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromLongPress ? "invisible" : ""}`}
               >
                 <MessageDotsIcon />
               </button>
@@ -1299,7 +1319,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onForward={onForward}
-                  onClose={() => setMenuOpen(false)}
+                  onClose={closeMenu}
                 />
               )}
             </div>

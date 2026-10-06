@@ -28,7 +28,7 @@ self.addEventListener("push", (event) => {
     body: data.body || "Você tem uma nova notificação.",
     // `icon` is the full-color app mark in the notification drawer; `badge`
     // is the transparent monochrome mark used by Android's status bar.
-    icon: "/clouds-notification-icon.png?v=2",
+    icon: "/logo_clouds.png?v=1",
     badge: "/clouds-notification-badge.svg",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },

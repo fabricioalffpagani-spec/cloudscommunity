@@ -1406,7 +1406,9 @@ function CloudMessageBubble({
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [msgMenuOpen, setMsgMenuOpen] = useState(false);
   const [menuOpenUpward, setMenuOpenUpward] = useState(false);
+  const [openedFromLongPress, setOpenedFromLongPress] = useState(false);
   const dotsButtonRef = useRef<HTMLButtonElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const groupedReactions = useMemo(() => {
     return msg.reactions.reduce((acc, reaction) => {
       if (!acc[reaction.emoji]) {
@@ -1417,16 +1419,48 @@ function CloudMessageBubble({
     }, {} as Record<string, ReactionPayload[]>);
   }, [msg.reactions]);
 
-  function handleToggleMsgMenu() {
-    if (!msgMenuOpen && dotsButtonRef.current) {
+  function openMsgMenu() {
+    if (dotsButtonRef.current) {
       const rect = dotsButtonRef.current.getBoundingClientRect();
       setMenuOpenUpward(window.innerHeight - rect.bottom < 220);
     }
-    setMsgMenuOpen((v) => !v);
+    setMsgMenuOpen(true);
+  }
+
+  function handleToggleMsgMenu() {
+    if (msgMenuOpen) {
+      setMsgMenuOpen(false);
+      setOpenedFromLongPress(false);
+      return;
+    }
+    setOpenedFromLongPress(false);
+    openMsgMenu();
+  }
+
+  function closeMsgMenu() {
+    setMsgMenuOpen(false);
+    setOpenedFromLongPress(false);
+  }
+
+  function clearLongPress() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function startLongPress(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("button, a"))) return;
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      setOpenedFromLongPress(true);
+      openMsgMenu();
+      longPressTimerRef.current = null;
+    }, 500);
   }
 
   return (
-    <div className={`group flex items-end gap-2.5 ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`}>
+    <div className={`group flex items-end gap-2.5 ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`} onPointerDown={startLongPress} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress}>
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
       {showFooter && !own && <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
         <UserAvatar
@@ -1491,10 +1525,10 @@ function CloudMessageBubble({
               {own && !msg.pending && <MessageReceipt />}
             </div>
             <div className="relative sm:hidden">
-              <button ref={dotsButtonRef} type="button" aria-label="Mais opções da mensagem" onClick={handleToggleMsgMenu} className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white">
+              <button ref={dotsButtonRef} type="button" aria-label="Mais opções da mensagem" onClick={handleToggleMsgMenu} className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromLongPress ? "invisible" : ""}`}>
                 <MessageDotsIcon />
               </button>
-              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onClose={() => setMsgMenuOpen(false)} />}
+              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onClose={closeMsgMenu} />}
             </div>
           </div>}
         </div>
@@ -1547,7 +1581,6 @@ function CloudMessageBubble({
           </button>
           <div className="relative">
             <button
-              ref={dotsButtonRef}
               type="button"
               title="Mais opções"
               onClick={handleToggleMsgMenu}
@@ -1568,7 +1601,7 @@ function CloudMessageBubble({
                 onDelete={onDelete}
                 onReport={onReport}
                 onSaveSticker={onSaveSticker}
-                onClose={() => setMsgMenuOpen(false)}
+                onClose={closeMsgMenu}
               />
             )}
           </div>

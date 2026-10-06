@@ -13,6 +13,7 @@ import {
   useSessionUser,
 } from "../components/session-user";
 import { MobileAppNav } from "../components/MobileAppChrome";
+import { ProfilePhotoCropper } from "../components/ProfilePhotoCropper";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aplicativo" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -221,6 +222,7 @@ function PanelPerfil() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
+  const [cropSource, setCropSource] = useState<string | null>(null);
   const [error, setError] = useState("");
   const displayName = getSessionUserDisplayName(user);
 
@@ -250,15 +252,20 @@ function PanelPerfil() {
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível salvar o perfil."); }
     finally { setSaving(false); }
   };
-  const choosePhoto = async (file?: File) => {
+  const choosePhoto = (file?: File) => {
     if (!file) return;
-    // Base64 expands the original image before it is persisted. Keep the
-    // source below the server's 4 MB payload ceiling so a valid selection
-    // cannot fail only when the user saves the profile.
-    if (!file.type.startsWith("image/") || file.size > 2_800_000) { setError("Escolha uma imagem de até 2,8 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = () => { setAvatarUrl(typeof reader.result === "string" ? reader.result : null); setError(""); };
-    reader.readAsDataURL(file);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 10_000_000) { setError("Escolha uma imagem JPG, PNG ou WebP de até 10 MB."); return; }
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSource(URL.createObjectURL(file));
+    setError("");
+  };
+  const closeCropper = () => {
+    if (cropSource) URL.revokeObjectURL(cropSource);
+    setCropSource(null);
+  };
+  const confirmCrop = (image: string) => {
+    setAvatarUrl(image);
+    closeCropper();
   };
   const handleDeviceLocation = async () => {
     if (!navigator.geolocation) { setError("A localização não é suportada neste dispositivo."); return; }
@@ -283,8 +290,8 @@ function PanelPerfil() {
           <div className="relative"><SessionUserAvatar user={avatarUrl ? { ...user!, avatarUrl } : user} size={80} className="ring-4 ring-[#9333EA]/40" />
             <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Alterar foto" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#A855F7] border-2 border-[#120a2e] text-white hover:bg-[#9333EA]"><CameraIcon s={13}/></button>
           </div>
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => void choosePhoto(event.target.files?.[0])} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="text-[13px] text-[#A855F7] hover:text-[#a855f7]">Alterar foto</button>
+          <input ref={fileInputRef} id="profile-photo-input" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onClick={(event) => { event.currentTarget.value = ""; }} onChange={(event) => choosePhoto(event.target.files?.[0])} />
+          <label htmlFor="profile-photo-input" className="cursor-pointer text-[13px] text-[#A855F7] hover:text-[#c084fc]">Alterar foto</label>
         </div>
         <div className="flex flex-col gap-4">
           <Field label="Nome de exibição" value={name || displayName} onChange={setName} />
@@ -338,6 +345,7 @@ function PanelPerfil() {
           <div className="flex justify-end"><button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-[#A855F7] px-6 py-2.5 text-[13px] font-semibold text-white hover:bg-[#9333EA] transition disabled:opacity-60">{saved?<><CheckIcon/>Salvo!</>:saving?"Salvando...":"Salvar perfil"}</button></div>
         </div>
       </Card>
+      <ProfilePhotoCropper source={cropSource} onCancel={closeCropper} onConfirm={confirmCrop} />
     </div>
   );
 }
