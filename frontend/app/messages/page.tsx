@@ -1047,6 +1047,10 @@ function DmMenuForwardIcon() {
   );
 }
 
+function DmMenuPinIcon() {
+  return <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4h6" /><path d="M10 4v5l-3 3v2h10v-2l-3-3V4" /><path d="M12 14v6" /></svg>;
+}
+
 function DmMsgMenu({
   msg,
   isRight,
@@ -1055,6 +1059,8 @@ function DmMsgMenu({
   onEdit,
   onDelete,
   onForward,
+  onPin,
+  isPinned = false,
   onClose,
 }: {
   msg: Msg;
@@ -1064,6 +1070,8 @@ function DmMsgMenu({
   onEdit?: (m: Msg) => void;
   onDelete?: (m: Msg) => void;
   onForward?: (m: Msg) => void;
+  onPin?: (m: Msg) => void;
+  isPinned?: boolean;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -1155,6 +1163,12 @@ function DmMsgMenu({
       action: () => { onForward?.(msg); onClose(); },
       show: !isPrivateCloudInvite, // Hide forward for private cloud invitations
     },
+    {
+      label: isPinned ? "Desafixar" : "Fixar",
+      icon: <DmMenuPinIcon />,
+      action: () => { onPin?.(msg); onClose(); },
+      show: true,
+    },
   ];
 
   return (
@@ -1184,14 +1198,13 @@ function DmMsgMenu({
   );
 }
 
-function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
   const [actionsVisible, setActionsVisible] = useState(false);
-  const [openedFromLongPress, setOpenedFromLongPress] = useState(false);
+  const [openedFromDoubleClick, setOpenedFromDoubleClick] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const textContent = msg.kind === "text" ? msg.content : null;
   const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
@@ -1212,46 +1225,30 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
   function handleToggleMenu() {
     if (menuOpen) {
       setMenuOpen(false);
-      setOpenedFromLongPress(false);
+      setOpenedFromDoubleClick(false);
       return;
     }
-    setOpenedFromLongPress(false);
+    setOpenedFromDoubleClick(false);
     openMenu();
   }
 
   function closeMenu() {
     setMenuOpen(false);
-    setOpenedFromLongPress(false);
+    setOpenedFromDoubleClick(false);
   }
 
-  function clearLongPress() {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }
-
-  function startLongPress(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "touch") return;
-    clearLongPress();
-    longPressTimerRef.current = setTimeout(() => {
-      // On touch, open the actual action menu immediately instead of merely
-      // revealing its three-dot trigger.
-      setActionsVisible(false);
-      setOpenedFromLongPress(true);
-      openMenu();
-      longPressTimerRef.current = null;
-    }, 500);
+  function handleDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.target instanceof Element && event.target.closest("button, a")) return;
+    setActionsVisible(false);
+    setOpenedFromDoubleClick(true);
+    openMenu();
   }
 
   return (
     <div
       className="group flex w-full items-end gap-2.5"
       style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}
-      onPointerDown={startLongPress}
-      onPointerUp={clearLongPress}
-      onPointerCancel={clearLongPress}
-      onPointerLeave={clearLongPress}
+      onDoubleClick={handleDoubleClick}
     >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">
@@ -1306,7 +1303,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
                 onClick={handleToggleMenu}
                 aria-label="Mais opções da mensagem"
                 title="Mais opções"
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromLongPress ? "invisible" : ""}`}
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromDoubleClick ? "invisible" : ""}`}
               >
                 <MessageDotsIcon />
               </button>
@@ -1319,6 +1316,8 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, searchQuery,
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onForward={onForward}
+                  onPin={onPin}
+                  isPinned={isPinned}
                   onClose={closeMenu}
                 />
               )}
@@ -1370,6 +1369,7 @@ function MessagesPageContent() {
   const [editDraft, setEditDraft] = useState("");
   const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const composerFooterRef = useComposerPanLock();
@@ -2252,6 +2252,23 @@ function MessagesPageContent() {
     setForwardMsg(msg);
   }, []);
 
+  const togglePinnedMessage = useCallback((msg: Msg) => {
+    setPinnedMessageIds((current) => {
+      const next = new Set(current);
+      if (next.has(msg.id)) next.delete(msg.id); else next.add(msg.id);
+      try { window.localStorage.setItem(`clouds:pinned-direct-messages:${msg.conversationId}`, JSON.stringify([...next])); } catch { /* storage is optional */ }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeConversationId) return;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(`clouds:pinned-direct-messages:${activeConversationId}`) || "[]");
+      setPinnedMessageIds(new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : []));
+    } catch { setPinnedMessageIds(new Set()); }
+  }, [activeConversationId]);
+
   const handleReplyMsg = useCallback((msg: Msg) => {
     setEditingMsg(null);
     setReplyingTo(msg);
@@ -2610,7 +2627,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
                     </div>
                   );
                 });
@@ -2841,7 +2858,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
       )}
     </div>
   );

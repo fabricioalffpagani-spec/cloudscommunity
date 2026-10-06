@@ -1488,6 +1488,26 @@ export class CloudService {
       },
     });
 
+    if (!message.isPinned && message.userId !== current.user.id) {
+      const notification = await this.prisma.notification.create({
+        data: {
+          userId: message.userId,
+          type: 'cloud_message_pinned',
+          entityType: 'cloud_message',
+          entityId: messageId,
+          metadata: { cloudId, messageId, actorUserId: current.user.id },
+          title: 'Sua mensagem foi fixada',
+          body: `O anfitrião fixou sua mensagem em “${cloud.title}”.`,
+        },
+      });
+      await this.pushNotifications.send(message.userId, {
+        title: notification.title,
+        body: notification.body,
+        url: `/cloud/${cloudId}?message=${messageId}`,
+        tag: notification.id,
+      });
+    }
+
     return { ok: true };
   }
 

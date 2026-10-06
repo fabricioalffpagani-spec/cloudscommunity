@@ -26,10 +26,8 @@ self.addEventListener("push", (event) => {
     }
     await self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
-    // `icon` is the full-color app mark in the notification drawer; `badge`
-    // is the transparent monochrome mark used by Android's status bar.
-    icon: "/logo_clouds.png?v=1",
-    badge: "/clouds-notification-badge.svg",
+    // Use the installed PWA's icon in the notification and status indicator.
+    icon: "/pwa-192x192.png?v=2",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
     });
