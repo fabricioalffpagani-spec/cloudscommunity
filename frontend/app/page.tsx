@@ -579,13 +579,15 @@ type ShareContact = {
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
-function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
+function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; onClose: () => void }) {
   const [view, setView] = useState<"main" | "contacts" | "external">("main");
   const [sent, setSent] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
   const [contacts, setContacts] = useState<ShareContact[]>([]);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [loadingContacts, setLoadingContacts] = useState(false);
+
+  useEffect(() => { void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" }); }, [cloudId]);
 
   const encodedText = encodeURIComponent(`Participe da Cloud "${cloudTitle}" aqui: ${cloudUrl}`);
 
@@ -991,6 +993,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
             </button>
             {shareOpen && (
               <ShareModal
+                cloudId={cloud.id}
                 cloudTitle={cloud.title}
                 cloudUrl={fullShareUrl}
                 onClose={() => setShareOpen(false)}
@@ -1296,7 +1299,7 @@ function CreateCloudModal({
               autoFocus
               type="text"
               name="new-cloud-topic-title"
-              autoComplete="off"
+              autoComplete="new-password"
               data-lpignore="true"
               data-1p-ignore="true"
               autoCorrect="off"
@@ -2046,7 +2049,7 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
             autoFocus
             type="search"
             name="cloud-search"
-            autoComplete="off"
+            autoComplete="new-password"
             data-lpignore="true"
             data-1p-ignore="true"
             inputMode="search"
@@ -2459,6 +2462,7 @@ function TopicFeedStage({
       </div>
       {shareTarget && (
         <ShareModal
+          cloudId={shareTarget.id}
           cloudTitle={shareTarget.title}
           cloudUrl={`${siteOrigin}${shareTarget.href ?? `/cloud/${shareTarget.id}`}`}
           onClose={() => setShareTarget(null)}
@@ -2509,6 +2513,7 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
     <>
       {shareOpen && (
         <ShareModal
+          cloudId={cloudId}
           cloudTitle="Cloud ao vivo"
           cloudUrl={fullUrl}
           onClose={() => setShareOpen(false)}

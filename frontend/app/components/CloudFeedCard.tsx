@@ -48,7 +48,8 @@ function useSiteOrigin() {
   );
 }
 
-function ShareModal({ cloudTitle, cloudUrl, onClose }: { cloudTitle: string; cloudUrl: string; onClose: () => void }) {
+function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; onClose: () => void }) {
+  useEffect(() => { void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" }); }, [cloudId]);
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -217,7 +218,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
       </div>
 
       {shareOpen && (
-        <ShareModal cloudTitle={cloud.title} cloudUrl={fullShareUrl} onClose={() => setShareOpen(false)} />
+        <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={fullShareUrl} onClose={() => setShareOpen(false)} />
       )}
     </article>
   );

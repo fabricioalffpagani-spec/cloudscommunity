@@ -25,8 +25,8 @@ export default function OnboardingPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status === "authenticated" && (user?.interests?.length ?? 0) >= 3) router.replace("/?welcome=1");
-  }, [router, status, user?.interests?.length]);
+    if (status === "authenticated" && !user?.interestsOnboardingRequired) router.replace("/?welcome=1");
+  }, [router, status, user?.interestsOnboardingRequired]);
 
   const toggle = (id: string) => {
     setError("");

@@ -1972,8 +1972,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router, user?.id]);
 
   useEffect(() => {
-    // For an explicit entry, wait until the join request confirms membership.
-    if (!joinOnEntry) {
+    // Authenticated entries wait for membership confirmation. Guests viewing a
+    // public invitation never create membership, so they must load the chat
+    // immediately and see the registration-gated composer instead.
+    if (!joinOnEntry || status !== "authenticated" || !user) {
       void loadCloud();
       void loadMessages();
     }

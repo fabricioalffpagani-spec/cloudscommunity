@@ -253,6 +253,11 @@ export class CloudController {
     return this.cloudService.unhype(extractSessionToken(req), id);
   }
 
+  @Post(':id/share')
+  async share(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.recordShare(extractSessionToken(req), id);
+  }
+
   @Get(':id/hypes')
   async getHypes(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.getHypes(extractSessionToken(req), id);

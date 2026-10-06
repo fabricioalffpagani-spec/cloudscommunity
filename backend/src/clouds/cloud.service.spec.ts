@@ -51,6 +51,9 @@ function setup() {
     cloudHype: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
+    cloudShare: {
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
+    },
     profile: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },

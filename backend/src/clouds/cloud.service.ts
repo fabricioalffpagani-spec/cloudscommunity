@@ -29,6 +29,8 @@ import {
 } from './cloud.types';
 
 const ALLOWED_DURATIONS = ['10min', '30min', '2h', '5h', '24h'] as const;
+const RAPID_HYPES_THRESHOLD = 5;
+const RAPID_HYPES_WINDOW_MS = 15 * 60 * 1000;
 
 type CloudWithRelations = Prisma.CloudGetPayload<{
   include: {
@@ -228,43 +230,79 @@ export class CloudService {
       take: 100,
     });
 
-    // Score = hypeCount * 3 + recency decay (hours since creation, capped at 72h)
+    // For You combines declared interests with the themes the member actually
+    // engages with. A small discovery lane is added after ranking below.
     const now = Date.now();
-    const blocks = await this.prisma.userBlock.findMany({
-      where: {
-        OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }],
-      },
-      select: { blockerId: true, blockedId: true },
-    });
+    const [blocks, profiles, userHypes, memberships, messages, shares] = await Promise.all([
+      this.prisma.userBlock.findMany({
+        where: { OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }] },
+        select: { blockerId: true, blockedId: true },
+      }),
+      this.prisma.profile.findMany({
+        where: { userId: current.user.id },
+        select: { interests: true },
+      }),
+      this.prisma.cloudHype.findMany({
+        where: { userId: current.user.id },
+        select: { cloudId: true, cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudMember.findMany({
+        where: { userId: current.user.id },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudMessage.findMany({
+        where: { userId: current.user.id, deletedAt: null, type: { not: 'system' } },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudShare.findMany({
+        where: { userId: current.user.id },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+    ]);
     const blockedUserIds = new Set(
       blocks.map((block) =>
         block.blockerId === current.user.id ? block.blockedId : block.blockerId,
       ),
     );
+    const topicAffinity = new Map<string, number>();
+    const addTopicWeight = (topic: string | null, weight: number) => {
+      if (topic) topicAffinity.set(topic, (topicAffinity.get(topic) ?? 0) + weight);
+    };
+    profiles[0]?.interests.forEach((topic) => addTopicWeight(topic, 4));
+    userHypes.forEach(({ cloud }) => addTopicWeight(cloud.primaryTopic, 6));
+    memberships.forEach(({ cloud }) => addTopicWeight(cloud.primaryTopic, 2));
+    messages.forEach(({ cloud }) => addTopicWeight(cloud.primaryTopic, 5));
+    shares.forEach(({ cloud }) => addTopicWeight(cloud.primaryTopic, 7));
+
     const scored = clouds
       .filter((cloud) => !blockedUserIds.has(cloud.authorId))
       .map((cloud) => {
         const ageHours = (now - cloud.createdAt.getTime()) / 3_600_000;
         const recency = Math.max(0, 1 - ageHours / 72);
-        const score = cloud._count.hypes * 3 + recency * 10;
-        return { cloud, score };
+        const popularity = cloud._count.hypes * 3 + recency * 10;
+        const affinity = topicAffinity.get(cloud.primaryTopic ?? '') ?? 0;
+        return { cloud, score: popularity + affinity * 4, popularity, affinity };
       })
       .sort((a, b) => b.score - a.score);
-
-    const userHypes = new Set(
-      (
-        await this.prisma.cloudHype.findMany({
-          where: { userId: current.user.id },
-          select: { cloudId: true },
-        })
-      ).map((h) => h.cloudId),
-    );
+    const discovery = [...scored]
+      .filter((item) => item.affinity === 0)
+      .sort((a, b) => b.popularity - a.popularity);
+    const chosen = new Set<string>();
+    const diversified = scored.flatMap((item, index) => {
+      const candidate = index % 5 === 4
+        ? discovery.find((entry) => !chosen.has(entry.cloud.id)) ?? item
+        : item;
+      if (chosen.has(candidate.cloud.id)) return [];
+      chosen.add(candidate.cloud.id);
+      return [candidate];
+    });
+    const userHypeIds = new Set(userHypes.map((hype) => hype.cloudId));
 
     return {
       ok: true,
-      clouds: scored.map(({ cloud }) => ({
+      clouds: diversified.map(({ cloud }) => ({
         ...this.mapCloud(cloud),
-        hyped: userHypes.has(cloud.id),
+        hyped: userHypeIds.has(cloud.id),
       })),
     };
   }
@@ -834,39 +872,6 @@ export class CloudService {
       }),
     );
 
-    if (visibility === CloudVisibility.public && classification.primaryTopic) {
-      const interestedProfiles = await this.prisma.profile.findMany({
-        where: {
-          userId: { not: current.user.id },
-          interests: { has: classification.primaryTopic },
-        },
-        select: { userId: true },
-      });
-      await Promise.all(
-        interestedProfiles
-          .filter(({ userId }) => !followerIds.has(userId))
-          .map(async ({ userId }) => {
-            const notification = await this.prisma.notification.create({
-              data: {
-                userId,
-                type: 'system',
-                entityType: 'cloud',
-                entityId: created.id,
-                title: 'Cloud sugerida para você',
-                body: `“${created.title}” combina com seus interesses.`,
-                metadata: { topic: classification.primaryTopic },
-              },
-            });
-            await this.pushNotifications.send(userId, {
-              title: notification.title,
-              body: notification.body,
-              url: `/cloud/${created.id}`,
-              tag: notification.id,
-            });
-          }),
-      );
-    }
-
     return {
       ok: true,
       userId: current.user.id,
@@ -946,10 +951,103 @@ export class CloudService {
       });
     }
 
+    if (!existing) {
+      await this.notifyRapidHypeGrowth(cloud);
+    }
+
     const hypesCount = await this.prisma.cloudHype.count({
       where: { cloudId },
     });
     return { ok: true, hypesCount };
+  }
+
+  async recordShare(token: string | null, cloudId: string): Promise<{ ok: true }> {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.prisma.cloudShare.upsert({
+      where: { cloudId_userId: { cloudId, userId: current.user.id } },
+      create: { cloudId, userId: current.user.id },
+      update: {},
+    });
+    return { ok: true };
+  }
+
+  private async notifyRapidHypeGrowth(cloud: {
+    id: string;
+    authorId: string;
+    title: string;
+    primaryTopic: string | null;
+    visibility: CloudVisibility;
+  }) {
+    if (cloud.visibility !== CloudVisibility.public || !cloud.primaryTopic) return;
+    const recentHypes = await this.prisma.cloudHype.findMany({
+      where: {
+        cloudId: cloud.id,
+        createdAt: { gte: new Date(Date.now() - RAPID_HYPES_WINDOW_MS) },
+      },
+      select: { userId: true },
+    });
+    if (recentHypes.length < RAPID_HYPES_THRESHOLD) return;
+
+    const interestedProfiles = await this.prisma.profile.findMany({
+      where: {
+        userId: { not: cloud.authorId },
+        interests: { has: cloud.primaryTopic },
+        interestsOnboardingRequired: false,
+        user: { status: 'active', deletedAt: null },
+      },
+      select: { userId: true },
+    });
+    await Promise.all(
+      interestedProfiles.map(async ({ userId }) => {
+        const followsAuthor = await this.prisma.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: userId,
+              followingId: cloud.authorId,
+            },
+          },
+          select: { followerId: true },
+        });
+        if (followsAuthor) return;
+        try {
+          const notification = await this.prisma.$transaction(async (tx) => {
+            await tx.cloudTrendingDelivery.create({
+              data: { userId, cloudId: cloud.id },
+            });
+            return tx.notification.create({
+              data: {
+                userId,
+                type: 'cloud_trending',
+                entityType: 'cloud',
+                entityId: cloud.id,
+                title: 'Esta Cloud está em alta',
+                body: `“${cloud.title}” recebeu ${recentHypes.length} hypes nos últimos 15 minutos.`,
+                metadata: {
+                  topic: cloud.primaryTopic,
+                  forYou: true,
+                  recentHypes: recentHypes.length,
+                },
+              },
+            });
+          });
+          await this.pushNotifications.send(userId, {
+            title: notification.title,
+            body: notification.body,
+            url: `/cloud/${cloud.id}`,
+            tag: notification.id,
+          });
+        } catch (error) {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2002'
+          ) {
+            return;
+          }
+          throw error;
+        }
+      }),
+    );
   }
 
   async unhype(

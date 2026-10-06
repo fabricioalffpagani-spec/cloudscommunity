@@ -16,6 +16,7 @@ type NotificationActor = {
 type AppNotification = {
   id: string;
   type: string;
+  entityType: string;
   entityId: string;
   title: string;
   body: string;
@@ -167,7 +168,10 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 const cloudMessageHref = messageCloudId && (notification.type === "cloud_mention" || notification.type === "cloud_comment")
                   ? `/cloud/${encodeURIComponent(messageCloudId)}?message=${encodeURIComponent(messageId)}`
                   : null;
-                const href = cloudMessageHref ?? notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
+                const cloudHref = notification.entityType === "cloud"
+                  ? `/cloud/${encodeURIComponent(notification.entityId)}`
+                  : null;
+                const href = cloudMessageHref ?? cloudHref ?? notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
                 const alreadyFollowingBack = followingBack.has(notification.id);
                 const continuation = notification.type === "cloud_continuation" ? notification.metadata : null;
 
@@ -185,8 +189,8 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                         </div>
                       </Link>
                       <div className="min-w-0 flex-1">
-                        {cloudMessageHref ? (
-                          <Link href={cloudMessageHref} className="text-[13px] font-semibold text-white hover:underline">{notification.title}</Link>
+                        {cloudMessageHref || cloudHref ? (
+                          <Link href={href} className="text-[13px] font-semibold text-white hover:underline">{notification.title}</Link>
                         ) : (
                           <p className="text-[13px] font-semibold text-white">{notification.title}</p>
                         )}

@@ -171,6 +171,7 @@ export class AuthService {
               birthDate,
               bio,
               location: displayLocation,
+              interestsOnboardingRequired: true,
             },
           },
         },
@@ -587,6 +588,8 @@ export class AuthService {
             interests,
             interestsCompletedAt:
               interests === undefined ? undefined : new Date(),
+            interestsOnboardingRequired:
+              interests === undefined ? undefined : false,
           },
         },
       },
@@ -1051,6 +1054,7 @@ export class AuthService {
       showParticipatingNow: profile.showParticipatingNow,
       interests: profile.interests,
       interestsCompletedAt: profile.interestsCompletedAt?.toISOString() ?? null,
+      interestsOnboardingRequired: profile.interestsOnboardingRequired,
       status: user.status,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),

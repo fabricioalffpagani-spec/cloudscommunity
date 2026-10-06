@@ -16,6 +16,7 @@ export type AuthUserPayload = {
   showParticipatingNow: boolean;
   interests: string[];
   interestsCompletedAt: string | null;
+  interestsOnboardingRequired: boolean;
   status: string;
   createdAt: string;
   updatedAt: string;
