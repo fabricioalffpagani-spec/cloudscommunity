@@ -14,6 +14,7 @@ import {
 } from "../components/session-user";
 import { MobileAppNav } from "../components/MobileAppChrome";
 import { ProfilePhotoCropper } from "../components/ProfilePhotoCropper";
+import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
 
 type Section = "conta" | "perfil" | "privacidade" | "notificacoes" | "aplicativo" | "acessibilidade" | "seguranca" | "dados" | "sobre";
 
@@ -455,55 +456,62 @@ function PanelNotificacoes() {
   </div>);
 }
 
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-};
-
 function PanelAplicativo() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [canInstall, setCanInstall] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [showRemovalInstructions, setShowRemovalInstructions] = useState(false);
+  const [iosInstallHelpOpen, setIosInstallHelpOpen] = useState(false);
 
   useEffect(() => {
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     setInstalled(isStandalone);
     setCanInstall(window.isSecureContext || window.location.hostname === "localhost");
+    setInstallPrompt(getRememberedInstallPrompt());
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setInstallPrompt(event as InstallPromptEvent);
+      const prompt = event as InstallPromptEvent;
+      rememberInstallPrompt(prompt);
+      setInstallPrompt(prompt);
     };
-    const handleInstalled = () => { setInstalled(true); setInstallPrompt(null); };
+    const handlePromptReady = () => setInstallPrompt(getRememberedInstallPrompt());
+    const handleInstalled = () => { setInstalled(true); setInstallPrompt(null); clearRememberedInstallPrompt(); };
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("clouds:pwa-install-ready", handlePromptReady);
     window.addEventListener("appinstalled", handleInstalled);
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("clouds:pwa-install-ready", handlePromptReady);
       window.removeEventListener("appinstalled", handleInstalled);
     };
   }, []);
 
   const install = async () => {
-    if (!installPrompt) {
+    const prompt = installPrompt ?? getRememberedInstallPrompt();
+    if (!prompt) {
       setShowInstructions(true);
       return;
     }
-    await installPrompt.prompt();
-    const result = await installPrompt.userChoice;
+    await prompt.prompt();
+    const result = await prompt.userChoice;
     if (result.outcome === "accepted") setInstalled(true);
     setInstallPrompt(null);
+    clearRememberedInstallPrompt();
   };
 
   const isIos = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isMacSafari = typeof navigator !== "undefined" && /Macintosh/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg/.test(navigator.userAgent);
+  const needsAppleInstallGuide = isIos || isMacSafari;
   return <div className="flex flex-col gap-6"><h2 className="text-[20px] font-bold text-white">Aplicativo</h2>
     <Card><Sub>Clouds no seu dispositivo</Sub>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div><p className="text-[14px] font-medium text-white">Instalar Clouds</p><p className="mt-1 text-[12px] leading-5 text-white/60">Crie um atalho com ícone na tela inicial ou área de trabalho e abra o Clouds como aplicativo.</p></div>
-        {installed ? <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#9333EA]/20 px-4 py-2.5 text-[13px] font-semibold text-[#E9D5FF]"><CheckIcon />Instalado</span> : <button type="button" onClick={install} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"><DeviceIcon s={16} />Adicionar atalho para o Clouds</button>}
+        {installed ? <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#9333EA]/20 px-4 py-2.5 text-[13px] font-semibold text-[#E9D5FF]"><CheckIcon />Instalado</span> : <button type="button" onClick={() => needsAppleInstallGuide ? setIosInstallHelpOpen(true) : void install()} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"><DeviceIcon s={16} />Adicionar atalho para o Clouds</button>}
       </div>
-      {!installed && (isIos || showInstructions) && <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-[12px] leading-5 text-white/65">{isIos ? "No iPhone ou iPad, abra no Safari, toque em Compartilhar e escolha “Adicionar à Tela de Início”." : canInstall ? "No menu do navegador, escolha “Instalar aplicativo” ou “Adicionar à área de trabalho”." : "O atalho será instalado automaticamente quando o Clouds estiver publicado em HTTPS. Enquanto isso, você pode usar o menu do navegador para criar um atalho."}</p>}
+      {!installed && (needsAppleInstallGuide || showInstructions) && <p className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-[12px] leading-5 text-white/65">{isIos ? "No Safari do iPhone ou iPad, o botão abre o guia para adicionar o Clouds à Tela de Início." : isMacSafari ? "No Safari do Mac, o botão abre o guia para adicionar o Clouds ao Dock." : canInstall ? "Seu navegador ainda não liberou a instalação para este site. Quando estiver disponível, este mesmo botão abrirá automaticamente a confirmação nativa de instalação." : "A instalação automática exige que o Clouds esteja em HTTPS."}</p>}
     </Card>
+    {iosInstallHelpOpen && <div className="fixed inset-0 z-[100] flex items-end bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="ios-install-title" onClick={() => setIosInstallHelpOpen(false)}><section className="w-full rounded-t-3xl border border-white/10 bg-[#171821] p-6 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-md sm:rounded-3xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><p className="text-[12px] font-semibold uppercase tracking-[.16em] text-[#C084FC]">{isMacSafari ? "Safari para Mac" : "Safari para iPhone e iPad"}</p><h3 id="ios-install-title" className="mt-1 text-xl font-bold text-white">{isMacSafari ? "Adicione o Clouds ao Dock" : "Adicione o Clouds à Tela de Início"}</h3></div><button type="button" onClick={() => setIosInstallHelpOpen(false)} aria-label="Fechar" className="text-2xl leading-none text-white/55">×</button></div><p className="mt-3 text-sm leading-relaxed text-white/65">{isMacSafari ? "O Safari exige esta confirmação manual. São só dois passos:" : "O iOS exige esta confirmação manual. São só dois toques:"}</p><ol className="mt-5 space-y-3">{isMacSafari ? <><li className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-sm font-bold">1</span><p className="pt-1 text-sm text-white/85">Na barra de menus do Safari, abra <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">Arquivo</span>.</p></li><li className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-sm font-bold">2</span><p className="pt-1 text-sm text-white/85">Escolha <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">Adicionar ao Dock</span> e confirme.</p></li></> : <><li className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-sm font-bold">1</span><p className="pt-1 text-sm text-white/85">No Safari, toque no botão <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">Compartilhar</span> <span aria-label="Compartilhar">⎋</span>, na barra inferior.</p></li><li className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#9333EA] text-sm font-bold">2</span><p className="pt-1 text-sm text-white/85">Role a lista e toque em <span className="rounded bg-white/10 px-1.5 py-0.5 font-semibold">Adicionar à Tela de Início</span>.</p></li></>}</ol><p className="mt-5 rounded-xl bg-[#9333EA]/10 px-3 py-2.5 text-xs leading-relaxed text-[#E9D5FF]">{isMacSafari ? "O Clouds ficará disponível no Dock e abrirá em sua própria janela." : "Depois, o ícone do Clouds aparecerá na sua tela inicial e abrirá como aplicativo."}</p><button type="button" onClick={() => setIosInstallHelpOpen(false)} className="mt-6 w-full rounded-full bg-[#9333EA] py-3 text-sm font-semibold text-white">Entendi</button></section></div>}
     <Card className="border-red-500/20"><Sub>Remover do dispositivo</Sub>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div><p className="text-[14px] font-medium text-white">Remover atalho do Clouds</p><p className="mt-1 text-[12px] leading-5 text-white/60">Remove apenas o ícone e o acesso rápido deste dispositivo; sua conta e seus dados não serão apagados.</p></div>
@@ -804,6 +812,10 @@ function Header({ onSearchOpen }: { onSearchOpen: () => void }) {
 export default function SettingsPage() {
   const [active, setActive] = useState<Section>("conta");
   const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const requestedSection = new URLSearchParams(window.location.search).get("section");
+    if (NAV_ITEMS.some((item) => item.key === requestedSection)) setActive(requestedSection as Section);
+  }, []);
   const panels: Record<Section, React.ReactNode> = {
     conta:<PanelConta/>, perfil:<PanelPerfil/>, privacidade:<PanelPrivacidade/>,
     notificacoes:<PanelNotificacoes/>, aplicativo:<PanelAplicativo/>, acessibilidade:<PanelAcessibilidade/>,

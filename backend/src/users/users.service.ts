@@ -760,10 +760,20 @@ export class UsersService {
       );
     };
 
-    const [recentRanked, allTimeRanked, nearbyRanked] = await Promise.all([
+    const [recentRanked, allTimeRanked, nearbyRanked, newestUsers] = await Promise.all([
       rankProfiles(popularRecentCounts),
       rankProfiles(popularAllTimeCounts),
       rankProfiles(nearbyCounts),
+      this.prisma.user.findMany({
+        where: {
+          id: { not: current.user.id },
+          status: UserStatus.active,
+          deletedAt: null,
+        },
+        include: { profile: true },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
     ]);
 
     return {
@@ -778,6 +788,11 @@ export class UsersService {
         ...user,
         mutualFollowersCount: score,
       })),
+      newUsers: (await Promise.all(
+        newestUsers
+          .filter((candidate) => candidate.profile)
+          .map((candidate) => this.mapPublicProfile(candidate, current.user.id)),
+      )),
     };
   }
 
@@ -1143,6 +1158,7 @@ export class UsersService {
             content: true,
             duration: true,
             createdAt: true,
+            scheduledAt: true,
             visibility: true,
             authorId: true,
             members: {
@@ -1170,6 +1186,7 @@ export class UsersService {
       description: cloud.content,
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
+      scheduledAt: cloud.scheduledAt?.toISOString() ?? null,
       authorId: cloud.authorId,
       participantProfiles: cloud.members
         .filter((member) => member.user.profile)

@@ -1804,11 +1804,10 @@ export class CloudService {
   }
 
   async getSavedStickers(token: string | null) {
-    const current = await this.requireSession(token);
-    const stickers = await this.prisma.savedSticker.findMany({
-      where: { userId: current.user.id },
+    await this.requireSession(token);
+    const stickers = await this.prisma.systemSticker.findMany({
       orderBy: { createdAt: 'desc' },
-      take: 100,
+      take: 250,
     });
     return { ok: true, stickers };
   }
@@ -1826,20 +1825,40 @@ export class CloudService {
       });
     }
     // The image itself can be a large data URL, which must not be used as an
-    // indexed column in PostgreSQL. Its stable short hash gives each user one
-    // saved copy of the same sticker.
+    // indexed column. Its stable short hash gives the system catalogue one
+    // canonical copy of each sticker.
     const contentHash = crypto.createHash('md5').update(mediaUrl).digest('hex');
-    const existing = await this.prisma.savedSticker.findUnique({
-      where: { userId_contentHash: { userId: current.user.id, contentHash } },
+    const existing = await this.prisma.systemSticker.findUnique({
+      where: { contentHash },
     });
-    if (existing) return { ok: true, sticker: existing, alreadySaved: true };
+    if (existing) {
+      await this.prisma.savedSticker.upsert({
+        where: { userId_contentHash: { userId: current.user.id, contentHash } },
+        update: {},
+        create: { userId: current.user.id, mediaUrl, contentHash },
+      });
+      return { ok: true, sticker: existing, alreadySaved: true };
+    }
 
-    const sticker = await this.prisma.savedSticker.upsert({
-      where: { userId_contentHash: { userId: current.user.id, contentHash } },
-      update: {},
-      create: { userId: current.user.id, mediaUrl, contentHash },
-    });
-    return { ok: true, sticker, alreadySaved: false };
+    try {
+      const sticker = await this.prisma.systemSticker.create({
+        data: { mediaUrl, contentHash },
+      });
+      await this.prisma.savedSticker.upsert({
+        where: { userId_contentHash: { userId: current.user.id, contentHash } },
+        update: {},
+        create: { userId: current.user.id, mediaUrl, contentHash },
+      });
+      return { ok: true, sticker, alreadySaved: false };
+    } catch (error) {
+      // The global hash can collide only when another user saves the same
+      // sticker at the same time; return that canonical catalogue entry.
+      const concurrentSticker = await this.prisma.systemSticker.findUnique({
+        where: { contentHash },
+      });
+      if (concurrentSticker) return { ok: true, sticker: concurrentSticker, alreadySaved: true };
+      throw error;
+    }
   }
 
   async editMessage(

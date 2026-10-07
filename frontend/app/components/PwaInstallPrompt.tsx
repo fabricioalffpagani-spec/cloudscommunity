@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useSessionUser } from "./session-user";
-
-type InstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-};
+import { clearRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
 
 const declinedKey = (userId: string) => `clouds:pwa-install-declined:${userId}`;
 
@@ -29,10 +25,13 @@ export function PwaInstallPrompt() {
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      setInstallPrompt(event as InstallPromptEvent);
+      const prompt = event as InstallPromptEvent;
+      rememberInstallPrompt(prompt);
+      setInstallPrompt(prompt);
     };
     const onInstalled = () => {
       setInstallPrompt(null);
+      clearRememberedInstallPrompt();
       setOpen(false);
     };
 
@@ -72,6 +71,7 @@ export function PwaInstallPrompt() {
       await installPrompt.userChoice;
     } finally {
       setInstallPrompt(null);
+      clearRememberedInstallPrompt();
       setOpen(false);
     }
   };

@@ -22,6 +22,7 @@ import type {
   ConversationReadPayload,
   ConversationTypingPayload,
   DirectMessagePayload,
+  DirectMessageReactionPayload,
   SendDirectMessageInput,
 } from './direct-messages.types';
 
@@ -420,6 +421,20 @@ export class DirectMessagesGateway
     this.server
       .to(this.userRoom(senderConversation.participant.id))
       .emit('conversation:updated', recipientConversation);
+  }
+
+  async broadcastReactionChanged(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    reaction: DirectMessageReactionPayload,
+    removed: boolean,
+  ) {
+    const conversation = await this.directMessagesService.getConversationById(userId, conversationId);
+    this.server
+      .to(this.userRoom(userId))
+      .to(this.userRoom(conversation.participant.id))
+      .emit('message:reaction:changed', { conversationId, messageId, reaction, removed });
   }
 
   broadcastMessageEdited(

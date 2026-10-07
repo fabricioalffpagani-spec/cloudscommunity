@@ -43,6 +43,7 @@ export type PublicUserProfilePayload = {
     description: string | null;
     duration: string;
     createdAt: string;
+    scheduledAt: string | null;
     authorId: string;
     participantProfiles: Array<{
       id: string;
@@ -93,6 +94,7 @@ export type MeetResponse = {
   popularRecent: Array<PublicUserProfilePayload & { hypes: number }>;
   popularAllTime: Array<PublicUserProfilePayload & { hypes: number }>;
   nearby: Array<PublicUserProfilePayload & { mutualFollowersCount: number }>;
+  newUsers: PublicUserProfilePayload[];
 };
 
 export type UserProfileResponse = {

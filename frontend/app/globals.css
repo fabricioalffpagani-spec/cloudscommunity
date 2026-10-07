@@ -212,8 +212,13 @@ textarea {
 }
 
 .desktop-cloud-feed {
-  scroll-behavior: auto;
+  height: 100%;
+  scroll-behavior: smooth;
   scrollbar-width: none;
+}
+
+.desktop-cloud-feed [data-cloud-page] {
+  scroll-snap-stop: always;
 }
 
 .cloud-feed-main {

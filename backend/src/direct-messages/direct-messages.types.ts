@@ -18,6 +18,13 @@ export type DirectMessageAssetPayload = {
   durationMs: number | null;
 };
 
+export type DirectMessageReactionPayload = {
+  id: string;
+  emoji: string;
+  userId: string;
+  createdAt: string;
+};
+
 export type DirectMessagePayload = {
   id: string;
   conversationId: string;
@@ -33,6 +40,7 @@ export type DirectMessagePayload = {
   deletedAt: string | null;
   sender: DirectMessageAuthorPayload;
   mediaAsset: DirectMessageAssetPayload | null;
+  reactions: DirectMessageReactionPayload[];
 };
 
 export type DirectConversationParticipantPayload = {

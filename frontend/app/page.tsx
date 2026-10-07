@@ -619,6 +619,21 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
     });
   };
 
+  const handleNativeShare = async () => {
+    const shareData = { title: `Clouds — ${cloudTitle}`, text: `Participe da Cloud “${cloudTitle}”`, url: cloudUrl };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        onClose();
+      } catch (error) {
+        // Closing the native sheet is a normal cancellation, not an error.
+        if (!(error instanceof DOMException && error.name === "AbortError")) return;
+      }
+      return;
+    }
+    handleCopy();
+  };
+
   const externalOptions = [
     {
       label: "WhatsApp",
@@ -709,6 +724,14 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
         {/* ── Main view: two options ── */}
         {view === "main" && (
           <div className="flex flex-col gap-3 p-5">
+            <button
+              type="button"
+              onClick={() => void handleNativeShare()}
+              className="flex items-center gap-4 rounded-2xl border border-[#3B82F6]/35 bg-[#3B82F6]/10 px-5 py-4 text-left transition hover:bg-[#3B82F6]/20"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3B82F6]/20 text-[#BFDBFE] text-xl">↗</div>
+              <div><p className="text-[14px] font-semibold text-white">Compartilhar com apps</p><p className="mt-0.5 text-[12px] text-white/55">Abra a folha de compartilhamento do dispositivo</p></div>
+            </button>
             {/* Mensageiro */}
             <button
               type="button"
@@ -1299,7 +1322,7 @@ function CreateCloudModal({
               autoFocus
               type="text"
               name="new-cloud-topic-title"
-              autoComplete="new-password"
+              autoComplete="off"
               data-lpignore="true"
               data-1p-ignore="true"
               autoCorrect="off"
@@ -2047,12 +2070,12 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
           <input
             aria-label="Buscar Clouds e pessoas"
             autoFocus
-            type="search"
+            type="text"
             name="cloud-search"
-            autoComplete="new-password"
+            autoComplete="off"
             data-lpignore="true"
             data-1p-ignore="true"
-            inputMode="search"
+            inputMode="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") saveSearch(query); }}
@@ -2550,6 +2573,9 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
 
 function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const wheelLockedRef = useRef(false);
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2557,6 +2583,37 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     document.addEventListener("click", closeOptions);
     return () => document.removeEventListener("click", closeOptions);
   }, [optionsCloudId]);
+
+  const navigateFeed = (direction: number) => {
+    const nextIndex = Math.max(0, Math.min(clouds.length - 1, activeIndex + direction));
+    const target = feedRef.current?.querySelectorAll<HTMLElement>("[data-cloud-page]")[nextIndex];
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveIndex(nextIndex);
+  };
+
+  const syncActiveCloud = () => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    const pages = Array.from(feed.querySelectorAll<HTMLElement>("[data-cloud-page]"));
+    if (!pages.length) return;
+    const nearestIndex = pages.reduce((best, page, index) =>
+      Math.abs(page.offsetTop - feed.scrollTop) < Math.abs(pages[best].offsetTop - feed.scrollTop) ? index : best, 0);
+    setActiveIndex(nearestIndex);
+  };
+
+  const handleDesktopKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "PageDown" && event.key !== "PageUp") return;
+    event.preventDefault();
+    navigateFeed(event.key === "ArrowDown" || event.key === "PageDown" ? 1 : -1);
+  };
+
+  const handleDesktopWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaY) < 20 || wheelLockedRef.current) return;
+    event.preventDefault();
+    wheelLockedRef.current = true;
+    navigateFeed(event.deltaY > 0 ? 1 : -1);
+    window.setTimeout(() => { wheelLockedRef.current = false; }, 520);
+  };
 
 
   if (clouds.length === 0) return (
@@ -2573,17 +2630,18 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     </div>
   );
 
-  return <div className="desktop-cloud-feed cloud-feed-scroller px-8">{clouds.map((cloud) => {
+  return <div className="relative min-h-0 flex-1"><div ref={feedRef} tabIndex={0} role="region" aria-label="Clouds ativas" onScroll={syncActiveCloud} onWheel={handleDesktopWheel} onKeyDown={handleDesktopKeyDown} className="desktop-cloud-feed cloud-feed-scroller h-full px-8 outline-none">{clouds.map((cloud) => {
     const profile = getTopicProfile(cloud, 0);
     const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
     const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
-    return <article key={cloud.id} data-cloud-page className="relative mx-auto flex min-h-full w-full max-w-[1100px] snap-start flex-col">
+    return <article key={cloud.id} data-cloud-page className="relative mx-auto flex h-full min-h-full w-full max-w-[1100px] snap-start flex-col">
       <div className="talk-card-header flex items-center justify-between gap-6 px-12 pb-7 pt-10"><div className="flex min-w-0 items-center gap-5"><span className="relative shrink-0">{profile.avatar ? <img src={profile.avatar} alt="" className="talk-card-avatar h-20 w-20 rounded-full object-cover ring-2 ring-white/10" referrerPolicy="no-referrer" /> : <span className="talk-card-avatar flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-2xl font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}<span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" /></span><div className="min-w-0"><p className="truncate text-[21px] font-semibold text-white">{profile.name}</p><p className="text-[16px] text-white/45">@{profile.handle}</p></div></div><div className="flex shrink-0 items-center gap-6"><div className="flex -space-x-4" aria-label={`${participants.length} participantes da Cloud`}>{participants.slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold">{participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">+{participants.length - 7}</span>}</div><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((current) => current === cloud.id ? null : cloud.id); }} className="p-2 text-[26px] leading-none text-white/80 hover:text-white">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}<button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>{cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div></div></div>
+      <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="absolute left-12 top-10 z-20 h-20 w-[340px] rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-[#C084FC]" />
       <div className="talk-card-title flex flex-1 flex-col items-center justify-center px-12 py-10 text-center"><h2 lang="pt-BR" className="max-w-[90%] hyphens-auto break-normal text-[72px] font-extrabold leading-[1.06] tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2></div>
       <div className="talk-card-actions flex justify-center px-12 pb-16"><button type="button" onClick={() => !isScheduled && onEnter(cloud)} disabled={isScheduled} className="rounded-full border border-[#A855F7]/70 bg-transparent px-28 py-6 text-[21px] font-semibold text-white transition hover:bg-[#A855F7]/20 disabled:cursor-default disabled:opacity-60">{isScheduled ? "Em breve" : "Entrar na Cloud"}</button></div>
-      <span className="talk-card-countdown absolute bottom-9 right-12 rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white">{formatCountdown(getTopicCountdown(cloud))}</span>
+      <span className="talk-card-countdown absolute bottom-[72px] right-12 rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white">{formatCountdown(getTopicCountdown(cloud))}</span>
     </article>;
-  })}</div>;
+  })}</div>{clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}</div>;
 }
 
 function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
@@ -2596,6 +2654,10 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
   const [queueCloud, setQueueCloud] = useState<Cloud | null>(null);
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
+  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
+  // Keep the dialog tied to the live feed object, rather than a snapshot taken
+  // when it was opened. Membership changes are therefore visible immediately.
+  const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2645,16 +2707,16 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
         return (
           <article key={cloud.id} ref={(element) => { cloudRefs.current[cloud.id] = element; }} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="flex min-w-0 flex-1 items-center gap-2">
                 {profile.avatar ? <img src={profile.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-sm font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
                 <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-[1.25]">{profile.name}</p><p className="mt-0.5 truncate text-[12px] leading-[1.25] text-white/65">@{profile.handle}</p></div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2" aria-label={`${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
+              </Link>
+              <button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex shrink-0 items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]" aria-label={`Ver ${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
                 <div className="flex -space-x-2">
                 {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).slice(0, 4).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold">{participant.name.slice(0, 1)}</span>)}
                 {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">+{(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length - 4}</span>}
                 </div>
-              </div><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}<button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>{cloud.authorId === currentUser?.id && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div>
+              </button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}<button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>{cloud.authorId === currentUser?.id && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div>
             </div>
             <button
               type="button"
@@ -2684,6 +2746,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
           </article>
         );
       })}
+      {participantsCloud && <div className="fixed inset-0 z-[70] flex items-end bg-black/65 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="participants-title" onClick={() => setParticipantsCloudId(null)}><div className="w-full rounded-t-3xl border border-white/10 bg-[#171821] p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between gap-4"><div><h2 id="participants-title" className="text-lg font-bold text-white">Participantes</h2><p className="mt-1 text-sm text-white/60">{participantsCloud.participantProfiles?.length ?? 0} na Cloud “{participantsCloud.title}”</p></div><button type="button" onClick={() => setParticipantsCloudId(null)} aria-label="Fechar" className="text-2xl text-white/55">×</button></div><div className="mt-5 max-h-[55dvh] space-y-3 overflow-y-auto">{(participantsCloud.participantProfiles ?? []).map((participant) => <Link key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} onClick={() => setParticipantsCloudId(null)} className="flex items-center gap-3 rounded-2xl px-2 py-2 transition hover:bg-white/5"><span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-sm font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" /> : participant.name.slice(0, 1).toUpperCase()}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold text-white">{participant.name}</span><span className="block truncate text-xs text-white/55">@{participant.username}</span></span></Link>)}</div></div></div>}
       {queueCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={19} /></div><h2 className="text-lg font-bold text-white">Você entrou na fila</h2><p className="mt-1 text-sm leading-relaxed text-white/65">Você será notificado quando “{queueCloud.title}” estrear.</p></div><button type="button" onClick={() => setQueueCloud(null)} aria-label="Fechar" className="text-xl text-white/50">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{[...(queueCloud.participantProfiles ?? []), ...(currentUser?.id && !queueCloud.participantProfiles?.some((participant) => participant.id === currentUser.id) ? [{ id: currentUser.id, name: currentUser.displayName, username: currentUser.username, avatarUrl: currentUser.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setQueueCloud(null)} className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white">Entendi</button></div></div>}
     </div>
   );

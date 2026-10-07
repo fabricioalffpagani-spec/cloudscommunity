@@ -26,8 +26,10 @@ self.addEventListener("push", (event) => {
     }
     await self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
-    // Use the installed PWA's icon in the notification and status indicator.
-    icon: "/pwa-192x192.png?v=2",
+    // Android renders the status-bar glyph from `badge` and the rich
+    // notification from `icon`. Providing both prevents Chrome/bell fallbacks.
+    icon: "/pwa-512x512.png?v=4",
+    badge: "/clouds-notification-badge.png?v=5",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
     });

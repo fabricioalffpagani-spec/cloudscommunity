@@ -13,6 +13,7 @@ import {
   CreateConversationInput,
   DirectConversationPayload,
   DirectMessagePayload,
+  DirectMessageReactionPayload,
   ListDirectMessagesQuery,
   SendAudioMessageInput,
   SendImageMessageInput,
@@ -41,6 +42,7 @@ type MessageWithRelations = Prisma.DirectMessageGetPayload<{
   include: {
     sender: { include: { profile: true } };
     mediaAsset: true;
+    reactions: true;
   };
 }>;
 
@@ -219,6 +221,35 @@ export class DirectMessagesService {
     });
 
     return messages.map((message) => this.mapMessage(message));
+  }
+
+  async toggleReaction(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<{ reaction: DirectMessageReactionPayload; removed: boolean }> {
+    const normalizedEmoji = emoji.trim();
+    if (!normalizedEmoji || normalizedEmoji.length > 32) {
+      throw new BadRequestException({ message: 'Reação inválida.' });
+    }
+    await this.requireConversationAccess(conversationId, userId);
+    const message = await this.prisma.directMessage.findFirst({
+      where: { id: messageId, conversationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    const existing = await this.prisma.directMessageReaction.findUnique({
+      where: { messageId_userId_emoji: { messageId, userId, emoji: normalizedEmoji } },
+    });
+    if (existing) {
+      await this.prisma.directMessageReaction.delete({ where: { id: existing.id } });
+      return { reaction: { id: existing.id, emoji: existing.emoji, userId, createdAt: existing.createdAt.toISOString() }, removed: true };
+    }
+    const reaction = await this.prisma.directMessageReaction.create({
+      data: { messageId, userId, emoji: normalizedEmoji },
+    });
+    return { reaction: { id: reaction.id, emoji: reaction.emoji, userId, createdAt: reaction.createdAt.toISOString() }, removed: false };
   }
 
   async sendTextMessage(
@@ -1014,6 +1045,7 @@ export class DirectMessagesService {
     return {
       sender: { include: { profile: true } },
       mediaAsset: true,
+      reactions: { orderBy: { createdAt: 'asc' } },
     } as const;
   }
 
@@ -1094,6 +1126,12 @@ export class DirectMessagesService {
       mediaAsset: message.mediaAsset
         ? this.mapMediaAsset(message.mediaAsset)
         : null,
+      reactions: (message.reactions ?? []).map((reaction) => ({
+        id: reaction.id,
+        emoji: reaction.emoji,
+        userId: reaction.userId,
+        createdAt: reaction.createdAt.toISOString(),
+      })),
     };
   }
 

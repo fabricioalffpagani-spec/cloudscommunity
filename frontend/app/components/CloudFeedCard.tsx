@@ -50,6 +50,19 @@ function useSiteOrigin() {
 
 function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; onClose: () => void }) {
   useEffect(() => { void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" }); }, [cloudId]);
+  const shareNatively = async () => {
+    if (!navigator.share) {
+      await navigator.clipboard.writeText(cloudUrl);
+      onClose();
+      return;
+    }
+    try {
+      await navigator.share({ title: `Clouds — ${cloudTitle}`, text: `Veja esta Cloud: ${cloudTitle}`, url: cloudUrl });
+      onClose();
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) return;
+    }
+  };
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -62,13 +75,14 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
           {cloudUrl}
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button type="button" onClick={() => void shareNatively()} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#9333EA] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]">Compartilhar com apps</button>
           <button
             type="button"
             onClick={async () => {
               await navigator.clipboard.writeText(cloudUrl);
               onClose();
             }}
-            className="inline-flex items-center justify-center gap-2 rounded-full bg-[#9333EA] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-2.5 text-[14px] font-semibold text-white transition hover:bg-white/[0.1]"
           >
             Copiar link
           </button>

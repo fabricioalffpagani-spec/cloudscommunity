@@ -772,7 +772,7 @@ export default function ProfilePage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280]">Região</p>
                 <p className="mt-1 text-[14px] text-white/75">{draft.location || "Não definida"}</p>
                 <p className="mt-1 text-[12px] text-white/45">A cidade é definida pela localização nativa do dispositivo.</p>
-                <Link href="/settings" className="mt-2 inline-block text-[12px] font-semibold text-[#C084FC] hover:text-white">Definir localização nas configurações</Link>
+                <Link href="/settings?section=perfil" className="mt-2 inline-block text-[12px] font-semibold text-[#C084FC] hover:text-white">Definir localização nas configurações</Link>
               </div>
               <input ref={photoInputRef} id="profile-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={handlePhotoChange} />
               <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">

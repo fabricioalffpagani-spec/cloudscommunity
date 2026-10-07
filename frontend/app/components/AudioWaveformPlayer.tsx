@@ -179,8 +179,7 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
 
   return (
     <div
-      className={`flex items-start gap-3 px-3 pb-2.5 pt-4 ${pillRadius} ${containerClass}`}
-      style={{ minWidth: 272, maxWidth: 344 }}
+      className={`flex w-[min(272px,calc(100vw-8rem))] min-w-0 items-start gap-3 px-3 pb-2.5 pt-4 sm:w-[272px] ${pillRadius} ${containerClass}`}
     >
       <button
         type="button"

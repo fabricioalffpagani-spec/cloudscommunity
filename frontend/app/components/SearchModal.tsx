@@ -223,13 +223,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           <SearchIcon />
           <input
             autoFocus
-            type="search"
+            type="text"
             name="cloud-community-search"
             aria-label="Buscar Clouds e pessoas"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
-            inputMode="search"
+            inputMode="text"
             data-lpignore="true"
             data-1p-ignore="true"
             value={query}

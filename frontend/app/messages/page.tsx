@@ -9,7 +9,6 @@ import { socketAuth } from "../lib/socket-auth";
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
-import { MessageDotsIcon } from "../components/MessageDotsIcon";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
 import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
 import { buildMessageContactList } from "../lib/message-contacts";
@@ -64,6 +63,7 @@ type BackendMessage = {
     displayName: string;
     avatarUrl: string | null;
   };
+  reactions?: Array<{ id: string; emoji: string; userId: string; createdAt: string }>;
 };
 
 type Conversation = {
@@ -113,6 +113,7 @@ type Msg = {
   linkLabel: string | null;
   pending?: boolean;
   clientMessageId?: string | null;
+  reactions?: Array<{ id: string; emoji: string; userId: string; createdAt: string }>;
 };
 
 type SocketAck<T> = { ok: true; data: T } | { ok: false; message: string };
@@ -319,6 +320,15 @@ function parseLinkPreview(rawLabel: string | null | undefined, fallbackUrl?: str
   return rawLabel;
 }
 
+function replyPreview(message: Msg): string {
+  if (message.kind !== "link") return message.content || "Mídia";
+  try {
+    const parsed = JSON.parse(message.linkLabel || "{}") as { type?: string; cloudTitle?: string };
+    if (parsed.type === "cloud_invitation") return parsed.cloudTitle || "Convite para Cloud";
+  } catch { /* regular link */ }
+  return parseLinkPreview(message.linkLabel, message.linkUrl);
+}
+
 function previewForMessage(message: BackendMessage) {
   if (message.type === "audio") {
     const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
@@ -433,6 +443,7 @@ function buildMessage(
     linkUrl,
     linkLabel,
     clientMessageId: payload.clientMessageId,
+    reactions: payload.reactions ?? [],
   };
 }
 
@@ -727,11 +738,11 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
   const visibleBars = active && progress ? Math.min(Math.floor((progress / 15) * BAR_COUNT), BAR_COUNT) : 0;
 
   return (
-    <div className="flex items-end gap-[3px]" style={{ height: 32 }}>
+    <div className="flex items-end gap-[2px] sm:gap-[3px]" style={{ height: 32 }}>
       {heights.map((h, i) => (
         <span 
           key={i} 
-          className="block w-[4px] rounded-full transition-all duration-150 ease-out"
+          className={`block w-[4px] rounded-full transition-all duration-150 ease-out ${i > 11 ? "hidden sm:block" : ""}`}
           style={{ 
             height: `${h}px`,
             background: active && !paused 
@@ -781,6 +792,9 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
   const isForwarded = /^(?:↗\s*)?(?:Encaminhada|Mensagem encaminhada)$/i.test(msg.content.trim());
   const [expanded, setExpanded] = useState(false);
+  const isSticker = Boolean(msg.mediaFileName?.startsWith("figurinha"));
+
+  if (isSticker) return msg.mediaUrl ? <img src={msg.mediaUrl} alt="Figurinha enviada" className="mb-4 h-36 w-36 object-contain" /> : null;
 
   return (
     <button
@@ -1051,6 +1065,10 @@ function DmMenuPinIcon() {
   return <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4h6" /><path d="M10 4v5l-3 3v2h10v-2l-3-3V4" /><path d="M12 14v6" /></svg>;
 }
 
+function DmReactionIcon() {
+  return <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.5 10h.01M15.5 10h.01" /><path d="M8 15c1.1 1 2.4 1.5 4 1.5s2.9-.5 4-1.5" /></svg>;
+}
+
 function DmMsgMenu({
   msg,
   isRight,
@@ -1058,8 +1076,10 @@ function DmMsgMenu({
   openUpward,
   onEdit,
   onDelete,
+  onReply,
   onForward,
   onPin,
+  onSaveSticker,
   isPinned = false,
   onClose,
 }: {
@@ -1069,8 +1089,10 @@ function DmMsgMenu({
   openUpward: boolean;
   onEdit?: (m: Msg) => void;
   onDelete?: (m: Msg) => void;
+  onReply?: (m: Msg) => void;
   onForward?: (m: Msg) => void;
   onPin?: (m: Msg) => void;
+  onSaveSticker?: (mediaUrl: string) => void;
   isPinned?: boolean;
   onClose: () => void;
 }) {
@@ -1115,21 +1137,9 @@ function DmMsgMenu({
     }
   };
 
-  // Check if this is a private cloud invitation
-  let isPrivateCloudInvite = false;
-  try {
-    if (msg.linkLabel) {
-      const parsed = JSON.parse(msg.linkLabel);
-      if (parsed.type === "cloud_invitation" && parsed.cloudVisibility === "private") {
-        isPrivateCloudInvite = true;
-      }
-    }
-  } catch {
-    // Not JSON
-  }
-
   const copyable = !!textContent || !!msg.linkUrl;
   const isOwn = isRight;
+  const isSticker = msg.kind === "image" && Boolean(msg.mediaFileName?.startsWith("figurinha"));
 
   const items: { label: string; icon: React.ReactNode; action: () => void; danger?: boolean; show: boolean }[] = [
     {
@@ -1161,7 +1171,13 @@ function DmMsgMenu({
       label: "Encaminhar",
       icon: <DmMenuForwardIcon />,
       action: () => { onForward?.(msg); onClose(); },
-      show: !isPrivateCloudInvite, // Hide forward for private cloud invitations
+      show: true,
+    },
+    {
+      label: "Salvar figurinha",
+      icon: <DmMenuPinIcon />,
+      action: () => { if (msg.mediaUrl) onSaveSticker?.(msg.mediaUrl); onClose(); },
+      show: isSticker && Boolean(msg.mediaUrl?.startsWith("data:image/")),
     },
     {
       label: isPinned ? "Desafixar" : "Fixar",
@@ -1174,6 +1190,7 @@ function DmMsgMenu({
   return (
     <div
       ref={menuRef}
+      data-message-menu="true"
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
       style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
     >
@@ -1198,13 +1215,14 @@ function DmMsgMenu({
   );
 }
 
-function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
-  const [actionsVisible, setActionsVisible] = useState(false);
-  const [openedFromDoubleClick, setOpenedFromDoubleClick] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const lastTouchTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
 
   const textContent = msg.kind === "text" ? msg.content : null;
   const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
@@ -1213,42 +1231,45 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPin
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
   const cloudCommentReference = parseCloudCommentReference(textContent);
 
+  useEffect(() => {
+    const closeActions = (event: PointerEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(event.target as Node)) {
+        setReactionPickerOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeActions);
+    return () => document.removeEventListener("pointerdown", closeActions);
+  }, []);
+
   function openMenu() {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
+    if (menuAnchorRef.current) {
+      const rect = menuAnchorRef.current.getBoundingClientRect();
       // Open upward if less than 220px below the button
       setOpenUpward(window.innerHeight - rect.bottom < 220);
     }
     setMenuOpen(true);
   }
 
-  function handleToggleMenu() {
-    if (menuOpen) {
-      setMenuOpen(false);
-      setOpenedFromDoubleClick(false);
-      return;
-    }
-    setOpenedFromDoubleClick(false);
-    openMenu();
-  }
-
   function closeMenu() {
     setMenuOpen(false);
-    setOpenedFromDoubleClick(false);
   }
 
-  function handleDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (event.target instanceof Element && event.target.closest("button, a")) return;
-    setActionsVisible(false);
-    setOpenedFromDoubleClick(true);
-    openMenu();
+  function handleTouchDoubleTap(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
+    const now = Date.now();
+    const previous = lastTouchTapRef.current;
+    lastTouchTapRef.current = { at: now, x: event.clientX, y: event.clientY };
+    if (previous && now - previous.at < 360 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 28) {
+      lastTouchTapRef.current = null;
+      openMenu();
+    }
   }
 
   return (
     <div
       className="group flex w-full items-end gap-2.5"
       style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}
-      onDoubleClick={handleDoubleClick}
+      onPointerUp={handleTouchDoubleTap}
     >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">
@@ -1257,6 +1278,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPin
           size={34}
         />}
       </div>}
+      {selectionMode && <button type="button" aria-label={selected ? "Desmarcar mensagem" : "Selecionar mensagem"} onClick={() => onToggleSelection?.(msg)} className={`h-6 w-6 shrink-0 rounded-full border-2 ${selected ? "border-[#A855F7] bg-[#9333EA]" : "border-white/50 bg-black/20"}`}>{selected && <span className="block text-center text-[14px] leading-5 text-white">✓</span>}</button>}
       <div className={`relative flex flex-col gap-1 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
         {msg.kind === "audio" ? (
           <AudioMessageBubble msg={msg} />
@@ -1279,34 +1301,19 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPin
             {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
         )}
-        {/* Action row: reply + three-dot menu */}
+        {(msg.reactions?.length ?? 0) > 0 && <div className={`flex flex-wrap gap-1 px-1 ${isRight ? "justify-end" : "justify-start"}`}>
+          {Object.entries((msg.reactions ?? []).reduce<Record<string, NonNullable<Msg["reactions"]>>>((groups, reaction) => {
+            groups[reaction.emoji] = [...(groups[reaction.emoji] ?? []), reaction];
+            return groups;
+          }, {})).map(([emoji, reactions]) => <button key={emoji} type="button" onClick={() => onReact?.(msg, emoji)} className="rounded-full border border-white/15 bg-white/[0.08] px-2 py-0.5 text-[13px] text-white transition hover:bg-white/15">{emoji}<span className="ml-1 text-[11px] text-white/70">{reactions.length}</span></button>)}
+        </div>}
         <div className={`${showFooter ? "flex px-1" : "absolute -bottom-1"} items-center gap-1 ${isRight ? "right-0 flex-row-reverse" : "left-0"}`}>
           {showFooter && <>
             <span className="text-[11px] text-white">{msg.time}</span>
             {msg.editedAt && <span className="text-[10px] italic text-white/45">editada</span>}
             {isRight && <MessageReceipt msg={msg} />}
           </>}
-          {/* Actions — visible on hover, or directly as a menu after a touch hold. */}
-          <div className={`pointer-events-none flex items-center gap-0.5 opacity-0 transition-opacity sm:pointer-events-auto sm:group-hover:opacity-100 ${actionsVisible || menuOpen ? "pointer-events-auto opacity-100" : ""} ${isRight ? "mr-1.5" : "ml-1.5"}`}>
-            <button
-              type="button"
-              onClick={() => onReply?.(msg)}
-              title="Responder"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-white transition hover:bg-white/10 hover:text-white/70"
-            >
-              <DmReplyIcon />
-            </button>
-            <div className="relative">
-              <button
-                ref={triggerRef}
-                type="button"
-                onClick={handleToggleMenu}
-                aria-label="Mais opções da mensagem"
-                title="Mais opções"
-                className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromDoubleClick ? "invisible" : ""}`}
-              >
-                <MessageDotsIcon />
-              </button>
+          <div ref={menuAnchorRef} className="relative">
               {menuOpen && (
                 <DmMsgMenu
                   msg={msg}
@@ -1315,15 +1322,22 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, isPin
                   openUpward={openUpward}
                   onEdit={onEdit}
                   onDelete={onDelete}
+                  onReply={onReply}
                   onForward={onForward}
                   onPin={onPin}
+                  onSaveSticker={onSaveSticker}
                   isPinned={isPinned}
                   onClose={closeMenu}
                 />
               )}
-            </div>
           </div>
         </div>
+      </div>
+      <div ref={actionsRef} className={`hidden shrink-0 items-center gap-1 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 md:flex ${isRight ? "order-first" : ""}`}>
+        <button type="button" aria-label="Responder" title="Responder" onClick={() => onReply?.(msg)} className="flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/15"><span className="scale-125"><DmReplyIcon /></span></button>
+        <button type="button" aria-label={isPinned ? "Desafixar mensagem" : "Fixar mensagem"} title={isPinned ? "Desafixar mensagem" : "Fixar mensagem"} onClick={() => onPin?.(msg)} className={`flex h-12 w-12 items-center justify-center rounded-full transition hover:bg-white/15 ${isPinned ? "text-[#A855F7]" : "text-white"}`}><span className="scale-125"><DmMenuPinIcon /></span></button>
+        <div className="relative"><button type="button" aria-label="Reagir" title="Reagir" onClick={() => setReactionPickerOpen((open) => !open)} className="flex h-12 w-12 items-center justify-center rounded-full text-white transition hover:bg-white/15"><DmReactionIcon /></button>{reactionPickerOpen && <div className="absolute bottom-full right-0 z-50 mb-2 flex gap-1 rounded-full border border-white/10 bg-[#15161C] p-2 shadow-xl">{["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => <button key={emoji} type="button" onClick={() => { onReact?.(msg, emoji); setReactionPickerOpen(false); }} className="rounded-full p-1 text-xl transition hover:bg-white/10">{emoji}</button>)}</div>}</div>
+        <button type="button" aria-label="Mais opções" title="Mais opções" onClick={openMenu} className="flex h-12 w-12 items-center justify-center rounded-full text-2xl leading-none text-white transition hover:bg-white/15">⋮</button>
       </div>
     </div>
   );
@@ -1369,6 +1383,8 @@ function MessagesPageContent() {
   const [editDraft, setEditDraft] = useState("");
   const [replyingTo, setReplyingTo] = useState<Msg | null>(null);
   const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
+  const [forwardSelection, setForwardSelection] = useState<Msg[]>([]);
+  const [forwardSelectionMode, setForwardSelectionMode] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1541,7 +1557,12 @@ function MessagesPageContent() {
   }, [emojiOpen]);
 
   useEffect(() => {
-    void fetch("/api/stickers", { cache: "no-store" }).then((response) => response.json()).then((payload: { stickers?: Array<{ id: string; mediaUrl: string }> }) => setSavedStickers(payload.stickers ?? [])).catch(() => undefined);
+    const loadStickers = () => {
+      void fetch("/api/stickers", { cache: "no-store" }).then((response) => response.json()).then((payload: { stickers?: Array<{ id: string; mediaUrl: string }> }) => setSavedStickers(payload.stickers ?? [])).catch(() => undefined);
+    };
+    loadStickers();
+    const timer = window.setInterval(loadStickers, 15_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -1559,7 +1580,7 @@ function MessagesPageContent() {
     };
   }, [messageSearchOpen]);
 
-  const handleImageFile = useCallback(async (file: File | null) => {
+  const handleImageFile = useCallback(async (file: File | null, isSticker = false) => {
     if (!file || !activeConversationIdRef.current || !user?.id) {
       return;
     }
@@ -1581,6 +1602,7 @@ function MessagesPageContent() {
       isoTime: new Date().toISOString(),
       readAt: null,
       mediaUrl: tempUrl,
+      mediaFileName: isSticker ? "figurinha.webp" : null,
       durationMs: null,
       linkUrl: null,
       linkLabel: null,
@@ -1855,6 +1877,10 @@ function MessagesPageContent() {
       }
     } catch (conversationError) {
       setError(conversationError instanceof Error ? conversationError.message : "Não foi possível abrir a conversa.");
+    } finally {
+      // This ref prevents duplicate simultaneous requests only. Keeping it set
+      // after a failed request made a contact impossible to open until reload.
+      if (openedPeerRef.current === peerUserId) openedPeerRef.current = null;
     }
   }, [router, searchParams, user?.id]);
 
@@ -2027,6 +2053,18 @@ function MessagesPageContent() {
       }
     });
 
+    socket.on("message:reaction:changed", (payload: { conversationId: string; messageId: string; reaction: NonNullable<Msg["reactions"]>[number]; removed: boolean }) => {
+      setMessagesByConversation((previous) => ({
+        ...previous,
+        [payload.conversationId]: (previous[payload.conversationId] || []).map((message) => message.id !== payload.messageId ? message : {
+          ...message,
+          reactions: payload.removed
+            ? (message.reactions ?? []).filter((reaction) => reaction.id !== payload.reaction.id)
+            : [...(message.reactions ?? []).filter((reaction) => reaction.id !== payload.reaction.id), payload.reaction],
+        }),
+      }));
+    });
+
     socket.on("message:edited", (message: BackendMessage) => {
       const mapped = buildMessage(message, user);
       setMessagesByConversation((prev) => ({
@@ -2114,6 +2152,11 @@ function MessagesPageContent() {
     typingConversationIdRef.current = null;
     setDraft("");
     setEmojiOpen(false);
+    setReplyingTo(null);
+    setEditingMsg(null);
+    setForwardMsg(null);
+    setForwardSelection([]);
+    setForwardSelectionMode(false);
     activeConversationIdRef.current = conversationId;
     setActiveConversationId(conversationId);
     router.push(messagesConversationHref(conversationId), { scroll: false });
@@ -2249,7 +2292,68 @@ function MessagesPageContent() {
   }, []);
 
   const handleForwardMsg = useCallback((msg: Msg) => {
-    setForwardMsg(msg);
+    setForwardSelection([msg]);
+    setForwardSelectionMode(true);
+  }, []);
+
+  const toggleForwardSelection = useCallback((msg: Msg) => {
+    setForwardSelection((current) => current.some((item) => item.id === msg.id)
+      ? current.filter((item) => item.id !== msg.id)
+      : [...current, msg]);
+  }, []);
+
+  const openForwardModal = useCallback(() => {
+    if (!forwardSelection.length) return;
+    setForwardMsg(forwardSelection[0]);
+    setForwardSelectionMode(false);
+  }, [forwardSelection]);
+
+  const handleReaction = useCallback(async (msg: Msg, emoji: string) => {
+    if (msg.pending) return;
+    try {
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(msg.conversationId)}/messages/${encodeURIComponent(msg.id)}/reactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: string; reaction?: NonNullable<Msg["reactions"]>[number]; removed?: boolean } | null;
+      if (!response.ok || !payload?.ok || !payload.reaction) {
+        setError(payload?.message || "Não foi possível registrar a reação. Tente novamente.");
+        return;
+      }
+      const reaction = payload.reaction;
+      const removed = Boolean(payload.removed);
+      setMessagesByConversation((previous) => ({
+        ...previous,
+        [msg.conversationId]: (previous[msg.conversationId] || []).map((item) => {
+          if (item.id !== msg.id) return item;
+          return {
+            ...item,
+            reactions: removed
+              ? (item.reactions ?? []).filter((existing) => existing.id !== reaction.id)
+              : [...(item.reactions ?? []).filter((existing) => existing.id !== reaction.id), reaction],
+          };
+        }),
+      }));
+    } catch {
+      setError("Não foi possível conectar ao serviço de mensagens. Tente novamente.");
+    }
+  }, []);
+
+  const saveSticker = useCallback(async (mediaUrl: string) => {
+    try {
+      const response = await fetch("/api/stickers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaUrl }),
+      });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; sticker?: { id: string; mediaUrl: string }; message?: string } | null;
+      if (!response.ok || !payload?.sticker) throw new Error(payload?.message || "Não foi possível salvar a figurinha.");
+      const savedSticker = payload.sticker;
+      setSavedStickers((current) => current.some((sticker) => sticker.mediaUrl === savedSticker.mediaUrl) ? current : [...current, savedSticker]);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Não foi possível salvar a figurinha.");
+    }
   }, []);
 
   const togglePinnedMessage = useCallback((msg: Msg) => {
@@ -2571,7 +2675,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" ref={messagesContainerRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 pb-1 pt-4 sm:px-8 sm:pb-2 sm:pt-6" ref={messagesContainerRef}>
             <div className="flex min-h-full flex-col justify-end">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
@@ -2627,7 +2731,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
                     </div>
                   );
                 });
@@ -2688,19 +2792,19 @@ function MessagesPageContent() {
               <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-semibold text-[#A855F7]">Respondendo a {replyingTo.senderDisplayName}</p>
-                  <p className="truncate text-[12px] text-white/60">{replyingTo.content || "Mídia"}</p>
+                  <p className="truncate text-[12px] text-white/60">{replyPreview(replyingTo)}</p>
                 </div>
                 <button type="button" aria-label="Cancelar resposta" onClick={() => setReplyingTo(null)} className="text-white/40 transition hover:text-white">×</button>
               </div>
             </div>
           )}
 
-          <div ref={composerFooterRef} className="relative z-30 shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+          <div ref={composerFooterRef} className="relative z-30 shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
-                <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
+                <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[calc(100vw-2rem)] max-w-[600px] -translate-x-1/2 overflow-hidden rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
                   <div className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-2"><button type="button" onClick={() => setMediaPickerTab("emoji")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "emoji" ? "bg-white/10 text-white" : "text-white/45"}`}>😊 Emojis</button><button type="button" onClick={() => setMediaPickerTab("sticker")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "sticker" ? "bg-white/10 text-white" : "text-white/45"}`}>◌ Figurinhas</button></div>
-                  {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><p className="mb-2 text-[12px] font-semibold text-white/60">Minhas figurinhas</p>{savedStickers.length ? <div className="flex flex-wrap gap-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }))); setEmojiOpen(false); }} className="h-16 w-16 rounded-xl p-1 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className="h-full w-full object-contain" /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Nenhuma figurinha salva no CloudChat.</p>}</div> : <>
+                  {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><div className="mb-2 flex items-center justify-between"><p className="text-[12px] font-semibold text-white/60">Figurinhas do Clouds</p><span className="text-[11px] text-white/40">{savedStickers.length} {savedStickers.length === 1 ? "figurinha" : "figurinhas"}</span></div>{savedStickers.length ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-xl p-0 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Ainda não há figurinhas disponíveis.</p>}</div> : <>
                   {/* Abas de categorias */}
                   <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
                     {EMOJI_CATEGORIES.map((cat, i) => (
@@ -2738,7 +2842,7 @@ function MessagesPageContent() {
                   <div className="min-w-0 flex-1 text-[12px] text-white sm:text-[14px]" style={{ fontFamily: 'Arial, sans-serif' }}>
                     {audioRecorder.state === "paused" ? "Pausado" : "Gravando…"} {formatDuration(audioRecorder.seconds * 1000) || "0:00"}
                   </div>
-                  <div className="hidden min-w-0 sm:block"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
+                  <div className="block min-w-0"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
                   <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                     <button type="button" aria-label={audioRecorder.state === "paused" ? "Retomar" : "Pausar"} onClick={audioRecorder.state === "paused" ? audioRecorder.resume : audioRecorder.pause}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
@@ -2856,9 +2960,15 @@ function MessagesPageContent() {
         </main>
       </div>
 
+      {forwardSelectionMode && <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 mx-auto flex w-auto max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#15161C]/95 px-3 py-3 shadow-2xl backdrop-blur sm:inset-x-auto sm:w-fit sm:max-w-none md:bottom-6 md:gap-3 md:rounded-full md:px-4">
+        <span className="text-center text-sm font-semibold text-white">{forwardSelection.length} selecionada{forwardSelection.length === 1 ? "" : "s"}<span className="hidden sm:inline"> · toque nos círculos para selecionar mais</span></span>
+        <button type="button" onClick={() => { setForwardSelection([]); setForwardSelectionMode(false); }} className="rounded-full px-3 py-1.5 text-sm text-white/70 hover:bg-white/10">Cancelar</button>
+        <button type="button" disabled={!forwardSelection.length} onClick={openForwardModal} className="rounded-full bg-[#9333EA] px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">Encaminhar</button>
+      </div>}
+
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => setForwardMsg(null)} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.linkUrl ?? "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
       )}
     </div>
   );

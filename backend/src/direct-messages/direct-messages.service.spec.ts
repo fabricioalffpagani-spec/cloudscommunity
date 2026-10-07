@@ -91,6 +91,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
 
     await expect(
@@ -105,6 +106,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
     const conversation = {
       id: 'conv-1',
@@ -176,6 +178,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
     const conversation = {
       id: 'conv-1',
@@ -290,6 +293,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
     const conversation = {
       id: 'conv-1',
@@ -402,6 +406,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
     const conversation = {
       id: 'conv-1',
@@ -478,6 +483,7 @@ describe('DirectMessagesService', () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
     );
     prisma.conversation.findFirst.mockResolvedValue(null);
 

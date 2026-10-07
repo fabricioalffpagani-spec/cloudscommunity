@@ -50,6 +50,7 @@ type PublicUserProfile = {
     description: string | null;
     duration: string;
     createdAt: string;
+    scheduledAt: string | null;
     authorId: string;
     participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
     visibility: "public" | "private";
@@ -254,6 +255,7 @@ export default function UserProfilePage() {
   const [loadingHypes, setLoadingHypes] = useState(false);
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [cloudTab, setCloudTab] = useState<"all" | "active" | "scheduled" | "ended">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -475,6 +477,11 @@ export default function UserProfilePage() {
   const isOwnProfile = Boolean(profile?.isSelf || sessionUser?.id === profile?.id);
   const activeClouds = profile?.activeClouds ?? [];
   const endedClouds = profile?.endedClouds ?? [];
+  const scheduledClouds = activeClouds.filter((cloud) => Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now));
+  const liveClouds = activeClouds.filter((cloud) => !cloud.scheduledAt || new Date(cloud.scheduledAt).getTime() <= now);
+  const visibleClouds = cloudTab === "all"
+    ? [...liveClouds, ...scheduledClouds, ...endedClouds]
+    : cloudTab === "active" ? liveClouds : cloudTab === "scheduled" ? scheduledClouds : endedClouds;
   const participatingNow = profile?.participatingNow ?? null;
 
   const waText = profile
@@ -575,13 +582,16 @@ export default function UserProfilePage() {
 
       <div className="mx-auto max-w-[680px] px-6 pb-32 sm:px-5">
         <div className="mt-10 flex flex-col items-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
-            {profile.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
-            ) : (
-              initials
-            )}
+          <div className="relative">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
+              {profile.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            {isOwnProfile && <Link href="/settings?section=perfil" aria-label="Editar perfil" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9] focus-visible:ring-2 focus-visible:ring-white"><EditIcon /></Link>}
           </div>
 
           <h1 className="mt-4 text-[26px] font-extrabold tracking-tight">{displayName}</h1>
@@ -603,16 +613,7 @@ export default function UserProfilePage() {
             <span>Desde {memberSince}</span>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            {isOwnProfile ? (
-              <Link
-                href="/settings"
-                className="inline-flex items-center gap-2 rounded-full bg-[#7C3AED] px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#6D28D9]"
-              >
-                <EditIcon />
-                Edit profile
-              </Link>
-            ) : (
+          {!isOwnProfile && <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <>
                 <button
                   type="button"
@@ -645,8 +646,7 @@ export default function UserProfilePage() {
                   {profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear" : "Bloquear"}
                 </button>
               </>
-            )}
-          </div>
+          </div>}
 
           {participatingNow && (
             <section className="mt-8 w-full rounded-2xl border border-[#A855F7]/30 bg-[#1a0a3d] p-5 text-left shadow-[0_14px_40px_rgba(0,0,0,0.16)]">
@@ -670,27 +670,25 @@ export default function UserProfilePage() {
             </section>
           )}
 
-          <div className="mt-10 w-full text-left">
-            {activeClouds.length > 0 ? (
-              <>
-                <div className="grid gap-3">
-                  {activeClouds.map((cloud) => (
-                    <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} />
-                  ))}
-                </div>
-              </>
+          <section className="mt-10 w-full text-left" aria-label="Clouds do perfil">
+            <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
+              {(["all", "active", "scheduled", "ended"] as const).map((tab) => {
+                const selected = cloudTab === tab;
+                const label = { all: "Todas", active: "Ativas", scheduled: "Agendadas", ended: "Encerradas" }[tab];
+                const count = { all: liveClouds.length + scheduledClouds.length + endedClouds.length, active: liveClouds.length, scheduled: scheduledClouds.length, ended: endedClouds.length }[tab];
+                return <button key={tab} type="button" role="tab" aria-selected={selected} onClick={() => setCloudTab(tab)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${selected ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>
+                  {label} <span className={selected ? "text-white/75" : "text-white/40"}>{count}</span>
+                </button>;
+              })}
+            </div>
+            {visibleClouds.length > 0 ? (
+              <div className="grid gap-3">
+                {visibleClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} />)}
+              </div>
             ) : (
-              endedClouds.length === 0 && <p className="text-center text-[14px] text-white">{isOwnProfile ? "As clouds que criar aparecerão aqui. Você pode ocultá-las de seu perfil nas configurações." : "Sem clouds publicadas no momento"}</p>
+              <p className="py-8 text-center text-[14px] text-white/60">{cloudTab === "all" ? (isOwnProfile ? "As clouds que criar aparecerão aqui. Você pode ocultá-las de seu perfil nas configurações." : "Sem Clouds publicadas no momento") : cloudTab === "active" ? "Sem Clouds ativas no momento" : cloudTab === "scheduled" ? "Sem Clouds agendadas no momento" : "Sem Clouds encerradas no momento"}</p>
             )}
-            {endedClouds.length > 0 && (
-              <section className="mt-6">
-                <h2 className="mb-3 text-[14px] font-bold uppercase tracking-[0.16em] text-white/50">Clouds encerradas</h2>
-                <div className="grid gap-3">
-                  {endedClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} />)}
-                </div>
-              </section>
-            )}
-          </div>
+          </section>
         </div>
       </div>
 

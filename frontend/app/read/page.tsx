@@ -45,6 +45,24 @@ function ReadPageContent() {
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
+  const [readHintPhase, setReadHintPhase] = useState<"hidden" | "visible" | "fading">("hidden");
+
+  useEffect(() => {
+    if (!user?.id || !window.matchMedia("(max-width: 767px)").matches) return;
+    const storageKey = `clouds:read-first-visit:${user.id}`;
+    if (window.localStorage.getItem(storageKey)) return;
+
+    // Mark immediately so the welcome is shown only once for this account on
+    // this device, even if the user leaves Read before its fade-out completes.
+    window.localStorage.setItem(storageKey, "1");
+    setReadHintPhase("visible");
+    const fadeTimer = window.setTimeout(() => setReadHintPhase("fading"), 2300);
+    const hideTimer = window.setTimeout(() => setReadHintPhase("hidden"), 3000);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [user?.id]);
 
   const deleteCloud = async (cloudId: string) => {
     const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
@@ -95,6 +113,17 @@ function ReadPageContent() {
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
+      {readHintPhase !== "hidden" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-8 transition-opacity duration-700 md:hidden ${readHintPhase === "fading" ? "opacity-0" : "opacity-100"}`}
+        >
+          <p className="max-w-[280px] text-center text-[22px] font-semibold leading-snug text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.75)]">
+            Leia conversas que já aconteceram...
+          </p>
+        </div>
+      )}
       <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">

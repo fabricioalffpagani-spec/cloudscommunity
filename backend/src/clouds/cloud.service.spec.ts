@@ -7,6 +7,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { CloudService } from './cloud.service';
+import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
+import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
 
 const cloudId = '12345678-1234-1234-1234-123456789012';
 function setup() {
@@ -83,6 +85,8 @@ function setup() {
     service: new CloudService(
       prisma as unknown as PrismaService,
       auth as unknown as AuthService,
+      { send: jest.fn() } as unknown as PushNotificationsService,
+      { classify: jest.fn() } as unknown as CloudTopicClassifierService,
     ),
     prisma,
     auth,
@@ -94,15 +98,16 @@ describe('structured Cloud mentions', () => {
   const memberId = '11111111-1111-4111-8111-111111111111';
   const followedId = '22222222-2222-4222-8222-222222222222';
   const outsiderId = '33333333-3333-4333-8333-333333333333';
+  type Mention = {
+    userId: string;
+    username: string;
+    start: number;
+    end: number;
+  };
   const validate = (
     service: CloudService,
     content: string,
-    mentions: Array<{
-      userId: string;
-      username: string;
-      start: number;
-      end: number;
-    }>,
+    mentions: Mention[],
   ) =>
     (
       service as unknown as {
@@ -110,8 +115,8 @@ describe('structured Cloud mentions', () => {
           cloud: { id: string; authorId: string },
           authorId: string,
           content: string,
-          mentions: typeof mentions,
-        ) => Promise<typeof mentions>;
+          mentions: Mention[],
+        ) => Promise<Mention[]>;
       }
     ).validateMentions(
       { id: cloudId, authorId: 'author' },

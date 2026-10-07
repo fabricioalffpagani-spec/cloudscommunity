@@ -92,6 +92,7 @@ model User {
   followRequestsReceived    FollowRequest[] @relation("FollowRequestTarget")
   cloudMessages             CloudMessage[]
   directMessages            DirectMessage[]
+  directMessageReactions    DirectMessageReaction[]
   participantOneConversations Conversation[] @relation("ConversationParticipantOne")
   participantTwoConversations Conversation[] @relation("ConversationParticipantTwo")
   cloudMembers              CloudMember[]
@@ -316,6 +317,18 @@ model SavedSticker {
 
   @@index([userId, createdAt])
   @@unique([userId, contentHash])
+}
+
+// Global, platform-owned catalogue used by both CloudChat and private messages.
+// It deliberately has no user foreign key: a sticker remains available even if
+// the account that originally suggested it is later removed.
+model SystemSticker {
+  id          String   @id @default(uuid()) @db.Uuid
+  mediaUrl    String   @db.Text
+  contentHash String   @unique @db.VarChar(32)
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model SearchHistory {
@@ -560,6 +573,7 @@ model DirectMessage {
   mediaAsset       MediaAsset?    @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
   replyToMessage   DirectMessage? @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
   replies          DirectMessage[] @relation("DirectMessageReplies")
+  reactions        DirectMessageReaction[]
   lastMessageOfConversation Conversation? @relation("ConversationLastMessage")
 
   @@index([conversationId, createdAt])
@@ -567,6 +581,21 @@ model DirectMessage {
   @@index([replyToMessageId])
   @@index([mediaAssetId])
   @@unique([conversationId, clientMessageId])
+}
+
+model DirectMessageReaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  emoji     String   @db.VarChar(32)
+  createdAt DateTime @default(now())
+
+  message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId, createdAt])
+  @@index([userId])
 }
 
 model Session {

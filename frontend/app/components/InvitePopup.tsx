@@ -59,7 +59,8 @@ export function InvitePopup() {
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const inviteMessage = `Ei! Te convido a fazer parte do Clouds Community ☁️ — me acompanha por lá! Compartilhe suas opiniões e visões no Clouds, seu streaming de conversas. Entre agora: ${inviteUrl}`;
+  const inviteText = "Ei! Te convido a fazer parte do Clouds Community ☁️ — me acompanha por lá! Compartilhe suas opiniões e visões no Clouds, seu streaming de conversas. Entre agora:";
+  const inviteMessage = `${inviteText} ${inviteUrl}`;
 
   useEffect(() => {
     const previewMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invitePreview") === "1";
@@ -137,7 +138,9 @@ export function InvitePopup() {
   const shareNatively = async () => {
     if (!inviteUrl || !navigator.share) return;
     try {
-      await navigator.share({ title: "Clouds Community", text: inviteMessage, url: inviteUrl });
+      // The native Web Share sheet appends `url` itself. Including it in text
+      // duplicates the invitation in WhatsApp and other targets.
+      await navigator.share({ title: "Clouds Community", text: inviteText, url: inviteUrl });
       if (user?.id) markShown(user.id);
       setVisible(false);
     } catch { /* user cancelled */ }

@@ -39,18 +39,8 @@ type MeetPayload = {
   popularRecent: Array<PublicUserProfile & { hypes: number }>;
   popularAllTime: Array<PublicUserProfile & { hypes: number }>;
   nearby: Array<PublicUserProfile & { mutualFollowersCount: number }>;
+  newUsers: PublicUserProfile[];
 };
-
-const TEST_MEET_USERS: Array<PublicUserProfile & { hypes: number; mutualFollowersCount: number }> = [
-  ["teste-lia", "Lia Monteiro", "lia.monteiro", "São Paulo", 184, 12],
-  ["teste-caio", "Caio Nunes", "caio.nunes", "Rio de Janeiro", 142, 8],
-  ["teste-nina", "Nina Alves", "nina.alves", "Belo Horizonte", 118, 6],
-  ["teste-joao", "João Lima", "joao.lima", "Curitiba", 96, 4],
-].map(([id, displayName, username, location, hypes, mutualFollowersCount]) => ({
-  id: String(id), username: String(username), name: String(displayName), displayName: String(displayName), bio: "Perfil de teste para visualizar sugestões no Meet.", avatarUrl: null, coverUrl: null, location: String(location), website: null,
-  isPrivate: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), followersCount: Number(hypes), followingCount: 0, cloudsCount: 3, hypesCount: Number(hypes), showHypesCount: true,
-  isFollowing: false, isFollowRequested: false, isSelf: false, profileUrl: `/users/${String(id)}`, hypes: Number(hypes), mutualFollowersCount: Number(mutualFollowersCount),
-}));
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -193,7 +183,7 @@ function MeetPageContent() {
   const [meetData, setMeetData] = useState<MeetPayload | null>(null);
   const [meetLoading, setMeetLoading] = useState(true);
   const [hypePeriod, setHypePeriod] = useState<"recent" | "all">("recent");
-  const [meetCategory, setMeetCategory] = useState<"popular" | "nearby">("popular");
+  const [meetCategory, setMeetCategory] = useState<"popular" | "nearby" | "new">("popular");
 
   const normalizedQuery = useMemo(() => normalize(searchQuery), [searchQuery]);
 
@@ -240,13 +230,7 @@ function MeetPageContent() {
         const response = await fetch("/api/users/meet", { cache: "no-store" });
         const payload = await response.json().catch(() => null) as MeetPayload | null;
         if (!cancelled && response.ok && payload?.ok) {
-          const hasSuggestions = payload.popularRecent.length + payload.popularAllTime.length + payload.nearby.length > 0;
-          setMeetData(hasSuggestions ? payload : {
-            ok: true,
-            popularRecent: TEST_MEET_USERS,
-            popularAllTime: [...TEST_MEET_USERS].reverse(),
-            nearby: TEST_MEET_USERS,
-          });
+          setMeetData(payload);
         }
       } finally {
         if (!cancelled) setMeetLoading(false);
@@ -254,23 +238,20 @@ function MeetPageContent() {
     };
 
     void loadMeet();
-    return () => { cancelled = true; };
+    const refreshTimer = window.setInterval(() => { void loadMeet(); }, 30_000);
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") void loadMeet();
+    };
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
   }, []);
 
   const toggleFollow = async (target: PublicUserProfile) => {
     if (target.isSelf) {
-      return;
-    }
-
-    if (target.id.startsWith("teste-")) {
-      const updated = { ...target, isFollowing: !target.isFollowing };
-      setResults((current) => current.map((item) => item.id === target.id ? updated : item));
-      setMeetData((current) => current && {
-        ...current,
-        popularRecent: current.popularRecent.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
-        popularAllTime: current.popularAllTime.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
-        nearby: current.nearby.map((item) => item.id === target.id ? { ...item, isFollowing: updated.isFollowing } : item),
-      });
       return;
     }
 
@@ -294,6 +275,7 @@ function MeetPageContent() {
         popularRecent: current.popularRecent.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
         popularAllTime: current.popularAllTime.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
         nearby: current.nearby.map((item) => item.id === payload.user!.id ? { ...payload.user!, mutualFollowersCount: item.mutualFollowersCount } : item),
+        newUsers: current.newUsers.map((item) => item.id === payload.user!.id ? payload.user! : item),
       });
     } catch {
       // mantém silencioso para não interromper a navegação
@@ -384,21 +366,23 @@ function MeetPageContent() {
             <div className="mb-7 flex w-full max-w-[520px] rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1">
               <button type="button" onClick={() => setMeetCategory("popular")} className={`flex-1 rounded-full py-2 text-[16px] font-bold transition ${meetCategory === "popular" ? "bg-gradient-to-r from-[#9d31f6] to-[#b13bfa] text-white shadow-[0_8px_24px_rgba(147,51,234,0.38)]" : "text-[#aaa6ef] hover:text-white"}`}>Quem seguir</button>
               <button type="button" onClick={() => setMeetCategory("nearby")} className={`flex-1 rounded-full py-2 text-[16px] font-bold transition ${meetCategory === "nearby" ? "bg-gradient-to-r from-[#9d31f6] to-[#b13bfa] text-white shadow-[0_8px_24px_rgba(147,51,234,0.38)]" : "text-[#aaa6ef] hover:text-white"}`}>Próximos a você</button>
+              <button type="button" onClick={() => setMeetCategory("new")} className={`flex-1 rounded-full py-2 text-[16px] font-bold transition ${meetCategory === "new" ? "bg-gradient-to-r from-[#9d31f6] to-[#b13bfa] text-white shadow-[0_8px_24px_rgba(147,51,234,0.38)]" : "text-[#aaa6ef] hover:text-white"}`}>Novos</button>
             </div>
             <section>
               <div className="mb-7 flex items-center justify-between gap-5">
-                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes em suas clouds." : "Perfis que seus seguidores também acompanham."}</h2>
+                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes em suas clouds." : meetCategory === "nearby" ? "Perfis que seus seguidores também acompanham." : "Pessoas que acabaram de entrar no Clouds."}</h2>
                 {meetCategory === "popular" && <div className="flex shrink-0 rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1 text-[15px] font-semibold"><button type="button" onClick={() => setHypePeriod("recent")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "recent" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>24h</button><button type="button" onClick={() => setHypePeriod("all")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "all" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>Geral</button></div>}
               </div>
               <div className="flex flex-col gap-4">
-                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetData?.nearby)?.map((item) => {
+                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetCategory === "nearby" ? meetData?.nearby : meetData?.newUsers)?.map((item) => {
                   const hypes = "hypes" in item ? item.hypes : 0;
                   const mutualFollowersCount = "mutualFollowersCount" in item ? item.mutualFollowersCount : 0;
-                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum`} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
+                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : meetCategory === "nearby" ? `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum` : "Novo no Clouds"} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
                 })}
                 {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
                 {!meetLoading && meetCategory === "popular" && (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime)?.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
                 {!meetLoading && meetCategory === "nearby" && meetData?.nearby.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Suas conexões ainda não geraram sugestões.</p>}
+                {!meetLoading && meetCategory === "new" && meetData?.newUsers.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há novos perfis para mostrar.</p>}
               </div>
             </section>
           </div>

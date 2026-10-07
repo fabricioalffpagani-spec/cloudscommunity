@@ -203,6 +203,31 @@ export class DirectMessagesController {
     };
   }
 
+  @Post('conversations/:conversationId/messages/:messageId/reactions')
+  async toggleReaction(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: Record<string, unknown> = {},
+  ) {
+    const session = await this.authService.resolveSession(extractSessionToken(req));
+    if (!session) return { ok: false as const, message: 'Sessão não encontrada.' };
+    const result = await this.directMessagesService.toggleReaction(
+      session.user.id,
+      conversationId,
+      messageId,
+      typeof body.emoji === 'string' ? body.emoji : '',
+    );
+    await this.directMessagesGateway.broadcastReactionChanged(
+      session.user.id,
+      conversationId,
+      messageId,
+      result.reaction,
+      result.removed,
+    );
+    return { ok: true as const, ...result };
+  }
+
   @Post('conversations/:conversationId/audio')
   @UseInterceptors(
     FileInterceptor('file', {

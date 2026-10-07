@@ -11,7 +11,6 @@ import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../com
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { CloudSystemMessage } from "../../components/CloudSystemMessage";
-import { MessageDotsIcon } from "../../components/MessageDotsIcon";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
@@ -849,11 +848,11 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
   const visibleBars = active && progress ? Math.min(Math.floor((progress / 15) * BAR_COUNT), BAR_COUNT) : 0;
 
   return (
-    <div className="flex items-end gap-[3px]" style={{ height: 32 }}>
+    <div className="flex items-end gap-[2px] sm:gap-[3px]" style={{ height: 32 }}>
       {heights.map((h, i) => (
         <span
           key={i}
-          className="block w-[4px] rounded-full transition-all duration-150 ease-out"
+          className={`block w-[4px] rounded-full transition-all duration-150 ease-out ${i > 11 ? "hidden sm:block" : ""}`}
           style={{
             height: `${h}px`,
             background: active && !paused ? "linear-gradient(to top, #9333EA, #A855F7)" : "linear-gradient(to top, #9333EA 30%, #A855F7 100%)",
@@ -913,6 +912,7 @@ function CloudMsgMenu({
   onDelete,
   onReport,
   onSaveSticker,
+  onReply,
   onClose,
 }: {
   msg: ChatMessage;
@@ -926,6 +926,7 @@ function CloudMsgMenu({
   onDelete: (msg: ChatMessage) => void;
   onReport: (msg: ChatMessage) => void;
   onSaveSticker: (mediaUrl: string) => void;
+  onReply: (msg: ChatMessage) => void;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -971,6 +972,13 @@ function CloudMsgMenu({
   };
 
   const items: { key: string; label: string; action: () => void; danger?: boolean; show: boolean; icon: ReactNode }[] = [
+    {
+      key: "reply",
+      label: "Responder",
+      action: () => { onReply(msg); onClose(); },
+      show: true,
+      icon: <CloudReplyIcon />,
+    },
     {
       key: "copy",
       label: copied ? "Copiado!" : "Copiar",
@@ -1034,6 +1042,7 @@ function CloudMsgMenu({
   return (
     <div
       ref={menuRef}
+      data-message-menu="true"
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
       style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
     >
@@ -1115,7 +1124,7 @@ function AudioBubble({ msg, own }: { msg: ChatMessage; own?: boolean }) {
 
 function ImageBubble({ msg }: { msg: ChatMessage }) {
   return (
-    <div className={`relative ${msg.isSticker ? "w-fit" : ""}`}>
+    <div className={`relative ${msg.isSticker ? "mb-4 w-fit" : ""}`}>
     <div className={`block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] ${msg.isSticker ? "border-0 bg-transparent" : ""}`}>
       {msg.mediaUrl ? (
         <img src={msg.mediaUrl} alt={msg.isSticker ? "Figurinha enviada" : "Imagem enviada"} className={msg.isSticker ? "h-36 w-36 object-contain" : "max-h-[320px] max-w-full object-contain"} />
@@ -1406,8 +1415,8 @@ function CloudMessageBubble({
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [msgMenuOpen, setMsgMenuOpen] = useState(false);
   const [menuOpenUpward, setMenuOpenUpward] = useState(false);
-  const [openedFromDoubleClick, setOpenedFromDoubleClick] = useState(false);
-  const dotsButtonRef = useRef<HTMLButtonElement>(null);
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const lastTouchTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const groupedReactions = useMemo(() => {
     return msg.reactions.reduce((acc, reaction) => {
       if (!acc[reaction.emoji]) {
@@ -1419,36 +1428,30 @@ function CloudMessageBubble({
   }, [msg.reactions]);
 
   function openMsgMenu() {
-    if (dotsButtonRef.current) {
-      const rect = dotsButtonRef.current.getBoundingClientRect();
+    if (menuAnchorRef.current) {
+      const rect = menuAnchorRef.current.getBoundingClientRect();
       setMenuOpenUpward(window.innerHeight - rect.bottom < 220);
     }
     setMsgMenuOpen(true);
   }
 
-  function handleToggleMsgMenu() {
-    if (msgMenuOpen) {
-      setMsgMenuOpen(false);
-      setOpenedFromDoubleClick(false);
-      return;
-    }
-    setOpenedFromDoubleClick(false);
-    openMsgMenu();
-  }
-
   function closeMsgMenu() {
     setMsgMenuOpen(false);
-    setOpenedFromDoubleClick(false);
   }
 
-  function handleDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (event.target instanceof Element && event.target.closest("button, a")) return;
-    setOpenedFromDoubleClick(true);
-    openMsgMenu();
+  function handleTouchDoubleTap(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
+    const now = Date.now();
+    const previous = lastTouchTapRef.current;
+    lastTouchTapRef.current = { at: now, x: event.clientX, y: event.clientY };
+    if (previous && now - previous.at < 360 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 28) {
+      lastTouchTapRef.current = null;
+      openMsgMenu();
+    }
   }
 
   return (
-    <div className={`group flex items-end gap-2.5 ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`} onDoubleClick={handleDoubleClick}>
+    <div className={`group flex items-end gap-2.5 ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`} onPointerUp={handleTouchDoubleTap}>
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
       {showFooter && !own && <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
         <UserAvatar
@@ -1512,17 +1515,15 @@ function CloudMessageBubble({
               {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="italic">editada</span>}
               {own && !msg.pending && <MessageReceipt />}
             </div>
-            <div className="relative sm:hidden">
-              <button ref={dotsButtonRef} type="button" aria-label="Mais opções da mensagem" onClick={handleToggleMsgMenu} className={`flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition hover:bg-white/15 hover:text-white ${openedFromDoubleClick ? "invisible" : ""}`}>
-                <MessageDotsIcon />
-              </button>
-              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onClose={closeMsgMenu} />}
+            <div ref={menuAnchorRef} className="relative">
+              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReply={onReply} onClose={closeMsgMenu} />}
             </div>
           </div>}
         </div>
 
         {/* Action icons aligned to the side of message box */}
-        <div className={`hidden items-center gap-1.5 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 sm:flex ${own ? "ml-2" : "mr-2"}`}>
+        <div className={`hidden items-center gap-1.5 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 md:flex ${own ? "ml-2" : "mr-2"}`}>
+          <button type="button" title="Responder" onClick={() => onReply(msg)} className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"><CloudReplyIcon /></button>
           {isCloudAuthor && (
             <button
               type="button"
@@ -1559,40 +1560,7 @@ function CloudMessageBubble({
               </div>
             )}
           </div>
-          <button
-            type="button"
-            title="Responder"
-            onClick={() => onReply(msg)}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
-          >
-            <CloudReplyIcon />
-          </button>
-          <div className="relative">
-            <button
-              type="button"
-              title="Mais opções"
-              onClick={handleToggleMsgMenu}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
-            >
-              <MessageDotsIcon />
-            </button>
-            {msgMenuOpen && (
-              <CloudMsgMenu
-                msg={msg}
-                isRight={own}
-                isCloudAuthor={isCloudAuthor}
-                isPinned={isPinned}
-                openUpward={menuOpenUpward}
-                onPin={onPin}
-                onForward={onForward}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onReport={onReport}
-                onSaveSticker={onSaveSticker}
-                onClose={closeMsgMenu}
-              />
-            )}
-          </div>
+          <button type="button" title="Mais opções" onClick={openMsgMenu} className="flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-white transition hover:bg-white/15">⋮</button>
         </div>
       </div>
     </div>
@@ -2398,9 +2366,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   useEffect(() => {
     if (!user) return;
-    void fetch("/api/stickers").then((response) => readJson<{ stickers?: Array<{ id: string; mediaUrl: string }> }>(response)).then((payload) => {
-      setSavedStickers(payload.stickers ?? []);
-    }).catch(() => undefined);
+    const loadStickers = () => {
+      void fetch("/api/stickers", { cache: "no-store" }).then((response) => readJson<{ stickers?: Array<{ id: string; mediaUrl: string }> }>(response)).then((payload) => {
+        setSavedStickers(payload.stickers ?? []);
+      }).catch(() => undefined);
+    };
+    loadStickers();
+    const timer = window.setInterval(loadStickers, 15_000);
+    return () => window.clearInterval(timer);
   }, [user]);
 
   const saveSticker = useCallback(async (mediaUrl: string) => {
@@ -2958,7 +2931,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               <div className="min-w-0 flex-1 text-[12px] text-white sm:text-[14px]" style={{ fontFamily: "Arial, sans-serif" }}>
                 {audioRecorder.state === "paused" ? "Pausado" : "Gravando…"} {formatDurationMs(audioRecorder.seconds * 1000) || "0:00"}
               </div>
-              <div className="hidden min-w-0 sm:block"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
+                <div className="block min-w-0"><Waveform active={audioRecorder.state === "recording"} paused={audioRecorder.state === "paused"} progress={audioRecorder.seconds} /></div>
               <div className="flex shrink-0 items-center gap-1 sm:gap-2">
                 <button type="button" aria-label={audioRecorder.state === "paused" ? "Retomar" : "Pausar"} onClick={audioRecorder.state === "paused" ? audioRecorder.resume : audioRecorder.pause} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10">
                   {audioRecorder.state === "paused" ? <PlayIcon s={16} /> : <PauseIcon s={16} />}
@@ -3076,7 +3049,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 </div>
 
                 {emojiOpen && (
-                  <div data-cloud-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-10 rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)] overflow-hidden">
+                  <div data-cloud-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[calc(100vw-2rem)] max-w-[600px] -translate-x-1/2 overflow-hidden rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
                     <div role="tablist" aria-label="Tipo de conteúdo" className="mx-3 mt-3 grid grid-cols-2 rounded-xl border border-white/[0.10] bg-black/20 p-1">
                       <button type="button" role="tab" aria-selected={mediaPickerTab === "emoji"} onClick={() => setMediaPickerTab("emoji")} className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "emoji" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}>😊 Emojis</button>
                       <button type="button" role="tab" aria-selected={mediaPickerTab === "sticker"} onClick={() => setMediaPickerTab("sticker")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "sticker" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}><svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10a6 6 0 0 1 6-6h5a5 5 0 0 1 5 5v4a7 7 0 0 1-7 7h-3a6 6 0 0 1-6-6v-4Z"/><path d="M14 20a6 6 0 0 1 6-6"/><path d="m14 20 6-6"/></svg>Figurinhas</button>
@@ -3085,9 +3058,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                       {EMOJI_CATEGORIES.map((cat, index) => <button key={cat.label} type="button" onClick={() => setEmojiCategory(index)} title={cat.label} aria-label={cat.label} className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${index === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}>{cat.icon}</button>)}
                     </div>}
                     <div className="max-h-[28vh] overflow-y-auto p-3 [scrollbar-color:#7C3AED_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#7C3AED]">
-                      <div className="mb-2 flex items-center justify-between px-1"><p className="text-[12px] font-semibold text-white/65">{mediaPickerTab === "sticker" ? "Minhas figurinhas" : EMOJI_CATEGORIES[emojiCategory]?.label}</p><span className="text-[11px] text-white/35">{mediaPickerTab === "sticker" ? savedStickers.length : EMOJI_CATEGORIES[emojiCategory]?.emojis.length}</span></div>
+                      <div className="mb-2 flex items-center justify-between px-1"><p className="text-[12px] font-semibold text-white/65">{mediaPickerTab === "sticker" ? "Figurinhas do Clouds" : EMOJI_CATEGORIES[emojiCategory]?.label}</p><span className="text-[11px] text-white/35">{mediaPickerTab === "sticker" ? savedStickers.length : EMOJI_CATEGORIES[emojiCategory]?.emojis.length}</span></div>
                       {mediaPickerTab === "sticker" ? (
-                        savedStickers.length > 0 ? <div className="flex flex-wrap gap-5 px-2 py-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" title="Enviar figurinha" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="h-28 w-28 rounded-2xl p-1.5 transition hover:bg-white/[0.08]"><img src={sticker.mediaUrl} alt="Figurinha salva" className="h-full w-full object-contain" /></button>)}</div> : <p className="py-6 text-center text-sm text-white/45">Nenhuma figurinha salva ainda.</p>
+                        savedStickers.length > 0 ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3 px-1 py-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" title="Enviar figurinha" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-2xl p-0 transition hover:bg-white/[0.08]"><img src={sticker.mediaUrl} alt="Figurinha salva" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-6 text-center text-sm text-white/45">Nenhuma figurinha salva ainda.</p>
                       ) : <div className="flex flex-wrap gap-1.5">{EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => <button key={index} type="button" onClick={() => setDraft((current) => `${current}${emoji}`)} className="flex h-9 w-9 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/[0.07]">{emoji}</button>)}</div>}
                     </div>
                   </div>

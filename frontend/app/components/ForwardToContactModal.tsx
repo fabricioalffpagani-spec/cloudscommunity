@@ -9,6 +9,18 @@ export type ForwardContact = {
   avatarUrl: string | null;
 };
 
+export type ForwardItem = {
+  preview?: string;
+  url: string;
+  label: string;
+  messageContent?: string;
+  mediaKind?: "audio" | "image";
+  mediaUrl?: string | null;
+  mediaDurationMs?: number | null;
+  mediaFileName?: string | null;
+  forwarded?: boolean;
+};
+
 type Props = {
   title: string;
   preview?: string;
@@ -23,15 +35,17 @@ type Props = {
   contacts: ForwardContact[];
   loading?: boolean;
   externalShareText?: string;
+  items?: ForwardItem[];
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, externalShareText, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, externalShareText, items, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
+  const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded }];
 
   const forward = async (contact: ForwardContact) => {
     setSendingTo(contact.id);
@@ -45,43 +59,44 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       const conversationPayload = await conversationResponse.json().catch(() => null);
       if (!conversationResponse.ok || !conversationPayload?.conversation?.id) throw new Error(conversationPayload?.message || "Não foi possível abrir a conversa.");
       const conversationId = conversationPayload.conversation.id as string;
+      for (const item of forwardItems) {
       const clientMessageId = `forward-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const cleanMessageContent = messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/, "");
-      const isTextMessage = messageContent !== undefined;
-      let forwardedLabel = label;
-      if (forwarded && !isTextMessage) {
+      const cleanMessageContent = item.messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/, "");
+      const isTextMessage = item.messageContent !== undefined;
+      let forwardedLabel = item.label;
+      if (item.forwarded && !isTextMessage) {
         try {
-          forwardedLabel = JSON.stringify({ ...JSON.parse(label), external: true });
+          forwardedLabel = JSON.stringify({ ...JSON.parse(item.label), external: true });
         } catch {
-          forwardedLabel = JSON.stringify({ type: "forwarded_link", label, external: true });
+          forwardedLabel = JSON.stringify({ type: "forwarded_link", label: item.label, external: true });
         }
       }
-      const isMedia = Boolean(mediaKind);
+      const isMedia = Boolean(item.mediaKind);
       let endpoint = `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}`;
       let body: BodyInit;
 
       if (isMedia) {
-        if (!mediaUrl) throw new Error("A mídia original não está disponível para encaminhamento.");
-        const mediaResponse = await fetch(mediaUrl as string);
+        if (!item.mediaUrl) throw new Error("A mídia original não está disponível para encaminhamento.");
+        const mediaResponse = await fetch(item.mediaUrl as string);
         if (!mediaResponse.ok) throw new Error("Não foi possível carregar a mídia original.");
         const downloadedBlob = await mediaResponse.blob();
-        const expectedMimePrefix = mediaKind === "audio" ? "audio/" : "image/";
+        const expectedMimePrefix = item.mediaKind === "audio" ? "audio/" : "image/";
         const mediaBlob = downloadedBlob.type.startsWith(expectedMimePrefix)
           ? downloadedBlob
-          : new Blob([downloadedBlob], { type: mediaKind === "audio" ? "audio/webm" : "image/jpeg" });
+          : new Blob([downloadedBlob], { type: item.mediaKind === "audio" ? "audio/webm" : "image/jpeg" });
         const formData = new FormData();
-        const extension = mediaKind === "audio" ? "webm" : "jpg";
-        formData.set("file", mediaBlob, mediaFileName || `encaminhada-${Date.now()}.${extension}`);
+        const extension = item.mediaKind === "audio" ? "webm" : "jpg";
+        formData.set("file", mediaBlob, item.mediaFileName || `encaminhada-${Date.now()}.${extension}`);
         formData.set("clientMessageId", clientMessageId);
-        formData.set("forwarded", String(forwarded));
-        if (mediaKind === "audio" && mediaDurationMs) formData.set("durationMs", String(mediaDurationMs));
-        endpoint += mediaKind === "audio" ? "/audio" : "/image";
+        formData.set("forwarded", String(item.forwarded ?? true));
+        if (item.mediaKind === "audio" && item.mediaDurationMs) formData.set("durationMs", String(item.mediaDurationMs));
+        endpoint += item.mediaKind === "audio" ? "/audio" : "/image";
         body = formData;
       } else {
         endpoint += isTextMessage ? "/messages" : "/link";
         body = JSON.stringify(isTextMessage
-          ? { content: `${forwarded ? "↗ Encaminhada\n" : ""}${cleanMessageContent ?? ""}`, clientMessageId }
-          : { url, label: forwardedLabel, clientMessageId });
+          ? { content: `↗ Encaminhada\n${cleanMessageContent ?? ""}`, clientMessageId }
+          : { url: item.url, label: forwardedLabel, clientMessageId });
       }
 
       const send = () => fetch(endpoint, {
@@ -98,12 +113,13 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       }
       const forwardedPayload = await forwardedResponse.json().catch(() => null);
       if (!forwardedResponse.ok || forwardedPayload?.ok === false) throw new Error(forwardedPayload?.message || "Não foi possível encaminhar.");
+      }
       const text = note.trim();
       if (text) {
         const noteResponse = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: text, clientMessageId: `${clientMessageId}-note` }),
+          body: JSON.stringify({ content: text, clientMessageId: `forward-note-${Date.now()}-${Math.random().toString(36).slice(2)}` }),
         });
         const notePayload = await noteResponse.json().catch(() => null);
         if (!noteResponse.ok || notePayload?.ok === false) throw new Error(notePayload?.message || "O item foi encaminhado, mas não foi possível enviar o recado.");
@@ -152,11 +168,15 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
   };
 
   const shareNatively = async () => {
-    const text = externalShareText || `${preview || title}\n${url}`;
+    const text = externalShareText || (preview || title);
     setExternalShareNotice(null);
     try {
       if (!navigator.share) throw new Error("Compartilhamento nativo indisponível");
-      await navigator.share({ title: preview || title, text, url });
+      // Never put the URL in both `text` and `url`: WhatsApp renders those
+      // fields separately and would show the same invitation twice.
+      await navigator.share(externalShareText
+        ? { title: preview || title, text }
+        : { title: preview || title, text, url });
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       try {
@@ -189,7 +209,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
           <h3 className="text-[16px] font-bold text-white">{title}</h3>
           <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
         </div>
-        {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{preview}</p>}
+        {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{items && items.length > 1 ? `${items.length} mensagens selecionadas para encaminhar` : preview}</p>}
         {externalShareText && (
           <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:hidden">
             <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
