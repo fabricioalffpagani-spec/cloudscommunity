@@ -430,11 +430,19 @@ export class DirectMessagesGateway
     reaction: DirectMessageReactionPayload,
     removed: boolean,
   ) {
-    const conversation = await this.directMessagesService.getConversationById(userId, conversationId);
+    const conversation = await this.directMessagesService.getConversationById(
+      userId,
+      conversationId,
+    );
     this.server
       .to(this.userRoom(userId))
       .to(this.userRoom(conversation.participant.id))
-      .emit('message:reaction:changed', { conversationId, messageId, reaction, removed });
+      .emit('message:reaction:changed', {
+        conversationId,
+        messageId,
+        reaction,
+        removed,
+      });
   }
 
   broadcastMessageEdited(

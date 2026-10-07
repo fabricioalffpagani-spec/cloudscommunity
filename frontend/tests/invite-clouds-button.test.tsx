@@ -14,7 +14,7 @@ describe("InviteCloudsButton", () => {
 
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
       title: "Clouds",
-      text: "Curta o Clouds com seus amigos!",
+      text: "Junte a galera no Clouds!",
       url: `${window.location.origin}/signup`,
     })));
   });
@@ -26,7 +26,7 @@ describe("InviteCloudsButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Convidar pessoas para o Clouds" }));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`Curta o Clouds com seus amigos!\n${window.location.origin}/signup`));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`Junte a galera no Clouds!\n${window.location.origin}/signup`));
     expect(screen.getByRole("status")).toHaveTextContent("Link do convite copiado.");
   });
 
@@ -42,7 +42,7 @@ describe("InviteCloudsButton", () => {
     await waitFor(() => expect(share).toHaveBeenCalledTimes(2));
     expect(share).toHaveBeenLastCalledWith({
       title: "Clouds",
-      text: `Curta o Clouds com seus amigos!\n${window.location.origin}/signup`,
+      text: `Junte a galera no Clouds!\n${window.location.origin}/signup`,
     });
   });
 });

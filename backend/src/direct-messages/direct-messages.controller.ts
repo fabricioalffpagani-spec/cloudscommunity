@@ -210,8 +210,11 @@ export class DirectMessagesController {
     @Param('messageId') messageId: string,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(extractSessionToken(req));
-    if (!session) return { ok: false as const, message: 'Sessão não encontrada.' };
+    const session = await this.authService.resolveSession(
+      extractSessionToken(req),
+    );
+    if (!session)
+      return { ok: false as const, message: 'Sessão não encontrada.' };
     const result = await this.directMessagesService.toggleReaction(
       session.user.id,
       conversationId,

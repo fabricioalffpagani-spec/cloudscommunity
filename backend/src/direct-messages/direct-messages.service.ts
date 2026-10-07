@@ -238,18 +238,39 @@ export class DirectMessagesService {
       where: { id: messageId, conversationId, deletedAt: null },
       select: { id: true },
     });
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
     const existing = await this.prisma.directMessageReaction.findUnique({
-      where: { messageId_userId_emoji: { messageId, userId, emoji: normalizedEmoji } },
+      where: {
+        messageId_userId_emoji: { messageId, userId, emoji: normalizedEmoji },
+      },
     });
     if (existing) {
-      await this.prisma.directMessageReaction.delete({ where: { id: existing.id } });
-      return { reaction: { id: existing.id, emoji: existing.emoji, userId, createdAt: existing.createdAt.toISOString() }, removed: true };
+      await this.prisma.directMessageReaction.delete({
+        where: { id: existing.id },
+      });
+      return {
+        reaction: {
+          id: existing.id,
+          emoji: existing.emoji,
+          userId,
+          createdAt: existing.createdAt.toISOString(),
+        },
+        removed: true,
+      };
     }
     const reaction = await this.prisma.directMessageReaction.create({
       data: { messageId, userId, emoji: normalizedEmoji },
     });
-    return { reaction: { id: reaction.id, emoji: reaction.emoji, userId, createdAt: reaction.createdAt.toISOString() }, removed: false };
+    return {
+      reaction: {
+        id: reaction.id,
+        emoji: reaction.emoji,
+        userId,
+        createdAt: reaction.createdAt.toISOString(),
+      },
+      removed: false,
+    };
   }
 
   async sendTextMessage(

@@ -1856,7 +1856,8 @@ export class CloudService {
       const concurrentSticker = await this.prisma.systemSticker.findUnique({
         where: { contentHash },
       });
-      if (concurrentSticker) return { ok: true, sticker: concurrentSticker, alreadySaved: true };
+      if (concurrentSticker)
+        return { ok: true, sticker: concurrentSticker, alreadySaved: true };
       throw error;
     }
   }

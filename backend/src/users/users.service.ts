@@ -760,21 +760,22 @@ export class UsersService {
       );
     };
 
-    const [recentRanked, allTimeRanked, nearbyRanked, newestUsers] = await Promise.all([
-      rankProfiles(popularRecentCounts),
-      rankProfiles(popularAllTimeCounts),
-      rankProfiles(nearbyCounts),
-      this.prisma.user.findMany({
-        where: {
-          id: { not: current.user.id },
-          status: UserStatus.active,
-          deletedAt: null,
-        },
-        include: { profile: true },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-    ]);
+    const [recentRanked, allTimeRanked, nearbyRanked, newestUsers] =
+      await Promise.all([
+        rankProfiles(popularRecentCounts),
+        rankProfiles(popularAllTimeCounts),
+        rankProfiles(nearbyCounts),
+        this.prisma.user.findMany({
+          where: {
+            id: { not: current.user.id },
+            status: UserStatus.active,
+            deletedAt: null,
+          },
+          include: { profile: true },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+      ]);
 
     return {
       ok: true,
@@ -788,11 +789,13 @@ export class UsersService {
         ...user,
         mutualFollowersCount: score,
       })),
-      newUsers: (await Promise.all(
+      newUsers: await Promise.all(
         newestUsers
           .filter((candidate) => candidate.profile)
-          .map((candidate) => this.mapPublicProfile(candidate, current.user.id)),
-      )),
+          .map((candidate) =>
+            this.mapPublicProfile(candidate, current.user.id),
+          ),
+      ),
     };
   }
 
