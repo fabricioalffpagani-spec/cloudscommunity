@@ -474,6 +474,13 @@ function sortConversations(list: Conversation[]) {
   return [...list].sort((a, b) => (new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime()));
 }
 
+function withConfirmedPreview(list: Conversation[], conversationId: string, message: Msg, preview: string) {
+  return sortConversations(list.map((conversation) => conversation.id === conversationId
+    && (!conversation.lastMessageAt || conversation.lastMessageAt <= message.isoTime)
+    ? { ...conversation, lastMessage: preview, time: message.time, lastMessageAt: message.isoTime, unread: 0 }
+    : conversation));
+}
+
 function resolveSocketUrl() {
   if (SOCKET_URL) return SOCKET_URL.replace(/\/+$/, "");
   if (typeof window !== "undefined") return window.location.origin.replace(/\/+$/, "");
@@ -1461,15 +1468,6 @@ function MessagesPageContent() {
 
     setAudioUploading(true);
     setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
-    setConversations((prev) =>
-      sortConversations(
-        prev.map((conversation) =>
-          conversation.id === conversationId
-            ? { ...conversation, lastMessage: "Áudio", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
-            : conversation,
-        ),
-      ),
-    );
 
     try {
       const formData = new FormData();
@@ -1488,6 +1486,7 @@ function MessagesPageContent() {
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
       const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      setConversations((prev) => withConfirmedPreview(prev, conversationId, confirmed, "Áudio"));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar o áudio.");
@@ -1640,15 +1639,6 @@ function MessagesPageContent() {
 
     setImageUploading(true);
     setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
-    setConversations((prev) =>
-      sortConversations(
-        prev.map((conversation) =>
-          conversation.id === conversationId
-            ? { ...conversation, lastMessage: "Imagem", time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
-            : conversation,
-        ),
-      ),
-    );
 
     try {
       const formData = new FormData();
@@ -1663,6 +1653,7 @@ function MessagesPageContent() {
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
       const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      setConversations((prev) => withConfirmedPreview(prev, conversationId, confirmed, "Imagem"));
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
@@ -1712,15 +1703,6 @@ function MessagesPageContent() {
 
     setLinkUploading(true);
     setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
-    setConversations((prev) =>
-      sortConversations(
-        prev.map((conversation) =>
-          conversation.id === conversationId
-            ? { ...conversation, lastMessage: parseLinkPreview(sharedLink.label), time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
-            : conversation,
-        ),
-      ),
-    );
 
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/link`, {
@@ -1736,6 +1718,7 @@ function MessagesPageContent() {
       const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
       const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      setConversations((prev) => withConfirmedPreview(prev, conversationId, confirmed, parseLinkPreview(sharedLink.label)));
       setSharedLink(null);
       autoSendRef.current = false;
     } catch (sendError) {
@@ -2446,15 +2429,6 @@ function MessagesPageContent() {
     };
 
     setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], optimistic) }));
-    setConversations((prev) =>
-      sortConversations(
-        prev.map((conversation) =>
-          conversation.id === activeConversationId
-            ? { ...conversation, lastMessage: content, time: optimistic.time, lastMessageAt: optimistic.isoTime, unread: 0 }
-            : conversation,
-        ),
-      ),
-    );
     setDraft("");
 
     void (async () => {
@@ -2467,6 +2441,7 @@ function MessagesPageContent() {
         const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
         const confirmed = buildMessage(payload.message, user);
         setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], confirmed) }));
+        setConversations((prev) => withConfirmedPreview(prev, activeConversationId, confirmed, content));
       } catch (sendError) {
         setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
         setMessagesByConversation((prev) => ({

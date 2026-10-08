@@ -9,6 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { Logger } from '@nestjs/common';
 import type { IncomingMessage } from 'node:http';
 import { getAllowedOrigins } from '../shared/runtime-env';
 import { AuthService } from '../auth/auth.service';
@@ -75,6 +76,8 @@ export class DirectMessagesGateway
 {
   @WebSocketServer()
   server!: Server;
+
+  private readonly logger = new Logger(DirectMessagesGateway.name);
 
   private readonly typingTimers = new Map<
     string,
@@ -398,29 +401,36 @@ export class DirectMessagesGateway
     conversationId: string,
     message: DirectMessagePayload,
   ) {
-    const senderConversation =
-      await this.directMessagesService.getConversationById(
-        userId,
-        conversationId,
-      );
-    const recipientConversation =
-      await this.directMessagesService.getConversationById(
-        senderConversation.participant.id,
-        conversationId,
-      );
+    try {
+      const senderConversation =
+        await this.directMessagesService.getConversationById(
+          userId,
+          conversationId,
+        );
+      const recipientConversation =
+        await this.directMessagesService.getConversationById(
+          senderConversation.participant.id,
+          conversationId,
+        );
 
-    // Every authenticated device joins its user room. Conversation rooms are
-    // joined only for the active chat, so they cannot deliver to an idle peer.
-    this.server
-      .to(this.userRoom(userId))
-      .to(this.userRoom(senderConversation.participant.id))
-      .emit('message:new', message);
-    this.server
-      .to(this.userRoom(userId))
-      .emit('conversation:updated', senderConversation);
-    this.server
-      .to(this.userRoom(senderConversation.participant.id))
-      .emit('conversation:updated', recipientConversation);
+      // Every authenticated device joins its user room. Conversation rooms are
+      // joined only for the active chat, so they cannot deliver to an idle peer.
+      this.server
+        .to(this.userRoom(userId))
+        .to(this.userRoom(senderConversation.participant.id))
+        .emit('message:new', message);
+      this.server
+        .to(this.userRoom(userId))
+        .emit('conversation:updated', senderConversation);
+      this.server
+        .to(this.userRoom(senderConversation.participant.id))
+        .emit('conversation:updated', recipientConversation);
+    } catch (error) {
+      // The message has already committed before this broadcast is called.
+      this.logger.warn(
+        `Could not broadcast committed message ${message.id}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   async broadcastReactionChanged(

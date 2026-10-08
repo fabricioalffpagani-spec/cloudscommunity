@@ -1,5 +1,5 @@
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import {
   DirectMessagesService,
   buildConversationKey,
@@ -106,7 +106,80 @@ describe('DirectMessagesService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('sends a message and updates the conversation metadata', async () => {
+  it('loads the newest messages and returns them in display order', async () => {
+    const prisma = createPrismaMock();
+    prisma.conversation.findFirst.mockResolvedValue({ id: 'conv-1' });
+    const makeMessage = (id: string, minute: number) => ({
+      id,
+      conversationId: 'conv-1',
+      senderId: 'user-1',
+      type: 'text',
+      content: id,
+      clientMessageId: null,
+      replyToMessageId: null,
+      readAt: null,
+      editedAt: null,
+      deletedAt: null,
+      createdAt: new Date(
+        `2026-07-22T10:${String(minute).padStart(2, '0')}:00.000Z`,
+      ),
+      updatedAt: new Date(
+        `2026-07-22T10:${String(minute).padStart(2, '0')}:00.000Z`,
+      ),
+      sender: {
+        profile: { username: 'alpha', displayName: 'Alpha', avatarUrl: null },
+      },
+      mediaAsset: null,
+      reactions: [],
+    });
+    prisma.directMessage.findMany.mockResolvedValue([
+      makeMessage('newest', 2),
+      makeMessage('older', 1),
+    ]);
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
+    );
+
+    const messages = await service.listMessages('user-1', 'conv-1', {
+      take: 50,
+    });
+
+    expect(prisma.directMessage.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { conversationId: 'conv-1', deletedAt: null },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 50,
+      }),
+    );
+    expect(messages.map((message) => message.id)).toEqual(['older', 'newest']);
+  });
+
+  it('never updates the conversation preview when message creation fails', async () => {
+    const prisma = createPrismaMock();
+    prisma.conversation.findFirst.mockResolvedValue({
+      id: 'conv-1',
+      participantOneId: 'user-1',
+      participantTwoId: 'user-2',
+    });
+    prisma.directMessage.create.mockRejectedValue(
+      new Error('database write failed'),
+    );
+    const service = new DirectMessagesService(
+      prisma as unknown as PrismaService,
+      { send: jest.fn() } as never,
+    );
+
+    await expect(
+      service.sendTextMessage('user-1', {
+        conversationId: 'conv-1',
+        content: 'hello',
+      }),
+    ).rejects.toThrow('database write failed');
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps a committed message successful when notification lookup fails', async () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
@@ -159,6 +232,10 @@ describe('DirectMessagesService', () => {
       mediaAsset: null,
     });
     prisma.conversation.update.mockResolvedValue({});
+    prisma.conversation.findUnique.mockRejectedValue(
+      new Error('push lookup failed'),
+    );
+    const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
     const message = await service.sendTextMessage('user-1', {
       conversationId: 'conv-1',
@@ -176,6 +253,8 @@ describe('DirectMessagesService', () => {
         }) as unknown,
       }),
     );
+    expect(warning).toHaveBeenCalled();
+    warning.mockRestore();
   });
 
   it('sends an audio message and stores the media asset', async () => {

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -69,6 +70,8 @@ export function truncatePreview(value: string, maxLength = 255): string {
 
 @Injectable()
 export class DirectMessagesService {
+  private readonly logger = new Logger(DirectMessagesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly pushNotifications: PushNotificationsService,
@@ -209,8 +212,10 @@ export class DirectMessagesService {
         conversationId,
         deletedAt: null,
       },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: cursor ? -take : take,
+      // Fetch the newest page first. Ascending order returned the oldest 50
+      // messages, so newly persisted messages vanished after a reload.
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
       ...(cursor
         ? {
             cursor: { id: cursor },
@@ -220,7 +225,7 @@ export class DirectMessagesService {
       include: this.messageInclude(),
     });
 
-    return messages.map((message) => this.mapMessage(message));
+    return messages.reverse().map((message) => this.mapMessage(message));
   }
 
   async toggleReaction(
@@ -366,7 +371,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipient(
+    await this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -427,7 +432,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipient(
+    await this.notifyRecipientAfterCommit(
       message.id,
       conversationId,
       senderId,
@@ -547,7 +552,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipient(
+    await this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -667,7 +672,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipient(
+    await this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -782,7 +787,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipient(
+    await this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -1028,6 +1033,23 @@ export class DirectMessagesService {
     });
   }
 
+  private async notifyRecipientAfterCommit(
+    messageId: string,
+    conversationId: string,
+    senderId: string,
+    content: string | null,
+  ) {
+    try {
+      await this.notifyRecipient(messageId, conversationId, senderId, content);
+    } catch (error) {
+      // The database transaction has committed. Keep the HTTP response truthful
+      // even if a later push lookup or delivery fails.
+      this.logger.warn(
+        `Could not notify recipient for message ${messageId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private async notifyRecipient(
     messageId: string,
     conversationId: string,
@@ -1054,19 +1076,15 @@ export class DirectMessagesService {
       .trim()
       .slice(0, 140);
     // Direct messages belong to the Messages badge, not the activity bell.
-    // The message has already been committed. A device-specific push failure
-    // must never turn that successful send into an HTTP error for the sender.
-    await this.pushNotifications
-      .send(recipientId, {
-        // Some Android notification layouts only surface the title while the
-        // notification is collapsed. Keep the message preview there as well as
-        // in the body so the recipient can still read it in that layout.
-        title: `${senderName}: ${preview}`,
-        body: preview,
-        url: `/messages?conversation=${conversationId}`,
-        tag: `direct-message-${messageId}`,
-      })
-      .catch(() => undefined);
+    await this.pushNotifications.send(recipientId, {
+      // Some Android notification layouts only surface the title while the
+      // notification is collapsed. Keep the message preview there as well as
+      // in the body so the recipient can still read it in that layout.
+      title: `${senderName}: ${preview}`,
+      body: preview,
+      url: `/messages?conversation=${conversationId}`,
+      tag: `direct-message-${messageId}`,
+    });
   }
 
   private messageInclude() {

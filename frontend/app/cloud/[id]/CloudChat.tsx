@@ -3155,13 +3155,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       )}
 
       {descriptionOpen && cloud && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
-            <div className="mb-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" style={{ paddingLeft: "max(1rem, env(safe-area-inset-left))", paddingRight: "max(1rem, env(safe-area-inset-right))" }}>
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
               <h3 className="text-[18px] font-bold">Descrição da Cloud</h3>
-              <button type="button" onClick={() => setDescriptionOpen(false)} className="text-white/50 hover:text-white">×</button>
+              <button type="button" aria-label="Fechar descrição" onClick={() => setDescriptionOpen(false)} className="shrink-0 p-1 text-white/50 hover:text-white">×</button>
             </div>
-            <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/75">
+            <p className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[14px] leading-relaxed text-white/75">
               {cloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}
             </p>
           </div>

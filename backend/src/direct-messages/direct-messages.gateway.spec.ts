@@ -29,6 +29,26 @@ describe('DirectMessagesGateway message delivery', () => {
     expect(to).not.toHaveBeenCalledWith('conversation:conversation-1');
   });
 
+  it('does not report a committed message as failed when realtime lookup fails', async () => {
+    const gateway = Object.create(
+      DirectMessagesGateway.prototype,
+    ) as DirectMessagesGateway;
+    const warn = jest.fn();
+    Reflect.set(gateway, 'logger', { warn });
+    Reflect.set(gateway, 'directMessagesService', {
+      getConversationById: jest
+        .fn()
+        .mockRejectedValue(new Error('socket lookup failed')),
+    });
+
+    await expect(
+      gateway.broadcastMessageCreated('sender', 'conversation-1', {
+        id: 'message-1',
+      } as Parameters<DirectMessagesGateway['broadcastMessageCreated']>[2]),
+    ).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+  });
+
   it('sends each reader update with the other participant for that viewer', async () => {
     const emissions: Array<{
       room: string;

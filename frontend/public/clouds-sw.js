@@ -26,12 +26,10 @@ self.addEventListener("push", (event) => {
     }
     await self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
-    // Android renders the status-bar glyph from `badge` and the rich
-    // notification from `icon`. Use the Clouds maskable asset for both: the
-    // previous nearly-empty badge was rejected on some Samsung devices, which
-    // made Android fall back to a bell and a generic “C”.
+    // Android uses the transparent badge as a monochrome status-bar glyph.
+    // Keep the full-color icon for the expanded notification.
     icon: "/pwa-512x512.png?v=5",
-    badge: "/pwa-maskable-512x512.png?v=5",
+    badge: "/clouds-notification-badge-v2.png",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
     });
