@@ -27,9 +27,11 @@ self.addEventListener("push", (event) => {
     await self.registration.showNotification(data.title || "Clouds", {
     body: data.body || "Você tem uma nova notificação.",
     // Android renders the status-bar glyph from `badge` and the rich
-    // notification from `icon`. Providing both prevents Chrome/bell fallbacks.
-    icon: "/pwa-512x512.png?v=4",
-    badge: "/clouds-notification-badge.png?v=5",
+    // notification from `icon`. Use the Clouds maskable asset for both: the
+    // previous nearly-empty badge was rejected on some Samsung devices, which
+    // made Android fall back to a bell and a generic “C”.
+    icon: "/pwa-512x512.png?v=5",
+    badge: "/pwa-maskable-512x512.png?v=5",
     tag: data.tag || "clouds-notification",
     data: { url: data.url || "/" },
     });

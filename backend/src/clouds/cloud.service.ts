@@ -1804,8 +1804,9 @@ export class CloudService {
   }
 
   async getSavedStickers(token: string | null) {
-    await this.requireSession(token);
-    const stickers = await this.prisma.systemSticker.findMany({
+    const current = await this.requireSession(token);
+    const stickers = await this.prisma.savedSticker.findMany({
+      where: { userId: current.user.id },
       orderBy: { createdAt: 'desc' },
       take: 250,
     });
@@ -1824,42 +1825,18 @@ export class CloudService {
         message: 'A figurinha excede o limite permitido.',
       });
     }
-    // The image itself can be a large data URL, which must not be used as an
-    // indexed column. Its stable short hash gives the system catalogue one
-    // canonical copy of each sticker.
+    // A saved sticker belongs only to the current user. The global catalogue
+    // is reserved for the official Clouds starter pack.
     const contentHash = crypto.createHash('md5').update(mediaUrl).digest('hex');
-    const existing = await this.prisma.systemSticker.findUnique({
-      where: { contentHash },
+    const existing = await this.prisma.savedSticker.findUnique({
+      where: { userId_contentHash: { userId: current.user.id, contentHash } },
     });
-    if (existing) {
-      await this.prisma.savedSticker.upsert({
-        where: { userId_contentHash: { userId: current.user.id, contentHash } },
-        update: {},
-        create: { userId: current.user.id, mediaUrl, contentHash },
-      });
-      return { ok: true, sticker: existing, alreadySaved: true };
-    }
+    if (existing) return { ok: true, sticker: existing, alreadySaved: true };
 
-    try {
-      const sticker = await this.prisma.systemSticker.create({
-        data: { mediaUrl, contentHash },
-      });
-      await this.prisma.savedSticker.upsert({
-        where: { userId_contentHash: { userId: current.user.id, contentHash } },
-        update: {},
-        create: { userId: current.user.id, mediaUrl, contentHash },
-      });
-      return { ok: true, sticker, alreadySaved: false };
-    } catch (error) {
-      // The global hash can collide only when another user saves the same
-      // sticker at the same time; return that canonical catalogue entry.
-      const concurrentSticker = await this.prisma.systemSticker.findUnique({
-        where: { contentHash },
-      });
-      if (concurrentSticker)
-        return { ok: true, sticker: concurrentSticker, alreadySaved: true };
-      throw error;
-    }
+    const sticker = await this.prisma.savedSticker.create({
+      data: { userId: current.user.id, mediaUrl, contentHash },
+    });
+    return { ok: true, sticker, alreadySaved: false };
   }
 
   async editMessage(
