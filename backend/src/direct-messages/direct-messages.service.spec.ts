@@ -75,7 +75,11 @@ describe('DirectMessagesService', () => {
     expect(notificationCreate).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(
       'recipient',
-      expect.objectContaining({ url: '/messages?conversation=conversation' }),
+      expect.objectContaining({
+        title: 'Vicente: Olá',
+        body: 'Olá',
+        url: '/messages?conversation=conversation',
+      }),
     );
   });
 

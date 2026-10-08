@@ -7,15 +7,17 @@ vi.mock("../app/components/session-user", () => ({
   useSessionUser: () => ({ user: null }),
 }));
 
-describe("ordinary search input", () => {
-  it("identifies the field as search and opts out of credential autofill", () => {
+describe("ordinary search field", () => {
+  it("uses a single-line textarea and opts out of credential autofill", () => {
     render(<SearchModal onClose={vi.fn()} />);
-    const search = screen.getByRole("searchbox", {
+    const search = screen.getByRole("textbox", {
       name: "Buscar Clouds e pessoas",
     });
-    expect(search).toHaveAttribute("type", "search");
+    expect(search.tagName).toBe("TEXTAREA");
     expect(search).toHaveAttribute("autocomplete", "off");
-    expect(search).toHaveAttribute("inputmode", "search");
+    expect(search).toHaveAttribute("inputmode", "text");
+    expect(search).toHaveAttribute("rows", "1");
+    expect(search).toHaveAttribute("aria-multiline", "false");
     expect(search).toHaveAttribute("data-lpignore", "true");
     expect(search).toHaveAttribute("data-1p-ignore", "true");
   });

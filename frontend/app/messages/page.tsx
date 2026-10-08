@@ -794,7 +794,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
   const [expanded, setExpanded] = useState(false);
   const isSticker = Boolean(msg.mediaFileName?.startsWith("figurinha"));
 
-  if (isSticker) return msg.mediaUrl ? <img src={msg.mediaUrl} alt="Figurinha enviada" className="mb-4 h-36 w-36 object-contain" /> : null;
+  if (isSticker) return msg.mediaUrl ? <img src={msg.mediaUrl} alt="Figurinha enviada" className="mb-4 mt-4 h-36 w-36 object-contain" /> : null;
 
   return (
     <button
@@ -1222,7 +1222,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
-  const lastTouchTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const openedByLongPressRef = useRef(false);
 
   const textContent = msg.kind === "text" ? msg.content : null;
   const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
@@ -1254,22 +1256,48 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
     setMenuOpen(false);
   }
 
-  function handleTouchDoubleTap(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
-    const now = Date.now();
-    const previous = lastTouchTapRef.current;
-    lastTouchTapRef.current = { at: now, x: event.clientX, y: event.clientY };
-    if (previous && now - previous.at < 360 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 28) {
-      lastTouchTapRef.current = null;
+  function cancelLongPress() {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+    pressStartRef.current = null;
+  }
+
+  function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("button, a, [data-message-menu]"))) return;
+    // Prevent Android's text-selection handles from taking over the long press.
+    event.preventDefault();
+    cancelLongPress();
+    openedByLongPressRef.current = false;
+    pressStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressTimerRef.current = setTimeout(() => {
+      openedByLongPressRef.current = true;
       openMenu();
+    }, 500);
+  }
+
+  function handleMessagePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const start = pressStartRef.current;
+    if (event.pointerType === "touch" && start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) cancelLongPress();
+  }
+
+  function handleMessagePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    cancelLongPress();
+    if (openedByLongPressRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      openedByLongPressRef.current = false;
     }
   }
 
   return (
     <div
-      className="group flex w-full items-end gap-2.5"
+      className="group flex w-full touch-manipulation select-none items-end gap-2.5 [-webkit-touch-callout:none] md:select-text"
       style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}
-      onPointerUp={handleTouchDoubleTap}
+      onPointerDown={handleMessagePointerDown}
+      onPointerMove={handleMessagePointerMove}
+      onPointerUp={handleMessagePointerEnd}
+      onPointerCancel={cancelLongPress}
+      onPointerLeave={cancelLongPress}
     >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">

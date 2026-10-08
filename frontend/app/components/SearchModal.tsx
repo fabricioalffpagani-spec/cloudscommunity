@@ -221,21 +221,26 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         {/* Input */}
         <div className="flex items-center gap-3 rounded-xl bg-[#252840] px-4 py-3">
           <SearchIcon />
-          <input
+          <textarea
             autoFocus
-            type="search"
             name="cloud-community-search"
             aria-label="Buscar Clouds e pessoas"
+            aria-multiline="false"
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="none"
-            inputMode="search"
+            inputMode="text"
+            enterKeyHint="search"
+            rows={1}
             data-lpignore="true"
             data-1p-ignore="true"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => setQuery(e.target.value.replace(/\n/g, ""))}
+            onKeyDown={e => {
+              if (e.key === "Enter") e.preventDefault();
+            }}
             placeholder="Buscar clouds, pessoas..."
-            className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/40 outline-none"
+            className="min-h-0 flex-1 resize-none overflow-hidden bg-transparent text-[15px] leading-5 text-white placeholder:text-white/40 outline-none"
           />
           {loading ? (
             <span className="text-white/30"><SpinnerIcon /></span>

@@ -1055,7 +1055,10 @@ export class DirectMessagesService {
       .slice(0, 140);
     // Direct messages belong to the Messages badge, not the activity bell.
     await this.pushNotifications.send(recipientId, {
-      title: `Nova mensagem de ${senderName}`,
+      // Some Android notification layouts only surface the title while the
+      // notification is collapsed. Keep the message preview there as well as
+      // in the body so the recipient can still read it in that layout.
+      title: `${senderName}: ${preview}`,
       body: preview,
       url: `/messages?conversation=${conversationId}`,
       tag: `direct-message-${messageId}`,

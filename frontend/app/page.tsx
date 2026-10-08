@@ -1317,10 +1317,9 @@ function CreateCloudModal({
         <div className="space-y-4">
           <div>
             <label htmlFor="new-cloud-title" className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Título</label>
-            <input
+            <textarea
               id="new-cloud-title"
               autoFocus
-              type="text"
               name="new-cloud-topic-title"
               autoComplete="off"
               data-lpignore="true"
@@ -1329,12 +1328,18 @@ function CreateCloudModal({
               autoCapitalize="sentences"
               spellCheck={false}
               inputMode="text"
+              rows={1}
               value={title}
-              onChange={e => setTitle(e.target.value.slice(0, 30))}
-              onKeyDown={e => e.key === "Enter" && !isPrivateVisibility && handlePublish()}
+              onChange={e => setTitle(e.target.value.replace(/\n/g, "").slice(0, 30))}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!isPrivateVisibility) handlePublish();
+                }
+              }}
               placeholder="Título da sua Cloud..."
               maxLength={30}
-              className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
+              className="w-full resize-none overflow-hidden rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-[14px] leading-5 text-white placeholder:text-white/30 outline-none transition focus:border-[#9333EA]"
             />
             <div className="mt-2 flex justify-end text-[11px] text-white/35">{title.length}/30</div>
           </div>
