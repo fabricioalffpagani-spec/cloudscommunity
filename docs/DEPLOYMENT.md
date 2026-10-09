@@ -127,10 +127,9 @@ O deploy executa `git fetch origin main` e `git merge --ff-only` na VM, exigindo
 checkout limpo e `main` remoto exatamente no SHA publicado. Atualiza
 `IMAGE_TAG=sha-<SHA completo>` em `/opt/clouds/.env`, mantendo as outras linhas e
 permissões, e recusa entradas duplicadas. Baixa as imagens de `backend` e
-`frontend`. Se o par VAPID estiver ausente, gera
-as chaves uma única vez com a imagem validada e as grava apenas no `.env` da VM.
-Um par parcial ou duplicado interrompe o deploy; um par existente é preservado.
-Depois roda `docker compose up -d --no-build --no-deps --wait` para esses dois
+`frontend`. As chaves VAPID, quando usadas, devem ser configuradas previamente
+no `.env` da VM; o deploy não altera essas linhas. Depois roda
+`docker compose up -d --no-build --no-deps --wait` para esses dois
 serviços. PostgreSQL e Redis permanecem em execução e seus volumes não são
 removidos. O job confirma saúde de todos os quatro serviços e verifica a tag das
 imagens efetivamente usadas por backend e frontend. Por fim, exige HTTP 200 ou
