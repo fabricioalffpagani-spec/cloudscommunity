@@ -79,6 +79,8 @@ describe('DirectMessagesService', () => {
         title: 'Vicente: Olá',
         body: 'Olá',
         url: '/messages?conversation=conversation',
+        tag: 'direct-message-conversation',
+        messageId: 'message',
       }),
     );
   });

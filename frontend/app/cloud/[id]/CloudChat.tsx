@@ -932,18 +932,8 @@ function CloudMsgMenu({
   const [copied, setCopied] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const isOwn = isRight;
 
-  useEffect(() => {
-    const handle = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [onClose]);
 
   const textContent = msg.kind === "text" ? msg.content : null;
 
@@ -1041,7 +1031,6 @@ function CloudMsgMenu({
 
   return (
     <div
-      ref={menuRef}
       data-message-menu="true"
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
       style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
@@ -1125,7 +1114,7 @@ function AudioBubble({ msg, own }: { msg: ChatMessage; own?: boolean }) {
 function ImageBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className={`relative ${msg.isSticker ? "mb-4 mt-4 w-fit" : ""}`}>
-    <div className={`block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d] ${msg.isSticker ? "border-0 bg-transparent" : ""}`}>
+    <div className={msg.isSticker ? "block overflow-visible border-0 bg-transparent" : "block overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1a0e3d]"}>
       {msg.mediaUrl ? (
         <img src={msg.mediaUrl} alt={msg.isSticker ? "Figurinha enviada" : "Imagem enviada"} className={msg.isSticker ? "h-36 w-36 object-contain" : "max-h-[320px] max-w-full object-contain"} />
       ) : (
@@ -1419,6 +1408,36 @@ function CloudMessageBubble({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
   const openedByLongPressRef = useRef(false);
+
+  useEffect(() => () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    setMsgMenuOpen(false);
+    cancelLongPress();
+  }, [msg.id, msg.cloudId]);
+
+  useEffect(() => {
+    if (!msgMenuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuAnchorRef.current?.contains(event.target as Node)) setMsgMenuOpen(false);
+    };
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setMsgMenuOpen(false);
+    };
+    const closeOther = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== msg.id) setMsgMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside, true);
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("clouds:message-menu-open", closeOther);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside, true);
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("clouds:message-menu-open", closeOther);
+    };
+  }, [msgMenuOpen, msg.id]);
   const groupedReactions = useMemo(() => {
     return msg.reactions.reduce((acc, reaction) => {
       if (!acc[reaction.emoji]) {
@@ -1435,6 +1454,7 @@ function CloudMessageBubble({
       setMenuOpenUpward(window.innerHeight - rect.bottom < 220);
     }
     setMsgMenuOpen(true);
+    document.dispatchEvent(new CustomEvent("clouds:message-menu-open", { detail: msg.id }));
   }
 
   function closeMsgMenu() {
@@ -1448,16 +1468,14 @@ function CloudMessageBubble({
   }
 
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("button, a, [data-message-menu]"))) return;
-    // Prevent Android's text-selection handles from taking over the long press.
-    event.preventDefault();
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
     pressStartRef.current = { x: event.clientX, y: event.clientY };
     longPressTimerRef.current = setTimeout(() => {
       openedByLongPressRef.current = true;
       openMsgMenu();
-    }, 500);
+    }, 900);
   }
 
   function handleMessagePointerMove(event: React.PointerEvent<HTMLDivElement>) {
@@ -1470,7 +1488,6 @@ function CloudMessageBubble({
     if (openedByLongPressRef.current) {
       event.preventDefault();
       event.stopPropagation();
-      openedByLongPressRef.current = false;
     }
   }
 
@@ -1481,7 +1498,8 @@ function CloudMessageBubble({
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
       onPointerCancel={cancelLongPress}
-      onPointerLeave={cancelLongPress}
+      onClickCapture={(event) => { if (openedByLongPressRef.current) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
+      onContextMenu={(event) => { if (!(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); openMsgMenu(); } }}
     >
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
       {showFooter && !own && <Link href={`/users/${encodeURIComponent(msg.senderId)}`} aria-label={`Ver perfil de ${msg.senderName}`} className="mb-6 w-9 shrink-0">
@@ -1540,16 +1558,16 @@ function CloudMessageBubble({
           )}
 
           {/* Message actions row */}
-          {showFooter && <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
-            <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
+          <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
+            {showFooter && <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
               <span>{msg.time}</span>
               {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="italic">editada</span>}
               {own && !msg.pending && <MessageReceipt />}
-            </div>
+            </div>}
             <div ref={menuAnchorRef} className="relative">
               {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReply={onReply} onClose={closeMsgMenu} />}
             </div>
-          </div>}
+          </div>
         </div>
 
         {/* Action icons aligned to the side of message box */}

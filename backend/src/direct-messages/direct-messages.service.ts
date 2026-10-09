@@ -1083,7 +1083,8 @@ export class DirectMessagesService {
       title: `${senderName}: ${preview}`,
       body: preview,
       url: `/messages?conversation=${conversationId}`,
-      tag: `direct-message-${messageId}`,
+      tag: `direct-message-${conversationId}`,
+      messageId,
     });
   }
 

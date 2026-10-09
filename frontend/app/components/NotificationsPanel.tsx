@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { BellIcon, XIcon } from "./ui-icons";
 import { useSessionUser } from "./session-user";
+import { subscribeToPushNotifications } from "../lib/push-subscription";
 
 type NotificationActor = {
   id: string;
@@ -45,24 +46,10 @@ function formatRelativeTime(value: string) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short" }).format(date);
 }
 
-function vapidKeyToUint8Array(value: string) {
-  const padded = `${value.replace(/-/g, "+").replace(/_/g, "/")}${"=".repeat((4 - (value.length % 4)) % 4)}`;
-  const raw = window.atob(padded);
-  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
-}
-
 async function enableNativeNotifications() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
   if (await Notification.requestPermission() !== "granted") return;
-  const keyResponse = await fetch("/api/notifications/push-key", { cache: "no-store" });
-  const keyPayload = await keyResponse.json().catch(() => null) as { publicKey?: string | null } | null;
-  if (!keyResponse.ok || !keyPayload?.publicKey) return;
-  const registration = await navigator.serviceWorker.register("/clouds-sw.js", { updateViaCache: "none" });
-  await registration.update();
-  const subscription = await registration.pushManager.getSubscription()
-    ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey) });
-  const response = await fetch("/api/notifications/push-subscriptions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription) });
-  if (!response.ok) throw new Error("Não foi possível registrar as notificações push.");
+  await subscribeToPushNotifications();
 }
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {

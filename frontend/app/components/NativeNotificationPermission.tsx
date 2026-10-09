@@ -2,35 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useSessionUser } from "./session-user";
-
-function vapidKeyToUint8Array(value: string) {
-  const padded = `${value.replace(/-/g, "+").replace(/_/g, "/")}${"=".repeat((4 - (value.length % 4)) % 4)}`;
-  const raw = window.atob(padded);
-  return Uint8Array.from(raw, (character) => character.charCodeAt(0));
-}
-
-async function subscribeToPushNotifications() {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
-
-  const keyResponse = await fetch("/api/notifications/push-key", { cache: "no-store" });
-  const keyPayload = await keyResponse.json().catch(() => null) as { publicKey?: string | null } | null;
-  if (!keyResponse.ok || !keyPayload?.publicKey) throw new Error("Notificações push não estão configuradas no servidor.");
-
-  const registration = await navigator.serviceWorker.register("/clouds-sw.js", { updateViaCache: "none" });
-  await registration.update();
-  const subscription = await registration.pushManager.getSubscription()
-    ?? await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: vapidKeyToUint8Array(keyPayload.publicKey),
-    });
-
-  const response = await fetch("/api/notifications/push-subscriptions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(subscription),
-  });
-  if (!response.ok) throw new Error("Não foi possível registrar este dispositivo para notificações.");
-}
+import { subscribeToPushNotifications } from "../lib/push-subscription";
 
 async function requestNativePermission() {
   if (!("Notification" in window)) return;

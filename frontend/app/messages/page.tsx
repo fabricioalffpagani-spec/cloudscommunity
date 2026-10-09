@@ -1106,17 +1106,6 @@ function DmMsgMenu({
   const [copied, setCopied] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handle = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [onClose]);
 
   const handleCopy = () => {
     const text = textContent ?? msg.linkUrl ?? "";
@@ -1196,7 +1185,6 @@ function DmMsgMenu({
 
   return (
     <div
-      ref={menuRef}
       data-message-menu="true"
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
       style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
@@ -1250,6 +1238,36 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
     return () => document.removeEventListener("pointerdown", closeActions);
   }, []);
 
+  useEffect(() => () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+    cancelLongPress();
+  }, [msg.id, msg.conversationId]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!menuAnchorRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    const closeOther = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== msg.id) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside, true);
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("clouds:message-menu-open", closeOther);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside, true);
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("clouds:message-menu-open", closeOther);
+    };
+  }, [menuOpen, msg.id]);
+
   function openMenu() {
     if (menuAnchorRef.current) {
       const rect = menuAnchorRef.current.getBoundingClientRect();
@@ -1257,6 +1275,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
       setOpenUpward(window.innerHeight - rect.bottom < 220);
     }
     setMenuOpen(true);
+    document.dispatchEvent(new CustomEvent("clouds:message-menu-open", { detail: msg.id }));
   }
 
   function closeMenu() {
@@ -1270,16 +1289,14 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }
 
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("button, a, [data-message-menu]"))) return;
-    // Prevent Android's text-selection handles from taking over the long press.
-    event.preventDefault();
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
     pressStartRef.current = { x: event.clientX, y: event.clientY };
     longPressTimerRef.current = setTimeout(() => {
       openedByLongPressRef.current = true;
       openMenu();
-    }, 500);
+    }, 900);
   }
 
   function handleMessagePointerMove(event: React.PointerEvent<HTMLDivElement>) {
@@ -1292,7 +1309,6 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
     if (openedByLongPressRef.current) {
       event.preventDefault();
       event.stopPropagation();
-      openedByLongPressRef.current = false;
     }
   }
 
@@ -1304,7 +1320,8 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
       onPointerCancel={cancelLongPress}
-      onPointerLeave={cancelLongPress}
+      onClickCapture={(event) => { if (openedByLongPressRef.current) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
+      onContextMenu={(event) => { if (!(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); openMenu(); } }}
     >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
       {!isRight && <div className="w-9 shrink-0 mb-7">

@@ -7,6 +7,7 @@ export type PushMessage = {
   body: string;
   url?: string;
   tag?: string;
+  messageId?: string;
   badgeCount?: number;
   kind?: 'cloud_message';
   cloudId?: string;
