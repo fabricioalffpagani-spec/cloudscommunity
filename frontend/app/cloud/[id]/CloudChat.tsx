@@ -1134,13 +1134,20 @@ async function makeStickerFile(file: File): Promise<File> {
       nextImage.onerror = () => reject(new Error("Não foi possível ler a imagem selecionada."));
       nextImage.src = sourceUrl;
     });
+    // Stickers render at 144 CSS px. On common 3x mobile screens, 320 px
+    // source images are upscaled and look soft. Keep enough source detail for
+    // those displays while still bounding upload size.
     const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-    const scale = Math.min(1, 320 / longestSide);
+    const scale = Math.min(1, 512 / longestSide);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Não foi possível criar a figurinha.")), "image/webp", 0.86));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível preparar a figurinha.");
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Não foi possível criar a figurinha.")), "image/webp", 0.92));
     return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "figurinha"}.webp`, { type: "image/webp" });
   } finally {
     URL.revokeObjectURL(sourceUrl);
@@ -1699,6 +1706,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const outgoingTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingTypingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const minimizingRef = useRef(false);
+  const leftOnMobileExitRef = useRef(false);
 
   useEffect(() => {
     activeCloudIdRef.current = cloudId;
@@ -1832,6 +1841,36 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloudId]);
 
   const isCloudAuthor = Boolean(user?.id && cloud?.authorId && user.id === cloud.authorId);
+
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 767px)").matches || status !== "authenticated" || !user) return;
+
+    const leaveCloud = () => {
+      if (minimizingRef.current || leftOnMobileExitRef.current) return;
+      leftOnMobileExitRef.current = true;
+      const minimized = window.localStorage.getItem("clouds:minimized-cloud");
+      try {
+        if (minimized && JSON.parse(minimized).id === cloudId) {
+          window.localStorage.removeItem("clouds:minimized-cloud");
+          window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+        }
+      } catch { /* ignore invalid persisted state */ }
+      void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/${isCloudAuthor ? "exit" : "leave"}`, {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => undefined);
+    };
+
+    // Browser back (including Android's gesture/button) leaves the active
+    // Cloud. Do not turn that navigation into a Mini Cloud.
+    window.addEventListener("popstate", leaveCloud);
+    window.addEventListener("pagehide", leaveCloud);
+    return () => {
+      window.removeEventListener("popstate", leaveCloud);
+      window.removeEventListener("pagehide", leaveCloud);
+    };
+  }, [cloudId, isCloudAuthor, status, user]);
   const isPrivateCloud = (cloud?.visibility ?? visibility ?? "public") === "private";
   const typingPeople = Object.entries(typingUserIds)
     .filter(([, isTyping]) => isTyping)
@@ -1979,6 +2018,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [titleLongPressTimer]);
 
   const minimizeCloud = useCallback(() => {
+    minimizingRef.current = true;
     window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
     if (window.history.length > 1) {
@@ -2695,12 +2735,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
 
-  // Redireciona ao feed quando o tempo da Cloud zera
+  // Uma Cloud encerrada passa a viver no Read, onde a conversa permanece
+  // disponível e pode ser continuada em uma nova Cloud.
   useEffect(() => {
     if (isExpired && cloud) {
-      router.replace("/");
+      router.replace(`/read?cloud=${encodeURIComponent(cloudId)}`);
     }
-  }, [isExpired, cloud, router]);
+  }, [isExpired, cloud, cloudId, router]);
 
   if (status === "loading" || loadingCloud) {
     return (

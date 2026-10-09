@@ -31,3 +31,20 @@ export function subscribeToCloudPresence(onUpdate: (update: CloudPresenceUpdate)
     socket.disconnect();
   };
 }
+
+export function subscribeToCloudFeedUpdates(onUpdate: () => void) {
+  const socketUrl = resolveSocketUrl();
+  if (!socketUrl) return () => undefined;
+
+  const socket: Socket = io(`${socketUrl}/clouds`, {
+    auth: socketAuth,
+    withCredentials: true,
+    transports: ["polling", "websocket"],
+  });
+  socket.on("cloud:feed_updated", onUpdate);
+
+  return () => {
+    socket.removeListener("cloud:feed_updated", onUpdate);
+    socket.disconnect();
+  };
+}

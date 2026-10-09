@@ -24,6 +24,7 @@ import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrom
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import { SearchModal } from "./components/SearchModal";
 import { InviteCloudsButton } from "./components/InviteCloudsButton";
+import { subscribeToCloudFeedUpdates } from "./lib/cloud-presence";
 import {
   SessionUserAvatar,
   getSessionUserDisplayName,
@@ -2953,6 +2954,29 @@ function PageContent() {
 
     const timer = window.setInterval(() => void refreshParticipants(), 10_000);
     return () => window.clearInterval(timer);
+  }, [cloudScope, user?.id]);
+
+  useEffect(() => {
+    let refreshTimer: number | null = null;
+    const refreshFeed = () => {
+      if (refreshTimer !== null) return;
+      refreshTimer = window.setTimeout(async () => {
+        refreshTimer = null;
+        try {
+          const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", { cache: "no-store" });
+          const payload = (await response.json().catch(() => null)) as { clouds?: CloudApiPayload[] } | null;
+          if (!response.ok || !Array.isArray(payload?.clouds)) return;
+          setClouds(payload.clouds.map(mapApiCloudToCloud).filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id)));
+        } catch {
+          // The periodic refresh remains available if the live refresh fails.
+        }
+      }, 100);
+    };
+    const unsubscribe = subscribeToCloudFeedUpdates(refreshFeed);
+    return () => {
+      unsubscribe();
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+    };
   }, [cloudScope, user?.id]);
 
   useEffect(() => {

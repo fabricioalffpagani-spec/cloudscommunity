@@ -286,6 +286,10 @@ export class CloudMessagesGateway
       membersCount,
       members,
     });
+    // Feed clients do not join every Cloud room. Send only an invalidation
+    // signal globally, so they can refresh their own authorized view without
+    // exposing member identities from private Clouds.
+    this.server.emit('cloud:feed_updated');
     return membersCount;
   }
 

@@ -9,6 +9,7 @@ const PROTECTED_PATH_PREFIXES = [
   "/meet",
   "/settings",
   "/cloud",
+  "/mini-cloud",
   "/following",
   "/read",
   "/onboarding",
