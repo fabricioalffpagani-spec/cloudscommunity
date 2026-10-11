@@ -42,7 +42,13 @@ export async function subscribeToPushNotifications(): Promise<void> {
         (byte, index) => byte === new Uint8Array(existingKey)[index],
       );
     if (subscription && !sameKey) {
+      const staleEndpoint = subscription.endpoint;
       await subscription.unsubscribe();
+      await fetch("/api/notifications/push-subscriptions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: staleEndpoint }),
+      });
       subscription = null;
     }
     subscription ??= await registration.pushManager.subscribe({

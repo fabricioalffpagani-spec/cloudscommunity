@@ -312,10 +312,12 @@ model SavedSticker {
   mediaUrl    String   @db.Text
   contentHash String   @db.VarChar(32)
   createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([userId, lastUsedAt(sort: Desc), createdAt(sort: Desc)])
   @@unique([userId, contentHash])
 }
 

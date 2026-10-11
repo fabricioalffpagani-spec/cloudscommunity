@@ -107,4 +107,10 @@ describe("push service worker", () => {
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
   });
+
+  it("displays a cloud push with no app window open", async () => {
+    const worker = createWorker([]);
+    await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
+    expect(worker.showNotification).toHaveBeenCalledTimes(1);
+  });
 });

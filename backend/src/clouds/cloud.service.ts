@@ -15,7 +15,6 @@ import { Resend } from 'resend';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
-import { ChatPresenceService } from '../infrastructure/chat-presence/chat-presence.service';
 import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
 import {
   CloudInvitePayload,
@@ -125,7 +124,6 @@ export class CloudService {
     private readonly authService: AuthService,
     private readonly pushNotifications: PushNotificationsService,
     private readonly topicClassifier: CloudTopicClassifierService,
-    private readonly chatPresenceService?: ChatPresenceService,
   ) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     this.resend = apiKey ? new Resend(apiKey) : null;
@@ -390,6 +388,7 @@ export class CloudService {
           },
         },
         members: {
+          where: { leftAt: null },
           orderBy: { joinedAt: 'asc' },
           take: 8,
           select: {
@@ -403,7 +402,7 @@ export class CloudService {
         },
         _count: {
           select: {
-            members: true,
+            members: { where: { leftAt: null } },
             messages: { where: { deletedAt: null, type: { not: 'system' } } },
           },
         },
@@ -1807,7 +1806,7 @@ export class CloudService {
     const current = await this.requireSession(token);
     const stickers = await this.prisma.savedSticker.findMany({
       where: { userId: current.user.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ lastUsedAt: 'desc' }, { createdAt: 'desc' }, { id: 'asc' }],
       take: 250,
     });
     return { ok: true, stickers };
@@ -1837,6 +1836,42 @@ export class CloudService {
       data: { userId: current.user.id, mediaUrl, contentHash },
     });
     return { ok: true, sticker, alreadySaved: false };
+  }
+
+  async markStickerUsed(token: string | null, mediaUrl?: string) {
+    const current = await this.requireSession(token);
+    if (!mediaUrl || mediaUrl.length > 14 * 1024 * 1024) {
+      throw new BadRequestException({ message: 'Figurinha inválida.' });
+    }
+    const official = /^\/api\/stickers\/system\/[a-z]+\?v=2$/.test(mediaUrl);
+    const contentHash = crypto.createHash('md5').update(mediaUrl).digest('hex');
+    const where = {
+      userId_contentHash: { userId: current.user.id, contentHash },
+    };
+    const existing = await this.prisma.savedSticker.findUnique({ where });
+    if (!existing && !official) {
+      throw new NotFoundException({ message: 'Figurinha não salva.' });
+    }
+    const sticker = await this.prisma.savedSticker.upsert({
+      where,
+      create: {
+        userId: current.user.id,
+        mediaUrl,
+        contentHash,
+        lastUsedAt: new Date(),
+      },
+      update: { lastUsedAt: new Date() },
+    });
+    return { ok: true, sticker };
+  }
+
+  async removeSavedSticker(token: string | null, id?: string) {
+    const current = await this.requireSession(token);
+    if (!id) throw new BadRequestException({ message: 'Figurinha inválida.' });
+    await this.prisma.savedSticker.deleteMany({
+      where: { id, userId: current.user.id },
+    });
+    return { ok: true };
   }
 
   async editMessage(
@@ -2310,10 +2345,6 @@ export class CloudService {
       .slice(0, 140);
     await Promise.all(
       Array.from(recipientIds, async (recipientId) => {
-        const watchingThisCloud = await this.chatPresenceService
-          ?.isWatchingCloud(recipientId, cloudId)
-          .catch(() => false);
-        if (watchingThisCloud) return;
         const mentioned = mentionedIds.has(recipientId);
         const notification = await this.prisma.notification.create({
           data: {

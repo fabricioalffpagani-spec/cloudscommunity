@@ -47,14 +47,12 @@ export class CloudController {
 
   @Get()
   async feed(@Req() req: Request) {
-    const result = await this.cloudService.listFeed(extractSessionToken(req));
-    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
+    return this.cloudService.listFeed(extractSessionToken(req));
   }
 
   @Get('mine')
   async mine(@Req() req: Request) {
-    const result = await this.cloudService.listMine(extractSessionToken(req));
-    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
+    return this.cloudService.listMine(extractSessionToken(req));
   }
 
   @Get('read')
@@ -90,10 +88,7 @@ export class CloudController {
 
   @Get('following')
   async following(@Req() req: Request) {
-    const result = await this.cloudService.listFollowing(
-      extractSessionToken(req),
-    );
-    return { ...result, clouds: await this.withLiveCounts(result.clouds) };
+    return this.cloudService.listFollowing(extractSessionToken(req));
   }
 
   @Get('invite/:token')
@@ -109,11 +104,7 @@ export class CloudController {
 
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
-    const result = await this.cloudService.findById(
-      extractSessionToken(req),
-      id,
-    );
-    return { ...result, cloud: await this.withLiveCount(result.cloud) };
+    return this.cloudService.findById(extractSessionToken(req), id);
   }
 
   @Post()
@@ -543,6 +534,25 @@ export class CloudController {
     );
   }
 
+  @Post('stickers/use')
+  async markStickerUsed(
+    @Req() req: Request,
+    @Body() body: { mediaUrl?: string },
+  ) {
+    return this.cloudService.markStickerUsed(
+      extractSessionToken(req),
+      body.mediaUrl,
+    );
+  }
+
+  @Delete('stickers')
+  async removeSavedSticker(@Req() req: Request, @Body() body: { id?: string }) {
+    return this.cloudService.removeSavedSticker(
+      extractSessionToken(req),
+      body.id,
+    );
+  }
+
   @Post(':id/messages/:messageId/reactions')
   async addReaction(
     @Param('id') id: string,
@@ -579,22 +589,5 @@ export class CloudController {
       id,
       messageId,
     );
-  }
-
-  private async withLiveCount<T extends { id: string; membersCount: number }>(
-    cloud: T,
-  ): Promise<T> {
-    return {
-      ...cloud,
-      membersCount: await this.cloudMessagesGateway.getConnectedMemberCount(
-        cloud.id,
-      ),
-    };
-  }
-
-  private async withLiveCounts<T extends { id: string; membersCount: number }>(
-    clouds: T[],
-  ): Promise<T[]> {
-    return Promise.all(clouds.map((cloud) => this.withLiveCount(cloud)));
   }
 }
