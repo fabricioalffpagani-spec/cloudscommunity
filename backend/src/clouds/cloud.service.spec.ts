@@ -212,9 +212,11 @@ describe('Talk / Read regression', () => {
       author: { followers: { some: { followerId: 'viewer' } } },
     });
     expect(result.clouds[0].messagesCount).toBe(12);
-    expect(query.select?.members?.where).toEqual({ leftAt: null });
-    expect(query.select?._count?.select?.members).toEqual({
-      where: { leftAt: null },
+    expect(query).toMatchObject({
+      select: {
+        members: { where: { leftAt: null } },
+        _count: { select: { members: { where: { leftAt: null } } } },
+      },
     });
   });
   it('filters ended clouds to authors the viewer follows', async () => {
