@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { SESSION_COOKIE_NAME } from '../auth/auth.constants';
 import { NotificationsService } from './notifications.service';
@@ -51,6 +60,14 @@ export class NotificationsController {
     return this.notificationsService.savePushSubscription(
       extractSessionToken(req),
       subscription,
+    );
+  }
+
+  @Delete('push-subscriptions')
+  async unsubscribe(@Req() req: Request, @Body() body: { endpoint?: string }) {
+    return this.notificationsService.removePushSubscription(
+      extractSessionToken(req),
+      body.endpoint,
     );
   }
 

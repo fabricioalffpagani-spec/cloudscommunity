@@ -14,6 +14,7 @@ import { messagesConversationHref, requestedConversationId } from "../lib/naviga
 import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
 import { isConversationForViewer } from "../lib/direct-conversation";
+import { recordStickerUse } from "../lib/sticker-usage";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -1624,7 +1625,7 @@ function MessagesPageContent() {
     };
   }, [messageSearchOpen]);
 
-  const handleImageFile = useCallback(async (file: File | null, isSticker = false) => {
+  const handleImageFile = useCallback(async (file: File | null, isSticker = false, savedStickerUrl?: string) => {
     if (!file || !activeConversationIdRef.current || !user?.id) {
       return;
     }
@@ -1671,6 +1672,13 @@ function MessagesPageContent() {
       const confirmed = buildMessage(payload.message, user);
       setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
       setConversations((prev) => withConfirmedPreview(prev, conversationId, confirmed, "Imagem"));
+      if (savedStickerUrl) {
+        void recordStickerUse(savedStickerUrl).then(() =>
+          fetch("/api/stickers", { cache: "no-store" })
+            .then((result) => result.json())
+            .then((result: { stickers: Array<{ id: string; mediaUrl: string }> }) => setSavedStickers(result.stickers)),
+        ).catch(() => undefined);
+      }
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
@@ -2824,7 +2832,7 @@ function MessagesPageContent() {
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[calc(100vw-2rem)] max-w-[600px] -translate-x-1/2 overflow-hidden rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
                   <div className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-2"><button type="button" onClick={() => setMediaPickerTab("emoji")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "emoji" ? "bg-white/10 text-white" : "text-white/45"}`}>😊 Emojis</button><button type="button" onClick={() => setMediaPickerTab("sticker")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "sticker" ? "bg-white/10 text-white" : "text-white/45"}`}>◌ Figurinhas</button></div>
-                  {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><div className="mb-2 flex items-center justify-between"><p className="text-[12px] font-semibold text-white/60">Figurinhas do Clouds</p><span className="text-[11px] text-white/40">{savedStickers.length} {savedStickers.length === 1 ? "figurinha" : "figurinhas"}</span></div>{savedStickers.length ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-xl p-0 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Ainda não há figurinhas disponíveis.</p>}</div> : <>
+                  {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><div className="mb-2 flex items-center justify-between"><p className="text-[12px] font-semibold text-white/60">Figurinhas do Clouds</p><span className="text-[11px] text-white/40">{savedStickers.length} {savedStickers.length === 1 ? "figurinha" : "figurinhas"}</span></div>{savedStickers.length ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true, sticker.mediaUrl)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-xl p-0 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Ainda não há figurinhas disponíveis.</p>}</div> : <>
                   {/* Abas de categorias */}
                   <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
                     {EMOJI_CATEGORIES.map((cat, i) => (

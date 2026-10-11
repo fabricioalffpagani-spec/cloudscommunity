@@ -15,6 +15,7 @@ import { ForwardToContactModal } from "../../components/ForwardToContactModal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
 import { buildMentionCandidates } from "../../lib/mention-candidates";
+import { recordStickerUse } from "../../lib/sticker-usage";
 
 type CloudPayload = {
   id: string;
@@ -1138,7 +1139,7 @@ async function makeStickerFile(file: File): Promise<File> {
     // source images are upscaled and look soft. Keep enough source detail for
     // those displays while still bounding upload size.
     const longestSide = Math.max(image.naturalWidth, image.naturalHeight);
-    const scale = Math.min(1, 512 / longestSide);
+    const scale = file.type === "image/svg+xml" ? 512 / longestSide : Math.min(1, 512 / longestSide);
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -2477,7 +2478,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, []);
 
-  const handleImageFile = useCallback(async (file: File | null, isSticker = false) => {
+  const handleImageFile = useCallback(async (file: File | null, isSticker = false, savedStickerUrl?: string) => {
     if (!file) {
       return;
     }
@@ -2537,6 +2538,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       const payload = await readJson<{ ok: true; message: CloudMessagePayload }>(response);
       setMessages((prev) => mergeMessage(prev, normalizeMessage(payload.message, user.id)));
+      if (savedStickerUrl) {
+        void recordStickerUse(savedStickerUrl).then(() =>
+          fetch("/api/stickers", { cache: "no-store" })
+            .then((result) => readJson<{ stickers: Array<{ id: string; mediaUrl: string }> }>(result))
+            .then((result) => setSavedStickers(result.stickers)),
+        ).catch(() => undefined);
+      }
       URL.revokeObjectURL(tempUrl);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a imagem.");
@@ -3150,7 +3158,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     <div className="max-h-[28vh] overflow-y-auto p-3 [scrollbar-color:#7C3AED_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#7C3AED]">
                       <div className="mb-2 flex items-center justify-between px-1"><p className="text-[12px] font-semibold text-white/65">{mediaPickerTab === "sticker" ? "Figurinhas do Clouds" : EMOJI_CATEGORIES[emojiCategory]?.label}</p><span className="text-[11px] text-white/35">{mediaPickerTab === "sticker" ? savedStickers.length : EMOJI_CATEGORIES[emojiCategory]?.emojis.length}</span></div>
                       {mediaPickerTab === "sticker" ? (
-                        savedStickers.length > 0 ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3 px-1 py-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" title="Enviar figurinha" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-2xl p-0 transition hover:bg-white/[0.08]"><img src={sticker.mediaUrl} alt="Figurinha salva" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-6 text-center text-sm text-white/45">Nenhuma figurinha salva ainda.</p>
+                        savedStickers.length > 0 ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3 px-1 py-2">{savedStickers.map((sticker) => <button key={sticker.id} type="button" title="Enviar figurinha" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true, sticker.mediaUrl)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-2xl p-0 transition hover:bg-white/[0.08]"><img src={sticker.mediaUrl} alt="Figurinha salva" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-6 text-center text-sm text-white/45">Nenhuma figurinha salva ainda.</p>
                       ) : <div className="flex flex-wrap gap-1.5">{EMOJI_CATEGORIES[emojiCategory]?.emojis.map((emoji, index) => <button key={index} type="button" onClick={() => setDraft((current) => `${current}${emoji}`)} className="flex h-9 w-9 items-center justify-center rounded-xl text-[18px] transition hover:bg-white/[0.07]">{emoji}</button>)}</div>}
                     </div>
                   </div>

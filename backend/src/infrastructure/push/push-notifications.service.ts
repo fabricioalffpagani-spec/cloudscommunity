@@ -55,6 +55,12 @@ export class PushNotificationsService {
     });
   }
 
+  async removeSubscription(userId: string, endpoint: string) {
+    await this.prisma.pushSubscription.deleteMany({
+      where: { userId, endpoint },
+    });
+  }
+
   async send(userId: string, message: PushMessage) {
     if (!this.enabled) return;
     const [subscriptions, badgeCount] = await Promise.all([

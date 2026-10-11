@@ -163,6 +163,20 @@ export class NotificationsService {
     return { ok: true };
   }
 
+  async removePushSubscription(token: string | null, endpoint?: string) {
+    const current = await this.requireSession(token);
+    if (!endpoint?.trim()) {
+      throw new BadRequestException({
+        message: 'Inscrição de notificações inválida.',
+      });
+    }
+    await this.pushNotifications.removeSubscription(
+      current.user.id,
+      endpoint.trim(),
+    );
+    return { ok: true };
+  }
+
   async acceptFollowRequest(token: string | null, notificationId: string) {
     const notification = await this.requireFollowRequestNotification(
       token,
