@@ -7,13 +7,15 @@ type Notice = {
   options: {
     tag: string;
     body: string;
-    data: { url: string; messageId?: string; count: number };
+    renotify: boolean;
+    data: { url: string; messageId?: string };
   };
 };
 
-function createWorker(windows: Array<{ visibilityState: string }> = []) {
+function createWorker(showResult: Promise<void> = Promise.resolve()) {
   const timing: { pushReceivedAt?: string; showNotificationAt?: string } = {};
   const timingLog = vi.fn();
+  const timingRecords = new Map<string, string>();
   const handlers = new Map<
     string,
     (event: {
@@ -26,6 +28,7 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     async (title: string, options: Notice["options"]) => {
       timing.showNotificationAt = new Date().toISOString();
       notices.set(options.tag, { title, options });
+      await showResult;
     },
   );
   const self = {
@@ -38,10 +41,15 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     ) => handlers.set(name, handler),
     registration: {
       showNotification,
-      getNotifications: async ({ tag }: { tag: string }) =>
-        notices.has(tag) ? [notices.get(tag)!.options] : [],
+      getNotifications: vi.fn(async () => {
+        throw new Error("notification lookup unavailable");
+      }),
     },
-    clients: { matchAll: async () => windows },
+    clients: {
+      matchAll: vi.fn(async () => {
+        throw new Error("window lookup unavailable");
+      }),
+    },
     navigator: {},
   };
   runInNewContext(readFileSync("public/clouds-sw.js", "utf8"), {
@@ -51,6 +59,14 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     setTimeout,
     clearTimeout,
     console: { info: timingLog },
+    caches: {
+      open: async () => ({
+        put: async (key: string, response: Response) => {
+          timingRecords.set(key, await response.text());
+        },
+      }),
+    },
+    Response,
   });
   async function push(payload: unknown) {
     let done = Promise.resolve();
@@ -63,11 +79,20 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     });
     await done;
   }
-  return { notices, showNotification, push, timing, timingLog };
+  return {
+    notices,
+    showNotification,
+    getNotifications: self.registration.getNotifications,
+    matchAll: self.clients.matchAll,
+    push,
+    timing,
+    timingLog,
+    timingRecords,
+  };
 }
 
 describe("push service worker", () => {
-  it("keeps one notification per conversation and ignores redelivery of the same message", async () => {
+  it("shows each direct message without waiting for notification or window lookups", async () => {
     const worker = createWorker();
     await worker.push({
       title: "Ana: Oi",
@@ -97,24 +122,28 @@ describe("push service worker", () => {
       tag: "direct-message-b",
       messageId: "m3",
     });
-    expect(worker.showNotification).toHaveBeenCalledTimes(3);
+    expect(worker.showNotification).toHaveBeenCalledTimes(4);
     expect(worker.notices.size).toBe(2);
-    expect(worker.notices.get("direct-message-a")?.options.body).toContain(
-      "2 mensagens",
+    expect(worker.notices.get("direct-message-a")?.options.body).toBe(
+      "Tudo bem?",
     );
+    expect(worker.notices.get("direct-message-a")?.options.renotify).toBe(true);
     expect(worker.notices.get("direct-message-a")?.options.data.url).toBe(
       "/messages?conversation=a",
     );
+    expect(worker.getNotifications).not.toHaveBeenCalled();
+    expect(worker.matchAll).not.toHaveBeenCalled();
   });
 
-  it("still displays a cloud push when the only app window is hidden", async () => {
-    const worker = createWorker([{ visibilityState: "hidden" }]);
+  it("displays a cloud push even if window lookup would fail", async () => {
+    const worker = createWorker();
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
+    expect(worker.matchAll).not.toHaveBeenCalled();
   });
 
   it("displays a cloud push with no app window open", async () => {
-    const worker = createWorker([]);
+    const worker = createWorker();
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
     expect(worker.timing.pushReceivedAt).toBeDefined();
@@ -141,6 +170,42 @@ describe("push service worker", () => {
     });
     expect(worker.timingLog.mock.calls[1][1]).toMatchObject({
       trace: "test-trace",
+    });
+    const saved = JSON.parse(
+      worker.timingRecords.get("/__push_timing__/test-trace/0") || "{}",
+    ) as {
+      trace?: string;
+      pushReceivedAt?: string;
+      showNotificationAt?: string;
+      showResolvedAt?: string;
+    };
+    expect(saved.trace).toBe("test-trace");
+    expect(saved.pushReceivedAt).toBeDefined();
+    expect(saved.showNotificationAt).toBeDefined();
+    expect(saved.showResolvedAt).toBeDefined();
+  });
+
+  it("persists receive and call times even while notification display is pending", async () => {
+    const worker = createWorker(new Promise<void>(() => undefined));
+    void worker.push({
+      title: "Cloud",
+      pushTiming: {
+        traceId: "pending-trace",
+        subscription: 0,
+        sentAt: "2026-10-12T13:00:00.000Z",
+      },
+    });
+    await vi.waitFor(() => {
+      const saved = JSON.parse(
+        worker.timingRecords.get("/__push_timing__/pending-trace/0") || "{}",
+      ) as {
+        pushReceivedAt?: string;
+        showNotificationAt?: string;
+        showResolvedAt?: string;
+      };
+      expect(saved.pushReceivedAt).toBeDefined();
+      expect(saved.showNotificationAt).toBeDefined();
+      expect(saved.showResolvedAt).toBeUndefined();
     });
   });
 });

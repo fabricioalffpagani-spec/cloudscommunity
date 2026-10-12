@@ -1,3 +1,11 @@
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "clouds:push-diagnostics-version") {
+    event.ports?.[0]?.postMessage({
+      version: "2026-10-12-push-diagnostics-v1",
+    });
+  }
+});
+
 self.addEventListener("install", (event) => {
   // Ativa a versão nova assim que o PWA for aberto, sem conservar a interface
   // anterior (que ainda exibia o filtro textual "+ Recentes").
@@ -17,6 +25,33 @@ self.addEventListener("push", (event) => {
     /* A malformed payload must still show a notification. */
   }
   const timing = data.pushTiming;
+  let timingWrite = Promise.resolve();
+  const timingRecord = timing?.traceId
+    ? {
+        trace: timing.traceId,
+        subscription: timing.subscription,
+        sentAt: timing.sentAt,
+        pushReceivedAt: new Date().toISOString(),
+      }
+    : null;
+  const recordTiming = (fields) => {
+    if (!timingRecord) return Promise.resolve();
+    Object.assign(timingRecord, fields);
+    const snapshot = JSON.stringify(timingRecord);
+    timingWrite = timingWrite
+      .then(async () => {
+        const cache = await caches.open("clouds-push-timing-v1");
+        await cache.put(
+          `/__push_timing__/${timingRecord.trace}/${timingRecord.subscription}`,
+          new Response(snapshot, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      })
+      .catch(() => undefined);
+    return timingWrite;
+  };
+  const receivedWrite = recordTiming({});
   if (timing?.traceId) {
     console.info("push_timing", {
       trace: timing.traceId,
@@ -25,71 +60,50 @@ self.addEventListener("push", (event) => {
       pushReceivedAt: new Date().toISOString(),
     });
   }
-  event.waitUntil(
-    (async () => {
-      if (data.kind === "cloud_message" && data.cloudId) {
-        const windows = await self.clients.matchAll({
-          type: "window",
-          includeUncontrolled: true,
+  const tag = data.tag || "clouds-notification";
+  const showNotificationAt = new Date().toISOString();
+  const calledWrite = recordTiming({ showNotificationAt });
+  if (timing?.traceId) {
+    console.info("push_timing", {
+      trace: timing.traceId,
+      subscription: timing.subscription,
+      showNotificationAt,
+    });
+  }
+  let showTask;
+  try {
+    showTask = self.registration.showNotification(data.title || "Clouds", {
+      body: data.body || "Você tem uma nova notificação.",
+      // Android uses the transparent badge as a monochrome status-bar glyph.
+      // Keep the full-color icon for the expanded notification.
+      icon: "/pwa-512x512.png?v=5",
+      badge: "/clouds-notification-badge-v2.png",
+      tag,
+      renotify: Boolean(data.messageId),
+      data: { url: data.url || "/", messageId: data.messageId },
+    });
+  } catch (error) {
+    showTask = Promise.reject(error);
+  }
+  const tasks = [
+    Promise.resolve(showTask).then(
+      () => recordTiming({ showResolvedAt: new Date().toISOString() }),
+      async (error) => {
+        await recordTiming({
+          showErrorName: error instanceof Error ? error.name : "UnknownError",
         });
-        const watching = await Promise.all(
-          windows
-            .filter((client) => client.visibilityState === "visible")
-            .map(
-              (client) =>
-                new Promise((resolve) => {
-                  const channel = new MessageChannel();
-                  const timeout = setTimeout(() => resolve(false), 500);
-                  channel.port1.onmessage = (reply) => {
-                    clearTimeout(timeout);
-                    resolve(reply.data?.watching === true);
-                  };
-                  client.postMessage(
-                    {
-                      type: "clouds:mini-cloud-watching",
-                      cloudId: data.cloudId,
-                    },
-                    [channel.port2],
-                  );
-                }),
-            ),
-        );
-        if (watching.some(Boolean)) return;
-      }
-      const tag = data.tag || "clouds-notification";
-      const previous = data.messageId
-        ? (await self.registration.getNotifications({ tag }))[0]
-        : null;
-      if (data.messageId && previous?.data?.messageId === data.messageId)
-        return;
-      const count = data.messageId ? (previous?.data?.count || 0) + 1 : 0;
-      if (timing?.traceId) {
-        console.info("push_timing", {
-          trace: timing.traceId,
-          subscription: timing.subscription,
-          showNotificationAt: new Date().toISOString(),
-        });
-      }
-      await self.registration.showNotification(data.title || "Clouds", {
-        body:
-          count > 1
-            ? `${count} mensagens nesta conversa · ${data.body || "Nova mensagem"}`
-            : data.body || "Você tem uma nova notificação.",
-        // Android uses the transparent badge as a monochrome status-bar glyph.
-        // Keep the full-color icon for the expanded notification.
-        icon: "/pwa-512x512.png?v=5",
-        badge: "/clouds-notification-badge-v2.png",
-        tag,
-        renotify: count > 1,
-        data: { url: data.url || "/", messageId: data.messageId, count },
-      });
-      if (data.badgeCount && self.navigator.setAppBadge) {
-        await self.navigator
-          .setAppBadge(data.badgeCount)
-          .catch(() => undefined);
-      }
-    })(),
-  );
+        throw error;
+      },
+    ),
+    receivedWrite,
+    calledWrite,
+  ];
+  if (data.badgeCount && self.navigator.setAppBadge) {
+    tasks.push(
+      self.navigator.setAppBadge(data.badgeCount).catch(() => undefined),
+    );
+  }
+  event.waitUntil(Promise.all(tasks));
 });
 
 self.addEventListener("notificationclick", (event) => {
