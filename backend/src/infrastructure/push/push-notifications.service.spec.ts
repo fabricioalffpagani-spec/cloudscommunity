@@ -1,0 +1,95 @@
+import webpush from 'web-push';
+import { PrismaService } from '../prisma/prisma.service';
+import { PushNotificationsService } from './push-notifications.service';
+
+describe('PushNotificationsService delivery', () => {
+  const originalPublicKey = process.env.VAPID_PUBLIC_KEY;
+  const originalPrivateKey = process.env.VAPID_PRIVATE_KEY;
+  const originalDiagnostics = process.env.PUSH_TIMING_DIAGNOSTICS;
+
+  beforeEach(() => {
+    process.env.VAPID_PUBLIC_KEY = 'test-public-key';
+    process.env.VAPID_PRIVATE_KEY = 'test-private-key';
+    process.env.PUSH_TIMING_DIAGNOSTICS = '1';
+    jest.spyOn(webpush, 'setVapidDetails').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if (originalPublicKey === undefined) delete process.env.VAPID_PUBLIC_KEY;
+    else process.env.VAPID_PUBLIC_KEY = originalPublicKey;
+    if (originalPrivateKey === undefined) delete process.env.VAPID_PRIVATE_KEY;
+    else process.env.VAPID_PRIVATE_KEY = originalPrivateKey;
+    if (originalDiagnostics === undefined)
+      delete process.env.PUSH_TIMING_DIAGNOSTICS;
+    else process.env.PUSH_TIMING_DIAGNOSTICS = originalDiagnostics;
+  });
+
+  function setup() {
+    const prisma = {
+      pushSubscription: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'subscription-1',
+            endpoint: 'https://example.test/push',
+            p256dh: 'key',
+            auth: 'auth',
+          },
+        ]),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      notification: { count: jest.fn().mockResolvedValue(1) },
+    };
+    const service = new PushNotificationsService(
+      prisma as unknown as PrismaService,
+    );
+    return { service, prisma };
+  }
+
+  it('calls the provider immediately for a Cloud and records acceptance', async () => {
+    const { service } = setup();
+    const eventAt = new Date();
+    let providerAt: Date | undefined;
+    const provider = jest
+      .spyOn(webpush, 'sendNotification')
+      .mockImplementation(() => {
+        providerAt = new Date();
+        return Promise.resolve({ statusCode: 201, body: '', headers: {} });
+      });
+
+    await service.send(
+      'recipient',
+      { title: 'Cloud', body: 'Criada' },
+      eventAt,
+    );
+
+    expect(providerAt).toBeDefined();
+    expect(providerAt!.getTime() - eventAt.getTime()).toBeLessThan(1000);
+    expect(provider.mock.calls[0][2]).toEqual({
+      TTL: 600,
+      urgency: 'high',
+      timeout: 15_000,
+    });
+  });
+
+  it.each([404, 410])(
+    'uses immediate priority and removes subscriptions rejected with HTTP %i',
+    async (statusCode) => {
+      const { service, prisma } = setup();
+      const provider = jest
+        .spyOn(webpush, 'sendNotification')
+        .mockRejectedValue({ statusCode });
+
+      await service.send('recipient', { title: 'Activity', body: 'Update' });
+
+      expect(provider.mock.calls[0][2]).toEqual({
+        TTL: 600,
+        urgency: 'high',
+        timeout: 15_000,
+      });
+      expect(prisma.pushSubscription.delete).toHaveBeenCalledWith({
+        where: { id: 'subscription-1' },
+      });
+    },
+  );
+});

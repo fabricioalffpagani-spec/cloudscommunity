@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -12,6 +13,12 @@ export type PushMessage = {
   kind?: 'cloud_message';
   cloudId?: string;
 };
+
+const DELIVERY_OPTIONS = {
+  TTL: 10 * 60,
+  urgency: 'high',
+  timeout: 15_000,
+} as const;
 
 @Injectable()
 export class PushNotificationsService {
@@ -61,26 +68,54 @@ export class PushNotificationsService {
     });
   }
 
-  async send(userId: string, message: PushMessage) {
+  async send(userId: string, message: PushMessage, eventAt?: Date) {
     if (!this.enabled) return;
+    const diagnostics = process.env.PUSH_TIMING_DIAGNOSTICS === '1';
+    const traceId = diagnostics ? randomUUID() : undefined;
+    const eventTimestamp = eventAt?.toISOString();
     const [subscriptions, badgeCount] = await Promise.all([
       this.prisma.pushSubscription.findMany({ where: { userId } }),
       this.prisma.notification.count({
         where: { userId, isRead: false, type: { not: 'direct_message' } },
       }),
     ]);
-    const payload = JSON.stringify({ ...message, badgeCount });
+    if (diagnostics)
+      this.logger.log(
+        `push_timing trace=${traceId} event=${eventTimestamp ?? 'unknown'} subscriptions=${subscriptions.length}`,
+      );
     await Promise.all(
-      subscriptions.map(async (subscription) => {
+      subscriptions.map(async (subscription, index) => {
+        const sendAt = new Date();
+        const payload = JSON.stringify({
+          ...message,
+          badgeCount,
+          ...(diagnostics
+            ? {
+                pushTiming: {
+                  traceId,
+                  subscription: index,
+                  sentAt: sendAt.toISOString(),
+                },
+              }
+            : {}),
+        });
+        if (diagnostics)
+          this.logger.log(
+            `push_timing trace=${traceId} subscription=${index} send=${sendAt.toISOString()} event_to_send_ms=${eventAt ? sendAt.getTime() - eventAt.getTime() : 'unknown'} ttl=${DELIVERY_OPTIONS.TTL} urgency=${DELIVERY_OPTIONS.urgency}`,
+          );
         try {
-          await webpush.sendNotification(
+          const response = await webpush.sendNotification(
             {
               endpoint: subscription.endpoint,
               keys: { p256dh: subscription.p256dh, auth: subscription.auth },
             },
             payload,
-            { TTL: 60 * 60 * 12 },
+            DELIVERY_OPTIONS,
           );
+          if (diagnostics)
+            this.logger.log(
+              `push_timing trace=${traceId} subscription=${index} response=${new Date().toISOString()} status=${response.statusCode} retries=0`,
+            );
         } catch (error: unknown) {
           const statusCode =
             typeof error === 'object' && error && 'statusCode' in error
@@ -95,6 +130,10 @@ export class PushNotificationsService {
               `Falha no envio push (HTTP ${statusCode ?? 'desconhecido'}).`,
             );
           }
+          if (diagnostics)
+            this.logger.warn(
+              `push_timing trace=${traceId} subscription=${index} failure=${new Date().toISOString()} status=${statusCode ?? 'unknown'} retries=0 subscription_removed=${statusCode === 404 || statusCode === 410}`,
+            );
         }
       }),
     );

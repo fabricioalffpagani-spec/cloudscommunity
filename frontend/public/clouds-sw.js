@@ -16,6 +16,15 @@ self.addEventListener("push", (event) => {
   } catch {
     /* A malformed payload must still show a notification. */
   }
+  const timing = data.pushTiming;
+  if (timing?.traceId) {
+    console.info("push_timing", {
+      trace: timing.traceId,
+      subscription: timing.subscription,
+      sentAt: timing.sentAt,
+      pushReceivedAt: new Date().toISOString(),
+    });
+  }
   event.waitUntil(
     (async () => {
       if (data.kind === "cloud_message" && data.cloudId) {
@@ -54,6 +63,13 @@ self.addEventListener("push", (event) => {
       if (data.messageId && previous?.data?.messageId === data.messageId)
         return;
       const count = data.messageId ? (previous?.data?.count || 0) + 1 : 0;
+      if (timing?.traceId) {
+        console.info("push_timing", {
+          trace: timing.traceId,
+          subscription: timing.subscription,
+          showNotificationAt: new Date().toISOString(),
+        });
+      }
       await self.registration.showNotification(data.title || "Clouds", {
         body:
           count > 1
