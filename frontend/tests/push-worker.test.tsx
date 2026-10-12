@@ -12,6 +12,8 @@ type Notice = {
 };
 
 function createWorker(windows: Array<{ visibilityState: string }> = []) {
+  const timing: { pushReceivedAt?: string; showNotificationAt?: string } = {};
+  const timingLog = vi.fn();
   const handlers = new Map<
     string,
     (event: {
@@ -22,6 +24,7 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
   const notices = new Map<string, Notice>();
   const showNotification = vi.fn(
     async (title: string, options: Notice["options"]) => {
+      timing.showNotificationAt = new Date().toISOString();
       notices.set(options.tag, { title, options });
     },
   );
@@ -47,9 +50,11 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     MessageChannel,
     setTimeout,
     clearTimeout,
+    console: { info: timingLog },
   });
   async function push(payload: unknown) {
     let done = Promise.resolve();
+    timing.pushReceivedAt = new Date().toISOString();
     handlers.get("push")!({
       data: { json: () => payload },
       waitUntil: (promise) => {
@@ -58,7 +63,7 @@ function createWorker(windows: Array<{ visibilityState: string }> = []) {
     });
     await done;
   }
-  return { notices, showNotification, push };
+  return { notices, showNotification, push, timing, timingLog };
 }
 
 describe("push service worker", () => {
@@ -112,5 +117,30 @@ describe("push service worker", () => {
     const worker = createWorker([]);
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
+    expect(worker.timing.pushReceivedAt).toBeDefined();
+    expect(worker.timing.showNotificationAt).toBeDefined();
+    expect(
+      Date.parse(worker.timing.showNotificationAt!) -
+        Date.parse(worker.timing.pushReceivedAt!),
+    ).toBeLessThan(1000);
+  });
+
+  it("records service worker receive and display times for a diagnostic push", async () => {
+    const worker = createWorker();
+    await worker.push({
+      title: "Cloud",
+      pushTiming: {
+        traceId: "test-trace",
+        subscription: 0,
+        sentAt: "2026-10-12T13:00:00.000Z",
+      },
+    });
+    expect(worker.timingLog).toHaveBeenCalledTimes(2);
+    expect(worker.timingLog.mock.calls[0][1]).toMatchObject({
+      trace: "test-trace",
+    });
+    expect(worker.timingLog.mock.calls[1][1]).toMatchObject({
+      trace: "test-trace",
+    });
   });
 });

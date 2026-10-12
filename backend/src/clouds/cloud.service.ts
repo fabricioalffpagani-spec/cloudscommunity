@@ -838,54 +838,66 @@ export class CloudService {
     });
     const created = creation.cloud;
 
-    if (origin && origin.authorId !== current.user.id) {
-      const notification = await this.prisma.notification.findFirst({
-        where: {
-          userId: origin.authorId,
-          type: 'cloud_continuation',
-          entityType: 'cloud',
-          entityId: created.id,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (notification) {
-        await this.pushNotifications.send(origin.authorId, {
-          title: notification.title,
-          body: notification.body,
-          url: `/cloud/${created.id}`,
-          tag: notification.id,
-        });
-      }
-    }
-
-    const followers =
-      visibility === CloudVisibility.public
-        ? await this.prisma.follow.findMany({
-            where: { followingId: current.user.id },
-            select: { followerId: true },
-          })
-        : [];
-    await Promise.all(
-      followers.map(async ({ followerId }) => {
-        const notification = await this.prisma.notification.create({
-          data: {
-            userId: followerId,
-            type: 'cloud_comment',
+    await Promise.all([
+      (async () => {
+        if (!origin || origin.authorId === current.user.id) return;
+        const notification = await this.prisma.notification.findFirst({
+          where: {
+            userId: origin.authorId,
+            type: 'cloud_continuation',
             entityType: 'cloud',
             entityId: created.id,
-            title: 'Nova Cloud de alguém que você segue',
-            body: `${current.user.profile?.displayName || 'Alguém'} criou “${created.title}”.`,
-            metadata: { actorUserId: current.user.id },
           },
+          orderBy: { createdAt: 'desc' },
         });
-        await this.pushNotifications.send(followerId, {
-          title: notification.title,
-          body: notification.body,
-          url: `/cloud/${created.id}`,
-          tag: notification.id,
-        });
-      }),
-    );
+        if (notification) {
+          await this.pushNotifications.send(
+            origin.authorId,
+            {
+              title: notification.title,
+              body: notification.body,
+              url: `/cloud/${created.id}`,
+              tag: notification.id,
+            },
+            created.createdAt,
+          );
+        }
+      })(),
+      (async () => {
+        const followers =
+          visibility === CloudVisibility.public
+            ? await this.prisma.follow.findMany({
+                where: { followingId: current.user.id },
+                select: { followerId: true },
+              })
+            : [];
+        await Promise.all(
+          followers.map(async ({ followerId }) => {
+            const notification = await this.prisma.notification.create({
+              data: {
+                userId: followerId,
+                type: 'cloud_comment',
+                entityType: 'cloud',
+                entityId: created.id,
+                title: 'Nova Cloud de alguém que você segue',
+                body: `${current.user.profile?.displayName || 'Alguém'} criou “${created.title}”.`,
+                metadata: { actorUserId: current.user.id },
+              },
+            });
+            await this.pushNotifications.send(
+              followerId,
+              {
+                title: notification.title,
+                body: notification.body,
+                url: `/cloud/${created.id}`,
+                tag: notification.id,
+              },
+              created.createdAt,
+            );
+          }),
+        );
+      })(),
+    ]);
 
     return {
       ok: true,
@@ -2359,14 +2371,18 @@ export class CloudService {
             body: mentioned ? preview : `${senderName}: ${preview}`,
           },
         });
-        await this.pushNotifications.send(recipientId, {
-          title: notification.title,
-          body: notification.body,
-          url: `/cloud/${cloudId}?message=${created.id}`,
-          tag: notification.id,
-          kind: 'cloud_message',
-          cloudId,
-        });
+        await this.pushNotifications.send(
+          recipientId,
+          {
+            title: notification.title,
+            body: notification.body,
+            url: `/cloud/${cloudId}?message=${created.id}`,
+            tag: notification.id,
+            kind: 'cloud_message',
+            cloudId,
+          },
+          created.createdAt,
+        );
       }),
     );
 
