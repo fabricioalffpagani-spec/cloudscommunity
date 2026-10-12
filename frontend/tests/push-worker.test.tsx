@@ -12,10 +12,7 @@ type Notice = {
   };
 };
 
-function createWorker(showResult: Promise<void> = Promise.resolve()) {
-  const timing: { pushReceivedAt?: string; showNotificationAt?: string } = {};
-  const timingLog = vi.fn();
-  const timingRecords = new Map<string, string>();
+function createWorker() {
   const handlers = new Map<
     string,
     (event: {
@@ -26,9 +23,7 @@ function createWorker(showResult: Promise<void> = Promise.resolve()) {
   const notices = new Map<string, Notice>();
   const showNotification = vi.fn(
     async (title: string, options: Notice["options"]) => {
-      timing.showNotificationAt = new Date().toISOString();
       notices.set(options.tag, { title, options });
-      await showResult;
     },
   );
   const self = {
@@ -58,19 +53,9 @@ function createWorker(showResult: Promise<void> = Promise.resolve()) {
     MessageChannel,
     setTimeout,
     clearTimeout,
-    console: { info: timingLog },
-    caches: {
-      open: async () => ({
-        put: async (key: string, response: Response) => {
-          timingRecords.set(key, await response.text());
-        },
-      }),
-    },
-    Response,
   });
   async function push(payload: unknown) {
     let done = Promise.resolve();
-    timing.pushReceivedAt = new Date().toISOString();
     handlers.get("push")!({
       data: { json: () => payload },
       waitUntil: (promise) => {
@@ -85,9 +70,6 @@ function createWorker(showResult: Promise<void> = Promise.resolve()) {
     getNotifications: self.registration.getNotifications,
     matchAll: self.clients.matchAll,
     push,
-    timing,
-    timingLog,
-    timingRecords,
   };
 }
 
@@ -146,66 +128,5 @@ describe("push service worker", () => {
     const worker = createWorker();
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
-    expect(worker.timing.pushReceivedAt).toBeDefined();
-    expect(worker.timing.showNotificationAt).toBeDefined();
-    expect(
-      Date.parse(worker.timing.showNotificationAt!) -
-        Date.parse(worker.timing.pushReceivedAt!),
-    ).toBeLessThan(1000);
-  });
-
-  it("records service worker receive and display times for a diagnostic push", async () => {
-    const worker = createWorker();
-    await worker.push({
-      title: "Cloud",
-      pushTiming: {
-        traceId: "test-trace",
-        subscription: 0,
-        sentAt: "2026-10-12T13:00:00.000Z",
-      },
-    });
-    expect(worker.timingLog).toHaveBeenCalledTimes(2);
-    expect(worker.timingLog.mock.calls[0][1]).toMatchObject({
-      trace: "test-trace",
-    });
-    expect(worker.timingLog.mock.calls[1][1]).toMatchObject({
-      trace: "test-trace",
-    });
-    const saved = JSON.parse(
-      worker.timingRecords.get("/__push_timing__/test-trace/0") || "{}",
-    ) as {
-      trace?: string;
-      pushReceivedAt?: string;
-      showNotificationAt?: string;
-      showResolvedAt?: string;
-    };
-    expect(saved.trace).toBe("test-trace");
-    expect(saved.pushReceivedAt).toBeDefined();
-    expect(saved.showNotificationAt).toBeDefined();
-    expect(saved.showResolvedAt).toBeDefined();
-  });
-
-  it("persists receive and call times even while notification display is pending", async () => {
-    const worker = createWorker(new Promise<void>(() => undefined));
-    void worker.push({
-      title: "Cloud",
-      pushTiming: {
-        traceId: "pending-trace",
-        subscription: 0,
-        sentAt: "2026-10-12T13:00:00.000Z",
-      },
-    });
-    await vi.waitFor(() => {
-      const saved = JSON.parse(
-        worker.timingRecords.get("/__push_timing__/pending-trace/0") || "{}",
-      ) as {
-        pushReceivedAt?: string;
-        showNotificationAt?: string;
-        showResolvedAt?: string;
-      };
-      expect(saved.pushReceivedAt).toBeDefined();
-      expect(saved.showNotificationAt).toBeDefined();
-      expect(saved.showResolvedAt).toBeUndefined();
-    });
   });
 });

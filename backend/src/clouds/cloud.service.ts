@@ -851,16 +851,12 @@ export class CloudService {
           orderBy: { createdAt: 'desc' },
         });
         if (notification) {
-          await this.pushNotifications.send(
-            origin.authorId,
-            {
-              title: notification.title,
-              body: notification.body,
-              url: `/cloud/${created.id}`,
-              tag: notification.id,
-            },
-            created.createdAt,
-          );
+          await this.pushNotifications.send(origin.authorId, {
+            title: notification.title,
+            body: notification.body,
+            url: `/cloud/${created.id}`,
+            tag: notification.id,
+          });
         }
       })(),
       (async () => {
@@ -884,16 +880,12 @@ export class CloudService {
                 metadata: { actorUserId: current.user.id },
               },
             });
-            await this.pushNotifications.send(
-              followerId,
-              {
-                title: notification.title,
-                body: notification.body,
-                url: `/cloud/${created.id}`,
-                tag: notification.id,
-              },
-              created.createdAt,
-            );
+            await this.pushNotifications.send(followerId, {
+              title: notification.title,
+              body: notification.body,
+              url: `/cloud/${created.id}`,
+              tag: notification.id,
+            });
           }),
         );
       })(),
@@ -2371,18 +2363,14 @@ export class CloudService {
             body: mentioned ? preview : `${senderName}: ${preview}`,
           },
         });
-        await this.pushNotifications.send(
-          recipientId,
-          {
-            title: notification.title,
-            body: notification.body,
-            url: `/cloud/${cloudId}?message=${created.id}`,
-            tag: notification.id,
-            kind: 'cloud_message',
-            cloudId,
-          },
-          created.createdAt,
-        );
+        await this.pushNotifications.send(recipientId, {
+          title: notification.title,
+          body: notification.body,
+          url: `/cloud/${cloudId}?message=${created.id}`,
+          tag: notification.id,
+          kind: 'cloud_message',
+          cloudId,
+        });
       }),
     );
 

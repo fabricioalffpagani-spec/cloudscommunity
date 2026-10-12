@@ -62,7 +62,6 @@ describe('DirectMessagesService', () => {
       prisma as unknown as PrismaService,
       { send } as never,
     );
-    const eventAt = new Date('2026-10-12T13:00:00.000Z');
     await (
       service as unknown as {
         notifyRecipient: (
@@ -70,10 +69,9 @@ describe('DirectMessagesService', () => {
           conversationId: string,
           senderId: string,
           content: string,
-          eventAt: Date,
         ) => Promise<void>;
       }
-    ).notifyRecipient('message', 'conversation', 'sender', 'Olá', eventAt);
+    ).notifyRecipient('message', 'conversation', 'sender', 'Olá');
     expect(notificationCreate).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledWith(
       'recipient',
@@ -84,7 +82,6 @@ describe('DirectMessagesService', () => {
         tag: 'direct-message-conversation',
         messageId: 'message',
       }),
-      eventAt,
     );
   });
 
