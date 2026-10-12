@@ -55,16 +55,12 @@ export class CloudPremiereNotificationsService
               userId,
             );
             if (!notification) return;
-            await this.pushNotifications.send(
-              userId,
-              {
-                title: notification.title,
-                body: notification.body,
-                url: `/cloud/${cloud.id}?join=1`,
-                tag: notification.id,
-              },
-              notification.createdAt,
-            );
+            await this.pushNotifications.send(userId, {
+              title: notification.title,
+              body: notification.body,
+              url: `/cloud/${cloud.id}?join=1`,
+              tag: notification.id,
+            });
           }),
         ),
       );

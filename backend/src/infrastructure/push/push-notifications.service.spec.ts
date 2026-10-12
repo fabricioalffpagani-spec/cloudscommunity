@@ -5,12 +5,10 @@ import { PushNotificationsService } from './push-notifications.service';
 describe('PushNotificationsService delivery', () => {
   const originalPublicKey = process.env.VAPID_PUBLIC_KEY;
   const originalPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  const originalDiagnostics = process.env.PUSH_TIMING_DIAGNOSTICS;
 
   beforeEach(() => {
     process.env.VAPID_PUBLIC_KEY = 'test-public-key';
     process.env.VAPID_PRIVATE_KEY = 'test-private-key';
-    process.env.PUSH_TIMING_DIAGNOSTICS = '1';
     jest.spyOn(webpush, 'setVapidDetails').mockImplementation(() => undefined);
   });
 
@@ -20,9 +18,6 @@ describe('PushNotificationsService delivery', () => {
     else process.env.VAPID_PUBLIC_KEY = originalPublicKey;
     if (originalPrivateKey === undefined) delete process.env.VAPID_PRIVATE_KEY;
     else process.env.VAPID_PRIVATE_KEY = originalPrivateKey;
-    if (originalDiagnostics === undefined)
-      delete process.env.PUSH_TIMING_DIAGNOSTICS;
-    else process.env.PUSH_TIMING_DIAGNOSTICS = originalDiagnostics;
   });
 
   function setup() {
@@ -46,7 +41,7 @@ describe('PushNotificationsService delivery', () => {
     return { service, prisma };
   }
 
-  it('calls the provider immediately for a Cloud and records acceptance', async () => {
+  it('calls the provider immediately for a Cloud', async () => {
     const { service } = setup();
     const eventAt = new Date();
     let providerAt: Date | undefined;
@@ -57,11 +52,7 @@ describe('PushNotificationsService delivery', () => {
         return Promise.resolve({ statusCode: 201, body: '', headers: {} });
       });
 
-    await service.send(
-      'recipient',
-      { title: 'Cloud', body: 'Criada' },
-      eventAt,
-    );
+    await service.send('recipient', { title: 'Cloud', body: 'Criada' });
 
     expect(providerAt).toBeDefined();
     expect(providerAt!.getTime() - eventAt.getTime()).toBeLessThan(1000);

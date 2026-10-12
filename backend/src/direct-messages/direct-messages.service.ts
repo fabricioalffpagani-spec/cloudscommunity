@@ -376,7 +376,6 @@ export class DirectMessagesService {
       input.conversationId,
       userId,
       message.content,
-      message.createdAt,
     );
     return this.mapMessage(message);
   }
@@ -438,7 +437,6 @@ export class DirectMessagesService {
       conversationId,
       senderId,
       message.content,
-      message.createdAt,
     );
     return this.mapMessage(message);
   }
@@ -559,7 +557,6 @@ export class DirectMessagesService {
       input.conversationId,
       userId,
       message.content,
-      message.createdAt,
     );
     return this.mapMessage(message);
   }
@@ -680,7 +677,6 @@ export class DirectMessagesService {
       input.conversationId,
       userId,
       message.content,
-      message.createdAt,
     );
     return this.mapMessage(message);
   }
@@ -796,7 +792,6 @@ export class DirectMessagesService {
       input.conversationId,
       userId,
       message.content,
-      message.createdAt,
     );
     return this.mapMessage(message);
   }
@@ -1043,16 +1038,9 @@ export class DirectMessagesService {
     conversationId: string,
     senderId: string,
     content: string | null,
-    eventAt: Date,
   ) {
     try {
-      await this.notifyRecipient(
-        messageId,
-        conversationId,
-        senderId,
-        content,
-        eventAt,
-      );
+      await this.notifyRecipient(messageId, conversationId, senderId, content);
     } catch (error) {
       // The database transaction has committed. Keep the HTTP response truthful
       // even if a later push lookup or delivery fails.
@@ -1067,7 +1055,6 @@ export class DirectMessagesService {
     conversationId: string,
     senderId: string,
     content: string | null,
-    eventAt?: Date,
   ) {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
@@ -1089,20 +1076,16 @@ export class DirectMessagesService {
       .trim()
       .slice(0, 140);
     // Direct messages belong to the Messages badge, not the activity bell.
-    await this.pushNotifications.send(
-      recipientId,
-      {
-        // Some Android notification layouts only surface the title while the
-        // notification is collapsed. Keep the message preview there as well as
-        // in the body so the recipient can still read it in that layout.
-        title: `${senderName}: ${preview}`,
-        body: preview,
-        url: `/messages?conversation=${conversationId}`,
-        tag: `direct-message-${conversationId}`,
-        messageId,
-      },
-      eventAt,
-    );
+    await this.pushNotifications.send(recipientId, {
+      // Some Android notification layouts only surface the title while the
+      // notification is collapsed. Keep the message preview there as well as
+      // in the body so the recipient can still read it in that layout.
+      title: `${senderName}: ${preview}`,
+      body: preview,
+      url: `/messages?conversation=${conversationId}`,
+      tag: `direct-message-${conversationId}`,
+      messageId,
+    });
   }
 
   private messageInclude() {
