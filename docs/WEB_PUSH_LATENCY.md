@@ -1,30 +1,37 @@
-# Diagnóstico de latência do Web Push
+# Investigação da latência do Web Push
 
-## O que foi encontrado no código
+## Histórico e causa
 
-- A notificação **“Nova Cloud de alguém que você segue”** é criada após a transação que cria a Cloud. O backend chama `PushNotificationsService.send()` na mesma requisição, sem fila, Redis ou retry. A consulta de seguidores, a criação da notificação e as consultas de subscription/contador ocorrem entre a criação da Cloud e o HTTP ao provedor; esse intervalo precisa ser medido em produção.
-- Antes da correção, uma Cloud que continuava outra conversa aguardava o Web Push ao autor original antes de consultar e avisar os seguidores. Agora os dois caminhos iniciam em paralelo e cada chamada ao provedor tem timeout de socket de 15 segundos. Esse bloqueio era possível, mas não há logs históricos suficientes para afirmar que ocorreu no caso relatado.
-- Antes desta correção, todo push usava `TTL: 43200` segundos (12 horas) e a urgência padrão `normal` do pacote `web-push`. O TTL é o limite de retenção no provedor, não um agendamento de envio. A prioridade `normal` pode permitir adiamento por economia de energia.
-- O backend configura VAPID a partir de `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT`. O pacote `web-push` compõe os cabeçalhos de autenticação e criptografia; agora recebe `TTL` e `urgency` explícitos. Não há cabeçalhos customizados nem `Topic`: agrupar pushes de mensagens/Clouds no serviço poderia substituir um aviso ainda não entregue. A configuração não registra nem revela as chaves.
-- O endpoint da subscription é único no banco. O cliente troca uma subscription quando a chave VAPID muda e o backend apaga subscriptions rejeitadas com HTTP 404/410. Não há deduplicação por aparelho além da unicidade do endpoint. Uma subscription antiga que ainda receba sucesso do provedor não pode ser identificada como obsoleta apenas pelo HTTP.
-- O service worker não usa fila ou timer para exibir o push recebido. Para mensagens de Cloud, ele pode aguardar até 500 ms para saber se há uma janela visível acompanhando a conversa.
-- Todos os avisos enviados por Web Push usam `high` com TTL de 10 minutos. O aviso permanece no banco mesmo se um push expirar após o TTL. A urgência solicita entrega imediata ao provedor, mas o navegador e o sistema operacional ainda controlam a exibição no aparelho.
+- `907e31b` (29/09/2026) introduziu o service worker de Web Push. Não existe registro de teste em aparelho que permita afirmar qual foi o último commit comprovadamente funcional com o PWA fechado.
+- `a2be0f0` (04/10/2026) passou a aguardar `clients.matchAll()` antes de chamar `showNotification()` para mensagens de Cloud.
+- `b4263b9` (08/10/2026) ainda chamava `showNotification()` diretamente para mensagens privadas. É o último estado de código com esse comportamento, não uma comprovação histórica em aparelho.
+- `f43dbd6` (09/10/2026) passou a aguardar `getNotifications()` antes de mostrar mensagens privadas. Em reprodução controlada, uma rejeição dessa consulta impede a chamada de `showNotification()`; o código anterior ainda exibia o aviso. A notificação de **criação de Cloud por alguém seguido** não passava por essa consulta, então essa mudança não explica sozinha todo relato anterior.
+- `00996d0` (12/10/2026) fez o evento `push` chamar `showNotification()` imediatamente para todos os tipos de aviso, sem depender de consultas de janelas ou notificações anteriores. Os testes de regressão simulam falha nessas consultas e ausência de janela aberta.
 
-## Ensaio controlado
+## Caminho no backend
 
-1. Habilite `PUSH_TIMING_DIAGNOSTICS=1` **somente durante o ensaio**. Os logs contêm apenas um UUID aleatório, índice da subscription, timestamps UTC, TTL, urgência e status HTTP. Não contêm usuário, endpoint, chaves VAPID, título ou corpo.
-2. Em dois dispositivos com o PWA instalado e permissão de notificações, feche o PWA. Anote modelo, navegador, estado de economia de bateria e hora local com segundos. No Android, inspecione o service worker com as ferramentas remotas do navegador para ver `push_timing` no console, quando possível.
-3. Crie uma Cloud pública com uma conta seguida pelas contas de teste. Anote o horário da criação. No backend, correlacione `event`, `send`, `response` e `status` pelo campo `trace` (e `subscription` se a conta tiver mais de uma).
-4. No console do service worker, anote `pushReceivedAt` e `showNotificationAt`. No próprio dispositivo, anote a hora em que a notificação apareceu. Os quatro horários usam relógios diferentes; sincronize os aparelhos ou registre a diferença de relógio antes de calcular latência entre servidores e celulares.
-5. Repita com um aparelho Samsung em economia de bateria normal e, se autorizado pelo dono, com o PWA em “Nunca suspender”. Faça a comparação apenas se o backend tiver registrado o envio imediato e a aceitação pelo provedor.
-6. Desabilite `PUSH_TIMING_DIAGNOSTICS` após coletar evidências suficientes. Remova a instrumentação opcional quando o estágio do atraso estiver confirmado.
+- Mensagens privadas e criação de Cloud chamam `PushNotificationsService.send()` na requisição que gera o evento. Não há fila Redis, job ou retry nesse caminho. O backend chama `webpush.sendNotification()` com `TTL: 600`, `urgency: high` e timeout de 15 segundos. Não usa `Topic` ou cabeçalhos customizados; o pacote `web-push` monta a autenticação VAPID. Subscriptions rejeitadas com HTTP 404/410 são removidas.
+- O endpoint da subscription é único no banco. Uma subscription antiga que ainda recebe HTTP 201 não pode ser identificada como obsoleta apenas por essa resposta. A permissão atual do navegador e a subscription persistida são estados distintos.
+- No ensaio de 12/10/2026, os nove pushes correlacionados pelos identificadores aleatórios foram enviados entre **17 e 112 ms** após o evento. Todos receberam HTTP **201** do serviço push, sem retry. Nenhum desses resultados sustenta atraso no backend.
 
-## Interpretação
+## Ensaio em produção de 12/10/2026
 
-- `event → send` alto: investigar consultas/contensão no banco e o processamento síncrono de seguidores. Não há job neste fluxo.
-- `send → response` alto ou HTTP não 2xx: investigar provedor, rede e falhas. Não há retry automático no código atual.
-- Resposta 2xx rápida, mas `pushReceivedAt` tardio: atraso entre provedor e service worker; verificar urgência, estado de energia, rede e navegador.
-- `pushReceivedAt` rápido, mas `showNotificationAt` tardio: investigar o service worker. Para avisos de criação de Cloud, ele chama `showNotification()` sem a verificação de janela de mensagens.
-- `showNotificationAt` rápido, mas aviso visível tardio: investigar o sistema de notificações do aparelho.
+O SHA de diagnóstico foi `5aa478afa9e0c4963c09f4c7b9f57243d426a496`. Dois aparelhos e dois perfis receberam notificações do Android com o PWA totalmente fechado, antes de abrir a aplicação, segundo confirmação de quem realizou o teste. Os registros abaixo foram correlacionados entre backend e service worker no aparelho destinatário. Horários em UTC; subtraia 3 horas para São Paulo. `HTTP 201` significa aceitação pelo serviço push, não exibição no Android.
 
-O teste automatizado do backend mede apenas o caminho com um provedor simulado; não prova a entrega em um aparelho real. O teste do service worker mede apenas um evento simulado.
+| Evento       | Envio Web Push | Evento → envio | Resposta            | `push` no SW | Envio → SW | SW → `showNotification()` |
+| ------------ | -------------- | -------------: | ------------------- | ------------ | ---------: | ------------------------: |
+| 23:04:37.523 | 23:04:37.593   |          70 ms | 201 às 23:04:37.962 | 23:04:41.455 |    3,862 s |                     35 ms |
+| 23:06:14.008 | 23:06:14.078   |          70 ms | 201 às 23:06:14.413 | 23:06:17.091 |    3,013 s |                     37 ms |
+| 23:09:30.511 | 23:09:30.597   |          86 ms | 201 às 23:09:31.075 | 23:09:36.255 |    5,658 s |                     64 ms |
+| 23:09:32.696 | 23:09:32.785   |          89 ms | 201 às 23:09:33.020 | 23:09:36.621 |    3,836 s |                      0 ms |
+| 23:09:34.430 | 23:09:34.490   |          60 ms | 201 às 23:09:34.738 | 23:09:36.690 |    2,200 s |                      0 ms |
+| 23:10:24.695 | 23:10:24.712   |          17 ms | 201 às 23:10:25.017 | 23:10:30.187 |    5,475 s |                     65 ms |
+| 23:11:37.877 | 23:11:37.900   |          23 ms | 201 às 23:11:38.194 | 23:11:43.771 |    5,871 s |                     51 ms |
+
+Nos dois registros fornecidos pelo outro aparelho, o service worker recebeu o push 0,651 s e 1,651 s após o envio; os dois tiveram HTTP 201. O relatório desse aparelho mostrou `permission: denied` **quando a página de diagnóstico foi consultada**, apesar de o usuário confirmar que o Android exibiu avisos com o PWA fechado. Não há timestamp de mudança de permissão ou identificação do contexto do navegador para explicar essa divergência. A subscription aparecia ativa, e uma subscription ativa por si só não prova permissão atual de exibição.
+
+O ensaio comprova o fluxo backend → serviço push → service worker → chamada de `showNotification()` e a exibição no Android com o PWA fechado nos dois aparelhos. Ele não prova que toda combinação de navegador, versão do Android ou economia de bateria terá o mesmo tempo. Tampouco identifica qual etapa causou as horas de atraso nos episódios anteriores, pois não havia timestamps do service worker nesses episódios. A falha histórica demonstrada no código era a dependência das consultas assíncronas antes de exibir alguns tipos de aviso.
+
+## Limpeza
+
+A página, o payload e os logs temporários de `PUSH_TIMING_DIAGNOSTICS` são removidos após o ensaio. Permanecem a chamada imediata de `showNotification()`, `TTL: 600`, `urgency: high`, a remoção de subscriptions HTTP 404/410 e os testes de regressão. Caso a falha reapareça, será necessário novo ensaio controlado com os horários de cada etapa.
