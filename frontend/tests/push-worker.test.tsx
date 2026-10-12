@@ -12,9 +12,10 @@ type Notice = {
   };
 };
 
-function createWorker() {
+function createWorker(showResult: Promise<void> = Promise.resolve()) {
   const timing: { pushReceivedAt?: string; showNotificationAt?: string } = {};
   const timingLog = vi.fn();
+  const timingRecords = new Map<string, string>();
   const handlers = new Map<
     string,
     (event: {
@@ -27,6 +28,7 @@ function createWorker() {
     async (title: string, options: Notice["options"]) => {
       timing.showNotificationAt = new Date().toISOString();
       notices.set(options.tag, { title, options });
+      await showResult;
     },
   );
   const self = {
@@ -57,6 +59,14 @@ function createWorker() {
     setTimeout,
     clearTimeout,
     console: { info: timingLog },
+    caches: {
+      open: async () => ({
+        put: async (key: string, response: Response) => {
+          timingRecords.set(key, await response.text());
+        },
+      }),
+    },
+    Response,
   });
   async function push(payload: unknown) {
     let done = Promise.resolve();
@@ -77,6 +87,7 @@ function createWorker() {
     push,
     timing,
     timingLog,
+    timingRecords,
   };
 }
 
@@ -159,6 +170,42 @@ describe("push service worker", () => {
     });
     expect(worker.timingLog.mock.calls[1][1]).toMatchObject({
       trace: "test-trace",
+    });
+    const saved = JSON.parse(
+      worker.timingRecords.get("/__push_timing__/test-trace/0") || "{}",
+    ) as {
+      trace?: string;
+      pushReceivedAt?: string;
+      showNotificationAt?: string;
+      showResolvedAt?: string;
+    };
+    expect(saved.trace).toBe("test-trace");
+    expect(saved.pushReceivedAt).toBeDefined();
+    expect(saved.showNotificationAt).toBeDefined();
+    expect(saved.showResolvedAt).toBeDefined();
+  });
+
+  it("persists receive and call times even while notification display is pending", async () => {
+    const worker = createWorker(new Promise<void>(() => undefined));
+    void worker.push({
+      title: "Cloud",
+      pushTiming: {
+        traceId: "pending-trace",
+        subscription: 0,
+        sentAt: "2026-10-12T13:00:00.000Z",
+      },
+    });
+    await vi.waitFor(() => {
+      const saved = JSON.parse(
+        worker.timingRecords.get("/__push_timing__/pending-trace/0") || "{}",
+      ) as {
+        pushReceivedAt?: string;
+        showNotificationAt?: string;
+        showResolvedAt?: string;
+      };
+      expect(saved.pushReceivedAt).toBeDefined();
+      expect(saved.showNotificationAt).toBeDefined();
+      expect(saved.showResolvedAt).toBeUndefined();
     });
   });
 });
