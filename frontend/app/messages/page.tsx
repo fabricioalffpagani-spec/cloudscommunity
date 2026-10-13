@@ -1987,7 +1987,13 @@ function MessagesPageContent() {
     void fetch(`/api/direct-messages/conversations/${encodeURIComponent(activeConversationId)}/read`, {
       method: "POST",
       credentials: "include",
-    });
+    }).then(async (response) => {
+      if (!response.ok || !("serviceWorker" in navigator)) return;
+      const result = await response.json().catch(() => null) as { ok?: boolean } | null;
+      if (result?.ok !== true) return;
+      const registration = await navigator.serviceWorker.getRegistration("/clouds-sw.js");
+      registration?.active?.postMessage({ type: "direct-message-read", conversationId: activeConversationId });
+    }).catch(() => undefined);
     window.dispatchEvent(new Event("direct-message-read"));
 
     const socket = socketRef.current;

@@ -27,6 +27,7 @@ function createWorker() {
     },
   );
   const self = {
+    location: { origin: "https://clouds.test" },
     addEventListener: (
       name: string,
       handler: (event: {
@@ -36,14 +37,17 @@ function createWorker() {
     ) => handlers.set(name, handler),
     registration: {
       showNotification,
-      getNotifications: vi.fn(async () => {
-        throw new Error("notification lookup unavailable");
-      }),
+      getNotifications: vi.fn(async ({ tag }: { tag: string }) =>
+        notices.has(tag)
+          ? [{ close: () => notices.delete(tag) }]
+          : [],
+      ),
     },
     clients: {
-      matchAll: vi.fn(async () => {
+      matchAll: vi.fn(async (): Promise<unknown[]> => {
         throw new Error("window lookup unavailable");
       }),
+      openWindow: vi.fn(async () => undefined),
     },
     navigator: {},
   };
@@ -51,6 +55,7 @@ function createWorker() {
     self,
     clients: self.clients,
     MessageChannel,
+    URL,
     setTimeout,
     clearTimeout,
   });
@@ -64,12 +69,33 @@ function createWorker() {
     });
     await done;
   }
+  async function markRead(conversationId: string) {
+    let done = Promise.resolve();
+    handlers.get("message")!({
+      data: { type: "direct-message-read", conversationId },
+      waitUntil: (promise: Promise<unknown>) => { done = promise.then(() => undefined); },
+    } as never);
+    await done;
+  }
+  async function click(tag: string) {
+    const notice = notices.get(tag);
+    if (!notice) throw new Error(`Missing notification ${tag}`);
+    let done = Promise.resolve();
+    handlers.get("notificationclick")!({
+      notification: { data: notice.options.data, close: () => notices.delete(tag) },
+      waitUntil: (promise: Promise<unknown>) => { done = promise.then(() => undefined); },
+    } as never);
+    await done;
+  }
   return {
     notices,
     showNotification,
     getNotifications: self.registration.getNotifications,
     matchAll: self.clients.matchAll,
     push,
+    markRead,
+    click,
+    openWindow: self.clients.openWindow,
   };
 }
 
@@ -79,6 +105,7 @@ describe("push service worker", () => {
     await worker.push({
       title: "Ana: Oi",
       body: "Oi",
+      unreadMessages: ["Oi"],
       url: "/messages?conversation=a",
       tag: "direct-message-a",
       messageId: "m1",
@@ -86,6 +113,7 @@ describe("push service worker", () => {
     await worker.push({
       title: "Ana: Tudo bem?",
       body: "Tudo bem?",
+      unreadMessages: ["Oi", "Tudo bem?"],
       url: "/messages?conversation=a",
       tag: "direct-message-a",
       messageId: "m2",
@@ -93,6 +121,7 @@ describe("push service worker", () => {
     await worker.push({
       title: "Ana: Tudo bem?",
       body: "Tudo bem?",
+      unreadMessages: ["Oi", "Tudo bem?"],
       url: "/messages?conversation=a",
       tag: "direct-message-a",
       messageId: "m2",
@@ -100,21 +129,44 @@ describe("push service worker", () => {
     await worker.push({
       title: "Bia: Olá",
       body: "Olá",
+      unreadMessages: ["Olá"],
       url: "/messages?conversation=b",
       tag: "direct-message-b",
       messageId: "m3",
     });
     expect(worker.showNotification).toHaveBeenCalledTimes(4);
     expect(worker.notices.size).toBe(2);
-    expect(worker.notices.get("direct-message-a")?.options.body).toBe(
-      "Tudo bem?",
-    );
+    expect(worker.notices.get("direct-message-a")?.title).toBe("Ana: Tudo bem?");
+    expect(worker.notices.get("direct-message-a")?.options.body).toBe("Oi\nTudo bem?");
+    expect(worker.notices.get("direct-message-b")?.options.body).toBe("Olá");
     expect(worker.notices.get("direct-message-a")?.options.renotify).toBe(true);
     expect(worker.notices.get("direct-message-a")?.options.data.url).toBe(
       "/messages?conversation=a",
     );
     expect(worker.getNotifications).not.toHaveBeenCalled();
     expect(worker.matchAll).not.toHaveBeenCalled();
+  });
+
+  it("shows several unread messages in order, then clears only the read conversation", async () => {
+    const worker = createWorker();
+    await worker.push({ title: "Ana: Até logo", body: "Até logo", tag: "direct-message-a", messageId: "m3", unreadMessages: ["Oi", "Tudo bem?", "Até logo"] });
+    await worker.push({ title: "Bia: Olá", body: "Olá", tag: "direct-message-b", messageId: "m4", unreadMessages: ["Olá"] });
+    expect(worker.notices.get("direct-message-a")?.options.body).toBe("Oi\nTudo bem?\nAté logo");
+    expect(worker.notices.get("direct-message-a")?.title).toBe("Ana: Até logo");
+    await worker.markRead("a");
+    expect(worker.notices.has("direct-message-a")).toBe(false);
+    expect(worker.notices.has("direct-message-b")).toBe(true);
+    await worker.push({ title: "Ana: Nova", body: "Nova", tag: "direct-message-a", messageId: "m5", unreadMessages: ["Nova"] });
+    expect(worker.notices.get("direct-message-a")?.options.body).toBe("Nova");
+  });
+
+  it("opens the conversation from a notification when the PWA is closed", async () => {
+    const worker = createWorker();
+    worker.matchAll.mockResolvedValue([]);
+    await worker.push({ title: "Ana: Oi", body: "Oi", tag: "direct-message-a", messageId: "m1", url: "/messages?conversation=a", unreadMessages: ["Oi"] });
+    await worker.click("direct-message-a");
+    expect(worker.openWindow).toHaveBeenCalledWith("https://clouds.test/messages?conversation=a");
+    expect(worker.notices.size).toBe(0);
   });
 
   it("displays a cloud push even if window lookup would fail", async () => {

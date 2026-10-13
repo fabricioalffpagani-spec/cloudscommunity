@@ -1075,6 +1075,17 @@ export class DirectMessagesService {
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 140);
+    const unreadMessages = await this.prisma.directMessage.findMany({
+      where: {
+        conversationId,
+        senderId,
+        readAt: null,
+        deletedAt: null,
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { content: true },
+    });
+    if (unreadMessages.length === 0) return;
     // Direct messages belong to the Messages badge, not the activity bell.
     await this.pushNotifications.send(recipientId, {
       // Some Android notification layouts only surface the title while the
@@ -1085,6 +1096,12 @@ export class DirectMessagesService {
       url: `/messages?conversation=${conversationId}`,
       tag: `direct-message-${conversationId}`,
       messageId,
+      unreadMessages: unreadMessages.map((message) =>
+        (message.content || 'enviou uma mensagem')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 140),
+      ),
     });
   }
 

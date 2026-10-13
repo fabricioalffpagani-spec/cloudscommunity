@@ -17,10 +17,15 @@ self.addEventListener("push", (event) => {
     /* A malformed payload must still show a notification. */
   }
   const tag = data.tag || "clouds-notification";
+  const unreadMessages = Array.isArray(data.unreadMessages)
+    ? data.unreadMessages.filter((message) => typeof message === "string")
+    : [];
   let showTask;
   try {
     showTask = self.registration.showNotification(data.title || "Clouds", {
-      body: data.body || "Você tem uma nova notificação.",
+      body: unreadMessages.length
+        ? unreadMessages.join("\n")
+        : data.body || "Você tem uma nova notificação.",
       // Android uses the transparent badge as a monochrome status-bar glyph.
       // Keep the full-color icon for the expanded notification.
       icon: "/pwa-512x512.png?v=5",
@@ -39,6 +44,17 @@ self.addEventListener("push", (event) => {
     );
   }
   event.waitUntil(Promise.all(tasks));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "direct-message-read" ||
+      typeof event.data.conversationId !== "string") return;
+  const tag = `direct-message-${event.data.conversationId}`;
+  event.waitUntil(
+    self.registration.getNotifications({ tag }).then((notifications) => {
+      notifications.forEach((notification) => notification.close());
+    }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

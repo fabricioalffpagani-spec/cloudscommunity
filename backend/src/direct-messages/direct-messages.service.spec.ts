@@ -56,6 +56,9 @@ describe('DirectMessagesService', () => {
           .fn()
           .mockResolvedValue({ profile: { displayName: 'Vicente' } }),
       },
+      directMessage: {
+        findMany: jest.fn().mockResolvedValue([{ content: 'Olá' }]),
+      },
       notification: { create: notificationCreate },
     };
     const service = new DirectMessagesService(
@@ -81,8 +84,98 @@ describe('DirectMessagesService', () => {
         url: '/messages?conversation=conversation',
         tag: 'direct-message-conversation',
         messageId: 'message',
+        unreadMessages: ['Olá'],
       }),
     );
+  });
+
+  it('includes all unread messages in conversation order and excludes read messages', async () => {
+    const send = jest.fn().mockResolvedValue(undefined);
+    const findMany = jest
+      .fn()
+      .mockResolvedValue([
+        { content: 'Oi' },
+        { content: 'Tudo bem?' },
+        { content: 'Até logo' },
+      ]);
+    const service = new DirectMessagesService(
+      {
+        conversation: {
+          findUnique: jest.fn().mockResolvedValue({
+            participantOneId: 'sender',
+            participantTwoId: 'recipient',
+          }),
+        },
+        user: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ profile: { displayName: 'Vicente' } }),
+        },
+        directMessage: { findMany },
+      } as unknown as PrismaService,
+      { send } as never,
+    );
+    await (
+      service as unknown as {
+        notifyRecipient: (
+          messageId: string,
+          conversationId: string,
+          senderId: string,
+          content: string,
+        ) => Promise<void>;
+      }
+    ).notifyRecipient('m3', 'conversation', 'sender', 'Até logo');
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: 'conversation',
+          senderId: 'sender',
+          readAt: null,
+          deletedAt: null,
+        },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
+    );
+    expect(send).toHaveBeenCalledWith(
+      'recipient',
+      expect.objectContaining({
+        title: 'Vicente: Até logo',
+        body: 'Até logo',
+        unreadMessages: ['Oi', 'Tudo bem?', 'Até logo'],
+      }),
+    );
+  });
+
+  it('does not notify when the conversation was read before push dispatch', async () => {
+    const send = jest.fn();
+    const service = new DirectMessagesService(
+      {
+        conversation: {
+          findUnique: jest.fn().mockResolvedValue({
+            participantOneId: 'sender',
+            participantTwoId: 'recipient',
+          }),
+        },
+        user: {
+          findUnique: jest
+            .fn()
+            .mockResolvedValue({ profile: { displayName: 'Vicente' } }),
+        },
+        directMessage: { findMany: jest.fn().mockResolvedValue([]) },
+      } as unknown as PrismaService,
+      { send } as never,
+    );
+    await (
+      service as unknown as {
+        notifyRecipient: (
+          messageId: string,
+          conversationId: string,
+          senderId: string,
+          content: string,
+        ) => Promise<void>;
+      }
+    ).notifyRecipient('m1', 'conversation', 'sender', 'Oi');
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('builds a deterministic conversation key', () => {
