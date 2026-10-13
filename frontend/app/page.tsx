@@ -6,6 +6,8 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
+import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
 
 const CloudChat = dynamic(() => import("./cloud/[id]/CloudChat"), {
   ssr: false,
@@ -2577,11 +2579,12 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
   );
 }
 
-function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+function DesktopCloudFeed({ clouds, initialCloudId, scope, order, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; initialCloudId?: string | null; scope: string; order: string; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const wheelLockedRef = useRef(false);
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, onActiveIndex: setActiveIndex });
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2595,16 +2598,6 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     const target = feedRef.current?.querySelectorAll<HTMLElement>("[data-cloud-page]")[nextIndex];
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveIndex(nextIndex);
-  };
-
-  const syncActiveCloud = () => {
-    const feed = feedRef.current;
-    if (!feed) return;
-    const pages = Array.from(feed.querySelectorAll<HTMLElement>("[data-cloud-page]"));
-    if (!pages.length) return;
-    const nearestIndex = pages.reduce((best, page, index) =>
-      Math.abs(page.offsetTop - feed.scrollTop) < Math.abs(pages[best].offsetTop - feed.scrollTop) ? index : best, 0);
-    setActiveIndex(nearestIndex);
   };
 
   const handleDesktopKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -2636,7 +2629,7 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
     </div>
   );
 
-  return <div className="relative min-h-0 flex-1"><div ref={feedRef} tabIndex={0} role="region" aria-label="Clouds ativas" onScroll={syncActiveCloud} onWheel={handleDesktopWheel} onKeyDown={handleDesktopKeyDown} className="desktop-cloud-feed cloud-feed-scroller h-full px-8 outline-none">{clouds.map((cloud) => {
+  return <div className="relative min-h-0 flex-1"><div ref={feedRef} tabIndex={0} role="region" aria-label="Clouds ativas" onScroll={syncPosition} onWheel={handleDesktopWheel} onKeyDown={handleDesktopKeyDown} className="desktop-cloud-feed cloud-feed-scroller h-full px-8 outline-none">{clouds.map((cloud) => {
     const profile = getTopicProfile(cloud, 0);
     const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
     const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
@@ -2650,11 +2643,12 @@ function DesktopCloudFeed({ clouds, currentUserId, onEnter, onDescription, onRep
   })}</div>{clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}</div>;
 }
 
-function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; initialCloudId?: string | null; scope: string; order: string; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const sessionUser = useSessionUser();
   const currentUser = sessionUser.user;
   const titleTapRef = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order });
   const cloudRefs = useRef<Record<string, HTMLElement | null>>({});
   const [premiereId, setPremiereId] = useState<string | null>(null);
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
@@ -2677,7 +2671,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
     const frame = window.requestAnimationFrame(() => {
       const cloudElement = cloudRefs.current[focusCloudId];
       if (cloudElement) {
-        feedRef.current?.scrollTo({ top: cloudElement.offsetTop, behavior: "smooth" });
+        feedRef.current?.scrollTo({ top: cloudElement.offsetTop, behavior: "instant" });
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -2695,7 +2689,7 @@ function MobileCloudFeed({ clouds, focusCloudId, onEnter, onCreate, onDescriptio
   }
 
   return (
-    <div ref={feedRef} className="mobile-cloud-feed cloud-feed-scroller">
+    <div ref={feedRef} onScroll={syncPosition} className="mobile-cloud-feed cloud-feed-scroller">
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
@@ -2768,21 +2762,23 @@ function PageContent() {
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
   const requestedCloudId = searchParams.get("cloud");
   const mobilePreview = searchParams.get("mobilePreview") === "1";
+  const initialScope = searchParams.get("scope") === "following" ? "following" : "for-you";
+  const initialCacheKey = user?.id ? `talk:${user.id}:${initialScope}` : "";
 
-  const [clouds, setClouds] = useState<Cloud[]>([]);
+  const [clouds, setClouds] = useState<Cloud[]>(() => getCachedFeed<Cloud[]>(initialCacheKey) ?? []);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [hydrated, setHydrated] = useState(() => getCachedFeed<Cloud[]>(initialCacheKey) !== null);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
   const [originCloudId, setOriginCloudId] = useState<string | null>(null);
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
-  const [feedOrder, setFeedOrder] = useState<"default" | "recent">("default");
+  const [feedOrder, setFeedOrder] = useState<"default" | "recent">(() => searchParams.get("order") === "recent" ? "recent" : "default");
   const [mobileFocusCloudId, setMobileFocusCloudId] = useState<string | null>(null);
   const [recentNoticeMounted, setRecentNoticeMounted] = useState(false);
   const [recentNoticeVisible, setRecentNoticeVisible] = useState(false);
-  const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
+  const [cloudScope, setCloudScope] = useState<CloudScope>(initialScope);
   const [cloudOptionsOpen, setCloudOptionsOpen] = useState(false);
   const [cloudDescriptionOpen, setCloudDescriptionOpen] = useState(false);
   const [cloudReportOpen, setCloudReportOpen] = useState(false);
@@ -2869,6 +2865,7 @@ function PageContent() {
   }, [orderedClouds, requestedCloudId]);
 
   const enterConversation = (cloud: Cloud) => {
+    replaceFeedPosition(cloud.id, cloudScope, feedOrder);
     const params = new URLSearchParams({
       title: cloud.title,
       duration: cloud.duration,
@@ -2898,6 +2895,16 @@ function PageContent() {
         // ignore invalid stored polls
       }
 
+      const currentCacheKey = user?.id ? `talk:${user.id}:${cloudScope}` : "";
+      const cachedClouds = getCachedFeed<Cloud[]>(currentCacheKey);
+      if (cachedClouds) {
+        if (!cancelled) {
+          setClouds(cachedClouds);
+          setHydrated(true);
+        }
+        return;
+      }
+
       try {
         const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", {
           cache: "no-store",
@@ -2915,6 +2922,7 @@ function PageContent() {
           : [];
 
         if (!cancelled) {
+          cacheFeed(currentCacheKey, serverClouds);
           setClouds(serverClouds);
         }
       } catch {
@@ -2946,6 +2954,7 @@ function PageContent() {
         const refreshedClouds = payload.clouds
           .map(mapApiCloudToCloud)
           .filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id));
+        cacheFeed(user?.id ? `talk:${user.id}:${cloudScope}` : "", refreshedClouds);
         setClouds(refreshedClouds);
       } catch {
         // Keep the last successfully rendered feed while the refresh fails.
@@ -3214,8 +3223,12 @@ function PageContent() {
       <main className={`${mobilePreview ? "flex" : "flex md:hidden"} cloud-feed-main`}>
         <div className="relative flex h-full min-h-0 flex-1 flex-col">
         <MobileCloudFeed
+          key={`${cloudScope}:${feedOrder}`}
           clouds={activeClouds}
           focusCloudId={mobileFocusCloudId}
+          initialCloudId={requestedCloudId}
+          scope={cloudScope}
+          order={feedOrder}
           onEnter={enterConversation}
           onCreate={() => setModal("create")}
           onDescription={(cloud) => {
@@ -3246,7 +3259,11 @@ function PageContent() {
         </button>}
         <div className="relative flex h-full min-h-0 flex-1 flex-col">
         <DesktopCloudFeed
+          key={`${cloudScope}:${feedOrder}`}
           clouds={activeClouds}
+          initialCloudId={requestedCloudId}
+          scope={cloudScope}
+          order={feedOrder}
           currentUserId={user?.id}
           onEnter={enterConversation}
           onDescription={(cloud) => { const index = activeClouds.findIndex((item) => item.id === cloud.id); if (index >= 0) setCurrentCloudIndex(index); setCloudDescriptionOpen(true); }}

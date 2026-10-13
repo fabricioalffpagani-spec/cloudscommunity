@@ -7,6 +7,7 @@ import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../../lib/socket-auth";
 
 import { FlameIcon } from "../../components/FlameIcon";
+import { CloudTitleMarquee } from "../../components/CloudTitleMarquee";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
 import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
@@ -1976,7 +1977,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
   const resolvedTitle = cloud?.title || title || "Cloud";
-  const shouldScrollTitle = resolvedTitle.length > 28;
 
   const handleTitlePointerDown = useCallback((event: React.PointerEvent) => {
     // Only enable long press on mobile/touch devices
@@ -2771,17 +2771,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           <ArrowLeftIcon s={18} />
         </button>
 
-        <div className="min-w-0 overflow-hidden">
-          <h1
-            className={`${shouldScrollTitle ? "cloud-title-marquee md:truncate" : "truncate"} text-[22px] font-bold leading-tight text-white sm:text-[28px]`}
-            onPointerDown={handleTitlePointerDown}
-            onPointerUp={handleTitlePointerUp}
-            onPointerLeave={handleTitlePointerLeave}
-            onPointerCancel={handleTitlePointerCancel}
-          >
-            {shouldScrollTitle ? <><span>{resolvedTitle}</span><span aria-hidden="true">{resolvedTitle}</span></> : resolvedTitle}
-          </h1>
-        </div>
+        <CloudTitleMarquee title={resolvedTitle} onPointerDown={handleTitlePointerDown} onPointerUp={handleTitlePointerUp} onPointerLeave={handleTitlePointerLeave} onPointerCancel={handleTitlePointerCancel} />
 
         <div className="flex shrink-0 items-center gap-0.5">
           {!isDarkCloud && (

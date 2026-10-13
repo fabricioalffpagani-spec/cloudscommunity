@@ -15,7 +15,7 @@ import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
 import { isConversationForViewer } from "../lib/direct-conversation";
 import { recordStickerUse } from "../lib/sticker-usage";
-import { mergeDirectMessage as mergeMessage } from "../lib/merge-direct-message";
+import { markDirectMessageFailed, mergeDirectMessage as mergeMessage, retryDirectMessage } from "../lib/merge-direct-message";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -114,7 +114,9 @@ type Msg = {
   linkUrl: string | null;
   linkLabel: string | null;
   pending?: boolean;
+  failed?: boolean;
   clientMessageId?: string | null;
+  replyToMessageId?: string | null;
   reactions?: Array<{ id: string; emoji: string; userId: string; createdAt: string }>;
 };
 
@@ -971,6 +973,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
 }
 
 function MessageReceipt({ msg }: { msg: Msg }) {
+  if (msg.failed) return null;
   const isRead = Boolean(msg.readAt);
   const isDelivered = !msg.pending;
   const iconClass = isRead ? "text-[#7C3AED]" : "text-white";
@@ -1202,7 +1205,7 @@ function DmMsgMenu({
   );
 }
 
-function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, onRetry, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; onRetry?: (m: Msg) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
@@ -1342,9 +1345,10 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
           <div className={`relative rounded-2xl px-4 ${isForwardedMessage ? "min-w-[112px] pb-3 pt-6" : "py-3"} text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
             {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ Encaminhada</span>}
             <span dangerouslySetInnerHTML={{ __html: highlightedContent || visibleTextContent || "" }} />
-            {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
+            {msg.pending && !msg.failed && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
         )}
+        {msg.failed && msg.kind === "text" && <button type="button" onClick={() => onRetry?.(msg)} className="px-1 text-[11px] font-semibold text-red-300 hover:text-red-200">Falha no envio · Tentar novamente</button>}
         {(msg.reactions?.length ?? 0) > 0 && <div className={`flex flex-wrap gap-1 px-1 ${isRight ? "justify-end" : "justify-start"}`}>
           {Object.entries((msg.reactions ?? []).reduce<Record<string, NonNullable<Msg["reactions"]>>>((groups, reaction) => {
             groups[reaction.emoji] = [...(groups[reaction.emoji] ?? []), reaction];
@@ -2411,6 +2415,39 @@ function MessagesPageContent() {
     setReplyingTo(msg);
   }, []);
 
+  const postTextMessage = useCallback(async (message: Msg) => {
+    const conversationId = message.conversationId;
+    const clientMessageId = message.clientMessageId;
+    if (!clientMessageId) return;
+    try {
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: message.content, clientMessageId, replyToMessageId: message.replyToMessageId ?? null }),
+      });
+      const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
+      const confirmed = buildMessage(payload.message, user);
+      setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], confirmed) }));
+      setConversations((prev) => withConfirmedPreview(prev, conversationId, confirmed, message.content));
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: markDirectMessageFailed(prev[conversationId] || [], clientMessageId),
+      }));
+    }
+  }, [user]);
+
+  const retryTextMessage = useCallback((message: Msg) => {
+    const clientMessageId = message.clientMessageId;
+    if (!message.failed || !clientMessageId) return;
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [message.conversationId]: retryDirectMessage(prev[message.conversationId] || [], clientMessageId),
+    }));
+    void postTextMessage(message);
+  }, [postTextMessage]);
+
   const sendText = useCallback(() => {
     const socket = socketRef.current;
     const content = draft.trim();
@@ -2448,32 +2485,15 @@ function MessagesPageContent() {
       linkLabel: null,
       pending: true,
       clientMessageId,
+      replyToMessageId: replyingTo?.id ?? null,
     };
 
     setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], optimistic) }));
     setDraft("");
 
-    void (async () => {
-      try {
-        const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(activeConversationId)}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content, clientMessageId, replyToMessageId: replyingTo?.id ?? null }),
-        });
-        const payload = await readJson<{ ok: true; message: BackendMessage }>(response);
-        const confirmed = buildMessage(payload.message, user);
-        setMessagesByConversation((prev) => ({ ...prev, [activeConversationId]: mergeMessage(prev[activeConversationId] || [], confirmed) }));
-        setConversations((prev) => withConfirmedPreview(prev, activeConversationId, confirmed, content));
-      } catch (sendError) {
-        setError(sendError instanceof Error ? sendError.message : "Não foi possível enviar a mensagem.");
-        setMessagesByConversation((prev) => ({
-          ...prev,
-          [activeConversationId]: (prev[activeConversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
-        }));
-      }
-    })();
+    void postTextMessage(optimistic);
     setReplyingTo(null);
-  }, [activeConversationId, draft, isConversationBlocked, replyingTo, user]);
+  }, [activeConversationId, draft, isConversationBlocked, postTextMessage, replyingTo, user]);
 
   const startAudioRecording = useCallback(() => {
     if (!activeConversationId || isAudioBusy || isConversationBlocked) {
@@ -2756,7 +2776,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
                     </div>
                   );
                 });

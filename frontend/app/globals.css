@@ -276,15 +276,6 @@ textarea {
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .cloud-title-marquee {
-      display: flex;
-      gap: 3rem;
-      min-width: max-content;
-      white-space: nowrap;
-      animation: cloud-title-marquee 18s linear 1s infinite;
-      will-change: transform;
-    }
-
     .cloud-share-pulse {
       animation: cloud-share-pulse 8s ease-in-out 3s infinite;
     }
@@ -304,6 +295,33 @@ textarea {
 
   html[data-mobile-tab-transition="back"] body > * {
     animation: mobile-tab-enter-back 300ms cubic-bezier(0.22, 0.8, 0.25, 1) both;
+  }
+}
+
+.cloud-title-marquee {
+  display: flex;
+  width: max-content;
+  gap: 3rem;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cloud-title-marquee {
+    animation: cloud-title-marquee 18s linear 1s infinite;
+    will-change: transform;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud-title-marquee {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cloud-title-marquee span[aria-hidden="true"] {
+    display: none;
   }
 }
 

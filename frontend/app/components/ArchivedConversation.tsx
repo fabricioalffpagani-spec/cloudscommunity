@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ReadOnlyCloudMessage, type ReadOnlyMessage } from "./ReadOnlyCloudMessage";
+import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
 
 type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
@@ -24,6 +26,10 @@ function LockIcon() {
 }
 
 export function ArchivedConversation({ cloudId }: { cloudId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromReadFeed = searchParams.get("from") === "read";
+  const readScope = searchParams.get("scope") === "following" ? "following" : "for-you";
   const { user } = useSessionUser();
   const [cloud, setCloud] = useState<ArchivePayload["cloud"] | null>(null);
   const [messages, setMessages] = useState<ArchivedMessage[]>([]);
@@ -115,9 +121,9 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
 
   return <main className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
     <header className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
-      <Link href="/read" aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></Link>
+      {fromReadFeed ? <button type="button" onClick={() => router.back()} aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></button> : <Link href={`/read?cloud=${encodeURIComponent(cloudId)}&scope=${readScope}`} aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></Link>}
       <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
-        <h1 className="truncate text-[22px] font-bold leading-tight text-white sm:text-[28px]">{cloud?.title ?? "Conversa encerrada"}</h1>
+        <CloudTitleMarquee title={cloud?.title ?? "Conversa encerrada"} />
         <div className="flex items-center gap-2 whitespace-nowrap text-[13px] text-white/50 sm:text-[16px]">
           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-white/30 sm:h-3 sm:w-3" />
           <span>Cloud encerrada</span>

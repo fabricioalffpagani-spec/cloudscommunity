@@ -12,6 +12,7 @@ import { NotificationsBell } from "../components/NotificationsPanel";
 import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
+import { cacheFeed, getCachedFeed } from "../lib/feed-cache";
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -39,12 +40,14 @@ function ReadPageContent() {
   const searchParams = useSearchParams();
   const mobileFeedTabSwipe = useMobileFeedTabSwipe();
   const { user } = useSessionUser();
-  const [clouds, setClouds] = useState<ReadCloud[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialScope = searchParams.get("scope") === "following" ? "following" : "for-you";
+  const cacheKey = user?.id ? `read:${user.id}:${initialScope}` : "";
+  const [clouds, setClouds] = useState<ReadCloud[]>(() => getCachedFeed<ReadCloud[]>(cacheKey) ?? []);
+  const [loading, setLoading] = useState(() => getCachedFeed<ReadCloud[]>(cacheKey) === null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [cloudScope, setCloudScope] = useState<CloudScope>("for-you");
+  const [cloudScope, setCloudScope] = useState<CloudScope>(initialScope);
   const [readHintPhase, setReadHintPhase] = useState<"hidden" | "visible" | "fading">("hidden");
 
   useEffect(() => {
@@ -79,6 +82,13 @@ function ReadPageContent() {
     let cancelled = false;
 
     const loadRead = async () => {
+      const currentCacheKey = user?.id ? `read:${user.id}:${cloudScope}` : "";
+      const cached = getCachedFeed<ReadCloud[]>(currentCacheKey);
+      if (cached && attempt === 0) {
+        setClouds(cached);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setError("");
 
@@ -89,7 +99,8 @@ function ReadPageContent() {
         if (!response.ok || !Array.isArray(payload?.clouds)) throw new Error("Não foi possível carregar as clouds encerradas.");
 
         if (!cancelled) {
-          setClouds(response.ok && Array.isArray(payload?.clouds) ? payload.clouds : []);
+          cacheFeed(currentCacheKey, payload.clouds);
+          setClouds(payload.clouds);
         }
       } catch {
         if (!cancelled) {
@@ -108,7 +119,7 @@ function ReadPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [attempt, cloudScope]);
+  }, [attempt, cloudScope, user?.id]);
 
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
@@ -169,7 +180,7 @@ function ReadPageContent() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center md:block">
-            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} currentUserId={user?.id} onDelete={deleteCloud} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} />
           </div>
         )}
       </main>

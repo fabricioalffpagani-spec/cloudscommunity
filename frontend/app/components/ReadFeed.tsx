@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useFeedPosition } from "../lib/feed-position";
 
 export type ReadCloud = {
   id: string;
@@ -14,42 +15,21 @@ export type ReadCloud = {
   participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
 };
 
-export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { clouds: ReadCloud[]; initialCloudId?: string | null; currentUserId?: string; onDelete: (cloudId: string) => Promise<void> }) {
+export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void> }) {
   const router = useRouter();
-  const [index, setIndex] = useState(0);
   const [now, setNow] = useState(() => Date.now());
-  const [slideAnim, setSlideAnim] = useState<"up" | "down" | null>(null);
   const [cloudToDelete, setCloudToDelete] = useState<ReadCloud | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope });
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    const index = initialCloudId ? clouds.findIndex((cloud) => cloud.id === initialCloudId) : -1;
-    if (index >= 0) setIndex(index);
-  }, [clouds, initialCloudId]);
-
-  const current = Math.min(index, Math.max(0, clouds.length - 1));
-
-  const navigateCloud = (direction: number) => {
-    if (clouds.length <= 1 || slideAnim) return;
-    setSlideAnim(direction > 0 ? "up" : "down");
-    window.setTimeout(() => {
-      setIndex((previous) => {
-        const next = previous + direction;
-        if (next < 0) return clouds.length - 1;
-        if (next >= clouds.length) return 0;
-        return next;
-      });
-      setSlideAnim(null);
-    }, 260);
-  };
 
   const confirmDelete = async () => {
     if (!cloudToDelete) return;
@@ -71,7 +51,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
 
   return (
     <div className="relative flex min-h-0 h-full w-full flex-col">
-      <div className="mobile-cloud-feed desktop-cloud-feed cloud-feed-scroller md:mx-auto md:w-full md:max-w-[1100px]">
+      <div ref={feedRef} onScroll={syncPosition} className="mobile-cloud-feed desktop-cloud-feed cloud-feed-scroller md:mx-auto md:w-full md:max-w-[1100px]">
         {clouds.map((cloud) => {
             const participants = cloud.participantProfiles.filter((person) => person.id !== cloud.author.id);
             const participantsCount = Math.max(participants.length, Math.max((cloud.participantsCount ?? 0) - 1, 0));
@@ -79,11 +59,6 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
             key={cloud.id}
             data-cloud-page
             className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6 md:px-0 md:pb-0 md:pt-0"
-            style={{
-              transition: "transform 0.25s ease, opacity 0.25s ease",
-              transform: slideAnim === "up" ? "translateY(-36px)" : slideAnim === "down" ? "translateY(36px)" : "translateY(0)",
-              opacity: slideAnim ? 0.15 : 1,
-            }}
           >
             <div className="read-card-header flex items-center justify-between gap-3 md:px-10 md:pb-5 md:pt-8">
               <Link href={`/users/${encodeURIComponent(cloud.author.username)}`} aria-label={`Ver perfil de ${cloud.author.name}`} className="flex min-w-0 items-center gap-3 md:gap-4">
@@ -122,7 +97,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
                 const now = Date.now();
                 if (titleTap.current?.cloudId === cloud.id && now - titleTap.current.at < 350) {
                   titleTap.current = null;
-                  router.push(`/cloud/${cloud.id}/conversation`);
+                  router.push(`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`);
                 } else {
                   titleTap.current = { cloudId: cloud.id, at: now };
                 }
@@ -132,7 +107,7 @@ export function ReadFeed({ clouds, initialCloudId, currentUserId, onDelete }: { 
               aria-label={`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`}
             >
               <h2 lang="pt-BR" className={`max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
-              <Link href={`/cloud/${cloud.id}/conversation`} className="read-card-action mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
+              <Link href={`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`} className="read-card-action mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 
             <div className="read-card-footer relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-10 md:pt-0 md:text-[14px]">

@@ -5,8 +5,8 @@ import { CloudPreview } from "../app/components/CloudPreview";
 import { ArchivedConversation } from "../app/components/ArchivedConversation";
 import { SessionUserProvider } from "../app/components/session-user";
 
-const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock }) }));
+const { pushMock, backMock } = vi.hoisted(() => ({ pushMock: vi.fn(), backMock: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, back: backMock }), useSearchParams: () => new URLSearchParams(window.location.search) }));
 
 const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2026-09-20T12:00:00Z", messagesCount: 18, author: { id: "user-maria", name: "Maria", username: "maria", avatarUrl: null }, participantProfiles: [] };
 const onDelete = vi.fn<(cloudId: string) => Promise<void>>().mockResolvedValue(undefined);
@@ -37,7 +37,7 @@ describe("Read", () => {
     fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
-    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation");
+    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation?from=read&scope=for-you");
   });
   it("leaves desktop wheel scrolling native across archived topics", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
@@ -104,6 +104,17 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("uses browser history for the internal back button when opened from Read", async () => {
+    window.history.replaceState(null, "", "/cloud/cloud-1/conversation?from=read&scope=following");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud, messages: [] }) };
+      return { ok: true, json: async () => ({ user: null }) };
+    }));
+    render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Voltar para Read" }));
+    expect(backMock).toHaveBeenCalledOnce();
+  });
+
   it("uses the active messenger layout without writing or editing controls", async () => {
     const archiveMessages = [
       { id: "text", type: "text", content: "Minha mensagem", mediaUrl: null, createdAt: "2026-09-20T12:00:00Z", sender: { id: "user-1", displayName: "Maria", username: "maria", avatarUrl: null } },
