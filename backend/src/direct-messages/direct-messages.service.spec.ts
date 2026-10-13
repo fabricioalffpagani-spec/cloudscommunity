@@ -274,7 +274,7 @@ describe('DirectMessagesService', () => {
     expect(prisma.conversation.update).not.toHaveBeenCalled();
   });
 
-  it('keeps a committed message successful when notification lookup fails', async () => {
+  it('returns a committed message before push lookup finishes, even if it later fails', async () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(
       prisma as unknown as PrismaService,
@@ -327,8 +327,11 @@ describe('DirectMessagesService', () => {
       mediaAsset: null,
     });
     prisma.conversation.update.mockResolvedValue({});
-    prisma.conversation.findUnique.mockRejectedValue(
-      new Error('push lookup failed'),
+    let rejectPushLookup!: (error: Error) => void;
+    prisma.conversation.findUnique.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectPushLookup = reject;
+      }),
     );
     const warning = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
@@ -348,6 +351,9 @@ describe('DirectMessagesService', () => {
         }) as unknown,
       }),
     );
+    expect(warning).not.toHaveBeenCalled();
+    rejectPushLookup(new Error('push lookup failed'));
+    await new Promise((resolve) => setImmediate(resolve));
     expect(warning).toHaveBeenCalled();
     warning.mockRestore();
   });

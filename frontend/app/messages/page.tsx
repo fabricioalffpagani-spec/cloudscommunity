@@ -15,6 +15,7 @@ import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
 import { isConversationForViewer } from "../lib/direct-conversation";
 import { recordStickerUse } from "../lib/sticker-usage";
+import { mergeDirectMessage as mergeMessage } from "../lib/merge-direct-message";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -446,16 +447,6 @@ function buildMessage(
     clientMessageId: payload.clientMessageId,
     reactions: payload.reactions ?? [],
   };
-}
-
-function mergeMessage(list: Msg[], next: Msg) {
-  const index = next.clientMessageId ? list.findIndex((item) => item.clientMessageId === next.clientMessageId) : -1;
-  if (index >= 0) {
-    const existing = list[index];
-    return list.map((item, i) => (i === index ? { ...next, pending: false, peaks: next.peaks ?? existing.peaks ?? null } : item));
-  }
-  if (list.some((item) => item.id === next.id)) return list;
-  return [...list, next];
 }
 
 type CloudCommentReference = { cloudTitle: string; comment: string; response?: string; isLegacyReference: boolean };

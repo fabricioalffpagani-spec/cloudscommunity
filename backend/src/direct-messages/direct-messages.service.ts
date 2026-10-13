@@ -371,7 +371,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipientAfterCommit(
+    void this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -432,7 +432,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipientAfterCommit(
+    void this.notifyRecipientAfterCommit(
       message.id,
       conversationId,
       senderId,
@@ -552,7 +552,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipientAfterCommit(
+    void this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -672,7 +672,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipientAfterCommit(
+    void this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,
@@ -787,7 +787,7 @@ export class DirectMessagesService {
       return created;
     });
 
-    await this.notifyRecipientAfterCommit(
+    void this.notifyRecipientAfterCommit(
       message.id,
       input.conversationId,
       userId,

@@ -63,6 +63,43 @@ describe('PushNotificationsService delivery', () => {
     });
   });
 
+  it('keeps the same Web Push delivery options for grouped direct messages', async () => {
+    const { service } = setup();
+    const provider = jest
+      .spyOn(webpush, 'sendNotification')
+      .mockResolvedValue({ statusCode: 201, body: '', headers: {} });
+
+    await service.send('recipient', {
+      title: 'Ana: Tudo bem?',
+      body: 'Tudo bem?',
+      tag: 'direct-message-conversation-1',
+      messageId: 'message-2',
+      unreadMessages: ['Oi', 'Tudo bem?'],
+    });
+
+    const payload = JSON.parse(provider.mock.calls[0][1] as string) as {
+      title: string;
+      body: string;
+      tag: string;
+      messageId: string;
+      unreadMessages: string[];
+    };
+    expect(payload).toEqual(
+      expect.objectContaining({
+        title: 'Ana: Tudo bem?',
+        body: 'Tudo bem?',
+        tag: 'direct-message-conversation-1',
+        messageId: 'message-2',
+        unreadMessages: ['Oi', 'Tudo bem?'],
+      }),
+    );
+    expect(provider.mock.calls[0][2]).toEqual({
+      TTL: 600,
+      urgency: 'high',
+      timeout: 15_000,
+    });
+  });
+
   it.each([404, 410])(
     'uses immediate priority and removes subscriptions rejected with HTTP %i',
     async (statusCode) => {

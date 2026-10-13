@@ -100,6 +100,25 @@ function createWorker() {
 }
 
 describe("push service worker", () => {
+  it.each(["open", "background", "closed"])(
+    "shows a direct push with the PWA %s without consulting app windows",
+    async (state) => {
+      const worker = createWorker();
+      if (state === "closed") worker.matchAll.mockResolvedValue([]);
+      else worker.matchAll.mockResolvedValue([{ url: "https://clouds.test/messages" }]);
+      await worker.push({
+        title: "Ana: Oi",
+        body: "Oi",
+        unreadMessages: ["Oi"],
+        tag: "direct-message-a",
+        messageId: "m1",
+      });
+      expect(worker.showNotification).toHaveBeenCalledTimes(1);
+      expect(worker.notices.get("direct-message-a")?.options.body).toBe("Oi");
+      expect(worker.matchAll).not.toHaveBeenCalled();
+    },
+  );
+
   it("shows each direct message without waiting for notification or window lookups", async () => {
     const worker = createWorker();
     await worker.push({
