@@ -37,7 +37,7 @@ export function CloudTitleMarquee({
   }, [title]);
 
   return (
-    <div ref={viewportRef} className="min-w-0 overflow-hidden">
+    <div ref={viewportRef} className="min-w-0 flex-1 overflow-hidden">
       <h1
         className={`${overflowing ? "cloud-title-marquee" : "block"} text-[22px] font-bold leading-tight text-white sm:text-[28px]`}
         onPointerDown={onPointerDown}
@@ -45,11 +45,14 @@ export function CloudTitleMarquee({
         onPointerLeave={onPointerLeave}
         onPointerCancel={onPointerCancel}
       >
-        <span ref={textRef} className="shrink-0 whitespace-nowrap">
+        <span ref={textRef} className="inline-block shrink-0 whitespace-nowrap">
           {title}
         </span>
         {overflowing && (
-          <span aria-hidden="true" className="shrink-0 whitespace-nowrap">
+          <span
+            aria-hidden="true"
+            className="inline-block shrink-0 whitespace-nowrap"
+          >
             {title}
           </span>
         )}

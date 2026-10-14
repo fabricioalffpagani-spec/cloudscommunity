@@ -106,7 +106,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
               style={{ touchAction: "pan-y" }}
               aria-label={`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`}
             >
-              <h2 lang="pt-BR" className={`max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
+              <h2 lang="pt-BR" className={`cloud-feed-title max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
               <Link href={`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`} className="read-card-action mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 

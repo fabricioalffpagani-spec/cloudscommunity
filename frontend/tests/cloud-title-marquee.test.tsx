@@ -40,10 +40,16 @@ describe("Cloud title marquee", () => {
         "cloud-title-marquee",
       );
       expect(container.querySelectorAll("h1 span")).toHaveLength(2);
+      expect(container.querySelector("h1 span:first-child")).toHaveClass(
+        "inline-block",
+      );
       expect(
         container.querySelector('h1 span[aria-hidden="true"]'),
       ).toHaveTextContent(title);
-      expect(container.querySelector("div")).toHaveClass("overflow-hidden");
+      expect(container.querySelector("div")).toHaveClass(
+        "flex-1",
+        "overflow-hidden",
+      );
     },
   );
 

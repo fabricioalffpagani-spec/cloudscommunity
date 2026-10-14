@@ -305,6 +305,12 @@ textarea {
   white-space: nowrap;
 }
 
+.cloud-feed-title {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .cloud-title-marquee {
     animation: cloud-title-marquee 18s linear 1s infinite;
