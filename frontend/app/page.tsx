@@ -4,7 +4,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
+import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore, type RefObject } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
 import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
@@ -2579,12 +2579,12 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
   );
 }
 
-function DesktopCloudFeed({ clouds, initialCloudId, scope, order, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; initialCloudId?: string | null; scope: string; order: string; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+function DesktopCloudFeed({ clouds, initialCloudId, scope, order, navigationTargetRef, currentUserId, onEnter, onDescription, onReport, onDelete }: { clouds: Cloud[]; initialCloudId?: string | null; scope: string; order: string; navigationTargetRef: RefObject<string | null>; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const wheelLockedRef = useRef(false);
-  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, onActiveIndex: setActiveIndex });
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, onActiveIndex: setActiveIndex, navigationTargetRef });
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2643,12 +2643,12 @@ function DesktopCloudFeed({ clouds, initialCloudId, scope, order, currentUserId,
   })}</div>{clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}</div>;
 }
 
-function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; initialCloudId?: string | null; scope: string; order: string; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
+function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, navigationTargetRef, onEnter, onCreate, onDescription, onReport, onDelete }: { clouds: Cloud[]; focusCloudId: string | null; initialCloudId?: string | null; scope: string; order: string; navigationTargetRef: RefObject<string | null>; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void }) {
   const sessionUser = useSessionUser();
   const currentUser = sessionUser.user;
   const titleTapRef = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
-  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order });
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, navigationTargetRef });
   const cloudRefs = useRef<Record<string, HTMLElement | null>>({});
   const [premiereId, setPremiereId] = useState<string | null>(null);
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
@@ -2774,6 +2774,7 @@ function PageContent() {
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
+  const navigationTargetRef = useRef<string | null>(null);
   const [feedOrder, setFeedOrder] = useState<"default" | "recent">(() => searchParams.get("order") === "recent" ? "recent" : "default");
   const [mobileFocusCloudId, setMobileFocusCloudId] = useState<string | null>(null);
   const [recentNoticeMounted, setRecentNoticeMounted] = useState(false);
@@ -2865,6 +2866,7 @@ function PageContent() {
   }, [orderedClouds, requestedCloudId]);
 
   const enterConversation = (cloud: Cloud) => {
+    navigationTargetRef.current = cloud.id;
     replaceFeedPosition(cloud.id, cloudScope, feedOrder);
     const params = new URLSearchParams({
       title: cloud.title,
@@ -3227,6 +3229,7 @@ function PageContent() {
           clouds={activeClouds}
           focusCloudId={mobileFocusCloudId}
           initialCloudId={requestedCloudId}
+          navigationTargetRef={navigationTargetRef}
           scope={cloudScope}
           order={feedOrder}
           onEnter={enterConversation}
@@ -3262,6 +3265,7 @@ function PageContent() {
           key={`${cloudScope}:${feedOrder}`}
           clouds={activeClouds}
           initialCloudId={requestedCloudId}
+          navigationTargetRef={navigationTargetRef}
           scope={cloudScope}
           order={feedOrder}
           currentUserId={user?.id}

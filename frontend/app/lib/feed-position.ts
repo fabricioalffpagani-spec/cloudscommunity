@@ -9,20 +9,32 @@ type FeedPositionOptions = {
   scope?: string;
   order?: string;
   onActiveIndex?: (index: number) => void;
+  navigationTargetRef?: RefObject<string | null>;
 };
+
+function pageTopInFeed(feed: HTMLElement, page: HTMLElement): number {
+  return (
+    feed.scrollTop +
+    page.getBoundingClientRect().top -
+    feed.getBoundingClientRect().top
+  );
+}
 
 export function nearestCloudIndex(
   feed: HTMLElement,
   pages: HTMLElement[],
 ): number {
-  return pages.reduce(
-    (best, page, index) =>
-      Math.abs(page.offsetTop - feed.scrollTop) <
-      Math.abs(pages[best].offsetTop - feed.scrollTop)
-        ? index
-        : best,
-    0,
-  );
+  const feedTop = feed.getBoundingClientRect().top;
+  let best = 0;
+  let smallestDistance = Number.POSITIVE_INFINITY;
+  pages.forEach((page, index) => {
+    const distance = Math.abs(page.getBoundingClientRect().top - feedTop);
+    if (distance < smallestDistance) {
+      smallestDistance = distance;
+      best = index;
+    }
+  });
+  return best;
 }
 
 export function replaceFeedPosition(
@@ -54,6 +66,7 @@ export function useFeedPosition({
   scope,
   order,
   onActiveIndex,
+  navigationTargetRef,
 }: FeedPositionOptions) {
   const initialId = useRef(initialCloudId);
   const restored = useRef(false);
@@ -65,6 +78,7 @@ export function useFeedPosition({
     const feed = feedRef.current;
     if (
       !feed ||
+      navigationTargetRef?.current ||
       !cloudIds.length ||
       (restored.current && lastSignature.current === signature)
     )
@@ -81,18 +95,26 @@ export function useFeedPosition({
       : Math.max(0, cloudIds.indexOf(initialId.current ?? ""));
     const previousBehavior = feed.style.scrollBehavior;
     feed.style.scrollBehavior = "auto";
-    feed.scrollTop = pages[index].offsetTop;
+    feed.scrollTop = pageTopInFeed(feed, pages[index]);
     feed.style.scrollBehavior = previousBehavior;
     restored.current = true;
     lastSignature.current = signature;
     lastActiveId.current = cloudIds[index];
     onActiveIndex?.(index);
     replaceFeedPosition(cloudIds[index], scope, order);
-  }, [cloudIds, feedRef, onActiveIndex, order, scope, signature]);
+  }, [
+    cloudIds,
+    feedRef,
+    navigationTargetRef,
+    onActiveIndex,
+    order,
+    scope,
+    signature,
+  ]);
 
   const syncPosition = useCallback(() => {
     const feed = feedRef.current;
-    if (!feed || !restored.current) return;
+    if (!feed || !restored.current || navigationTargetRef?.current) return;
     const pages = Array.from(
       feed.querySelectorAll<HTMLElement>("[data-cloud-page]"),
     );
@@ -103,7 +125,7 @@ export function useFeedPosition({
     lastActiveId.current = id;
     onActiveIndex?.(index);
     replaceFeedPosition(id, scope, order);
-  }, [cloudIds, feedRef, onActiveIndex, order, scope]);
+  }, [cloudIds, feedRef, navigationTargetRef, onActiveIndex, order, scope]);
 
   return syncPosition;
 }
