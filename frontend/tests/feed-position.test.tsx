@@ -1,4 +1,6 @@
 import { fireEvent, render } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useRef, type RefObject } from "react";
 import { useFeedPosition } from "../app/lib/feed-position";
@@ -39,6 +41,17 @@ function Feed({
 }
 
 describe("feed position", () => {
+  it("marks each Talk mobile card for restoration by stable Cloud ID", () => {
+    const pageSource = readFileSync(
+      resolve(process.cwd(), "app/page.tsx"),
+      "utf8",
+    );
+    const mobileFeed = pageSource
+      .split("function MobileCloudFeed(")[1]
+      ?.split("function PageContent(")[0];
+    expect(mobileFeed).toMatch(/<article key=\{cloud\.id\} data-cloud-page\b/);
+  });
+
   beforeEach(() => {
     window.history.replaceState(null, "", "/read");
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(

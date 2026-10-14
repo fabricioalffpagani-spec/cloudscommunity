@@ -2705,7 +2705,7 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
           }
         };
         return (
-          <article key={cloud.id} ref={(element) => { cloudRefs.current[cloud.id] = element; }} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
+          <article key={cloud.id} data-cloud-page ref={(element) => { cloudRefs.current[cloud.id] = element; }} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
             <div className="flex items-center justify-between gap-2">
               <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="flex min-w-0 flex-1 items-center gap-2">
                 {profile.avatar ? <img src={profile.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-sm font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}
