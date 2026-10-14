@@ -13,6 +13,7 @@ import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
 import { cacheFeed, getCachedFeed } from "../lib/feed-cache";
+import { ReadWelcomeHint } from "../components/ReadWelcomeHint";
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -124,17 +125,7 @@ function ReadPageContent() {
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      {readHintPhase !== "hidden" && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={`pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-8 transition-opacity duration-700 md:hidden ${readHintPhase === "fading" ? "opacity-0" : "opacity-100"}`}
-        >
-          <p className="max-w-[280px] text-center text-[22px] font-semibold leading-snug text-white drop-shadow-[0_3px_18px_rgba(0,0,0,0.75)]">
-            Leia conversas que já aconteceram...
-          </p>
-        </div>
-      )}
+      {readHintPhase !== "hidden" && <ReadWelcomeHint fading={readHintPhase === "fading"} />}
       <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
