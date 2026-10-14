@@ -259,6 +259,17 @@ export class CloudController {
     return this.cloudService.delete(extractSessionToken(req), id);
   }
 
+  @Patch(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() body: { title?: string; duration?: string },
+    @Req() req: Request,
+  ) {
+    const result = await this.cloudService.update(extractSessionToken(req), id, body);
+    this.cloudMessagesGateway.broadcastCloudUpdated(id, result.cloud);
+    return result;
+  }
+
   @Delete(':id/members/:userId')
   async removeMember(
     @Param('id') id: string,
@@ -441,6 +452,16 @@ export class CloudController {
       take: take ? Number(take) : undefined,
       before: before || undefined,
     });
+  }
+
+  @Post(':id/messages/views')
+  async markMessagesViewed(@Param('id') id: string, @Body() body: { messageIds?: string[] }, @Req() req: Request) {
+    return this.cloudService.markMessagesViewed(extractSessionToken(req), id, body.messageIds ?? []);
+  }
+
+  @Get(':id/messages/:messageId/views')
+  async getMessageViews(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
+    return this.cloudService.getMessageViews(extractSessionToken(req), id, messageId);
   }
 
   @Post(':id/audio')

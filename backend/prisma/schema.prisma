@@ -104,6 +104,7 @@ model User {
   emailVerificationTokens   EmailVerificationToken[]
   passwordResetTokens       PasswordResetToken[]
   cloudMessageReactions     CloudMessageReaction[]
+  cloudMessageViews         CloudMessageView[]
   cloudBans                 CloudBan[]             @relation("CloudBanUser")
   cloudBansGiven            CloudBan[]             @relation("CloudBanBannedBy")
   cloudReports              CloudReport[]          @relation("CloudReportReported")
@@ -182,6 +183,7 @@ model Cloud {
   visibility   CloudVisibility @default(public)
   status       CloudStatus     @default(active)
   duration     String          @db.VarChar(20)
+    editCount    Int             @default(0)
   audioUrl     String?         @db.Text
   scheduledAt  DateTime?
   startedAt    DateTime?
@@ -299,11 +301,24 @@ model CloudMessage {
   replyToMessage   CloudMessage?  @relation("CloudMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
   replies          CloudMessage[] @relation("CloudMessageReplies")
   reactions        CloudMessageReaction[]
+  views            CloudMessageView[]
 
   @@index([cloudId, createdAt])
   @@index([userId])
   @@index([replyToMessageId])
   @@index([cloudId, isPinned])
+}
+
+model CloudMessageView {
+  messageId String   @db.Uuid
+  userId    String   @db.Uuid
+  viewedAt  DateTime @default(now())
+
+  message   CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, viewedAt])
 }
 
 model SavedSticker {

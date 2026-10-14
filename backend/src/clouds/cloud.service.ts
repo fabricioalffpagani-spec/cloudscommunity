@@ -25,6 +25,7 @@ import {
   CreateCloudInput,
   CreateCloudMessageInput,
   ListCloudMessagesQuery,
+  UpdateCloudInput,
 } from './cloud.types';
 
 const ALLOWED_DURATIONS = ['10min', '30min', '2h', '5h', '24h'] as const;
@@ -657,10 +658,10 @@ export class CloudService {
       });
     }
 
-    if (title.length > 30) {
+    if (title.length > 40) {
       throw new BadRequestException({
         message: 'Título muito longo.',
-        fieldErrors: { title: 'O título deve ter até 30 caracteres.' },
+        fieldErrors: { title: 'O título deve ter até 40 caracteres.' },
       });
     }
 
@@ -1163,6 +1164,62 @@ export class CloudService {
     });
 
     return { ok: true };
+  }
+
+  async update(
+    token: string | null,
+    cloudId: string,
+    input: UpdateCloudInput,
+  ): Promise<{ ok: true; cloud: { id: string; title: string; duration: string; editCount: number } }> {
+    const current = await this.requireSession(token);
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+      select: { id: true, authorId: true, editCount: true },
+    });
+
+    if (!cloud) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
+
+    if (cloud.authorId !== current.user.id) {
+      throw new UnauthorizedException({
+        message: 'Apenas o criador pode editar esta cloud.',
+      });
+    }
+
+    if (cloud.editCount >= 3) {
+      throw new BadRequestException({
+        message: 'Esta cloud já atingiu o limite de três edições.',
+      });
+    }
+
+    const title = (input.title ?? '').trim();
+    const normalizedDuration = normalizeDuration(input.duration ?? '');
+    if (!title) {
+      throw new BadRequestException({
+        message: 'Título obrigatório.',
+        fieldErrors: { title: 'Informe o título da cloud.' },
+      });
+    }
+    if (title.length > 40) {
+      throw new BadRequestException({
+        message: 'Título muito longo.',
+        fieldErrors: { title: 'O título deve ter até 40 caracteres.' },
+      });
+    }
+    if (!normalizedDuration) {
+      throw new BadRequestException({
+        message: 'Duração inválida.',
+        fieldErrors: { duration: 'Selecione 10min, 30min, 2h, 5h ou 24h.' },
+      });
+    }
+
+    const updated = await this.prisma.cloud.update({
+      where: { id: cloudId },
+      data: { title, duration: normalizedDuration, editCount: { increment: 1 } },
+      select: { id: true, title: true, duration: true, editCount: true },
+    });
+    return { ok: true, cloud: updated };
   }
 
   async removeMember(
@@ -1997,6 +2054,40 @@ export class CloudService {
       ok: true,
       messages: messages.reverse().map((message) => this.mapMessage(message)),
     };
+  }
+
+  async markMessagesViewed(token: string | null, cloudId: string, messageIds: string[]) {
+    const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
+    await this.requireCloudMembership(cloudId, current.user.id);
+    const ids = [...new Set(messageIds.filter((id) => typeof id === 'string' && id.trim()))].slice(0, 100);
+    if (!ids.length) return { ok: true };
+    const messages = await this.prisma.cloudMessage.findMany({
+      where: { id: { in: ids }, cloudId, deletedAt: null, userId: { not: current.user.id } },
+      select: { id: true },
+    });
+    if (messages.length) {
+      await this.prisma.cloudMessageView.createMany({
+        data: messages.map((message) => ({ messageId: message.id, userId: current.user.id })),
+        skipDuplicates: true,
+      });
+    }
+    return { ok: true };
+  }
+
+  async getMessageViews(token: string | null, cloudId: string, messageId: string) {
+    const current = await this.requireSession(token);
+    const message = await this.prisma.cloudMessage.findFirst({
+      where: { id: messageId, cloudId, deletedAt: null },
+      select: { userId: true },
+    });
+    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (message.userId !== current.user.id) throw new UnauthorizedException({ message: 'Apenas o autor pode ver as visualizações.' });
+    const views = await this.prisma.cloudMessageView.findMany({
+      where: { messageId }, orderBy: { viewedAt: 'desc' },
+      include: { user: { include: { profile: true } } },
+    });
+    return { ok: true, views: views.map((view) => ({ userId: view.userId, viewedAt: view.viewedAt.toISOString(), displayName: view.user.profile?.displayName || view.user.profile?.username || 'Usuário', username: view.user.profile?.username || '', avatarUrl: view.user.profile?.avatarUrl ?? null })) };
   }
 
   async addReaction(
@@ -3055,6 +3146,7 @@ export class CloudService {
       title: cloud.title,
       description: cloud.content,
       duration: cloud.duration,
+      editCount: cloud.editCount,
       visibility:
         cloud.visibility === CloudVisibility.private ? 'private' : 'public',
       createdAt: cloud.createdAt.toISOString(),

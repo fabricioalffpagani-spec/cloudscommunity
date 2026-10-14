@@ -198,6 +198,15 @@ export class DirectMessagesGateway
     }
   }
 
+  /** Notifies every active session for the supplied users to revalidate profile counters. */
+  emitProfileStatsUpdated(userIds: string[]) {
+    if (!this.server) return;
+
+    for (const userId of new Set(userIds)) {
+      this.server.to(this.userRoom(userId)).emit('profile:stats_updated');
+    }
+  }
+
   @SubscribeMessage('conversation:join')
   async joinConversation(
     @MessageBody() body: { conversationId?: string },

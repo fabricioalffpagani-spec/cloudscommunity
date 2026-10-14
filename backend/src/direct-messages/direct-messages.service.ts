@@ -60,7 +60,19 @@ export function buildConversationKey(
 }
 
 export function truncatePreview(value: string, maxLength = 255): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
+  let previewValue = value;
+  try {
+    const parsed = JSON.parse(value) as {
+      type?: string;
+      cloudTitle?: string;
+    };
+    if (parsed.type === 'cloud_comment_reply') {
+      previewValue = `Respondeu ao seu comentário na Cloud${parsed.cloudTitle ? ` “${parsed.cloudTitle}”` : ''}.`;
+    }
+  } catch {
+    // Ordinary messages are stored as plain text.
+  }
+  const normalized = previewValue.replace(/\s+/g, ' ').trim();
   if (normalized.length <= maxLength) {
     return normalized;
   }
@@ -1071,10 +1083,7 @@ export class DirectMessagesService {
     });
     const senderName =
       sender?.profile?.displayName || sender?.profile?.username || 'Alguém';
-    const preview = (content || 'enviou uma mensagem')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 140);
+    const preview = truncatePreview(content || 'enviou uma mensagem', 140);
     const unreadMessages = await this.prisma.directMessage.findMany({
       where: {
         conversationId,
@@ -1097,10 +1106,7 @@ export class DirectMessagesService {
       tag: `direct-message-${conversationId}`,
       messageId,
       unreadMessages: unreadMessages.map((message) =>
-        (message.content || 'enviou uma mensagem')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 140),
+        truncatePreview(message.content || 'enviou uma mensagem', 140),
       ),
     });
   }

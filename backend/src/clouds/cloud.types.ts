@@ -78,6 +78,7 @@ export type CloudPayload = {
   title: string;
   description: string | null;
   duration: string;
+  editCount: number;
   visibility: CloudVisibilityValue;
   status: string;
   createdAt: string;
@@ -120,6 +121,11 @@ export type CreateCloudInput = {
   visibility?: CloudVisibilityValue;
   originCloudId?: string;
   scheduledAt?: string;
+};
+
+export type UpdateCloudInput = {
+  title?: string;
+  duration?: string;
 };
 
 export type ListCloudMessagesQuery = {

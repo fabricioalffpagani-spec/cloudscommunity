@@ -17,12 +17,14 @@ import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
 import { buildMentionCandidates } from "../../lib/mention-candidates";
 import { recordStickerUse } from "../../lib/sticker-usage";
+import { getRevealedMessageTimeSide, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
 
 type CloudPayload = {
   id: string;
   title: string;
   description: string | null;
   duration: string;
+  editCount?: number;
   status: string;
   authorId: string;
   createdAt?: string;
@@ -127,6 +129,7 @@ type CloudMeta = {
   id?: string;
   title: string;
   duration: string;
+  editCount?: number;
   createdAt: string;
   membersCount: number;
   description?: string | null;
@@ -458,6 +461,7 @@ function normalizeCloud(payload: CloudPayload) {
     title: payload.title,
     description: payload.description,
     duration: payload.duration,
+    editCount: payload.editCount ?? 0,
     createdAt: payload.createdAt ?? new Date().toISOString(),
     status: payload.status,
     authorId: payload.authorId,
@@ -914,7 +918,8 @@ function CloudMsgMenu({
   onDelete,
   onReport,
   onSaveSticker,
-  onReply,
+  onView,
+  onReact,
   onClose,
 }: {
   msg: ChatMessage;
@@ -928,7 +933,8 @@ function CloudMsgMenu({
   onDelete: (msg: ChatMessage) => void;
   onReport: (msg: ChatMessage) => void;
   onSaveSticker: (mediaUrl: string) => void;
-  onReply: (msg: ChatMessage) => void;
+  onView: (msg: ChatMessage) => void;
+  onReact: (messageId: string, emoji: string) => void;
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -965,11 +971,11 @@ function CloudMsgMenu({
 
   const items: { key: string; label: string; action: () => void; danger?: boolean; show: boolean; icon: ReactNode }[] = [
     {
-      key: "reply",
-      label: "Responder",
-      action: () => { onReply(msg); onClose(); },
-      show: true,
-      icon: <CloudReplyIcon />,
+      key: "views",
+      label: "Visualizações",
+      action: () => { onView(msg); onClose(); },
+      show: isOwn && !msg.pending,
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>,
     },
     {
       key: "copy",
@@ -1037,6 +1043,9 @@ function CloudMsgMenu({
       className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
       style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
     >
+      {!msg.pending && <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
+        {["❤️", "😂", "😮", "😢", "👍", "🔥"].map((emoji) => <button key={emoji} type="button" onClick={() => { onReact(msg.id, emoji); onClose(); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-[17px] transition hover:bg-white/[0.08]" aria-label={`Reagir com ${emoji}`}>{emoji}</button>)}
+      </div>}
       {translated && (
         <div className="border-b border-white/[0.06] px-4 py-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Tradução</p>
@@ -1389,10 +1398,12 @@ function CloudMessageBubble({
   onDelete,
   onReport,
   onSaveSticker,
+  onView,
   isCloudAuthor,
   isPinned,
   grouped = false,
   showFooter = true,
+  showSwipeTime = false,
 }: {
   msg: ChatMessage;
   onReact: (messageId: string, emoji: string) => void;
@@ -1404,10 +1415,12 @@ function CloudMessageBubble({
   onDelete: (msg: ChatMessage) => void;
   onReport: (msg: ChatMessage) => void;
   onSaveSticker: (mediaUrl: string) => void;
+  onView: (msg: ChatMessage) => void;
   isCloudAuthor: boolean;
   isPinned: boolean;
   grouped?: boolean;
   showFooter?: boolean;
+  showSwipeTime?: boolean;
 }) {
   const own = msg.side === "right";
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -1416,6 +1429,7 @@ function CloudMessageBubble({
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const replySwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const openedByLongPressRef = useRef(false);
 
   useEffect(() => () => {
@@ -1477,6 +1491,8 @@ function CloudMessageBubble({
   }
 
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.stopPropagation();
+    replySwipeStartRef.current = { x: event.clientX, y: event.clientY };
     if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
@@ -1493,7 +1509,15 @@ function CloudMessageBubble({
   }
 
   function handleMessagePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    const replySwipeStart = replySwipeStartRef.current;
+    replySwipeStartRef.current = null;
     cancelLongPress();
+    if (replySwipeStart && Math.abs(event.clientX - replySwipeStart.x) >= 44 && Math.abs(event.clientY - replySwipeStart.y) <= 48) {
+      event.preventDefault();
+      event.stopPropagation();
+      onReply(msg);
+      return;
+    }
     if (openedByLongPressRef.current) {
       event.preventDefault();
       event.stopPropagation();
@@ -1519,8 +1543,9 @@ function CloudMessageBubble({
       </Link>}
       {!showFooter && !own && <div aria-hidden="true" className="w-9 shrink-0" />}
 
-      <div className={`flex min-w-0 max-w-[calc(100%_-_2.75rem)] items-end gap-2 sm:max-w-[74%] ${own ? "flex-row-reverse" : "flex-row"}`}>
-        <div className={`flex min-w-0 flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
+      <div className={`flex min-w-0 max-w-[calc(100%_-_2.75rem)] items-end gap-2 transition-transform duration-200 sm:max-w-[74%] ${own ? "flex-row-reverse" : "flex-row"}`} style={{ transform: showSwipeTime ? `translateX(${own ? -44 : 44}px)` : "translateX(0)" }}>
+        <div className={`relative flex min-w-0 flex-col gap-1.5 ${own ? "items-end" : "items-start"}`}>
+          {showSwipeTime && <span data-message-swipe-time className={`absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap text-[11px] text-white/65 ${own ? "left-full ml-2" : "right-full mr-2"}`}>{msg.time}</span>}
           {!grouped && <div className={`flex items-center gap-2 px-1 ${own ? "flex-row-reverse" : ""}`}>
             <Link href={`/users/${encodeURIComponent(msg.senderId)}`} className="text-[12px] font-semibold text-white/40 transition hover:text-white hover:underline">{own ? "Você" : msg.senderName}</Link>
             {isPinned && <span className="flex items-center gap-1 text-[10px] text-[#A855F7]"><CloudPinIcon pinned={true} /> fixada</span>}
@@ -1574,14 +1599,13 @@ function CloudMessageBubble({
               {own && !msg.pending && <MessageReceipt />}
             </div>}
             <div ref={menuAnchorRef} className="relative">
-              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReply={onReply} onClose={closeMsgMenu} />}
+              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReact={onReact} onView={onView} onClose={closeMsgMenu} />}
             </div>
           </div>
         </div>
 
         {/* Action icons aligned to the side of message box */}
         <div className={`hidden items-center gap-1.5 self-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 md:flex ${own ? "ml-2" : "mr-2"}`}>
-          <button type="button" title="Responder" onClick={() => onReply(msg)} className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"><CloudReplyIcon /></button>
           {isCloudAuthor && (
             <button
               type="button"
@@ -1631,16 +1655,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const socketRef = useRef<Socket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesScrollRef = useRef<HTMLDivElement | null>(null);
+  const messageTimeSwipeStartRef = useRef<number | null>(null);
   const targetScrolledRef = useRef(false);
   const composerFooterRef = useComposerPanLock();
   const hasJoinedRef = useRef(false);
   const messagesLoadRequestRef = useRef(0);
+  const viewedMessageIdsRef = useRef(new Set<string>());
   const audioRecorder = useAudioRecorder((recording) => {
     void handleAudioRecordingStop(recording);
   });
 
   const [cloud, setCloud] = useState<ReturnType<typeof normalizeCloud> | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [revealedMessageTimeSide, setRevealedMessageTimeSide] = useState<"left" | "right" | null>(null);
   const [draft, setDraft] = useState("");
   const [draftMentions, setDraftMentions] = useState<CloudMention[]>([]);
   const [caretIndex, setCaretIndex] = useState(0);
@@ -1658,6 +1685,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [hypeListOpen, setHypeListOpen] = useState(false);
   const [reactionDetailsMessage, setReactionDetailsMessage] = useState<ChatMessage | null>(null);
   const [reactionDetailsEmoji, setReactionDetailsEmoji] = useState<string | null>(null);
+  const [messageViewsOpen, setMessageViewsOpen] = useState<ChatMessage | null>(null);
+  const [messageViews, setMessageViews] = useState<Array<{ userId: string; viewedAt: string; displayName: string; username: string; avatarUrl: string | null }>>([]);
+  const [loadingMessageViews, setLoadingMessageViews] = useState(false);
   const [audioUploading, setAudioUploading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(true);
@@ -1676,6 +1706,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [cloudEditOpen, setCloudEditOpen] = useState(false);
+  const [cloudTitleDraft, setCloudTitleDraft] = useState("");
+  const [cloudDurationDraft, setCloudDurationDraft] = useState("10min");
+  const [isSavingCloudEdit, setIsSavingCloudEdit] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
@@ -1976,6 +2010,34 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
+  const openCloudEdit = useCallback(() => {
+    if (!cloud || !isCloudAuthor || (cloud.editCount ?? 0) >= 3) return;
+    setCloudTitleDraft(cloud.title);
+    setCloudDurationDraft(cloud.duration);
+    setCloudEditOpen(true);
+  }, [cloud, isCloudAuthor]);
+
+  const saveCloudEdit = useCallback(async () => {
+    if (!cloud || !isCloudAuthor || isSavingCloudEdit) return;
+    setIsSavingCloudEdit(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: cloudTitleDraft, duration: cloudDurationDraft }),
+      });
+      const payload = await readJson<{ ok: true; cloud: { id: string; title: string; duration: string; editCount: number } }>(response);
+      setCloud((current) => current ? { ...current, ...payload.cloud } : current);
+      setCloudEditOpen(false);
+    } catch (editError) {
+      setError(editError instanceof Error ? editError.message : "Não foi possível editar a cloud.");
+    } finally {
+      setIsSavingCloudEdit(false);
+    }
+  }, [cloud, cloudDurationDraft, cloudId, cloudTitleDraft, isCloudAuthor, isSavingCloudEdit]);
+
   const resolvedTitle = cloud?.title || title || "Cloud";
 
   const handleTitlePointerDown = useCallback((event: React.PointerEvent) => {
@@ -2057,8 +2119,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     socketRef.current = socket;
     setConnectionState("connecting");
 
+    socket.on("connect", () => {
+      setConnectionState("connected");
+      // Socket.IO rooms are per connection. Rejoin after every reconnect so
+      // new Cloud messages do not require leaving and entering again.
+      joinCloud(socket, false);
+    });
+
     socket.on("session:ready", () => {
       setConnectionState("connected");
+      joinCloud(socket, false);
     });
 
     socket.on("disconnect", () => setConnectionState("disconnected"));
@@ -2120,6 +2190,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     socket.on("cloud:members_updated", (payload: { cloudId: string; membersCount: number; members?: CloudPayload["members"] }) => {
       if (payload.cloudId !== cloudId) return;
       setCloud((prev) => prev ? { ...prev, membersCount: payload.membersCount, ...(payload.members ? { members: normalizeCloud({ ...prev, members: payload.members } as CloudPayload).members } : {}) } : prev);
+    });
+
+    socket.on("cloud:updated", (payload: { cloudId: string; cloud: { title: string; duration: string; editCount: number } }) => {
+      if (payload.cloudId !== cloudId) return;
+      setCloud((current) => current ? { ...current, ...payload.cloud } : current);
     });
 
     socket.on("cloud:banned", (payload: { cloudId: string }) => {
@@ -2238,6 +2313,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       messagesScrollRef.current?.scrollTo({ top: messagesScrollRef.current.scrollHeight, behavior: "smooth" });
     }
   }, [isLocallyTyping, messages, typingUserIds]);
+
+  const revealConversationMessageTimes = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch") messageTimeSwipeStartRef.current = event.clientX;
+  }, []);
+
+  const finishRevealConversationMessageTimes = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const start = messageTimeSwipeStartRef.current;
+    messageTimeSwipeStartRef.current = null;
+    if (event.pointerType !== "touch" || start === null) return;
+    const side = getRevealedMessageTimeSide(event.clientX - start);
+    if (!side) return;
+    setRevealedMessageTimeSide((current) => nextRevealedMessageTimeSide(current, side));
+  }, []);
 
   // Animação de saída do balão de digitação
   const prevTypingCountRef = useRef(0);
@@ -2660,6 +2748,32 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     setReportingMsg(msg);
   }, []);
 
+  const openMessageViews = useCallback(async (msg: ChatMessage) => {
+    if (msg.side !== "right" || msg.pending) return;
+    setMessageViewsOpen(msg);
+    setLoadingMessageViews(true);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msg.id)}/views`, { credentials: "include" });
+      const payload = await readJson<{ ok: true; views: Array<{ userId: string; viewedAt: string; displayName: string; username: string; avatarUrl: string | null }> }>(response);
+      setMessageViews(payload.views);
+    } catch (viewError) {
+      setMessageViews([]);
+      setError(viewError instanceof Error ? viewError.message : "Não foi possível carregar as visualizações.");
+    } finally {
+      setLoadingMessageViews(false);
+    }
+  }, [cloudId]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unseen = messages.filter((message) => message.side === "left" && !message.pending && !message.id.startsWith("client-") && !viewedMessageIdsRef.current.has(message.id));
+    if (!unseen.length) return;
+    unseen.forEach((message) => viewedMessageIdsRef.current.add(message.id));
+    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/views`, {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageIds: unseen.map((message) => message.id) }),
+    }).catch(() => unseen.forEach((message) => viewedMessageIdsRef.current.delete(message.id)));
+  }, [cloudId, messages, user]);
+
   const canReportCloud = Boolean(
     user &&
     cloud &&
@@ -2864,6 +2978,20 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#11141F] shadow-xl"
               >
+                {isCloudAuthor && (cloud?.editCount ?? 0) < 3 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      openCloudEdit();
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white md:hidden"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/70">✎</span>
+                    Editar Cloud
+                    <span className="ml-auto text-[11px] text-white/40">restam {3 - (cloud?.editCount ?? 0)}</span>
+                  </button>
+                )}
                 {isCloudAuthor && (
                   <button
                     type="button"
@@ -2954,7 +3082,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         );
       })()}
 
-      <div ref={messagesScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6">
+      <div ref={messagesScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" onPointerDown={revealConversationMessageTimes} onPointerUp={finishRevealConversationMessageTimes} onPointerCancel={() => { messageTimeSwipeStartRef.current = null; }}>
         {loadingMessages && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
         ) : messages.length === 0 ? (
@@ -2997,18 +3125,29 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               const grouped = Boolean(previousMessage && previousMessage.kind !== "system" && previousMessage.senderId === msg.senderId && new Date(msg.isoTime).getTime() - new Date(previousMessage.isoTime).getTime() < 5 * 60_000);
               const showFooter = !nextMessage || nextMessage.kind === "system" || nextMessage.senderId !== msg.senderId || new Date(nextMessage.isoTime).getTime() - new Date(msg.isoTime).getTime() >= 5 * 60_000;
 
-              return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter} /></div>;
+              return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} onView={(message) => void openMessageViews(message)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter && msg.side !== "right"} showSwipeTime={revealedMessageTimeSide === msg.side} /></div>;
             });
           })()
         )}
-        <div className="px-3 pb-2 min-h-[44px] flex items-end">
-          {(typingPeople.length > 0 || typingExiting) && (
+        {(typingPeople.length > 0 || typingExiting) && (
+          <div className="flex min-h-[44px] items-end px-3 pb-2">
             <TypingBubble avatars={typingPeople.length > 0 ? typingPeople : []} exiting={typingExiting} />
-          )}
-        </div>
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
+      {replyingTo && !editingMsg && (
+        <div className="shrink-0 border-t border-white/[0.07] bg-[#000000] px-4 pt-3 sm:px-5">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/[0.08] bg-[#1a0e3d] px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold text-[#A855F7]">Respondendo a {replyingTo.senderName}</p>
+              <p className="truncate text-[12px] text-white/60">{replyingTo.content || "Mídia"}</p>
+            </div>
+            <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancelar resposta" className="text-white/40 transition hover:text-white">×</button>
+          </div>
+        </div>
+      )}
       <div ref={composerFooterRef} className="shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5">
         <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
           {status !== "authenticated" && (
@@ -3071,15 +3210,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     </div>
                     <button type="button" onClick={() => void submitEditMsg()} className="text-[#A855F7] transition hover:text-white">Salvar</button>
                     <button type="button" onClick={() => setEditingMsg(null)} className="text-white/40 transition hover:text-white">×</button>
-                  </div>
-                )}
-                {replyingTo && !editingMsg && (
-                  <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-4 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold text-[#A855F7]">Respondendo a {replyingTo.senderName}</p>
-                      <p className="truncate text-[12px] text-white/60">{replyingTo.content || "Mídia"}</p>
-                    </div>
-                    <button type="button" onClick={() => setReplyingTo(null)} className="text-white/40 transition hover:text-white">×</button>
                   </div>
                 )}
                 <div className="flex items-center gap-3">
@@ -3297,6 +3427,39 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </div>
       )}
 
+      {messageViewsOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-5">
+            <div className="flex items-center justify-between gap-3"><div><h3 className="text-[18px] font-bold">Visualizações</h3><p className="mt-1 line-clamp-1 text-[12px] text-white/50">{messageViewsOpen.content || "Mídia"}</p></div><button type="button" aria-label="Fechar visualizações" onClick={() => setMessageViewsOpen(null)} className="text-xl text-white/50 hover:text-white">×</button></div>
+            <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
+              {loadingMessageViews ? <p className="py-5 text-center text-sm text-white/50">Carregando...</p> : messageViews.length ? messageViews.map((view) => <div key={view.userId} className="flex items-center gap-3 rounded-xl px-2 py-2"><UserAvatar user={{ id: view.userId, username: view.username, displayName: view.displayName, avatarUrl: view.avatarUrl }} size={36} /><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{view.displayName}</p><p className="text-[11px] text-white/45">Viu às {new Date(view.viewedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p></div></div>) : <p className="py-5 text-center text-sm text-white/50">Ainda não há visualizações.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cloudEditOpen && isCloudAuthor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div><h3 className="text-[18px] font-bold">Editar Cloud</h3><p className="mt-1 text-[12px] text-white/50">Você ainda pode editar esta Cloud {Math.max(0, 3 - (cloud?.editCount ?? 0))} vez(es).</p></div>
+              <button type="button" aria-label="Fechar edição" onClick={() => setCloudEditOpen(false)} disabled={isSavingCloudEdit} className="text-xl text-white/50 transition hover:text-white disabled:opacity-50">×</button>
+            </div>
+            <label className="block text-[13px] font-medium text-white/75">Título <span className="text-white/40">({cloudTitleDraft.length}/40)</span>
+              <input value={cloudTitleDraft} maxLength={40} onChange={(event) => setCloudTitleDraft(event.target.value)} disabled={isSavingCloudEdit} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50" />
+            </label>
+            <label className="mt-4 block text-[13px] font-medium text-white/75">Duração
+              <select value={cloudDurationDraft} onChange={(event) => setCloudDurationDraft(event.target.value)} disabled={isSavingCloudEdit} className="mt-2 w-full rounded-xl border border-white/10 bg-[#1f1830] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50">
+                <option value="10min">10 minutos</option><option value="30min">30 minutos</option><option value="2h">2 horas</option><option value="5h">5 horas</option><option value="24h">24 horas</option>
+              </select>
+            </label>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setCloudEditOpen(false)} disabled={isSavingCloudEdit} className="rounded-full bg-white/[0.06] px-4 py-2 text-[13px] text-white/80 transition hover:bg-white/[0.12] disabled:opacity-50">Cancelar</button>
+              <button type="button" onClick={() => void saveCloudEdit()} disabled={isSavingCloudEdit || !cloudTitleDraft.trim()} className="rounded-full bg-[#9333EA] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-50">{isSavingCloudEdit ? "Salvando..." : "Salvar edição"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirmOpen && isCloudAuthor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">

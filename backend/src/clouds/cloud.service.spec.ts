@@ -19,6 +19,7 @@ function setup() {
     visibility: 'public',
     title: 'Topic',
     duration: '10min',
+    editCount: 0,
     createdAt: new Date(Date.now() - 3600000),
     updatedAt: new Date(),
     startedAt: null,
@@ -468,5 +469,44 @@ describe('Talk / Read regression', () => {
         },
       }),
     );
+  });
+
+  it('allows the author to edit title and duration while edits remain', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    cloud.editCount = 2;
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloud.update.mockResolvedValue({
+      id: cloudId,
+      title: 'Título corrigido',
+      duration: '2h',
+      editCount: 3,
+    });
+
+    await expect(
+      service.update('token', cloudId, { title: 'Título corrigido', duration: '2h' }),
+    ).resolves.toEqual({
+      ok: true,
+      cloud: { id: cloudId, title: 'Título corrigido', duration: '2h', editCount: 3 },
+    });
+    expect(prisma.cloud.update).toHaveBeenCalledWith({
+      where: { id: cloudId },
+      data: { title: 'Título corrigido', duration: '2h', editCount: { increment: 1 } },
+      select: { id: true, title: true, duration: true, editCount: true },
+    });
+  });
+
+  it('rejects the fourth edit and edits from non-authors', async () => {
+    const { service, auth, cloud } = setup();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    cloud.editCount = 3;
+    await expect(
+      service.update('token', cloudId, { title: 'Título', duration: '10min' }),
+    ).rejects.toThrow(BadRequestException);
+
+    cloud.editCount = 0;
+    auth.resolveSession.mockResolvedValue({ user: { id: 'viewer' } });
+    await expect(
+      service.update('token', cloudId, { title: 'Título', duration: '10min' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 });

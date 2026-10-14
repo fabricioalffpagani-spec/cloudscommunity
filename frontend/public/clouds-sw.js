@@ -28,7 +28,7 @@ self.addEventListener("push", (event) => {
         : data.body || "Você tem uma nova notificação.",
       // Android uses the transparent badge as a monochrome status-bar glyph.
       // Keep the full-color icon for the expanded notification.
-      icon: "/pwa-512x512.png?v=5",
+      icon: "/apple-touch-icon.png?v=2",
       badge: "/clouds-notification-badge-v2.png",
       tag,
       renotify: Boolean(data.messageId),

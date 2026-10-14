@@ -117,7 +117,8 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
     if (!notification.actor) return;
     setFollowingBack((prev) => new Set(prev).add(notification.id));
     try {
-      await fetch(`/api/follow/${encodeURIComponent(notification.actor.username)}`, { method: "POST" });
+      const response = await fetch(`/api/follow/${encodeURIComponent(notification.actor.username)}`, { method: "POST" });
+      if (response.ok) void refresh();
     } finally {
       // keep the "Seguindo" state — don't remove from set
     }

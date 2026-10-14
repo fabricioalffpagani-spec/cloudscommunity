@@ -3,18 +3,31 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useSessionUser } from "./session-user";
-import { clearRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
+import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
 
-const declinedKey = (userId: string) => `clouds:pwa-install-declined:${userId}`;
+const reminderKey = (userId: string) => `clouds:pwa-install-reminder:${userId}`;
+const FIRST_REMINDER_DELAY_MS = 6 * 60_000;
+const REMINDER_INTERVAL_MS = 24 * 60 * 60_000;
+
+function readReminder(userId: string) {
+  try {
+    return Number(window.localStorage?.getItem?.(reminderKey(userId)) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function saveReminder(userId: string, timestamp: number) {
+  try {
+    window.localStorage?.setItem?.(reminderKey(userId), String(timestamp));
+  } catch {
+    // Private browsing or embedded contexts can deny storage access.
+  }
+}
 
 function isInstalled() {
   return window.matchMedia("(display-mode: standalone)").matches
     || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-}
-
-function isMobileDevice() {
-  return window.matchMedia("(max-width: 767px) and (pointer: coarse)").matches
-    || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 export function PwaInstallPrompt() {
@@ -53,18 +66,31 @@ export function PwaInstallPrompt() {
   }, []);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user || !installPrompt || isInstalled() || !isMobileDevice()) return;
-    if (window.localStorage.getItem(declinedKey(user.id)) === "1") return;
-    setOpen(true);
-  }, [installPrompt, status, user]);
+    if (status !== "authenticated" || !user || open || isInstalled()) return;
+    const createdAt = new Date(user.createdAt).getTime();
+    if (Number.isNaN(createdAt)) return;
+    const lastReminder = readReminder(user.id);
+    const dueAt = lastReminder > 0 ? lastReminder + REMINDER_INTERVAL_MS : createdAt + FIRST_REMINDER_DELAY_MS;
+    const showWhenDue = () => {
+      if (isInstalled() || Date.now() < dueAt) return;
+      saveReminder(user.id, Date.now());
+      setInstallPrompt((current) => current ?? getRememberedInstallPrompt());
+      setOpen(true);
+    };
+    showWhenDue();
+    const timer = window.setTimeout(showWhenDue, Math.max(0, dueAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [open, status, user]);
 
   const decline = () => {
-    if (user) window.localStorage.setItem(declinedKey(user.id), "1");
     setOpen(false);
   };
 
   const install = async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) {
+      window.location.assign("/settings");
+      return;
+    }
 
     try {
       await installPrompt.prompt();
@@ -82,11 +108,11 @@ export function PwaInstallPrompt() {
     <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/65 p-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pwa-install-title">
       <section className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171325] p-6 shadow-2xl">
         <Image src="/logo_clouds.png" alt="Clouds" width={48} height={48} className="h-12 w-12 object-contain" priority />
-        <h2 id="pwa-install-title" className="mt-4 text-[20px] font-bold text-white">Adicione um atalho para o Clouds em sua tela inicial?</h2>
+        <h2 id="pwa-install-title" className="mt-4 text-[20px] font-bold text-white">Adicione um atalho para o Clouds na tela inicial para economizar tempo!</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-white/60">Abra o Clouds mais rápido, como um aplicativo.</p>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={decline} className="rounded-full px-4 py-2.5 text-[14px] font-semibold text-white/65 transition hover:text-white">Não</button>
-          <button type="button" onClick={() => void install()} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Sim</button>
+          <button type="button" onClick={() => void install()} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Adicionar atalho</button>
         </div>
       </section>
     </div>

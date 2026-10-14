@@ -17,3 +17,11 @@ export async function DELETE(
   const { id } = await params;
   return proxyJsonRequest(req, `/clouds/${encodeURIComponent(id)}`);
 }
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  return proxyJsonRequest(req, `/clouds/${encodeURIComponent(id)}`);
+}

@@ -7,7 +7,7 @@ import { useSessionUser } from "./session-user";
 
 /** Keeps live presence tied to the app session, including pages outside Messages. */
 export function PresenceConnection() {
-  const { status, user } = useSessionUser();
+  const { status, user, refresh } = useSessionUser();
 
   useEffect(() => {
     if (status !== "authenticated" || !user?.id) return;
@@ -17,8 +17,12 @@ export function PresenceConnection() {
       withCredentials: true,
       transports: ["polling", "websocket"],
     });
-    return () => { socket.disconnect(); };
-  }, [status, user?.id]);
+    socket.on("profile:stats_updated", refresh);
+    return () => {
+      socket.off("profile:stats_updated", refresh);
+      socket.disconnect();
+    };
+  }, [status, user?.id, refresh]);
 
   return null;
 }

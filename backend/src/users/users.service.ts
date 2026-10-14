@@ -9,6 +9,7 @@ import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
+import { DirectMessagesGateway } from '../direct-messages/direct-messages.gateway';
 import {
   MeetResponse,
   PublicUserProfilePayload,
@@ -78,6 +79,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly pushNotifications: PushNotificationsService,
+    private readonly directMessagesGateway: DirectMessagesGateway,
   ) {}
 
   async search(
@@ -190,6 +192,7 @@ export class UsersService {
           target.id,
           current.user.profile?.displayName ?? 'Alguém',
         );
+        this.emitProfileStatsUpdated(current.user.id, target.id);
       }
     }
 
@@ -212,7 +215,7 @@ export class UsersService {
       });
     }
 
-    await this.prisma.follow.deleteMany({
+    const deleted = await this.prisma.follow.deleteMany({
       where: {
         followerId: current.user.id,
         followingId: target.id,
@@ -229,6 +232,10 @@ export class UsersService {
         entityId: current.user.id,
       },
     });
+
+    if (deleted.count > 0) {
+      this.emitProfileStatsUpdated(current.user.id, target.id);
+    }
 
     return {
       ok: true,
@@ -334,7 +341,7 @@ export class UsersService {
       throw new BadRequestException({
         message: 'Você não pode bloquear a si mesmo.',
       });
-    await this.prisma.$transaction([
+    const [, removedFollows] = await this.prisma.$transaction([
       this.prisma.userBlock.upsert({
         where: {
           blockerId_blockedId: {
@@ -362,6 +369,9 @@ export class UsersService {
         },
       }),
     ]);
+    if (removedFollows.count > 0) {
+      this.emitProfileStatsUpdated(current.user.id, target.id);
+    }
     return { ok: true };
   }
 
@@ -391,7 +401,7 @@ export class UsersService {
       });
     }
 
-    await this.prisma.follow.deleteMany({
+    const deleted = await this.prisma.follow.deleteMany({
       where: { followerId, followingId: current.user.id },
     });
     await this.cancelFollowRequest(followerId, current.user.id);
@@ -404,6 +414,10 @@ export class UsersService {
         entityId: followerId,
       },
     });
+
+    if (deleted.count > 0) {
+      this.emitProfileStatsUpdated(followerId, current.user.id);
+    }
 
     return { ok: true };
   }
@@ -441,6 +455,7 @@ export class UsersService {
       current.user.id,
       requester.profile?.displayName ?? 'Alguém',
     );
+    this.emitProfileStatsUpdated(requester.id, current.user.id);
     await this.cancelFollowRequest(requester.id, current.user.id);
     const acceptedNotification = await this.prisma.notification.create({
       data: {
@@ -1012,6 +1027,10 @@ export class UsersService {
       url: '/notifications',
       tag: followNotification.id,
     });
+  }
+
+  private emitProfileStatsUpdated(...userIds: string[]) {
+    this.directMessagesGateway.emitProfileStatsUpdated(userIds);
   }
 
   private async createFollowRequest(

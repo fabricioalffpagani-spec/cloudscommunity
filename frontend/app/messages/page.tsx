@@ -16,6 +16,8 @@ import { useComposerPanLock } from "../lib/composer-pan-lock";
 import { isConversationForViewer } from "../lib/direct-conversation";
 import { recordStickerUse } from "../lib/sticker-usage";
 import { markDirectMessageFailed, mergeDirectMessage as mergeMessage, retryDirectMessage } from "../lib/merge-direct-message";
+import { getInboxConversationPreview } from "../lib/conversation-preview";
+import { getRevealedMessageTimeSide, nextRevealedMessageTimeSide } from "../lib/message-time-swipe";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -378,7 +380,10 @@ function buildConversation(payload: BackendConversation, viewerId: string): Conv
     name,
     status: mapStatus(payload.participant.status),
     avatarUrl: payload.participant.avatarUrl,
-    lastMessage: parseLinkPreview(payload.lastMessagePreview) || "",
+    lastMessage: getInboxConversationPreview(
+      payload.lastMessagePreview,
+      parseLinkPreview,
+    ),
     time: timeLabel(payload.lastMessageAt),
     unread: payload.unreadCount,
     blockedByPeer: payload.blockedByPeer ?? false,
@@ -1205,7 +1210,7 @@ function DmMsgMenu({
   );
 }
 
-function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, onRetry, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; onRetry?: (m: Msg) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean }) {
+function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, onRetry, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true, showSwipeTime = false }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; onRetry?: (m: Msg) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean; showSwipeTime?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
@@ -1326,7 +1331,8 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
         />}
       </div>}
       {selectionMode && <button type="button" aria-label={selected ? "Desmarcar mensagem" : "Selecionar mensagem"} onClick={() => onToggleSelection?.(msg)} className={`h-6 w-6 shrink-0 rounded-full border-2 ${selected ? "border-[#A855F7] bg-[#9333EA]" : "border-white/50 bg-black/20"}`}>{selected && <span className="block text-center text-[14px] leading-5 text-white">✓</span>}</button>}
-      <div className={`relative flex flex-col gap-1 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%" }}>
+      <div className={`relative flex flex-col gap-1 transition-transform duration-200 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%", transform: showSwipeTime ? `translateX(${isRight ? -44 : 44}px)` : "translateX(0)" }}>
+        {showSwipeTime && <span data-message-swipe-time className={`absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap text-[11px] text-white/65 ${isRight ? "left-full ml-2" : "right-full mr-2"}`}>{msg.time}</span>}
         {msg.kind === "audio" ? (
           <AudioMessageBubble msg={msg} />
         ) : msg.kind === "image" ? (
@@ -1434,8 +1440,10 @@ function MessagesPageContent() {
   const [forwardSelection, setForwardSelection] = useState<Msg[]>([]);
   const [forwardSelectionMode, setForwardSelectionMode] = useState(false);
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
+  const [revealedMessageTimeSide, setRevealedMessageTimeSide] = useState<"left" | "right" | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messageTimeSwipeStartRef = useRef<number | null>(null);
   const composerFooterRef = useComposerPanLock();
   const [conversationSearch, setConversationSearch] = useState(() => searchParams.get("q")?.trim() || "");
   const [messageMatchConversationIds, setMessageMatchConversationIds] = useState<Set<string>>(new Set());
@@ -2160,6 +2168,19 @@ function MessagesPageContent() {
     messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: "smooth" });
   }, [activeMessages, activeConversationId, isActiveConversationTyping, isTypingLocally]);
 
+  const revealConversationMessageTimes = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch") messageTimeSwipeStartRef.current = event.clientX;
+  }, []);
+
+  const finishRevealConversationMessageTimes = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const start = messageTimeSwipeStartRef.current;
+    messageTimeSwipeStartRef.current = null;
+    if (event.pointerType !== "touch" || start === null) return;
+    const side = getRevealedMessageTimeSide(event.clientX - start);
+    if (!side) return;
+    setRevealedMessageTimeSide((current) => nextRevealedMessageTimeSide(current, side));
+  }, []);
+
   useEffect(() => {
     if (localTypingPreviewTimerRef.current) clearTimeout(localTypingPreviewTimerRef.current);
     if (!draft.trim()) {
@@ -2720,7 +2741,7 @@ function MessagesPageContent() {
             </div>
           )}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 pb-1 pt-4 sm:px-8 sm:pb-2 sm:pt-6" ref={messagesContainerRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 pb-1 pt-4 sm:px-8 sm:pb-2 sm:pt-6" ref={messagesContainerRef} onPointerDown={revealConversationMessageTimes} onPointerUp={finishRevealConversationMessageTimes} onPointerCancel={() => { messageTimeSwipeStartRef.current = null; }}>
             <div className="flex min-h-full flex-col justify-end">
             {!activeConversationId ? (
               <div className="flex h-full items-center justify-center text-center text-white/40">
@@ -2776,7 +2797,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup && message.side !== "right"} showSwipeTime={revealedMessageTimeSide === message.side} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
                     </div>
                   );
                 });

@@ -172,7 +172,7 @@ export default function MeetPage() {
 }
 
 function MeetPageContent() {
-  const { user } = useSessionUser();
+  const { user, refresh: refreshSessionUser } = useSessionUser();
   const router = useRouter();
   const mobileFeedTabSwipe = useMobileFeedTabSwipe();
   const meetSwipeStart = useRef<{ x: number; y: number } | null>(null);
@@ -270,6 +270,7 @@ function MeetPageContent() {
       }
 
       setResults((current) => current.map((item) => (item.id === payload.user!.id ? payload.user! : item)));
+      void refreshSessionUser();
       setMeetData((current) => current && {
         ...current,
         popularRecent: current.popularRecent.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),

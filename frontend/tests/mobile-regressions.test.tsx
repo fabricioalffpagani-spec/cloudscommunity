@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("../app/components/session-user", () => ({
-  useSessionUser: () => ({ status: "authenticated", user: { id: "u", username: "tester" } }),
+  useSessionUser: () => ({ status: "authenticated", user: { id: "u", username: "tester", createdAt: "2026-10-14T00:00:00.000Z" } }),
   SessionUserAvatar: () => null,
 }));
 
@@ -66,11 +66,12 @@ describe("mobile regressions", () => {
     expect(await screen.findByRole("link", { name: /1 contato/ })).toBeVisible();
   });
 
-  it("keeps the install dialog off desktop", () => {
+  it("shows the install reminder on desktop six minutes after registration", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:06:00.000Z"));
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     render(<PwaInstallPrompt />);
-    act(() => window.dispatchEvent(new Event("beforeinstallprompt")));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Adicione um atalho para o Clouds na tela inicial para economizar tempo!");
   });
 
   it("swipes left from Talk to Read and then Meet", () => {
