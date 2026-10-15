@@ -11,15 +11,22 @@ export function PresenceConnection() {
 
   useEffect(() => {
     if (status !== "authenticated" || !user?.id) return;
-    const socketUrl = (process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() || window.location.origin).replace(/\/+$/, "");
+    const socketUrl = (
+      process.env.NEXT_PUBLIC_CLOUDS_SOCKET_URL?.trim() ||
+      window.location.origin
+    ).replace(/\/+$/, "");
     const socket = io(`${socketUrl}/direct-messages`, {
       auth: socketAuth,
       withCredentials: true,
       transports: ["polling", "websocket"],
     });
-    socket.on("profile:stats_updated", refresh);
+    const onStatsUpdated = () => {
+      void refresh();
+      window.dispatchEvent(new Event("profile:stats-updated"));
+    };
+    socket.on("profile:stats_updated", onStatsUpdated);
     return () => {
-      socket.off("profile:stats_updated", refresh);
+      socket.off("profile:stats_updated", onStatsUpdated);
       socket.disconnect();
     };
   }, [status, user?.id, refresh]);

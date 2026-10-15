@@ -515,6 +515,40 @@ describe('Talk / Read regression', () => {
     });
   });
 
+  it('accepts 40 characters on edit and rejects 41 on create and edit', async () => {
+    const { service, prisma, auth } = setup();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    const title40 = 'a'.repeat(40);
+    prisma.cloud.update.mockResolvedValue({
+      id: cloudId,
+      title: title40,
+      duration: '2h',
+      editCount: 1,
+    });
+    await expect(
+      service.update('token', cloudId, { title: title40, duration: '2h' }),
+    ).resolves.toMatchObject({ cloud: { title: title40 } });
+    await expect(
+      service.update('token', cloudId, {
+        title: `${title40}a`,
+        duration: '2h',
+      }),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.create('token', { title: `${title40}a`, duration: '2h' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects reporting a Cloud owned by the reporter', async () => {
+    const { service, auth } = setup();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    await expect(
+      service.reportUser('token', cloudId, 'viewer', null, null, [
+        'Spam ou publicidade',
+      ]),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('rejects the fourth edit and edits from non-authors', async () => {
     const { service, auth, cloud } = setup();
     auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });

@@ -2019,6 +2019,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const saveCloudEdit = useCallback(async () => {
     if (!cloud || !isCloudAuthor || isSavingCloudEdit) return;
+    if (cloudTitleDraft.trim().length > 40) {
+      setError("O título deve ter até 40 caracteres.");
+      return;
+    }
     setIsSavingCloudEdit(true);
     setError(null);
     try {
@@ -3082,7 +3086,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         );
       })()}
 
-      <div ref={messagesScrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" onPointerDown={revealConversationMessageTimes} onPointerUp={finishRevealConversationMessageTimes} onPointerCancel={() => { messageTimeSwipeStartRef.current = null; }}>
+      <div ref={messagesScrollRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain scrollbar-purple px-3 py-4 sm:px-8 sm:py-6" onPointerDown={revealConversationMessageTimes} onPointerUp={finishRevealConversationMessageTimes} onPointerCancel={() => { messageTimeSwipeStartRef.current = null; }}>
         {loadingMessages && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-white/40">Carregando mensagens...</div>
         ) : messages.length === 0 ? (
@@ -3093,7 +3097,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             </div>
           </div>
         ) : (
-          (() => {
+          <div className="mt-auto shrink-0">{(() => {
             const rows: Array<ChatMessage | { id: string; type: "date"; label: string }> = [];
             let previous = "";
             for (const message of messages) {
@@ -3127,7 +3131,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
               return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} onView={(message) => void openMessageViews(message)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter && msg.side !== "right"} showSwipeTime={revealedMessageTimeSide === msg.side} /></div>;
             });
-          })()
+          })()}</div>
         )}
         {(typingPeople.length > 0 || typingExiting) && (
           <div className="flex min-h-[44px] items-end px-3 pb-2">
@@ -3355,7 +3359,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         </div>
       )}
 
-      {reportOpen && (
+      {reportOpen && canReportCloud && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
             <div className="mb-4 flex items-center justify-between">

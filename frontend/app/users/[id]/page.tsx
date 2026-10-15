@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ProfileAvatarViewer } from "../../components/ProfileAvatarViewer";
 import { useParams, useRouter } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
@@ -228,7 +229,7 @@ function ActiveCloudCard({ cloud, now, hostAvatarUrl, hostInitial, viewerId }: {
     } catch (error) { setReportError(error instanceof Error ? error.message : "Não foi possível enviar a denúncia."); }
     finally { setReporting(false); }
   };
-  return <article className="relative flex min-h-[180px] w-full flex-col rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm"><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</div><div className="relative"><button type="button" onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{!isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className="text-center text-[11px] text-white/50">{live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada em ${ended && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : "agora"}`}</p>{detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl bg-[#15161C] p-5"><div className="sticky top-0 z-10 flex items-center justify-between bg-[#15161C]"><h2 className="text-lg font-bold">Informações da Cloud</h2><button type="button" aria-label="Fechar informações" onClick={() => setDetailsOpen(false)} className="shrink-0 p-1">×</button></div><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></div></div>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
+  return <article className="relative flex min-h-[180px] w-full flex-col rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm"><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</div><div className="relative"><button type="button" onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className="text-center text-[11px] text-white/50">{live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada em ${ended && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : "agora"}`}</p>{detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl bg-[#15161C] p-5"><div className="sticky top-0 z-10 flex items-center justify-between bg-[#15161C]"><h2 className="text-lg font-bold">Informações da Cloud</h2><button type="button" aria-label="Fechar informações" onClick={() => setDetailsOpen(false)} className="shrink-0 p-1">×</button></div><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></div></div>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
 }
 
 export default function UserProfilePage() {
@@ -302,14 +303,16 @@ export default function UserProfilePage() {
   }, [identifier]);
 
   useEffect(() => {
-    const refreshStats = () => fetch(`/api/users/${encodeURIComponent(identifier)}`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload: { user?: PublicUserProfile }) => {
-        if (payload.user) setProfile((current) => current ? { ...current, ...payload.user } : payload.user ?? null);
-      })
-      .catch(() => {});
-    const interval = window.setInterval(refreshStats, 10_000);
-    return () => window.clearInterval(interval);
+    const refreshStats = () => {
+      void fetch(`/api/users/${encodeURIComponent(identifier)}`, { cache: "no-store" })
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload: { user?: PublicUserProfile } | null) => {
+          if (payload?.user) setProfile((current) => current ? { ...current, ...payload.user } : current);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("profile:stats-updated", refreshStats);
+    return () => window.removeEventListener("profile:stats-updated", refreshStats);
   }, [identifier]);
 
   useEffect(() => {
@@ -360,6 +363,7 @@ export default function UserProfilePage() {
 
       setProfile(payload.user);
       void refreshSessionUser();
+      window.dispatchEvent(new Event("profile:stats-updated"));
     } catch {
       // keep current state
     } finally {
@@ -585,14 +589,14 @@ export default function UserProfilePage() {
       <div className="mx-auto max-w-[680px] px-6 pb-32 sm:px-5">
         <div className="mt-10 flex flex-col items-center text-center">
           <div className="relative">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
+            <ProfileAvatarViewer avatarUrl={profile.avatarUrl} name={displayName}><div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
               {profile.avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={profile.avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
               ) : (
                 initials
               )}
-            </div>
+            </div></ProfileAvatarViewer>
             {isOwnProfile && <Link href="/settings?section=perfil" aria-label="Editar perfil" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9] focus-visible:ring-2 focus-visible:ring-white"><EditIcon /></Link>}
           </div>
 

@@ -1431,6 +1431,12 @@ export class CloudService {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
+    if (!messageId && cloud.authorId === current.user.id) {
+      throw new BadRequestException({
+        message: 'Você não pode denunciar sua própria Cloud.',
+      });
+    }
+
     if (messageId) {
       const message = await this.prisma.cloudMessage.findFirst({
         where: { id: messageId, cloudId, deletedAt: null },
