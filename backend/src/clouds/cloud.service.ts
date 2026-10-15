@@ -1170,7 +1170,10 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     input: UpdateCloudInput,
-  ): Promise<{ ok: true; cloud: { id: string; title: string; duration: string; editCount: number } }> {
+  ): Promise<{
+    ok: true;
+    cloud: { id: string; title: string; duration: string; editCount: number };
+  }> {
     const current = await this.requireSession(token);
     const cloud = await this.prisma.cloud.findFirst({
       where: { id: cloudId, deletedAt: null },
@@ -1214,11 +1217,39 @@ export class CloudService {
       });
     }
 
-    const updated = await this.prisma.cloud.update({
-      where: { id: cloudId },
-      data: { title, duration: normalizedDuration, editCount: { increment: 1 } },
-      select: { id: true, title: true, duration: true, editCount: true },
-    });
+    let updated: {
+      id: string;
+      title: string;
+      duration: string;
+      editCount: number;
+    };
+    try {
+      updated = await this.prisma.cloud.update({
+        // Keep the three-edit limit atomic across simultaneous requests.
+        where: {
+          id: cloudId,
+          authorId: current.user.id,
+          deletedAt: null,
+          editCount: { lt: 3 },
+        },
+        data: {
+          title,
+          duration: normalizedDuration,
+          editCount: { increment: 1 },
+        },
+        select: { id: true, title: true, duration: true, editCount: true },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new BadRequestException({
+          message: 'Esta cloud já atingiu o limite de três edições.',
+        });
+      }
+      throw error;
+    }
     return { ok: true, cloud: updated };
   }
 
@@ -2056,38 +2087,76 @@ export class CloudService {
     };
   }
 
-  async markMessagesViewed(token: string | null, cloudId: string, messageIds: string[]) {
+  async markMessagesViewed(
+    token: string | null,
+    cloudId: string,
+    messageIds: string[],
+  ) {
     const current = await this.requireSession(token);
     await this.requireCloudAccess(cloudId, current.user.id);
     await this.requireCloudMembership(cloudId, current.user.id);
-    const ids = [...new Set(messageIds.filter((id) => typeof id === 'string' && id.trim()))].slice(0, 100);
+    const ids = [
+      ...new Set(
+        messageIds.filter((id) => typeof id === 'string' && id.trim()),
+      ),
+    ].slice(0, 100);
     if (!ids.length) return { ok: true };
     const messages = await this.prisma.cloudMessage.findMany({
-      where: { id: { in: ids }, cloudId, deletedAt: null, userId: { not: current.user.id } },
+      where: {
+        id: { in: ids },
+        cloudId,
+        deletedAt: null,
+        userId: { not: current.user.id },
+      },
       select: { id: true },
     });
     if (messages.length) {
       await this.prisma.cloudMessageView.createMany({
-        data: messages.map((message) => ({ messageId: message.id, userId: current.user.id })),
+        data: messages.map((message) => ({
+          messageId: message.id,
+          userId: current.user.id,
+        })),
         skipDuplicates: true,
       });
     }
     return { ok: true };
   }
 
-  async getMessageViews(token: string | null, cloudId: string, messageId: string) {
+  async getMessageViews(
+    token: string | null,
+    cloudId: string,
+    messageId: string,
+  ) {
     const current = await this.requireSession(token);
+    await this.requireCloudAccess(cloudId, current.user.id);
     const message = await this.prisma.cloudMessage.findFirst({
       where: { id: messageId, cloudId, deletedAt: null },
       select: { userId: true },
     });
-    if (!message) throw new NotFoundException({ message: 'Mensagem não encontrada.' });
-    if (message.userId !== current.user.id) throw new UnauthorizedException({ message: 'Apenas o autor pode ver as visualizações.' });
+    if (!message)
+      throw new NotFoundException({ message: 'Mensagem não encontrada.' });
+    if (message.userId !== current.user.id)
+      throw new UnauthorizedException({
+        message: 'Apenas o autor pode ver as visualizações.',
+      });
     const views = await this.prisma.cloudMessageView.findMany({
-      where: { messageId }, orderBy: { viewedAt: 'desc' },
+      where: { messageId },
+      orderBy: { viewedAt: 'desc' },
       include: { user: { include: { profile: true } } },
     });
-    return { ok: true, views: views.map((view) => ({ userId: view.userId, viewedAt: view.viewedAt.toISOString(), displayName: view.user.profile?.displayName || view.user.profile?.username || 'Usuário', username: view.user.profile?.username || '', avatarUrl: view.user.profile?.avatarUrl ?? null })) };
+    return {
+      ok: true,
+      views: views.map((view) => ({
+        userId: view.userId,
+        viewedAt: view.viewedAt.toISOString(),
+        displayName:
+          view.user.profile?.displayName ||
+          view.user.profile?.username ||
+          'Usuário',
+        username: view.user.profile?.username || '',
+        avatarUrl: view.user.profile?.avatarUrl ?? null,
+      })),
+    };
   }
 
   async addReaction(

@@ -183,7 +183,7 @@ model Cloud {
   visibility   CloudVisibility @default(public)
   status       CloudStatus     @default(active)
   duration     String          @db.VarChar(20)
-    editCount    Int             @default(0)
+  editCount    Int             @default(0)
   audioUrl     String?         @db.Text
   scheduledAt  DateTime?
   startedAt    DateTime?

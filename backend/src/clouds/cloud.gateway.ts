@@ -297,9 +297,10 @@ export class CloudMessagesGateway
     cloudId: string,
     cloud: { id: string; title: string; duration: string; editCount: number },
   ) {
-    this.server.to(this.cloudRoom(cloudId)).emit('cloud:updated', { cloudId, cloud });
+    this.server
+      .to(this.cloudRoom(cloudId))
+      .emit('cloud:updated', { cloudId, cloud });
     this.server.emit('cloud:feed_updated');
-    return Promise.resolve();
   }
 
   async broadcastMessageCreated(

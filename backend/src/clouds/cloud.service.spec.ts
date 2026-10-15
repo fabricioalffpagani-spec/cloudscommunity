@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import {
@@ -46,6 +46,9 @@ function setup() {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
       create: jest.fn<Promise<unknown>, unknown[]>(),
       update: jest.fn<Promise<unknown>, unknown[]>(),
+    },
+    cloudMessageView: {
+      findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
     userBlock: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
@@ -483,14 +486,31 @@ describe('Talk / Read regression', () => {
     });
 
     await expect(
-      service.update('token', cloudId, { title: 'Título corrigido', duration: '2h' }),
+      service.update('token', cloudId, {
+        title: 'Título corrigido',
+        duration: '2h',
+      }),
     ).resolves.toEqual({
       ok: true,
-      cloud: { id: cloudId, title: 'Título corrigido', duration: '2h', editCount: 3 },
+      cloud: {
+        id: cloudId,
+        title: 'Título corrigido',
+        duration: '2h',
+        editCount: 3,
+      },
     });
     expect(prisma.cloud.update).toHaveBeenCalledWith({
-      where: { id: cloudId },
-      data: { title: 'Título corrigido', duration: '2h', editCount: { increment: 1 } },
+      where: {
+        id: cloudId,
+        authorId: 'author',
+        deletedAt: null,
+        editCount: { lt: 3 },
+      },
+      data: {
+        title: 'Título corrigido',
+        duration: '2h',
+        editCount: { increment: 1 },
+      },
       select: { id: true, title: true, duration: true, editCount: true },
     });
   });
@@ -508,5 +528,32 @@ describe('Talk / Read regression', () => {
     await expect(
       service.update('token', cloudId, { title: 'Título', duration: '10min' }),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('rejects a simultaneous edit that reaches the limit first', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    cloud.editCount = 2;
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloud.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Cloud changed', {
+        code: 'P2025',
+        clientVersion: Prisma.prismaVersion.client,
+      }),
+    );
+
+    await expect(
+      service.update('token', cloudId, { title: 'Título', duration: '2h' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('hides message-view identities when the author has lost Cloud access', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudBan.findUnique.mockResolvedValue({ cloudId });
+
+    await expect(
+      service.getMessageViews('token', cloudId, 'message-id'),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.cloudMessage.findFirst).not.toHaveBeenCalled();
+    expect(prisma.cloudMessageView.findMany).not.toHaveBeenCalled();
   });
 });

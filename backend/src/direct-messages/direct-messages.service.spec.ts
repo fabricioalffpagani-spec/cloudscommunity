@@ -188,12 +188,14 @@ describe('DirectMessagesService', () => {
 
   it('uses a human-readable preview for a reply to a Read Cloud comment', () => {
     expect(
-      truncatePreview(JSON.stringify({
-        type: 'cloud_comment_reply',
-        cloudTitle: 'Cores de fundo',
-        comment: 'Esse roxo traz personalidade',
-        response: 'Concordo',
-      })),
+      truncatePreview(
+        JSON.stringify({
+          type: 'cloud_comment_reply',
+          cloudTitle: 'Cores de fundo',
+          comment: 'Esse roxo traz personalidade',
+          response: 'Concordo',
+        }),
+      ),
     ).toBe('Respondeu ao seu comentário na Cloud “Cores de fundo”.');
   });
 

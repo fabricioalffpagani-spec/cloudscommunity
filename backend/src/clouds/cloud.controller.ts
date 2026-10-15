@@ -265,7 +265,11 @@ export class CloudController {
     @Body() body: { title?: string; duration?: string },
     @Req() req: Request,
   ) {
-    const result = await this.cloudService.update(extractSessionToken(req), id, body);
+    const result = await this.cloudService.update(
+      extractSessionToken(req),
+      id,
+      body,
+    );
     this.cloudMessagesGateway.broadcastCloudUpdated(id, result.cloud);
     return result;
   }
@@ -455,13 +459,29 @@ export class CloudController {
   }
 
   @Post(':id/messages/views')
-  async markMessagesViewed(@Param('id') id: string, @Body() body: { messageIds?: string[] }, @Req() req: Request) {
-    return this.cloudService.markMessagesViewed(extractSessionToken(req), id, body.messageIds ?? []);
+  async markMessagesViewed(
+    @Param('id') id: string,
+    @Body() body: { messageIds?: string[] },
+    @Req() req: Request,
+  ) {
+    return this.cloudService.markMessagesViewed(
+      extractSessionToken(req),
+      id,
+      body.messageIds ?? [],
+    );
   }
 
   @Get(':id/messages/:messageId/views')
-  async getMessageViews(@Param('id') id: string, @Param('messageId') messageId: string, @Req() req: Request) {
-    return this.cloudService.getMessageViews(extractSessionToken(req), id, messageId);
+  async getMessageViews(
+    @Param('id') id: string,
+    @Param('messageId') messageId: string,
+    @Req() req: Request,
+  ) {
+    return this.cloudService.getMessageViews(
+      extractSessionToken(req),
+      id,
+      messageId,
+    );
   }
 
   @Post(':id/audio')
