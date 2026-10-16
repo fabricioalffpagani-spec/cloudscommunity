@@ -3678,7 +3678,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             <h2 id="discard-audio-title" className="text-[17px] font-bold text-white">Excluir gravação?</h2>
             <p className="mt-2 text-[13px] leading-relaxed text-white/65">A gravação foi pausada. Você pode continuar de onde parou ou descartá-la permanentemente.</p>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => setDiscardAudioConfirmationOpen(false)} className="rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/75 transition hover:bg-white/[0.08] hover:text-white">Continuar gravando</button>
+              <button type="button" onClick={() => { audioRecorder.resume(); setDiscardAudioConfirmationOpen(false); }} className="rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/75 transition hover:bg-white/[0.08] hover:text-white">Continuar gravando</button>
               <button type="button" onClick={confirmAudioRecordingDiscard} className="rounded-full bg-red-500 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-red-600">Excluir gravação</button>
             </div>
           </div>
