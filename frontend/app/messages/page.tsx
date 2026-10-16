@@ -1290,7 +1290,12 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }
 
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    // The message owns a horizontal drag; the list only handles gestures that
+    // begin outside a bubble, such as showing timestamps.
+    event.stopPropagation();
     replySwipeStartRef.current = { x: event.clientX, y: event.clientY };
+    // Keep the end event even when the reply drag leaves the message bubble.
+    event.currentTarget.setPointerCapture(event.pointerId);
     if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
@@ -1307,6 +1312,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }
 
   function handleMessagePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const replySwipeStart = replySwipeStartRef.current;
     replySwipeStartRef.current = null;
     cancelLongPress();
@@ -1324,7 +1330,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
 
   return (
     <div
-      className="group flex w-full touch-manipulation select-none items-end gap-2.5 [-webkit-touch-callout:none] md:select-text"
+      className="group flex w-full [touch-action:pan-y] select-none items-end gap-2.5 [-webkit-touch-callout:none] md:select-text"
       style={{ justifyContent: isRight ? "flex-end" : "flex-start" }}
       onPointerDown={handleMessagePointerDown}
       onPointerMove={handleMessagePointerMove}

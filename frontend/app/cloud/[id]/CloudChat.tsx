@@ -1493,6 +1493,8 @@ function CloudMessageBubble({
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.stopPropagation();
     replySwipeStartRef.current = { x: event.clientX, y: event.clientY };
+    // Keep the end event even when the reply drag leaves the message bubble.
+    event.currentTarget.setPointerCapture(event.pointerId);
     if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
@@ -1509,6 +1511,7 @@ function CloudMessageBubble({
   }
 
   function handleMessagePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const replySwipeStart = replySwipeStartRef.current;
     replySwipeStartRef.current = null;
     cancelLongPress();
@@ -1526,7 +1529,7 @@ function CloudMessageBubble({
 
   return (
     <div
-      className={`group flex touch-manipulation select-none items-end gap-2.5 [-webkit-touch-callout:none] md:select-text ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`}
+      className={`group flex [touch-action:pan-y] select-none items-end gap-2.5 [-webkit-touch-callout:none] md:select-text ${grouped ? "mt-0.5" : "mt-3"} ${own ? "flex-row-reverse" : "flex-row"}`}
       onPointerDown={handleMessagePointerDown}
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
@@ -2593,7 +2596,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
     let fileToSend = file;
     try {
-      if (isSticker) fileToSend = await makeStickerFile(file);
+      // Saved stickers are already optimized; re-encoding them softens edges.
+      if (isSticker && !savedStickerUrl) fileToSend = await makeStickerFile(file);
     } catch (formatError) {
       setError(formatError instanceof Error ? formatError.message : "Não foi possível transformar a imagem em figurinha.");
       return;
@@ -2873,7 +2877,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   const shareLink = `${publicAppUrl || (typeof window !== "undefined" ? window.location.origin : "")}/cloud/${encodeURIComponent(cloudId)}?join=1`;
-  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\nJunte-se a mim nessa conversa: ${shareLink}`;
+  const participantsText = `${resolvedParticipants} ${resolvedParticipants === 1 ? "pessoa está" : "pessoas estão"} discutindo este tema ao vivo.`;
+  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\n${participantsText}\nJunte-se a mim nessa conversa: ${shareLink}`;
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
 
@@ -3005,7 +3010,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                       setActionMenuOpen(false);
                       openCloudEdit();
                     }}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white md:hidden"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white"
                   >
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/70">✎</span>
                     Editar Cloud

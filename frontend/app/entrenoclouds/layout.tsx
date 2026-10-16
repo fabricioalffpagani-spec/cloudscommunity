@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-const inviteImage = "/logo_clouds.png";
+const inviteImage = "/cloud-general-invite.png";
 const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "Clouds Community";
 const description = "Converse sobre o que realmente importa. Conversas públicas e ao vivo.";
