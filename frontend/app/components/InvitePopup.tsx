@@ -55,7 +55,7 @@ function InstagramIcon() {
 export function InvitePopup() {
   const { user, status } = useSessionUser();
   const [visible, setVisible] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState(() => typeof window === "undefined" ? "" : `${window.location.origin}/cloudscommunity`);
+  const [inviteUrl, setInviteUrl] = useState(() => typeof window === "undefined" ? "" : `${window.location.origin}/entrenoclouds`);
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

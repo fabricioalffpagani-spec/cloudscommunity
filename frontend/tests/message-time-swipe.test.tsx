@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRevealedMessageTimeSide, nextRevealedMessageTimeSide } from "../app/lib/message-time-swipe";
+import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../app/lib/message-time-swipe";
 
 describe("message timestamp swipe", () => {
   it("reveals all own-message timestamps when the conversation is swiped left", () => {
@@ -20,5 +20,15 @@ describe("message timestamp swipe", () => {
     expect(ownMessages).toBe("right");
     expect(nextRevealedMessageTimeSide(ownMessages, "right")).toBe("right");
     expect(nextRevealedMessageTimeSide(ownMessages, "left")).toBeNull();
+  });
+
+  it("recognizes a horizontal message drag as a reply gesture", () => {
+    expect(isMessageReplySwipe(44, 0)).toBe(true);
+    expect(isMessageReplySwipe(-44, 48)).toBe(true);
+  });
+
+  it("does not reply while the person scrolls or makes a short drag", () => {
+    expect(isMessageReplySwipe(43, 0)).toBe(false);
+    expect(isMessageReplySwipe(44, 49)).toBe(false);
   });
 });

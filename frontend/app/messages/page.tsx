@@ -17,7 +17,7 @@ import { isConversationForViewer } from "../lib/direct-conversation";
 import { recordStickerUse } from "../lib/sticker-usage";
 import { markDirectMessageFailed, mergeDirectMessage as mergeMessage, retryDirectMessage } from "../lib/merge-direct-message";
 import { getInboxConversationPreview } from "../lib/conversation-preview";
-import { getRevealedMessageTimeSide, nextRevealedMessageTimeSide } from "../lib/message-time-swipe";
+import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../lib/message-time-swipe";
 
 type Status = "online" | "offline" | "busy";
 type MessageKind = "text" | "audio" | "image" | "link";
@@ -1219,6 +1219,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   const actionsRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const replySwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const openedByLongPressRef = useRef(false);
 
   const textContent = msg.kind === "text" ? msg.content : null;
@@ -1289,6 +1290,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }
 
   function handleMessagePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    replySwipeStartRef.current = { x: event.clientX, y: event.clientY };
     if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
@@ -1305,7 +1307,15 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }
 
   function handleMessagePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    const replySwipeStart = replySwipeStartRef.current;
+    replySwipeStartRef.current = null;
     cancelLongPress();
+    if (replySwipeStart && isMessageReplySwipe(event.clientX - replySwipeStart.x, event.clientY - replySwipeStart.y)) {
+      event.preventDefault();
+      event.stopPropagation();
+      onReply?.(msg);
+      return;
+    }
     if (openedByLongPressRef.current) {
       event.preventDefault();
       event.stopPropagation();
@@ -1424,6 +1434,7 @@ function MessagesPageContent() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
+  const [discardAudioConfirmationOpen, setDiscardAudioConfirmationOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [linkUploading, setLinkUploading] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -2531,8 +2542,14 @@ function MessagesPageContent() {
     audioRecorder.stop();
   }, [audioRecorder]);
 
-  const cancelAudioRecording = useCallback(() => {
+  const requestAudioRecordingDiscard = useCallback(() => {
+    if (audioRecorder.state === "recording") audioRecorder.pause();
+    setDiscardAudioConfirmationOpen(true);
+  }, [audioRecorder]);
+
+  const confirmAudioRecordingDiscard = useCallback(() => {
     audioRecorder.cancel();
+    setDiscardAudioConfirmationOpen(false);
   }, [audioRecorder]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -2797,7 +2814,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup && message.side !== "right"} showSwipeTime={revealedMessageTimeSide === message.side} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showSwipeTime={revealedMessageTimeSide === message.side} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
                     </div>
                   );
                 });
@@ -2918,7 +2935,7 @@ function MessagesPageContent() {
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white hover:bg-[#6D28D9] transition">
                       <SendIcon />
                     </button>
-                    <button type="button" aria-label="Cancelar gravação" onClick={cancelAudioRecording}
+                    <button type="button" aria-label="Excluir gravação" onClick={requestAudioRecordingDiscard}
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white hover:bg-white/10 transition">
                       <TrashIcon s={16} />
                     </button>
@@ -3025,6 +3042,19 @@ function MessagesPageContent() {
           </div>
         </main>
       </div>
+
+      {discardAudioConfirmationOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="discard-audio-title">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171821] p-5 shadow-2xl">
+            <h2 id="discard-audio-title" className="text-[17px] font-bold text-white">Excluir gravação?</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/65">A gravação foi pausada. Você pode continuar de onde parou ou descartá-la permanentemente.</p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setDiscardAudioConfirmationOpen(false)} className="rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/75 transition hover:bg-white/[0.08] hover:text-white">Continuar gravando</button>
+              <button type="button" onClick={confirmAudioRecordingDiscard} className="rounded-full bg-red-500 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-red-600">Excluir gravação</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {forwardSelectionMode && <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 mx-auto flex w-auto max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-2xl border border-white/10 bg-[#15161C]/95 px-3 py-3 shadow-2xl backdrop-blur sm:inset-x-auto sm:w-fit sm:max-w-none md:bottom-6 md:gap-3 md:rounded-full md:px-4">
         <span className="text-center text-sm font-semibold text-white">{forwardSelection.length} selecionada{forwardSelection.length === 1 ? "" : "s"}<span className="hidden sm:inline"> · toque nos círculos para selecionar mais</span></span>

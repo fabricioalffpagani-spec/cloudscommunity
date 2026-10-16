@@ -44,6 +44,7 @@ enum CloudMemberRole {
 }
 
 enum NotificationType {
+  cloud_activity
   cloud_comment
   cloud_mention
   cloud_hype

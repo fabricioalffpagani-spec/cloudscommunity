@@ -5,7 +5,10 @@ import { InviteCloudsButton } from "../app/components/InviteCloudsButton";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("InviteCloudsButton", () => {
-  it("opens native sharing with the signup link and invitation text", async () => {
+  const invitationText = "Vem pro Clouds comigo! ☁️\nÉ uma plataforma de conversas públicas ao vivo.\nCriei meu perfil aqui:";
+  const inviteUrl = `${window.location.origin}/entrenoclouds`;
+
+  it("opens native sharing with the branded invitation link and text", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, share });
     render(<InviteCloudsButton />);
@@ -14,8 +17,8 @@ describe("InviteCloudsButton", () => {
 
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
       title: "Clouds",
-      text: "Junte a galera no Clouds!",
-      url: `${window.location.origin}/signup`,
+      text: invitationText,
+      url: inviteUrl,
     })));
   });
 
@@ -26,7 +29,7 @@ describe("InviteCloudsButton", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Convidar pessoas para o Clouds" }));
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`Junte a galera no Clouds!\n${window.location.origin}/signup`));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${invitationText}\n${inviteUrl}`));
     expect(screen.getByRole("status")).toHaveTextContent("Link do convite copiado.");
   });
 
@@ -42,7 +45,7 @@ describe("InviteCloudsButton", () => {
     await waitFor(() => expect(share).toHaveBeenCalledTimes(2));
     expect(share).toHaveBeenLastCalledWith({
       title: "Clouds",
-      text: `Junte a galera no Clouds!\n${window.location.origin}/signup`,
+      text: `${invitationText}\n${inviteUrl}`,
     });
   });
 });

@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 
 const inviteImage = "/logo_clouds.png";
 const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const title = "Clouds Community";
+const description = "Converse sobre o que realmente importa. Conversas públicas e ao vivo.";
 
 export const metadata: Metadata = {
-  title: "Entre no Clouds Community",
-  description: "Junte-se à comunidade Clouds.",
+  title,
+  description,
   openGraph: {
-    title: "Entre no Clouds Community",
-    description: "Junte-se à comunidade Clouds.",
+    title,
+    description,
     url: `${siteOrigin}/entrenoclouds`,
     siteName: "Clouds Community",
     type: "website",
@@ -16,8 +18,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Entre no Clouds Community",
-    description: "Junte-se à comunidade Clouds.",
+    title,
+    description,
     images: [inviteImage],
   },
 };

@@ -6,6 +6,8 @@ import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
 import { installComposerPanLock } from "../app/lib/composer-pan-lock";
 
 const navigation = vi.hoisted(() => ({ pathname: "/", push: vi.fn(), prefetch: vi.fn() }));
+const originalUserAgent = window.navigator.userAgent;
+const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: navigation.push, prefetch: navigation.prefetch }),
   usePathname: () => navigation.pathname,
@@ -23,6 +25,9 @@ function SwipeProbe() {
 afterEach(() => {
   navigation.pathname = "/";
   navigation.push.mockClear();
+  Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: originalUserAgent });
+  if (originalLocalStorageDescriptor) Object.defineProperty(window, "localStorage", originalLocalStorageDescriptor);
+  else delete (window as { localStorage?: Storage }).localStorage;
   vi.useRealTimers();
 });
 
@@ -72,6 +77,28 @@ describe("mobile regressions", () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     render(<PwaInstallPrompt />);
     expect(screen.getByRole("dialog")).toHaveTextContent("Adicione um atalho para o Clouds na tela inicial para economizar tempo!");
+  });
+
+  it("does not remind an iPhone user again after they confirm adding the shortcut", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:06:00.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    const stored = new Map<string, string>();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => stored.set(key, value) },
+    });
+    Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" });
+    const first = render(<PwaInstallPrompt />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar atalho" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Adicione o Clouds à Tela de Início");
+    fireEvent.click(screen.getByRole("button", { name: "Já adicionei o atalho" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    first.unmount();
+    render(<PwaInstallPrompt />);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("swipes left from Talk to Read and then Meet", () => {

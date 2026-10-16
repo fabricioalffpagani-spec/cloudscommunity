@@ -55,6 +55,7 @@ function setup() {
       })),
     },
     notification: {
+      findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn(
         (input: {
           data: { userId: string; type: string; metadata?: unknown };
@@ -89,7 +90,7 @@ function setup() {
   jest
     .spyOn(service as never, 'requireCloudMembership' as never)
     .mockResolvedValue(undefined as never);
-  return { service, prisma, push };
+  return { service, prisma, push, auth };
 }
 
 describe('Cloud structured mentions', () => {
@@ -110,8 +111,8 @@ describe('Cloud structured mentions', () => {
     ]);
     expect(
       prisma.notification.create.mock.calls.map(([input]) => input.data.userId),
-    ).toEqual([otherId, mentionedId]);
-    expect(prisma.notification.create.mock.calls[1][0].data.type).toBe(
+    ).toEqual([mentionedId, otherId]);
+    expect(prisma.notification.create.mock.calls[0][0].data.type).toBe(
       'cloud_mention',
     );
   });
@@ -157,12 +158,11 @@ describe('Cloud structured mentions', () => {
       },
       {
         userId: otherId,
-        type: 'cloud_comment',
-        metadata: { cloudId, messageId: result.message.id },
-        entityType: 'cloud_message',
-        entityId: result.message.id,
-        title: 'Nova mensagem em Teste',
-        body: 'Alpha: @beta e @beta',
+        type: 'cloud_activity',
+        entityType: 'cloud',
+        entityId: cloudId,
+        title: 'Novos comentários na Cloud Teste',
+        body: 'Há novos comentários em “Teste”.',
       },
     ]);
     expect(
@@ -174,5 +174,73 @@ describe('Cloud structured mentions', () => {
           payload.url === `/cloud/${cloudId}?message=${result.message.id}`,
       ),
     ).toBe(true);
+  });
+
+  it('immediately notifies the author of a directly replied comment', async () => {
+    const { service, prisma, push } = setup();
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'reply-target',
+      userId: otherId,
+    });
+    prisma.cloudMember.findMany.mockResolvedValue([]);
+
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Resposta',
+      replyToMessageId: 'reply-target',
+    });
+
+    expect(prisma.notification.create.mock.calls[0][0].data).toMatchObject({
+      userId: otherId,
+      type: 'cloud_comment',
+      title: 'Alpha respondeu ao seu comentário na Cloud Teste',
+    });
+    expect(push.send).toHaveBeenCalledWith(
+      otherId,
+      expect.objectContaining({
+        url: `/cloud/${cloudId}?message=55555555-5555-4555-8555-555555555555`,
+      }),
+    );
+  });
+
+  it('notifies only the creator for other users activity and respects the stored throttle', async () => {
+    const { service, prisma, push, auth } = setup();
+    prisma.notification.findFirst.mockResolvedValue(null);
+    (
+      service as unknown as { requireCloudAccess: jest.Mock }
+    ).requireCloudAccess.mockResolvedValue({
+      id: cloudId,
+      authorId,
+      title: 'Teste',
+      status: 'active',
+      createdAt: new Date(),
+      duration: '30min',
+    });
+    auth.resolveSession.mockResolvedValue({ user: { id: otherId } });
+
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Uma nova mensagem',
+    });
+
+    expect(prisma.notification.create.mock.calls[0][0].data).toMatchObject({
+      userId: authorId,
+      type: 'cloud_activity',
+      entityType: 'cloud',
+      entityId: cloudId,
+      title: 'Há movimentações em sua Cloud',
+    });
+    expect(push.send).toHaveBeenCalledWith(
+      authorId,
+      expect.objectContaining({ tag: `cloud-activity-${cloudId}` }),
+    );
+
+    prisma.notification.create.mockClear();
+    prisma.notification.findFirst.mockResolvedValue({ id: 'recent-activity' });
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Outra mensagem',
+    });
+    expect(prisma.notification.create).not.toHaveBeenCalled();
   });
 });

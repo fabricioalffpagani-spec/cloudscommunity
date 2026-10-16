@@ -17,7 +17,7 @@ import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
 import { buildMentionCandidates } from "../../lib/mention-candidates";
 import { recordStickerUse } from "../../lib/sticker-usage";
-import { getRevealedMessageTimeSide, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
+import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
 
 type CloudPayload = {
   id: string;
@@ -1512,7 +1512,7 @@ function CloudMessageBubble({
     const replySwipeStart = replySwipeStartRef.current;
     replySwipeStartRef.current = null;
     cancelLongPress();
-    if (replySwipeStart && Math.abs(event.clientX - replySwipeStart.x) >= 44 && Math.abs(event.clientY - replySwipeStart.y) <= 48) {
+    if (replySwipeStart && isMessageReplySwipe(event.clientX - replySwipeStart.x, event.clientY - replySwipeStart.y)) {
       event.preventDefault();
       event.stopPropagation();
       onReply(msg);
@@ -1689,6 +1689,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [messageViews, setMessageViews] = useState<Array<{ userId: string; viewedAt: string; displayName: string; username: string; avatarUrl: string | null }>>([]);
   const [loadingMessageViews, setLoadingMessageViews] = useState(false);
   const [audioUploading, setAudioUploading] = useState(false);
+  const [discardAudioConfirmationOpen, setDiscardAudioConfirmationOpen] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [contacts, setContacts] = useState<PublicUserProfile[]>([]);
@@ -1891,7 +1892,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
         }
       } catch { /* ignore invalid persisted state */ }
-      void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/${isCloudAuthor ? "exit" : "leave"}`, {
+      const leaveUrl = `/api/clouds/${encodeURIComponent(cloudId)}/${isCloudAuthor ? "exit" : "leave"}`;
+      // A regular fetch can be aborted as Android navigates away after the
+      // browser-back gesture. Beacon keeps the persisted leave request alive,
+      // so the server can create the system message and broadcast members.
+      if (navigator.sendBeacon?.(leaveUrl)) return;
+      void fetch(leaveUrl, {
         method: "POST",
         credentials: "include",
         keepalive: true,
@@ -2690,6 +2696,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     setReplyingTo(msg);
   }, []);
 
+  const requestAudioRecordingDiscard = useCallback(() => {
+    if (audioRecorder.state === "recording") audioRecorder.pause();
+    setDiscardAudioConfirmationOpen(true);
+  }, [audioRecorder]);
+
+  const confirmAudioRecordingDiscard = useCallback(() => {
+    audioRecorder.cancel();
+    setDiscardAudioConfirmationOpen(false);
+  }, [audioRecorder]);
+
   const handleForwardMsg = useCallback((_msg: ChatMessage) => {
     setShareOpen(true);
   }, []);
@@ -3129,7 +3145,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               const grouped = Boolean(previousMessage && previousMessage.kind !== "system" && previousMessage.senderId === msg.senderId && new Date(msg.isoTime).getTime() - new Date(previousMessage.isoTime).getTime() < 5 * 60_000);
               const showFooter = !nextMessage || nextMessage.kind === "system" || nextMessage.senderId !== msg.senderId || new Date(nextMessage.isoTime).getTime() - new Date(msg.isoTime).getTime() >= 5 * 60_000;
 
-              return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} onView={(message) => void openMessageViews(message)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter && msg.side !== "right"} showSwipeTime={revealedMessageTimeSide === msg.side} /></div>;
+              return <div key={msg.id} data-message-id={msg.id}><CloudMessageBubble msg={msg} onReact={sendReaction} onShowReactions={(message, emoji) => { setReactionDetailsMessage(message); setReactionDetailsEmoji(emoji); }} onReply={handleReply} onPin={handlePin} onForward={handleForwardMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onReport={handleReportMsg} onSaveSticker={(mediaUrl) => void saveSticker(mediaUrl)} onView={(message) => void openMessageViews(message)} isCloudAuthor={isCloudAuthor} isPinned={pinnedMessageId === msg.id} grouped={grouped} showFooter={showFooter} showSwipeTime={revealedMessageTimeSide === msg.side} /></div>;
             });
           })()}</div>
         )}
@@ -3170,7 +3186,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 <button type="button" aria-label="Enviar áudio" onClick={audioRecorder.stop} className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-white transition hover:bg-[#6D28D9]">
                   <SendIcon className="text-white" />
                 </button>
-                <button type="button" aria-label="Cancelar gravação" onClick={audioRecorder.cancel} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10 hover:text-red-500">
+                <button type="button" aria-label="Excluir gravação" onClick={requestAudioRecordingDiscard} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-white transition hover:bg-white/10 hover:text-red-500">
                   <TrashIcon s={16} />
                 </button>
               </div>
@@ -3651,6 +3667,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   );
                 })
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {discardAudioConfirmationOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="discard-audio-title">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171821] p-5 shadow-2xl">
+            <h2 id="discard-audio-title" className="text-[17px] font-bold text-white">Excluir gravação?</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/65">A gravação foi pausada. Você pode continuar de onde parou ou descartá-la permanentemente.</p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setDiscardAudioConfirmationOpen(false)} className="rounded-full px-4 py-2.5 text-[13px] font-semibold text-white/75 transition hover:bg-white/[0.08] hover:text-white">Continuar gravando</button>
+              <button type="button" onClick={confirmAudioRecordingDiscard} className="rounded-full bg-red-500 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-red-600">Excluir gravação</button>
             </div>
           </div>
         </div>

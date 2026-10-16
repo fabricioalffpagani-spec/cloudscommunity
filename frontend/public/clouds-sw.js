@@ -8,6 +8,44 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function isViewingNotificationContext(client, data) {
+  if (!client.focused || typeof client.url !== "string") return false;
+
+  const currentUrl = new URL(client.url, self.location.origin);
+  if (data.kind === "cloud_message" && typeof data.cloudId === "string") {
+    return currentUrl.pathname === `/cloud/${encodeURIComponent(data.cloudId)}`;
+  }
+
+  const notificationUrl = new URL(data.url || "/", self.location.origin);
+  return (
+    notificationUrl.pathname === "/messages" &&
+    currentUrl.pathname === "/messages" &&
+    notificationUrl.searchParams.get("conversation") !== null &&
+    notificationUrl.searchParams.get("conversation") === currentUrl.searchParams.get("conversation")
+  );
+}
+
+async function shouldSuppressNotification(data) {
+  const isCloudMessage = data.kind === "cloud_message" && typeof data.cloudId === "string";
+  const notificationUrl = new URL(data.url || "/", self.location.origin);
+  const isDirectMessage =
+    notificationUrl.pathname === "/messages" &&
+    notificationUrl.searchParams.get("conversation") !== null;
+
+  if (!isCloudMessage && !isDirectMessage) return false;
+
+  try {
+    const windows = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    return windows.some((client) => isViewingNotificationContext(client, data));
+  } catch {
+    // A falha ao consultar as janelas não pode impedir uma notificação válida.
+    return false;
+  }
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -20,9 +58,9 @@ self.addEventListener("push", (event) => {
   const unreadMessages = Array.isArray(data.unreadMessages)
     ? data.unreadMessages.filter((message) => typeof message === "string")
     : [];
-  let showTask;
-  try {
-    showTask = self.registration.showNotification(data.title || "Clouds", {
+  const showTask = shouldSuppressNotification(data).then((suppressed) => {
+    if (suppressed) return undefined;
+    return self.registration.showNotification(data.title || "Clouds", {
       body: unreadMessages.length
         ? unreadMessages.join("\n")
         : data.body || "Você tem uma nova notificação.",
@@ -34,10 +72,8 @@ self.addEventListener("push", (event) => {
       renotify: Boolean(data.messageId),
       data: { url: data.url || "/", messageId: data.messageId },
     });
-  } catch (error) {
-    showTask = Promise.reject(error);
-  }
-  const tasks = [Promise.resolve(showTask)];
+  });
+  const tasks = [showTask];
   if (data.badgeCount && self.navigator.setAppBadge) {
     tasks.push(
       self.navigator.setAppBadge(data.badgeCount).catch(() => undefined),

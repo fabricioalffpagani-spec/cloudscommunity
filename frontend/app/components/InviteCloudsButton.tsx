@@ -15,8 +15,8 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
 
   const invite = async () => {
-    const url = new URL("/signup", window.location.origin).href;
-    const text = "Junte a galera no Clouds!";
+    const url = new URL("/entrenoclouds", window.location.origin).href;
+    const text = "Vem pro Clouds comigo! ☁️\nÉ uma plataforma de conversas públicas ao vivo.\nCriei meu perfil aqui:";
     const invitation = `${text}\n${url}`;
     setNotice("");
 

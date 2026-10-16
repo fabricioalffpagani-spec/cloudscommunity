@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 const BAR_COUNT = 32;
+const PLAYBACK_RATES = [1, 1.5, 2] as const;
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -83,6 +84,7 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState<number>(() => (durationMs ? durationMs / 1000 : 0));
   const [decoded, setDecoded] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState<(typeof PLAYBACK_RATES)[number]>(1);
 
   const hasProvided = !!providedPeaks && providedPeaks.length > 0;
   const bars = hasProvided ? providedPeaks : decodedPeaks;
@@ -109,6 +111,11 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
   useEffect(() => {
     if (durationMs && durationMs > 0) setDuration(durationMs / 1000);
   }, [durationMs]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) audio.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   const toggle = useCallback(() => {
     const a = audioRef.current;
@@ -144,6 +151,13 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
 
   const onPlay = useCallback(() => setPlaying(true), []);
   const onPause = useCallback(() => setPlaying(false), []);
+
+  const handlePlaybackRateChange = useCallback((event: React.ChangeEvent<HTMLSelectElement>) => {
+    const nextRate = Number(event.target.value);
+    if (PLAYBACK_RATES.includes(nextRate as (typeof PLAYBACK_RATES)[number])) {
+      setPlaybackRate(nextRate as (typeof PLAYBACK_RATES)[number]);
+    }
+  }, []);
 
   const progress = useMemo(() => {
     if (!duration || duration <= 0) return 0;
@@ -236,7 +250,19 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
             );
           })}
         </div>
-        <div className="flex items-center justify-end text-[11px] leading-none">
+        <div className="flex items-center justify-between gap-2 text-[11px] leading-none">
+          <select
+            aria-label="Velocidade de reprodução"
+            value={playbackRate}
+            onChange={handlePlaybackRateChange}
+            className={`cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-[11px] font-medium outline-none ${isOwn ? "bg-white/15 text-white/90" : "bg-white/10 text-white/70"}`}
+          >
+            {PLAYBACK_RATES.map((rate) => (
+              <option key={rate} value={rate} className="bg-[#1c1530] text-white">
+                {String(rate).replace(".", ",")}×
+              </option>
+            ))}
+          </select>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${isOwn ? "bg-white/15 text-white/90" : "bg-white/10 text-white/70"}`}>
             {displayTime}
           </span>

@@ -2441,6 +2441,77 @@ export class CloudService {
     return Math.max(1, Math.min(rawTake, 100));
   }
 
+  private cloudActivityNotificationIntervalMs(createdAt: Date): number {
+    const ageMs = Math.max(0, Date.now() - createdAt.getTime());
+    if (ageMs < 10 * 60 * 1000) return 3 * 60 * 1000;
+    if (ageMs < 30 * 60 * 1000) return 6 * 60 * 1000;
+    return 10 * 60 * 1000;
+  }
+
+  /** Persists the throttle so periodic summaries work across all devices. */
+  private async notifyCloudUserAboutActivity(
+    userId: string,
+    title: string,
+    body: string,
+    cloud: {
+      id: string;
+      authorId: string;
+      title: string;
+      createdAt: Date;
+    },
+  ): Promise<void> {
+    const intervalMs = this.cloudActivityNotificationIntervalMs(
+      cloud.createdAt,
+    );
+    const since = new Date(Date.now() - intervalMs);
+    const recentActivity = await this.prisma.notification.findFirst({
+      where: {
+        userId,
+        type: 'cloud_activity',
+        entityType: 'cloud',
+        entityId: cloud.id,
+        createdAt: { gte: since },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (recentActivity) return;
+
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId,
+        type: 'cloud_activity',
+        entityType: 'cloud',
+        entityId: cloud.id,
+        title,
+        body,
+      },
+    });
+    await this.pushNotifications.send(userId, {
+      title: notification.title,
+      body: notification.body,
+      url: `/cloud/${cloud.id}`,
+      tag: `cloud-activity-${cloud.id}`,
+      kind: 'cloud_message',
+      cloudId: cloud.id,
+    });
+  }
+
+  private notifyCloudCreatorAboutActivity(cloud: {
+    id: string;
+    authorId: string;
+    title: string;
+    createdAt: Date;
+  }): Promise<void> {
+    return this.notifyCloudUserAboutActivity(
+      cloud.authorId,
+      'Há movimentações em sua Cloud',
+      `Há novas interações em “${cloud.title}”.`,
+      cloud,
+    );
+  }
+
   private async createCloudMessage(
     userId: string,
     cloudId: string,
@@ -2463,21 +2534,21 @@ export class CloudService {
           )
         : [];
 
-    if (replyToMessageId) {
-      const replyTarget = await this.prisma.cloudMessage.findFirst({
-        where: {
-          id: replyToMessageId,
-          cloudId,
-          deletedAt: null,
-        },
-        select: { id: true },
-      });
+    const replyTarget = replyToMessageId
+      ? await this.prisma.cloudMessage.findFirst({
+          where: {
+            id: replyToMessageId,
+            cloudId,
+            deletedAt: null,
+          },
+          select: { id: true, userId: true },
+        })
+      : null;
 
-      if (!replyTarget) {
-        throw new BadRequestException({
-          message: 'A mensagem de resposta não foi encontrada.',
-        });
-      }
+    if (replyToMessageId && !replyTarget) {
+      throw new BadRequestException({
+        message: 'A mensagem de resposta não foi encontrada.',
+      });
     }
 
     const created = await this.prisma.cloudMessage.create({
@@ -2494,17 +2565,12 @@ export class CloudService {
       include: this.messageInclude(),
     });
 
-    const recipients = await this.prisma.cloudMember.findMany({
-      where: { cloudId, leftAt: null, userId: { not: userId } },
-      select: { userId: true },
-    });
     const mentionedIds = new Set(mentions.map((mention) => mention.userId));
-    const recipientIds = new Set(
-      recipients.map((recipient) => recipient.userId),
-    );
-    for (const mentionedId of mentionedIds) {
-      if (mentionedId !== userId) recipientIds.add(mentionedId);
-    }
+    const directReplyRecipientId =
+      replyTarget && replyTarget.userId !== userId ? replyTarget.userId : null;
+    const immediateRecipientIds = new Set(mentionedIds);
+    if (directReplyRecipientId)
+      immediateRecipientIds.add(directReplyRecipientId);
     const senderName =
       created.user.profile?.displayName ||
       created.user.profile?.username ||
@@ -2514,8 +2580,10 @@ export class CloudService {
       .trim()
       .slice(0, 140);
     await Promise.all(
-      Array.from(recipientIds, async (recipientId) => {
+      Array.from(immediateRecipientIds, async (recipientId) => {
+        if (recipientId === userId) return;
         const mentioned = mentionedIds.has(recipientId);
+        const replied = recipientId === directReplyRecipientId;
         const notification = await this.prisma.notification.create({
           data: {
             userId: recipientId,
@@ -2523,10 +2591,13 @@ export class CloudService {
             entityType: 'cloud_message',
             entityId: created.id,
             metadata: { cloudId, messageId: created.id },
-            title: mentioned
-              ? `${senderName} mencionou você na Cloud ${cloud.title}`
-              : `Nova mensagem em ${cloud.title}`,
-            body: mentioned ? preview : `${senderName}: ${preview}`,
+            title:
+              mentioned && replied
+                ? `${senderName} respondeu e mencionou você na Cloud ${cloud.title}`
+                : mentioned
+                  ? `${senderName} mencionou você na Cloud ${cloud.title}`
+                  : `${senderName} respondeu ao seu comentário na Cloud ${cloud.title}`,
+            body: preview,
           },
         });
         await this.pushNotifications.send(recipientId, {
@@ -2538,6 +2609,34 @@ export class CloudService {
           cloudId,
         });
       }),
+    );
+
+    // Only activity from somebody else may notify the creator. A direct
+    // mention remains immediate and already conveys the relevant activity.
+    if (cloud.authorId !== userId && !mentionedIds.has(cloud.authorId)) {
+      await this.notifyCloudCreatorAboutActivity(cloud);
+    }
+
+    const participants = await this.prisma.cloudMember.findMany({
+      where: { cloudId, leftAt: null, userId: { not: userId } },
+      select: { userId: true },
+    });
+    await Promise.all(
+      participants
+        .map((participant) => participant.userId)
+        .filter(
+          (participantId) =>
+            participantId !== cloud.authorId &&
+            !immediateRecipientIds.has(participantId),
+        )
+        .map((participantId) =>
+          this.notifyCloudUserAboutActivity(
+            participantId,
+            `Novos comentários na Cloud ${cloud.title}`,
+            `Há novos comentários em “${cloud.title}”.`,
+            cloud,
+          ),
+        ),
     );
 
     return this.mapMessage(created, input.clientMessageId?.trim() || null);
@@ -3055,27 +3154,7 @@ export class CloudService {
 
     const entered = membershipChanged || !hasEntryNotification;
     if (entered && !waiting && cloud.authorId !== current.user.id) {
-      const memberName =
-        current.user.profile?.displayName ||
-        current.user.profile?.username ||
-        'Uma pessoa';
-      const notification = await this.prisma.notification.create({
-        data: {
-          userId: cloud.authorId,
-          type: 'cloud_member_joined',
-          entityType: 'cloud',
-          entityId: cloudId,
-          title: 'Novo participante na sua Cloud',
-          body: `${memberName} entrou em “${cloud.title}”.`,
-          metadata: { actorUserId: current.user.id },
-        },
-      });
-      await this.pushNotifications.send(cloud.authorId, {
-        title: notification.title,
-        body: notification.body,
-        url: `/cloud/${cloudId}`,
-        tag: notification.id,
-      });
+      await this.notifyCloudCreatorAboutActivity(cloud);
     }
 
     return {

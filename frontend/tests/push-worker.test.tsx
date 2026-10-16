@@ -100,26 +100,41 @@ function createWorker() {
 }
 
 describe("push service worker", () => {
-  it.each(["open", "background", "closed"])(
-    "shows a direct push with the PWA %s without consulting app windows",
-    async (state) => {
-      const worker = createWorker();
-      if (state === "closed") worker.matchAll.mockResolvedValue([]);
-      else worker.matchAll.mockResolvedValue([{ url: "https://clouds.test/messages" }]);
-      await worker.push({
-        title: "Ana: Oi",
-        body: "Oi",
-        unreadMessages: ["Oi"],
-        tag: "direct-message-a",
-        messageId: "m1",
-      });
-      expect(worker.showNotification).toHaveBeenCalledTimes(1);
-      expect(worker.notices.get("direct-message-a")?.options.body).toBe("Oi");
-      expect(worker.matchAll).not.toHaveBeenCalled();
-    },
-  );
+  it("suppresses a direct push when its conversation is focused", async () => {
+    const worker = createWorker();
+    worker.matchAll.mockResolvedValue([
+      { url: "https://clouds.test/messages?conversation=a", focused: true },
+    ]);
 
-  it("shows each direct message without waiting for notification or window lookups", async () => {
+    await worker.push({
+      title: "Ana: Oi",
+      body: "Oi",
+      url: "/messages?conversation=a",
+      tag: "direct-message-a",
+      messageId: "m1",
+    });
+
+    expect(worker.showNotification).not.toHaveBeenCalled();
+  });
+
+  it("shows a direct push when another conversation is focused", async () => {
+    const worker = createWorker();
+    worker.matchAll.mockResolvedValue([
+      { url: "https://clouds.test/messages?conversation=b", focused: true },
+    ]);
+
+    await worker.push({
+      title: "Ana: Oi",
+      body: "Oi",
+      url: "/messages?conversation=a",
+      tag: "direct-message-a",
+      messageId: "m1",
+    });
+
+    expect(worker.showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows each direct message when the conversation is not focused", async () => {
     const worker = createWorker();
     await worker.push({
       title: "Ana: Oi",
@@ -163,7 +178,7 @@ describe("push service worker", () => {
       "/messages?conversation=a",
     );
     expect(worker.getNotifications).not.toHaveBeenCalled();
-    expect(worker.matchAll).not.toHaveBeenCalled();
+    expect(worker.matchAll).toHaveBeenCalledTimes(4);
   });
 
   it("shows several unread messages in order, then clears only the read conversation", async () => {
@@ -188,11 +203,22 @@ describe("push service worker", () => {
     expect(worker.notices.size).toBe(0);
   });
 
-  it("displays a cloud push even if window lookup would fail", async () => {
+  it("suppresses a cloud push when its CloudChat is focused", async () => {
     const worker = createWorker();
+    worker.matchAll.mockResolvedValue([
+      { url: "https://clouds.test/cloud/c", focused: true },
+    ]);
+    await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
+    expect(worker.showNotification).not.toHaveBeenCalled();
+  });
+
+  it("displays a cloud push when another CloudChat is focused", async () => {
+    const worker = createWorker();
+    worker.matchAll.mockResolvedValue([
+      { url: "https://clouds.test/cloud/other", focused: true },
+    ]);
     await worker.push({ title: "Cloud", kind: "cloud_message", cloudId: "c" });
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
-    expect(worker.matchAll).not.toHaveBeenCalled();
   });
 
   it("displays a cloud push with no app window open", async () => {

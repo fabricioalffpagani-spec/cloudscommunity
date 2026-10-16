@@ -1396,7 +1396,7 @@ export class UsersService {
     const appUrl =
       process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ??
       'http://localhost:3000';
-    const inviteUrl = `${appUrl}/cloudscommunity`;
+    const inviteUrl = `${appUrl}/entrenoclouds`;
 
     return { ok: true, inviteUrl };
   }
