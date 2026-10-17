@@ -1293,10 +1293,10 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
     // The message owns a horizontal drag; the list only handles gestures that
     // begin outside a bubble, such as showing timestamps.
     event.stopPropagation();
+    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("a, button, input, select, textarea, [data-message-menu]"))) return;
     replySwipeStartRef.current = { x: event.clientX, y: event.clientY };
     // Keep the end event even when the reply drag leaves the message bubble.
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (event.pointerType !== "touch" || (event.target instanceof Element && event.target.closest("[data-message-menu]"))) return;
     cancelLongPress();
     openedByLongPressRef.current = false;
     pressStartRef.current = { x: event.clientX, y: event.clientY };
@@ -1335,7 +1335,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
       onPointerDown={handleMessagePointerDown}
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
-      onPointerCancel={cancelLongPress}
+      onPointerCancel={() => { replySwipeStartRef.current = null; cancelLongPress(); }}
       onClickCapture={(event) => { if (openedByLongPressRef.current) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
       onContextMenu={(event) => { if (!(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); openMenu(); } }}
     >
