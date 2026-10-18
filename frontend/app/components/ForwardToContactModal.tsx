@@ -19,6 +19,7 @@ export type ForwardItem = {
   mediaDurationMs?: number | null;
   mediaFileName?: string | null;
   forwarded?: boolean;
+  forwardedOrigin?: "cloud";
 };
 
 type Props = {
@@ -32,6 +33,7 @@ type Props = {
   mediaDurationMs?: number | null;
   mediaFileName?: string | null;
   forwarded?: boolean;
+  forwardedOrigin?: "cloud";
   contacts: ForwardContact[];
   loading?: boolean;
   externalShareText?: string;
@@ -39,13 +41,13 @@ type Props = {
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, contacts, loading = false, externalShareText, items, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, contacts, loading = false, externalShareText, items, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
-  const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded }];
+  const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded, forwardedOrigin }];
 
   const forward = async (contact: ForwardContact) => {
     setSendingTo(contact.id);
@@ -61,7 +63,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       const conversationId = conversationPayload.conversation.id as string;
       for (const item of forwardItems) {
       const clientMessageId = `forward-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const cleanMessageContent = item.messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/, "");
+      const cleanMessageContent = item.messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada(?: de uma cloud)?)\s*)+/, "");
       const isTextMessage = item.messageContent !== undefined;
       let forwardedLabel = item.label;
       if (item.forwarded && !isTextMessage) {
@@ -89,13 +91,14 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         formData.set("file", mediaBlob, item.mediaFileName || `encaminhada-${Date.now()}.${extension}`);
         formData.set("clientMessageId", clientMessageId);
         formData.set("forwarded", String(item.forwarded ?? true));
+        if (item.forwardedOrigin) formData.set("forwardedOrigin", item.forwardedOrigin);
         if (item.mediaKind === "audio" && item.mediaDurationMs) formData.set("durationMs", String(item.mediaDurationMs));
         endpoint += item.mediaKind === "audio" ? "/audio" : "/image";
         body = formData;
       } else {
         endpoint += isTextMessage ? "/messages" : "/link";
         body = JSON.stringify(isTextMessage
-          ? { content: `↗ Encaminhada\n${cleanMessageContent ?? ""}`, clientMessageId }
+          ? { content: `↗ ${item.forwardedOrigin === "cloud" ? "Encaminhada de uma cloud" : "Encaminhada"}\n${cleanMessageContent ?? ""}`, clientMessageId }
           : { url: item.url, label: forwardedLabel, clientMessageId });
       }
 

@@ -17,6 +17,17 @@ describe("Read", () => {
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+  it("keeps Ler immediately above the ended status at the bottom of each card", () => {
+    const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Título extenso ".repeat(14) }]} onDelete={onDelete} />);
+    for (const card of container.querySelectorAll("[data-cloud-page]")) {
+      const action = card.querySelector(".read-card-action");
+      const status = card.querySelector(".read-card-footer");
+      expect(action).toHaveTextContent("Ler");
+      expect(action?.nextElementSibling).toBe(status);
+      expect(status).toHaveTextContent(/Encerrad/);
+      expect(card.querySelector(".read-card-center")?.nextElementSibling).toBe(action);
+    }
+  });
   it("does not open the read-only conversation with a mobile swipe", () => {
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
@@ -25,7 +36,7 @@ describe("Read", () => {
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 60, clientY: 45 });
     expect(pushMock).not.toHaveBeenCalled();
-    expect(screen.getByText("18 comentários")).toBeVisible();
+    expect(screen.queryByText("18 comentários")).not.toBeInTheDocument();
     expect(screen.queryByText(/Entrar/)).not.toBeInTheDocument();
   });
   it("opens the archived conversation after a double tap in the title area on mobile", () => {
@@ -50,6 +61,15 @@ describe("Read", () => {
     expect(container.querySelectorAll("article.snap-start")).toHaveLength(2);
     expect(fireEvent.wheel(feed, { deltaY: 100, deltaX: 0, cancelable: true })).toBe(true);
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+  it("navigates archived clouds with desktop arrows while keeping scroll available", () => {
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Próxima Cloud" }));
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(screen.getByRole("button", { name: "Cloud anterior" })).toBeEnabled();
+    expect(container.querySelector(".cloud-feed-scroller")).toBeInTheDocument();
   });
 });
 
@@ -104,6 +124,17 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("loads the first archive page when entered from Read", async () => {
+    window.history.replaceState(null, "", "/cloud/cloud-1/conversation?from=read");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud, messages: [] }) };
+      return { ok: true, json: async () => ({ user: null }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
+    await screen.findByText("Nenhuma mensagem");
+    expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/archive/messages?take=100&fromStart=true", { cache: "no-store" });
+  });
   it("uses browser history for the internal back button when opened from Read", async () => {
     window.history.replaceState(null, "", "/cloud/cloud-1/conversation?from=read&scope=following");
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {

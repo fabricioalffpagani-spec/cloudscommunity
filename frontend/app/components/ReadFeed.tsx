@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFeedPosition } from "../lib/feed-position";
+import { CloudParticipantsSheet } from "./CloudParticipantsSheet";
 
 export type ReadCloud = {
   id: string;
@@ -12,7 +13,7 @@ export type ReadCloud = {
   messagesCount: number;
   participantsCount?: number;
   author: { id: string; name: string; username: string; avatarUrl: string | null };
-  participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+  participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
 };
 
 export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void> }) {
@@ -21,10 +22,20 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const [cloudToDelete, setCloudToDelete] = useState<ReadCloud | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
-  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope });
+  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, onActiveIndex: setActiveIndex });
+  const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
+
+  const navigateFeed = (direction: number) => {
+    const nextIndex = Math.max(0, Math.min(clouds.length - 1, activeIndex + direction));
+    const target = feedRef.current?.querySelectorAll<HTMLElement>("[data-cloud-page]")[nextIndex];
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveIndex(nextIndex);
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -73,14 +84,14 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
                 </div>
               </Link>
 
-              <div className="flex shrink-0 -space-x-2 md:-space-x-3" aria-label={`${participantsCount} participantes da Cloud`}>
+              <button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex shrink-0 -space-x-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC] md:-space-x-3" aria-label={`Ver ${participantsCount} participantes da Cloud`}>
                   {participants.slice(0, 7).map((person) => (
-                    <Link key={person.id} href={`/users/${encodeURIComponent(person.id)}`} aria-label={`Ver perfil de ${person.name}`}>
+                    <span key={person.id}>
                       {person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} title={person.name} className="h-8 w-8 rounded-full border-2 border-[#100625] object-cover md:h-11 md:w-11 md:border-[#160a3e]" referrerPolicy="no-referrer" /> : <span title={person.name} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[10px] font-bold text-white md:h-11 md:w-11 md:border-[#160a3e] md:text-[13px]">{person.name.slice(0, 1).toUpperCase()}</span>}
-                    </Link>
+                    </span>
                   ))}
                   {participantsCount > 7 && <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[10px] font-bold text-white md:h-11 md:w-11 md:border-[#160a3e] md:text-[13px]">+{participantsCount - 7}</span>}
-              </div>
+              </button>
             </div>
 
             <div
@@ -107,17 +118,18 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
               aria-label={`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`}
             >
               <h2 lang="pt-BR" className={`cloud-feed-title max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
-              <Link href={`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`} className="read-card-action mt-8 hidden min-w-[306px] items-center justify-center rounded-full border border-[#A855F7] px-7 py-4 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:inline-flex">Ler conversa</Link>
             </div>
 
-            <div className="read-card-footer relative flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-white/[.08] pt-3 text-[12px] text-white/65 md:gap-x-6 md:border-0 md:px-10 md:pb-10 md:pt-0 md:text-[14px]">
-              <span className="inline-flex shrink-0 items-center gap-1.5"><MessageIcon /><span className="hidden sm:inline">{cloud.messagesCount} comentários</span><span className="sm:hidden">{cloud.messagesCount}</span></span>
+            <Link href={`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`} className="read-card-action mx-auto mb-3 mt-4 inline-flex min-w-[min(306px,calc(100%-3rem))] items-center justify-center rounded-full border border-[#A855F7] px-7 py-3 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:mb-4 md:py-4">Ler</Link>
+            <div className="read-card-footer relative mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12px] text-white/65 md:mb-10 md:gap-x-6 md:px-10 md:text-[14px]">
               <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
           </article>;
         })}
       </div>
+      {clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}
+      {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles} onClose={() => setParticipantsCloudId(null)} />}
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">
           <h2 id="delete-cloud-title" className="text-[18px] font-bold text-white">Excluir Cloud?</h2>
@@ -128,10 +140,6 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       </div>}
     </div>
   );
-}
-
-function MessageIcon() {
-  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" className="shrink-0 text-[#A855F7]" aria-hidden="true"><path d="M21 14a3 3 0 0 1-3 3H9l-5 4V6a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3z" /></svg>;
 }
 
 function LockIcon() {

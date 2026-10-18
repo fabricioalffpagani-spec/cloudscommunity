@@ -27,6 +27,16 @@ beforeEach(() => {
 });
 
 describe("Mini Cloud leave", () => {
+  it("keeps the normal desktop dock inside the app without opening a popup", async () => {
+    localStorage.setItem("clouds:mini-cloud-popout", "another-cloud");
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+    render(<MiniCloudDock />);
+    expect(await screen.findByRole("button", { name: "Expandir Cloud" })).toBeVisible();
+    expect(screen.getByRole("separator", { name: "Redimensionar Mini Cloud" })).toBeVisible();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
   it("keeps navigation, separate-window, and leave controls together", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
     render(<MiniCloudDock />);
@@ -48,6 +58,73 @@ describe("Mini Cloud leave", () => {
     expect(focus).toHaveBeenCalled();
     expect(localStorage.getItem("clouds:mini-cloud-popout")).toBe("cloud-1");
     open.mockRestore();
+  });
+
+  it("fills the external window without the internal dock margins or resize handle", async () => {
+    const originalPath = window.location.pathname;
+    window.history.replaceState(null, "", "/mini-cloud");
+    localStorage.setItem("clouds:mini-cloud-popout", "cloud-1");
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+
+    try {
+      render(<MiniCloudDock />);
+      const dock = (await screen.findByRole("button", { name: "Expandir Cloud" })).closest("aside");
+      expect(dock).toHaveStyle({ width: "100%", height: "100dvh" });
+      expect(dock).toHaveClass("relative");
+      expect(dock).not.toHaveClass("fixed", "rounded-2xl", "border");
+      expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeVisible();
+      expect(screen.queryByRole("separator", { name: "Redimensionar Mini Cloud" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState(null, "", originalPath);
+    }
+  });
+
+  it("shows a sent message immediately in the external window and deduplicates its socket event", async () => {
+    const originalPath = window.location.pathname;
+    window.history.replaceState(null, "", "/mini-cloud");
+    localStorage.setItem("clouds:mini-cloud-popout", "cloud-1");
+    const message = { id: "sent-1", cloudId: "cloud-1", type: "text", content: "Mensagem pela janela", createdAt: new Date().toISOString(), sender: { id: "viewer", displayName: "Você" } };
+    vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === "POST") return { ok: true, json: async () => ({ message }) };
+      if (input.endsWith("/messages?take=30")) return { json: async () => ({ messages: [] }) };
+      return { json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) };
+    }));
+
+    try {
+      render(<MiniCloudDock />);
+      fireEvent.change(await screen.findByRole("textbox"), { target: { value: "Mensagem pela janela" } });
+      fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+      expect(await screen.findByText("Mensagem pela janela")).toBeVisible();
+      act(() => socketHandlers.get("cloud:message:new")?.(message));
+      expect(screen.getAllByText("Mensagem pela janela")).toHaveLength(1);
+    } finally {
+      window.history.replaceState(null, "", originalPath);
+    }
+  });
+
+  it("returns from a real popup to its opener when expanded", async () => {
+    const originalPath = window.location.pathname;
+    const originalOpener = window.opener;
+    window.history.replaceState(null, "", "/mini-cloud");
+    localStorage.setItem("clouds:mini-cloud-popout", "cloud-1");
+    const assign = vi.fn();
+    const focus = vi.fn();
+    Object.defineProperty(window, "opener", { configurable: true, value: { closed: false, location: { assign }, focus } });
+    const close = vi.spyOn(window, "close").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+
+    try {
+      render(<MiniCloudDock />);
+      fireEvent.click(await screen.findByRole("button", { name: "Expandir Cloud" }));
+      expect(assign).toHaveBeenCalledWith("/cloud/cloud-1");
+      expect(focus).toHaveBeenCalled();
+      expect(close).toHaveBeenCalled();
+      expect(localStorage.getItem("clouds:mini-cloud-popout")).toBeNull();
+    } finally {
+      window.history.replaceState(null, "", originalPath);
+      Object.defineProperty(window, "opener", { configurable: true, value: originalOpener });
+    }
   });
 
   it("does not restore a Cloud minimized by another account", () => {

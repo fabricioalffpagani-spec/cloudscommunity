@@ -46,6 +46,7 @@ function setup() {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
       create: jest.fn<Promise<unknown>, unknown[]>(),
       update: jest.fn<Promise<unknown>, unknown[]>(),
+      updateMany: jest.fn<Promise<unknown>, unknown[]>(),
     },
     cloudMessageView: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
@@ -97,6 +98,78 @@ function setup() {
     cloud,
   };
 }
+
+describe('Cloud message pinning', () => {
+  it('persists pin and unpin for the author and rejects another user', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    const originalUpdatedAt = new Date('2026-10-18T17:00:00.000Z');
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'message-1',
+      cloudId,
+      userId: 'author',
+      isPinned: false,
+      updatedAt: originalUpdatedAt,
+    });
+
+    await expect(
+      service.pinMessage(null, cloudId, 'message-1'),
+    ).resolves.toEqual({ ok: true });
+    expect(prisma.cloudMessage.findMany).toHaveBeenCalledWith({
+      where: { cloudId, isPinned: true, id: { not: 'message-1' } },
+      select: { id: true, updatedAt: true },
+    });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({
+      where: { id: 'message-1' },
+      data: { isPinned: true, updatedAt: originalUpdatedAt },
+    });
+
+    await expect(
+      service.unpinMessage(null, cloudId, 'message-1'),
+    ).resolves.toEqual({ ok: true });
+    expect(prisma.cloudMessage.update).toHaveBeenLastCalledWith({
+      where: { id: 'message-1' },
+      data: { isPinned: false, updatedAt: originalUpdatedAt },
+    });
+
+    auth.resolveSession.mockResolvedValue({ user: { id: 'other' } });
+    await expect(
+      service.pinMessage(null, cloudId, 'message-1'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('preserves the edit timestamp when replacing a pinned message', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    const previousUpdatedAt = new Date('2026-10-18T16:00:00.000Z');
+    const nextUpdatedAt = new Date('2026-10-18T17:00:00.000Z');
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'message-2',
+      cloudId,
+      userId: 'author',
+      isPinned: false,
+      updatedAt: nextUpdatedAt,
+    });
+    prisma.cloudMessage.findMany.mockResolvedValue([
+      { id: 'message-1', updatedAt: previousUpdatedAt },
+    ]);
+
+    await service.pinMessage(null, cloudId, 'message-2');
+
+    expect(prisma.cloudMessage.update).toHaveBeenNthCalledWith(1, {
+      where: { id: 'message-1' },
+      data: { isPinned: false, updatedAt: previousUpdatedAt },
+    });
+    expect(prisma.cloudMessage.update).toHaveBeenNthCalledWith(2, {
+      where: { id: 'message-2' },
+      data: { isPinned: true, updatedAt: nextUpdatedAt },
+    });
+  });
+});
 
 describe('structured Cloud mentions', () => {
   const memberId = '11111111-1111-4111-8111-111111111111';

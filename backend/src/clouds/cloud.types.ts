@@ -63,6 +63,7 @@ export type CloudMessagePayload = {
   mentions: CloudMention[];
   mediaUrl: string | null;
   isSticker: boolean;
+  isPinned: boolean;
   clientMessageId: string | null;
   replyToMessageId: string | null;
   createdAt: string;
@@ -131,6 +132,8 @@ export type UpdateCloudInput = {
 export type ListCloudMessagesQuery = {
   take?: number;
   before?: string;
+  after?: string;
+  fromStart?: boolean;
 };
 
 export type CreateCloudMessageInput = {

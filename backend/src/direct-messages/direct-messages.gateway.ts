@@ -464,6 +464,22 @@ export class DirectMessagesGateway
       });
   }
 
+  async broadcastMessagePinned(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    isPinned: boolean,
+  ) {
+    const conversation = await this.directMessagesService.getConversationById(
+      userId,
+      conversationId,
+    );
+    this.server
+      .to(this.userRoom(userId))
+      .to(this.userRoom(conversation.participant.id))
+      .emit('message:pin:changed', { conversationId, messageId, isPinned });
+  }
+
   broadcastMessageEdited(
     conversationId: string,
     message: DirectMessagePayload,

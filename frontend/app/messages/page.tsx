@@ -7,9 +7,10 @@ import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
-import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, TrashIcon, XIcon } from "../components/ui-icons";
+import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, StickerIcon, TrashIcon, XIcon } from "../components/ui-icons";
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
+import { MessageMenuPortal } from "../components/MessageMenuPortal";
 import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
 import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
@@ -51,6 +52,7 @@ type BackendMessage = {
   updatedAt: string;
   editedAt: string | null;
   readAt: string | null;
+  isPinned: boolean;
   mediaAsset: {
     id: string;
     url: string;
@@ -109,6 +111,7 @@ type Msg = {
   updatedAt?: string;
   editedAt?: string | null;
   readAt: string | null;
+  isPinned?: boolean;
   mediaUrl: string | null;
   mediaFileName?: string | null;
   durationMs: number | null;
@@ -445,6 +448,7 @@ function buildMessage(
       updatedAt: payload.updatedAt,
       editedAt: payload.editedAt,
     readAt: payload.readAt,
+    isPinned: payload.isPinned,
     mediaUrl: payload.mediaAsset?.url ?? null,
     mediaFileName: payload.mediaAsset?.originalFileName ?? null,
     durationMs: payload.mediaAsset?.durationMs ?? null,
@@ -766,7 +770,8 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
 
 function AudioMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
-  const isForwarded = /^(?:↗\s*)?(?:Encaminhada|Mensagem encaminhada)$/i.test(msg.content.trim());
+  const isForwarded = /^(?:↗\s*)?(?:Encaminhada(?: de uma cloud)?|Mensagem encaminhada)$/i.test(msg.content.trim());
+  const forwardedLabel = /de uma cloud/i.test(msg.content) ? "Encaminhada de uma cloud" : "Encaminhada";
   if (!msg.mediaUrl) {
     return (
       <div className={`rounded-2xl border px-4 py-3 text-[12px] text-white/60 ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}>
@@ -778,7 +783,7 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
     <div className={`flex flex-col ${isForwarded ? "gap-0" : "gap-1"}`}>
       {isForwarded && (
         <div className={`w-[272px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
-          ↗ Encaminhada
+          ↗ {forwardedLabel}
         </div>
       )}
       <AudioWaveformPlayer
@@ -796,7 +801,8 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
 
 function ImageMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
-  const isForwarded = /^(?:↗\s*)?(?:Encaminhada|Mensagem encaminhada)$/i.test(msg.content.trim());
+  const isForwarded = /^(?:↗\s*)?(?:Encaminhada(?: de uma cloud)?|Mensagem encaminhada)$/i.test(msg.content.trim());
+  const forwardedLabel = /de uma cloud/i.test(msg.content) ? "Encaminhada de uma cloud" : "Encaminhada";
   const [expanded, setExpanded] = useState(false);
   const isSticker = Boolean(msg.mediaFileName?.startsWith("figurinha"));
 
@@ -809,7 +815,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
       className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
       style={{ maxWidth: "320px" }}
     >
-      {isForwarded && <div className="px-3 pb-2 pt-2 text-[9px] font-medium uppercase tracking-[0.12em] text-white/60">↗ Encaminhada</div>}
+      {isForwarded && <div className="px-3 pb-2 pt-2 text-[9px] font-medium uppercase tracking-[0.12em] text-white/60">↗ {forwardedLabel}</div>}
       {msg.mediaUrl ? (
         <img
           src={msg.mediaUrl}
@@ -1078,9 +1084,7 @@ function DmReactionIcon() {
 
 function DmMsgMenu({
   msg,
-  isRight,
   textContent,
-  openUpward,
   onEdit,
   onDelete,
   onReply,
@@ -1091,9 +1095,7 @@ function DmMsgMenu({
   onClose,
 }: {
   msg: Msg;
-  isRight: boolean;
   textContent: string | null;
-  openUpward: boolean;
   onEdit?: (m: Msg) => void;
   onDelete?: (m: Msg) => void;
   onReply?: (m: Msg) => void;
@@ -1134,7 +1136,7 @@ function DmMsgMenu({
   };
 
   const copyable = !!textContent || !!msg.linkUrl;
-  const isOwn = isRight;
+  const isOwn = msg.side === "right";
   const isSticker = msg.kind === "image" && Boolean(msg.mediaFileName?.startsWith("figurinha"));
 
   const items: { label: string; icon: React.ReactNode; action: () => void; danger?: boolean; show: boolean }[] = [
@@ -1186,8 +1188,7 @@ function DmMsgMenu({
   return (
     <div
       data-message-menu="true"
-      className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
-      style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
+      className="min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60"
     >
       {translated && (
         <div className="border-b border-white/[0.06] px-4 py-2.5">
@@ -1213,9 +1214,9 @@ function DmMsgMenu({
 function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onReact, onSaveSticker, onRetry, selectionMode = false, selected = false, onToggleSelection, isPinned, searchQuery, showFooter = true, showAvatar = true, showSwipeTime = false }: { msg: Msg; onReply?: (m: Msg) => void; onEdit?: (m: Msg) => void; onDelete?: (m: Msg) => void; onForward?: (m: Msg) => void; onPin?: (m: Msg) => void; onReact?: (m: Msg, emoji: string) => void; onSaveSticker?: (mediaUrl: string) => void; onRetry?: (m: Msg) => void; selectionMode?: boolean; selected?: boolean; onToggleSelection?: (m: Msg) => void; isPinned?: boolean; searchQuery?: string; showFooter?: boolean; showAvatar?: boolean; showSwipeTime?: boolean }) {
   const isRight = msg.side === "right";
   const [menuOpen, setMenuOpen] = useState(false);
-  const [openUpward, setOpenUpward] = useState(false);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const menuPortalRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -1223,8 +1224,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   const openedByLongPressRef = useRef(false);
 
   const textContent = msg.kind === "text" ? msg.content : null;
-  const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada)\s*)+/);
+  const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada(?: de uma cloud)?)\s*)+/);
   const isForwardedMessage = Boolean(forwardedMarkerMatch);
+  const forwardedLabel = forwardedMarkerMatch && /de uma cloud/i.test(forwardedMarkerMatch[0]) ? "Encaminhada de uma cloud" : "Encaminhada";
   const visibleTextContent = forwardedMarkerMatch ? textContent?.slice(forwardedMarkerMatch[0].length) ?? "" : textContent;
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
   const cloudCommentReference = parseCloudCommentReference(textContent);
@@ -1251,7 +1253,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   useEffect(() => {
     if (!menuOpen) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!menuAnchorRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      if (!menuAnchorRef.current?.contains(event.target as Node) && !menuPortalRef.current?.contains(event.target as Node)) setMenuOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenuOpen(false);
@@ -1270,11 +1272,6 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   }, [menuOpen, msg.id]);
 
   function openMenu() {
-    if (menuAnchorRef.current) {
-      const rect = menuAnchorRef.current.getBoundingClientRect();
-      // Open upward if less than 220px below the button
-      setOpenUpward(window.innerHeight - rect.bottom < 220);
-    }
     setMenuOpen(true);
     document.dispatchEvent(new CustomEvent("clouds:message-menu-open", { detail: msg.id }));
   }
@@ -1336,7 +1333,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
       onPointerCancel={() => { replySwipeStartRef.current = null; cancelLongPress(); }}
-      onClickCapture={(event) => { if (openedByLongPressRef.current) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
+      onClickCapture={(event) => { if (openedByLongPressRef.current && !(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
       onContextMenu={(event) => { if (!(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); openMenu(); } }}
     >
       {/* Avatar — alinha ao fundo do bubble usando mb igual à altura da action row */}
@@ -1365,7 +1362,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
           </div>
         ) : (
           <div className={`relative rounded-2xl px-4 ${isForwardedMessage ? "min-w-[112px] pb-3 pt-6" : "py-3"} text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ Encaminhada</span>}
+            {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ {forwardedLabel}</span>}
             <span dangerouslySetInnerHTML={{ __html: highlightedContent || visibleTextContent || "" }} />
             {msg.pending && !msg.failed && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
@@ -1385,11 +1382,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
           </>}
           <div ref={menuAnchorRef} className="relative">
               {menuOpen && (
-                <DmMsgMenu
+                <MessageMenuPortal anchorRef={menuAnchorRef} menuRef={menuPortalRef} alignRight={isRight}><DmMsgMenu
                   msg={msg}
-                  isRight={isRight}
                   textContent={textContent}
-                  openUpward={openUpward}
                   onEdit={onEdit}
                   onDelete={onDelete}
                   onReply={onReply}
@@ -1398,7 +1393,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
                   onSaveSticker={onSaveSticker}
                   isPinned={isPinned}
                   onClose={closeMenu}
-                />
+                /></MessageMenuPortal>
               )}
           </div>
         </div>
@@ -1456,7 +1451,6 @@ function MessagesPageContent() {
   const [forwardMsg, setForwardMsg] = useState<Msg | null>(null);
   const [forwardSelection, setForwardSelection] = useState<Msg[]>([]);
   const [forwardSelectionMode, setForwardSelectionMode] = useState(false);
-  const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const [revealedMessageTimeSide, setRevealedMessageTimeSide] = useState<"left" | "right" | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2086,6 +2080,15 @@ function MessagesPageContent() {
       }));
     });
 
+    socket.on("message:pin:changed", (payload: { conversationId: string; messageId: string; isPinned: boolean }) => {
+      setMessagesByConversation((current) => ({
+        ...current,
+        [payload.conversationId]: (current[payload.conversationId] ?? []).map((message) =>
+          message.id === payload.messageId ? { ...message, isPinned: payload.isPinned } : message,
+        ),
+      }));
+    });
+
     socket.on("message:new", (message: BackendMessage) => {
       window.dispatchEvent(new Event("direct-message-received"));
       const mapped = buildMessage(message, user);
@@ -2431,22 +2434,28 @@ function MessagesPageContent() {
     }
   }, []);
 
-  const togglePinnedMessage = useCallback((msg: Msg) => {
-    setPinnedMessageIds((current) => {
-      const next = new Set(current);
-      if (next.has(msg.id)) next.delete(msg.id); else next.add(msg.id);
-      try { window.localStorage.setItem(`clouds:pinned-direct-messages:${msg.conversationId}`, JSON.stringify([...next])); } catch { /* storage is optional */ }
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!activeConversationId) return;
+  const togglePinnedMessage = useCallback(async (msg: Msg) => {
+    const nextPinned = !msg.isPinned;
+    const update = (pinned: boolean) => setMessagesByConversation((current) => ({
+      ...current,
+      [msg.conversationId]: (current[msg.conversationId] ?? []).map((message) =>
+        message.id === msg.id ? { ...message, isPinned: pinned } : message,
+      ),
+    }));
+    update(nextPinned);
     try {
-      const saved = JSON.parse(window.localStorage.getItem(`clouds:pinned-direct-messages:${activeConversationId}`) || "[]");
-      setPinnedMessageIds(new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string") : []));
-    } catch { setPinnedMessageIds(new Set()); }
-  }, [activeConversationId]);
+      const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(msg.conversationId)}/messages/${encodeURIComponent(msg.id)}/pin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: nextPinned }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) throw new Error(payload?.message || "Não foi possível atualizar a mensagem fixada.");
+    } catch (pinError) {
+      update(Boolean(msg.isPinned));
+      setError(pinError instanceof Error ? pinError.message : "Não foi possível atualizar a mensagem fixada.");
+    }
+  }, []);
 
   const handleReplyMsg = useCallback((msg: Msg) => {
     setEditingMsg(null);
@@ -2820,7 +2829,7 @@ function MessagesPageContent() {
 
                   return (
                     <div key={message.id} className={continuesPreviousGroup ? "mt-1" : "mt-4 first:mt-0"}>
-                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showSwipeTime={revealedMessageTimeSide === message.side} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={pinnedMessageIds.has(message.id)} searchQuery={messageSearch} />
+                      <MessageBubble msg={message} showFooter={!continuesNextGroup} showSwipeTime={revealedMessageTimeSide === message.side} showAvatar={!continuesNextGroup} onReply={handleReplyMsg} onEdit={handleEditMsg} onDelete={handleDeleteMsg} onForward={handleForwardMsg} onPin={togglePinnedMessage} onReact={handleReaction} onSaveSticker={saveSticker} onRetry={retryTextMessage} selectionMode={forwardSelectionMode} selected={forwardSelection.some((item) => item.id === message.id)} onToggleSelection={toggleForwardSelection} isPinned={Boolean(message.isPinned)} searchQuery={messageSearch} />
                     </div>
                   );
                 });
@@ -2892,7 +2901,7 @@ function MessagesPageContent() {
             <div className="relative flex flex-col gap-2 rounded-full border border-white/[0.08] bg-[#1a0e3d] px-5 py-3">
               {emojiOpen && (
                 <div data-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[calc(100vw-2rem)] max-w-[600px] -translate-x-1/2 overflow-hidden rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-                  <div className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-2"><button type="button" onClick={() => setMediaPickerTab("emoji")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "emoji" ? "bg-white/10 text-white" : "text-white/45"}`}>😊 Emojis</button><button type="button" onClick={() => setMediaPickerTab("sticker")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "sticker" ? "bg-white/10 text-white" : "text-white/45"}`}>◌ Figurinhas</button></div>
+                  <div className="grid grid-cols-2 gap-1 border-b border-white/[0.07] p-2"><button type="button" onClick={() => setMediaPickerTab("emoji")} className={`rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "emoji" ? "bg-white/10 text-white" : "text-white/45"}`}>😊 Emojis</button><button type="button" onClick={() => setMediaPickerTab("sticker")} className={`flex items-center justify-center gap-1.5 rounded-xl py-2 text-[13px] font-semibold ${mediaPickerTab === "sticker" ? "bg-white/10 text-white" : "text-white/45"}`}><StickerIcon />Figurinhas</button></div>
                   {mediaPickerTab === "sticker" ? <div className="max-h-[28vh] overflow-y-auto p-3"><div className="mb-2 flex items-center justify-between"><p className="text-[12px] font-semibold text-white/60">Figurinhas do Clouds</p><span className="text-[11px] text-white/40">{savedStickers.length} {savedStickers.length === 1 ? "figurinha" : "figurinhas"}</span></div>{savedStickers.length ? <div className="grid w-full max-w-[560px] grid-cols-5 gap-3">{savedStickers.map((sticker) => <button key={sticker.id} type="button" onClick={() => { void fetch(sticker.mediaUrl).then((response) => response.blob()).then((blob) => handleImageFile(new File([blob], "figurinha.webp", { type: blob.type || "image/webp" }), true, sticker.mediaUrl)); setEmojiOpen(false); }} className="aspect-square w-full overflow-hidden rounded-xl p-0 transition hover:bg-white/10"><img src={sticker.mediaUrl} alt="Figurinha" className={`h-full w-full object-contain ${sticker.mediaUrl.includes("/api/stickers/system/") ? "scale-125" : "scale-100"}`} /></button>)}</div> : <p className="py-4 text-center text-sm text-white/40">Ainda não há figurinhas disponíveis.</p>}</div> : <>
                   {/* Abas de categorias */}
                   <div className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">

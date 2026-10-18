@@ -40,6 +40,19 @@ body {
   color: var(--text-primary);
 }
 
+/* The dedicated popup contains only the Mini Cloud. Keep its viewport flush
+   with the dock instead of inheriting the main application's background. */
+html:has(#mini-cloud-window-root),
+body:has(#mini-cloud-window-root) {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+
 .cloud-card {
   font-family: Arial, sans-serif;
 }
@@ -247,11 +260,9 @@ textarea {
   .talk-card-title h2 { font-size: clamp(2.5rem, 6.5dvh, 4.5rem); }
   .talk-card-actions { padding-bottom: clamp(0.75rem, 5dvh, 4rem); }
   .talk-card-actions button { padding-top: clamp(0.5rem, 2dvh, 1.5rem); padding-bottom: clamp(0.5rem, 2dvh, 1.5rem); }
-  .talk-card-countdown { bottom: clamp(0.75rem, 3dvh, 2.25rem); }
   .desktop-cloud-feed .read-card-header { padding-top: clamp(0.5rem, 3dvh, 2rem); padding-bottom: clamp(0.5rem, 2dvh, 1.25rem); }
   .desktop-cloud-feed .read-card-center { padding-top: clamp(0.5rem, 3dvh, 2.5rem); padding-bottom: clamp(0.5rem, 3dvh, 2.5rem); }
-  .desktop-cloud-feed .read-card-action { margin-top: clamp(0.75rem, 3dvh, 2rem); padding-top: clamp(0.5rem, 1.5dvh, 1rem); padding-bottom: clamp(0.5rem, 1.5dvh, 1rem); }
-  .desktop-cloud-feed .read-card-footer { padding-bottom: clamp(0.5rem, 3dvh, 2.5rem); }
+  .desktop-cloud-feed .read-card-action { padding-top: clamp(0.5rem, 1.5dvh, 1rem); padding-bottom: clamp(0.5rem, 1.5dvh, 1rem); }
 }
 
 .desktop-cloud-feed::-webkit-scrollbar {

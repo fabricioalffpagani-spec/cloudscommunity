@@ -323,6 +323,13 @@ export class CloudMessagesGateway
     broadcaster.emit('cloud:message:new', message);
   }
 
+  broadcastMessagePinned(cloudId: string, messageId: string | null) {
+    this.server.to(this.cloudRoom(cloudId)).emit('cloud:message:pin:changed', {
+      cloudId,
+      messageId,
+    });
+  }
+
   async broadcastMemberBanned(
     cloudId: string,
     bannedUserId: string,

@@ -1,6 +1,42 @@
 import { CloudController } from './cloud.controller';
 
 describe('CloudController', () => {
+  it('broadcasts a Cloud pin only after persistence succeeds', async () => {
+    const cloudService = {
+      pinMessage: jest.fn().mockResolvedValue({ ok: true }),
+      unpinMessage: jest.fn().mockResolvedValue({ ok: true }),
+    };
+    const gateway = { broadcastMessagePinned: jest.fn() };
+    const controller = new CloudController(
+      cloudService as never,
+      {} as never,
+      gateway as never,
+    );
+    const req = { headers: { cookie: '' } } as never;
+
+    await controller.pinMessage('cloud-id', 'message-id', req);
+    expect(cloudService.pinMessage).toHaveBeenCalledWith(
+      null,
+      'cloud-id',
+      'message-id',
+    );
+    expect(gateway.broadcastMessagePinned).toHaveBeenCalledWith(
+      'cloud-id',
+      'message-id',
+    );
+
+    await controller.unpinMessage('cloud-id', 'message-id', req);
+    expect(gateway.broadcastMessagePinned).toHaveBeenCalledWith(
+      'cloud-id',
+      null,
+    );
+
+    cloudService.pinMessage.mockRejectedValueOnce(new Error('denied'));
+    await expect(
+      controller.pinMessage('cloud-id', 'message-id', req),
+    ).rejects.toThrow('denied');
+    expect(gateway.broadcastMessagePinned).toHaveBeenCalledTimes(2);
+  });
   it('returns persisted active participant counts and avatars instead of socket totals', async () => {
     const cloud = {
       id: 'cloud-id',

@@ -36,6 +36,7 @@ type SessionContextValue = {
   status: "loading" | "authenticated" | "anonymous" | "error";
   refresh: () => Promise<void>;
   incrementCloudCount: () => void;
+  decrementCloudCount: () => void;
 };
 
 const SessionUserContext = createContext<SessionContextValue | null>(null);
@@ -50,6 +51,9 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
   const incrementCloudCount = useCallback(() => {
     setUser((current) => current ? { ...current, cloudsCount: (current.cloudsCount ?? 0) + 1 } : current);
+  }, []);
+  const decrementCloudCount = useCallback(() => {
+    setUser((current) => current ? { ...current, cloudsCount: Math.max(0, (current.cloudsCount ?? 0) - 1) } : current);
   }, []);
 
   const refresh = useCallback(async () => {
@@ -102,7 +106,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   }, [refresh]);
 
   return (
-    <SessionUserContext.Provider value={{ user, status, refresh, incrementCloudCount }}>
+    <SessionUserContext.Provider value={{ user, status, refresh, incrementCloudCount, decrementCloudCount }}>
       {children}
     </SessionUserContext.Provider>
   );

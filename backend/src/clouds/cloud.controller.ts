@@ -79,10 +79,14 @@ export class CloudController {
     @Req() req: Request,
     @Query('take') take?: string,
     @Query('before') before?: string,
+    @Query('after') after?: string,
+    @Query('fromStart') fromStart?: string,
   ) {
     return this.cloudService.getArchivedMessages(extractSessionToken(req), id, {
       take: take ? Number(take) : undefined,
       before: before || undefined,
+      after: after || undefined,
+      fromStart: fromStart === 'true',
     });
   }
 
@@ -354,11 +358,13 @@ export class CloudController {
     @Param('messageId') messageId: string,
     @Req() req: Request,
   ) {
-    return this.cloudService.pinMessage(
+    const result = await this.cloudService.pinMessage(
       extractSessionToken(req),
       id,
       messageId,
     );
+    this.cloudMessagesGateway.broadcastMessagePinned(id, messageId);
+    return result;
   }
 
   @Patch(':id/messages/:messageId/unpin')
@@ -367,11 +373,13 @@ export class CloudController {
     @Param('messageId') messageId: string,
     @Req() req: Request,
   ) {
-    return this.cloudService.unpinMessage(
+    const result = await this.cloudService.unpinMessage(
       extractSessionToken(req),
       id,
       messageId,
     );
+    this.cloudMessagesGateway.broadcastMessagePinned(id, null);
+    return result;
   }
 
   @Post(':id/pin-message')
@@ -380,11 +388,13 @@ export class CloudController {
     @Body() body: { messageId: string },
     @Req() req: Request,
   ) {
-    return this.cloudService.pinMessage(
+    const result = await this.cloudService.pinMessage(
       extractSessionToken(req),
       id,
       body.messageId,
     );
+    this.cloudMessagesGateway.broadcastMessagePinned(id, body.messageId);
+    return result;
   }
 
   @Post(':id/unpin-message')
@@ -393,11 +403,13 @@ export class CloudController {
     @Body() body: { messageId: string },
     @Req() req: Request,
   ) {
-    return this.cloudService.unpinMessage(
+    const result = await this.cloudService.unpinMessage(
       extractSessionToken(req),
       id,
       body.messageId,
     );
+    this.cloudMessagesGateway.broadcastMessagePinned(id, null);
+    return result;
   }
 
   @Patch(':id/messages/:messageId')
