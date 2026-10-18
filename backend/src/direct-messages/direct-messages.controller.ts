@@ -124,6 +124,34 @@ export class DirectMessagesController {
     return { ok: true as const };
   }
 
+  @Patch('conversations/:conversationId/messages/:messageId/pin')
+  async setMessagePinned(
+    @Req() req: Request,
+    @Param('conversationId') conversationId: string,
+    @Param('messageId') messageId: string,
+    @Body() body: Record<string, unknown> = {},
+  ) {
+    const session = await this.authService.resolveSession(
+      extractSessionToken(req),
+    );
+    if (!session) {
+      return { ok: false as const, message: 'Sessão não encontrada.' };
+    }
+    const message = await this.directMessagesService.setMessagePinned(
+      session.user.id,
+      conversationId,
+      messageId,
+      body.pinned === true,
+    );
+    await this.directMessagesGateway.broadcastMessagePinned(
+      session.user.id,
+      conversationId,
+      message.id,
+      message.isPinned,
+    );
+    return { ok: true as const, message };
+  }
+
   @Post('conversations')
   async createOrResolveConversation(
     @Req() req: Request,
@@ -272,6 +300,7 @@ export class DirectMessagesController {
             ? Number(body.durationMs)
             : undefined,
         forwarded: body.forwarded === true || body.forwarded === 'true',
+        forwardedOrigin: body.forwardedOrigin === 'cloud' ? 'cloud' : undefined,
       },
       file as MulterFile,
     );
@@ -325,6 +354,7 @@ export class DirectMessagesController {
             ? body.replyToMessageId
             : undefined,
         forwarded: body.forwarded === true || body.forwarded === 'true',
+        forwardedOrigin: body.forwardedOrigin === 'cloud' ? 'cloud' : undefined,
       },
       file as MulterFile,
     );

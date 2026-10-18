@@ -373,9 +373,7 @@ export class CloudService {
 
     const clouds = await this.prisma.cloud.findMany({
       where,
-      // Read only displays author data, the first few participant avatars and
-      // message/participant totals. Avoid loading every historic membership
-      // record (which grows quickly for popular Clouds).
+      // Read exposes the complete participant list, matching Talk's sheet.
       select: {
         id: true,
         title: true,
@@ -391,12 +389,17 @@ export class CloudService {
         members: {
           where: { leftAt: null },
           orderBy: { joinedAt: 'asc' },
-          take: 8,
           select: {
             user: {
               select: {
                 id: true,
-                profile: { select: { displayName: true, avatarUrl: true } },
+                profile: {
+                  select: {
+                    displayName: true,
+                    username: true,
+                    avatarUrl: true,
+                  },
+                },
               },
             },
           },
@@ -431,6 +434,7 @@ export class CloudService {
                 {
                   id: member.user.id,
                   name: profile.displayName,
+                  username: profile.username,
                   avatarUrl: profile.avatarUrl,
                 },
               ]
@@ -522,6 +526,8 @@ export class CloudService {
       });
 
     const before = query.before ? new Date(query.before) : null;
+    const after = query.after ? new Date(query.after) : null;
+    const fromStart = Boolean(query.fromStart || after);
     const messages = await this.prisma.cloudMessage.findMany({
       where: {
         cloudId,
@@ -529,15 +535,20 @@ export class CloudService {
         ...(before && !Number.isNaN(before.getTime())
           ? { createdAt: { lt: before } }
           : {}),
+        ...(after && !Number.isNaN(after.getTime())
+          ? { createdAt: { gt: after } }
+          : {}),
       },
       include: this.messageInclude(),
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: fromStart ? 'asc' : 'desc' },
       take: this.normalizeTake(query.take),
     });
     return {
       ok: true,
       cloud: this.mapCloud(cloud),
-      messages: messages.reverse().map((message) => this.mapMessage(message)),
+      messages: (fromStart ? messages : messages.reverse()).map((message) =>
+        this.mapMessage(message),
+      ),
     };
   }
 
@@ -1683,23 +1694,25 @@ export class CloudService {
       });
     }
 
-    // Desfixar qualquer mensagem já fixada nesta cloud
-    await this.prisma.cloudMessage.updateMany({
-      where: {
-        cloudId,
-        isPinned: true,
-        id: { not: messageId },
-      },
-      data: {
-        isPinned: false,
-      },
+    // A mudança de fixação não é uma edição do conteúdo. Preserve updatedAt,
+    // usado pelo cliente para indicar quando uma mensagem foi editada.
+    const previouslyPinned = await this.prisma.cloudMessage.findMany({
+      where: { cloudId, isPinned: true, id: { not: messageId } },
+      select: { id: true, updatedAt: true },
     });
+    for (const pinned of previouslyPinned) {
+      await this.prisma.cloudMessage.update({
+        where: { id: pinned.id },
+        data: { isPinned: false, updatedAt: pinned.updatedAt },
+      });
+    }
 
     // Fixar a nova mensagem
     await this.prisma.cloudMessage.update({
       where: { id: messageId },
       data: {
         isPinned: true,
+        updatedAt: message.updatedAt,
       },
     });
 
@@ -1771,6 +1784,7 @@ export class CloudService {
       where: { id: messageId },
       data: {
         isPinned: false,
+        updatedAt: message.updatedAt,
       },
     });
 
@@ -2059,7 +2073,11 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     query: ListCloudMessagesQuery = {},
-  ): Promise<{ ok: true; messages: CloudMessagePayload[] }> {
+  ): Promise<{
+    ok: true;
+    messages: CloudMessagePayload[];
+    pinnedMessage: CloudMessagePayload | null;
+  }> {
     const current = await this.authService.resolveSession(token);
     if (current) {
       await this.requireCloudAccess(cloudId, current.user.id);
@@ -2087,9 +2105,15 @@ export class CloudService {
       take,
     });
 
+    const pinnedMessage = await this.prisma.cloudMessage.findFirst({
+      where: { cloudId, deletedAt: null, isPinned: true },
+      include: this.messageInclude(),
+    });
+
     return {
       ok: true,
       messages: messages.reverse().map((message) => this.mapMessage(message)),
+      pinnedMessage: pinnedMessage ? this.mapMessage(pinnedMessage) : null,
     };
   }
 
@@ -2770,6 +2794,7 @@ export class CloudService {
         : [],
       mediaUrl: message.mediaUrl,
       isSticker: message.isSticker,
+      isPinned: message.isPinned,
       clientMessageId,
       replyToMessageId: message.replyToMessageId,
       createdAt: message.createdAt.toISOString(),

@@ -318,12 +318,12 @@ function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onR
   const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
   const visibleParticipants = participants.slice(0, 3);
   return (
-    <article className={`cloud-card relative flex min-h-[180px] w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${menuOpen ? "z-30" : "z-0"}`}>
+    <article className={`cloud-card relative flex min-h-[180px] min-w-0 w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${menuOpen ? "z-30" : "z-0"}`}>
       <div className="flex items-center justify-between gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">{authorAvatarUrl ? <img src={authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : cloud.title.slice(0, 1).toUpperCase()}</span>
         <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
       </div>
-      <MobileCloudEntryLink href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 lang="pt-BR" className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></MobileCloudEntryLink>
+      <MobileCloudEntryLink href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="flex min-w-0 flex-1 items-center justify-center py-5 text-center"><h3 lang="pt-BR" className={`min-w-0 break-words [overflow-wrap:anywhere] hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></MobileCloudEntryLink>
       <p className="text-center text-[11px] text-white/50">{statusLabel} {statusDetail}</p>
       {detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="sticky top-0 z-10 flex items-center justify-between gap-4 bg-[#15161C]"><h2 className="text-[18px] font-bold">Informações da Cloud</h2><button type="button" aria-label="Fechar informações" onClick={() => setDetailsOpen(false)} className="shrink-0 p-1 text-xl text-white/50">×</button></div><div className="mt-4 min-w-0 space-y-2 text-[14px] text-white/70"><p><span className="text-white/40">Duração: </span>{cloud.duration}</p><p><span className="text-white/40">Participantes: </span>{cloud.participantProfiles?.length ?? 0}</p><p><span className="text-white/40">Comentários: </span>{cloud.messagesCount ?? 0}</p><p><span className="text-white/40">Status: </span>{statusLabel}</p><p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><span className="text-white/40">Descrição: </span>{cloud.description?.trim() || "Sem descrição."}</p></div></div></div>}
       {reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="flex items-center justify-between gap-4"><h2 className="text-[18px] font-bold">Denunciar Cloud</h2><button type="button" onClick={() => setReportOpen(false)} className="text-xl text-white/50">×</button></div><p className="mt-2 text-[13px] leading-relaxed text-white/60">Selecione os motivos. A denúncia será encaminhada para cloudscomunidade@gmail.com.</p><div className="mt-4 space-y-2">{CLOUD_REPORT_REASONS.map((reason) => <label key={reason} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] text-white/80"><input type="checkbox" checked={reportReasons.includes(reason)} onChange={() => setReportReasons((current) => current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason])} className="h-4 w-4 accent-[#A855F7]" />{reason}</label>)}</div>{reportError && <p role="alert" className="mt-3 text-[13px] text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setReportOpen(false)} className="rounded-full px-4 py-2 text-[13px] text-white/70">Cancelar</button><button type="button" disabled={reportReasons.length === 0 || reporting} onClick={() => void sendReport()} className="rounded-full bg-red-500 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}
@@ -332,7 +332,7 @@ function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onR
 }
 
 export default function ProfilePage() {
-  const { user, status, refresh } = useSessionUser();
+  const { user, status, refresh, decrementCloudCount } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
   const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended">("all");
@@ -377,7 +377,7 @@ export default function ProfilePage() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user?.id) {
       return;
     }
 
@@ -407,13 +407,10 @@ export default function ProfilePage() {
     };
 
     void loadClouds();
-    const refreshTimer = window.setInterval(() => void loadClouds(false), 10_000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(refreshTimer);
     };
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -485,7 +482,9 @@ export default function ProfilePage() {
       const payload = await response.json().catch(() => null) as { message?: string } | null;
       if (!response.ok) throw new Error(payload?.message ?? "Não foi possível excluir a cloud.");
       setClouds((current) => current.filter((cloud) => cloud.id !== cloudToDelete.id));
+      decrementCloudCount();
       setCloudToDelete(null);
+      void refresh();
     } catch (error) {
       setDeleteCloudError(error instanceof Error ? error.message : "Não foi possível excluir a cloud.");
     } finally {
@@ -693,7 +692,7 @@ export default function ProfilePage() {
               Carregando suas clouds...
             </div>
           ) : filteredClouds.length > 0 ? (
-            <div className="grid gap-3">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
               {filteredClouds.map((cloud) => (
                 <ProfileCloudCard key={cloud.id} cloud={cloud} now={now} viewerId={user?.id} authorAvatarUrl={user?.avatarUrl} onReminderActivated={setQueueCloud} onDelete={(endedCloud) => { setDeleteCloudError(""); setCloudToDelete(endedCloud); }} />
               ))}

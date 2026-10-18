@@ -41,6 +41,45 @@ function createPrismaMock() {
 }
 
 describe('DirectMessagesService', () => {
+  it('persists a pin only for a message in an accessible conversation', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: 'message-1' });
+    const update = jest
+      .fn()
+      .mockResolvedValue({ id: 'message-1', isPinned: true });
+    const service = new DirectMessagesService(
+      { directMessage: { findFirst, update } } as unknown as PrismaService,
+      {} as never,
+    );
+    const requireAccess = jest.fn().mockResolvedValue({});
+    Reflect.set(service, 'requireConversationAccess', requireAccess);
+    Reflect.set(service, 'mapMessage', (message: unknown) => message);
+
+    await expect(
+      service.setMessagePinned('user-1', 'conversation-1', 'message-1', true),
+    ).resolves.toEqual({ id: 'message-1', isPinned: true });
+    expect(requireAccess).toHaveBeenCalledWith('conversation-1', 'user-1');
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'message-1',
+          conversationId: 'conversation-1',
+          deletedAt: null,
+        },
+      }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'message-1' },
+        data: { isPinned: true },
+      }),
+    );
+
+    findFirst.mockResolvedValueOnce(null);
+    await expect(
+      service.setMessagePinned('user-1', 'conversation-1', 'missing', false),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(update).toHaveBeenCalledTimes(1);
+  });
   it('sends message push without adding an activity-bell notification', async () => {
     const send = jest.fn().mockResolvedValue(undefined);
     const notificationCreate = jest.fn();

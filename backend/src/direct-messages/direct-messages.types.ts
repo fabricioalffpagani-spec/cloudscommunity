@@ -35,6 +35,7 @@ export type DirectMessagePayload = {
   replyToMessageId: string | null;
   readAt: string | null;
   editedAt: string | null;
+  isPinned: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -103,6 +104,7 @@ export type SendAudioMessageInput = {
   replyToMessageId?: string;
   durationMs?: number | null;
   forwarded?: boolean;
+  forwardedOrigin?: 'cloud';
 };
 
 export type SendImageMessageInput = {
@@ -110,6 +112,7 @@ export type SendImageMessageInput = {
   clientMessageId?: string;
   replyToMessageId?: string;
   forwarded?: boolean;
+  forwardedOrigin?: 'cloud';
 };
 
 export type SendLinkMessageInput = {

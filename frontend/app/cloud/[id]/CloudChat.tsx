@@ -9,10 +9,11 @@ import { socketAuth } from "../../lib/socket-auth";
 import { FlameIcon } from "../../components/FlameIcon";
 import { CloudTitleMarquee } from "../../components/CloudTitleMarquee";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
-import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, TrashIcon } from "../../components/ui-icons";
+import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, StickerIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { CloudSystemMessage } from "../../components/CloudSystemMessage";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
+import { MessageMenuPortal } from "../../components/MessageMenuPortal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
 import { buildMentionCandidates } from "../../lib/mention-candidates";
@@ -96,6 +97,7 @@ type CloudMessagePayload = {
   mentions: CloudMention[];
   mediaUrl: string | null;
   isSticker: boolean;
+  isPinned: boolean;
   clientMessageId: string | null;
   replyToMessageId: string | null;
   createdAt: string;
@@ -161,6 +163,7 @@ type ChatMessage = {
   mentions?: CloudMention[];
   mediaUrl: string | null;
   isSticker?: boolean;
+  isPinned?: boolean;
   replyTo: {
     id: string;
     sender: string;
@@ -444,6 +447,7 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     mentions: payload.mentions || [],
     mediaUrl: payload.mediaUrl,
     isSticker: payload.isSticker,
+    isPinned: payload.isPinned,
     replyTo: payload.replyTo,
     reactions: payload.reactions || [],
     time: timeLabel(payload.createdAt),
@@ -908,10 +912,8 @@ function CloudReplyIcon() {
 
 function CloudMsgMenu({
   msg,
-  isRight,
   isCloudAuthor,
   isPinned,
-  openUpward,
   onPin,
   onForward,
   onEdit,
@@ -923,10 +925,8 @@ function CloudMsgMenu({
   onClose,
 }: {
   msg: ChatMessage;
-  isRight: boolean;
   isCloudAuthor: boolean;
   isPinned: boolean;
-  openUpward: boolean;
   onPin: (msg: ChatMessage) => void;
   onForward: (msg: ChatMessage) => void;
   onEdit: (msg: ChatMessage) => void;
@@ -940,7 +940,7 @@ function CloudMsgMenu({
   const [copied, setCopied] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
-  const isOwn = isRight;
+  const isOwn = msg.side === "right";
 
 
   const textContent = msg.kind === "text" ? msg.content : null;
@@ -1040,8 +1040,7 @@ function CloudMsgMenu({
   return (
     <div
       data-message-menu="true"
-      className={`absolute z-50 min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60 ${isRight ? "right-0" : "left-0"}`}
-      style={openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }}
+      className="min-w-[168px] rounded-2xl border border-white/[0.08] bg-[#15161C] py-1 shadow-2xl shadow-black/60"
     >
       {!msg.pending && <div className="flex gap-1 border-b border-white/[0.06] px-3 py-2">
         {["❤️", "😂", "😮", "😢", "👍", "🔥"].map((emoji) => <button key={emoji} type="button" onClick={() => { onReact(msg.id, emoji); onClose(); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-[17px] transition hover:bg-white/[0.08]" aria-label={`Reagir com ${emoji}`}>{emoji}</button>)}
@@ -1425,8 +1424,8 @@ function CloudMessageBubble({
   const own = msg.side === "right";
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [msgMenuOpen, setMsgMenuOpen] = useState(false);
-  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
   const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const menuPortalRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressStartRef = useRef<{ x: number; y: number } | null>(null);
   const replySwipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -1444,7 +1443,7 @@ function CloudMessageBubble({
   useEffect(() => {
     if (!msgMenuOpen) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!menuAnchorRef.current?.contains(event.target as Node)) setMsgMenuOpen(false);
+      if (!menuAnchorRef.current?.contains(event.target as Node) && !menuPortalRef.current?.contains(event.target as Node)) setMsgMenuOpen(false);
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") setMsgMenuOpen(false);
@@ -1472,10 +1471,6 @@ function CloudMessageBubble({
   }, [msg.reactions]);
 
   function openMsgMenu() {
-    if (menuAnchorRef.current) {
-      const rect = menuAnchorRef.current.getBoundingClientRect();
-      setMenuOpenUpward(window.innerHeight - rect.bottom < 220);
-    }
     setMsgMenuOpen(true);
     document.dispatchEvent(new CustomEvent("clouds:message-menu-open", { detail: msg.id }));
   }
@@ -1534,7 +1529,7 @@ function CloudMessageBubble({
       onPointerMove={handleMessagePointerMove}
       onPointerUp={handleMessagePointerEnd}
       onPointerCancel={() => { replySwipeStartRef.current = null; cancelLongPress(); }}
-      onClickCapture={(event) => { if (openedByLongPressRef.current) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
+      onClickCapture={(event) => { if (openedByLongPressRef.current && !(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); event.stopPropagation(); openedByLongPressRef.current = false; } }}
       onContextMenu={(event) => { if (!(event.target instanceof Element && event.target.closest("[data-message-menu]"))) { event.preventDefault(); openMsgMenu(); } }}
     >
       {/* Avatar — mb compensa a action row abaixo do bubble para alinhar ao fundo do balão */}
@@ -1602,7 +1597,7 @@ function CloudMessageBubble({
               {own && !msg.pending && <MessageReceipt />}
             </div>}
             <div ref={menuAnchorRef} className="relative">
-              {msgMenuOpen && <CloudMsgMenu msg={msg} isRight={own} isCloudAuthor={isCloudAuthor} isPinned={isPinned} openUpward={menuOpenUpward} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReact={onReact} onView={onView} onClose={closeMsgMenu} />}
+              {msgMenuOpen && <MessageMenuPortal anchorRef={menuAnchorRef} menuRef={menuPortalRef} alignRight={own}><CloudMsgMenu msg={msg} isCloudAuthor={isCloudAuthor} isPinned={isPinned} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReact={onReact} onView={onView} onClose={closeMsgMenu} /></MessageMenuPortal>}
             </div>
           </div>
         </div>
@@ -1706,6 +1701,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [imageFormatOpen, setImageFormatOpen] = useState(false);
   const [savedStickers, setSavedStickers] = useState<Array<{ id: string; mediaUrl: string }>>([]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -1739,6 +1735,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [banConfirmOpen, setBanConfirmOpen] = useState(false);
   const [banConfirmUsername, setBanConfirmUsername] = useState("");
   const [pinnedMessageId, setPinnedMessageId] = useState<string | null>(null);
+  const [pinnedMessage, setPinnedMessage] = useState<ChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -1850,11 +1847,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     setLoadingMessages(true);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages?take=${MESSAGE_LIMIT}`, { cache: "no-store" });
-      const payload = await readJson<{ ok: true; messages: CloudMessagePayload[] }>(response);
+      const payload = await readJson<{ ok: true; messages: CloudMessagePayload[]; pinnedMessage: CloudMessagePayload | null }>(response);
       // An older initial request can finish after the join notification was
       // created. Only the latest response may replace the conversation.
       if (requestId === messagesLoadRequestRef.current) {
         setMessages(payload.messages.map((message) => normalizeMessage(message, user?.id)));
+        const pinned = payload.pinnedMessage ? normalizeMessage(payload.pinnedMessage, user?.id) : null;
+        setPinnedMessage(pinned);
+        setPinnedMessageId(pinned?.id ?? null);
       }
     } catch {
       // silently ignore message load errors — cloud still functional
@@ -2095,6 +2095,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const minimizeCloud = useCallback(() => {
     minimizingRef.current = true;
+    // Minimizar escolhe o dock integrado; a janela externa tem ação própria.
+    window.localStorage.removeItem("clouds:mini-cloud-popout");
     window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
     if (window.history.length > 1) {
@@ -2149,6 +2151,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
     socket.on("cloud:message:new", (message: CloudMessagePayload) => {
       setMessages((prev) => mergeMessage(prev, normalizeMessage(message, user?.id)));
+    });
+
+    socket.on("cloud:message:pin:changed", (payload: { cloudId: string }) => {
+      if (payload.cloudId === cloudId) void loadMessages();
     });
 
     socket.on("cloud:reaction:changed", (payload: { cloudId: string; messageId: string; reaction: ReactionPayload; removed: boolean }) => {
@@ -2251,7 +2257,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [cloudId, joinCloud, router, status, user?.id]);
+  }, [cloudId, joinCloud, loadMessages, router, status, user?.id]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -2691,9 +2697,27 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
   };
 
-  const handlePin = useCallback((msg: ChatMessage) => {
-    setPinnedMessageId((prev) => prev === msg.id ? null : msg.id);
-  }, []);
+  const handlePin = useCallback(async (msg: ChatMessage) => {
+    if (!isCloudAuthor || msg.pending) return;
+    const previousId = pinnedMessageId;
+    const previousMessage = pinnedMessage;
+    const unpin = previousId === msg.id;
+    setPinnedMessageId(unpin ? null : msg.id);
+    setPinnedMessage(unpin ? null : msg);
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msg.id)}/${unpin ? "unpin" : "pin"}`, { method: "PATCH" });
+      if (!response.ok) throw new Error("Pin request failed");
+      await loadMessages();
+    } catch {
+      setPinnedMessageId(previousId);
+      setPinnedMessage(previousMessage);
+      setError("Não foi possível atualizar a mensagem fixada.");
+    }
+  }, [cloudId, isCloudAuthor, loadMessages, pinnedMessage, pinnedMessageId]);
+
+  const handleUnpinPinned = useCallback(() => {
+    if (pinnedMessage) void handlePin(pinnedMessage);
+  }, [handlePin, pinnedMessage]);
 
   const handleReply = useCallback((msg: ChatMessage) => {
     setEditingMsg(null);
@@ -2710,8 +2734,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     setDiscardAudioConfirmationOpen(false);
   }, [audioRecorder]);
 
-  const handleForwardMsg = useCallback((_msg: ChatMessage) => {
-    setShareOpen(true);
+  const handleForwardMsg = useCallback((msg: ChatMessage) => {
+    setForwardMessage(msg);
   }, []);
 
   const handleEditMsg = useCallback((msg: ChatMessage) => {
@@ -2754,6 +2778,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     setMessages((prev) => prev.filter((message) => message.id !== msg.id));
     if (pinnedMessageId === msg.id) {
       setPinnedMessageId(null);
+      setPinnedMessage(null);
     }
     if (msg.pending) {
       return;
@@ -3091,7 +3116,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       {stickerSaveNotice && <div role="status" className="fixed left-1/2 top-5 z-[100] -translate-x-1/2 rounded-full border border-emerald-300/25 bg-emerald-950/95 px-4 py-2 text-[13px] font-semibold text-emerald-100 shadow-xl">{stickerSaveNotice}</div>}
 
       {pinnedMessageId && (() => {
-        const pinned = messages.find((m) => m.id === pinnedMessageId);
+        const pinned = pinnedMessage;
         if (!pinned) return null;
         return (
           <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.07] bg-[#1a0e3d]/60 px-5 py-2">
@@ -3101,7 +3126,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
               <p className="truncate text-[13px] text-white/70">{pinned.content || "Mídia"}</p>
             </div>
             {isCloudAuthor && (
-              <button type="button" onClick={() => setPinnedMessageId(null)} className="text-white/40 transition hover:text-white">×</button>
+              <button type="button" onClick={handleUnpinPinned} className="text-white/40 transition hover:text-white">×</button>
             )}
           </div>
         );
@@ -3295,7 +3320,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   <div data-cloud-emoji-picker="true" className="absolute bottom-[calc(100%+8px)] left-1/2 z-10 w-[calc(100vw-2rem)] max-w-[600px] -translate-x-1/2 overflow-hidden rounded-[22px] border border-white/10 bg-[#11141F] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
                     <div role="tablist" aria-label="Tipo de conteúdo" className="mx-3 mt-3 grid grid-cols-2 rounded-xl border border-white/[0.10] bg-black/20 p-1">
                       <button type="button" role="tab" aria-selected={mediaPickerTab === "emoji"} onClick={() => setMediaPickerTab("emoji")} className={`rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "emoji" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}>😊 Emojis</button>
-                      <button type="button" role="tab" aria-selected={mediaPickerTab === "sticker"} onClick={() => setMediaPickerTab("sticker")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "sticker" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}><svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10a6 6 0 0 1 6-6h5a5 5 0 0 1 5 5v4a7 7 0 0 1-7 7h-3a6 6 0 0 1-6-6v-4Z"/><path d="M14 20a6 6 0 0 1 6-6"/><path d="m14 20 6-6"/></svg>Figurinhas</button>
+                      <button type="button" role="tab" aria-selected={mediaPickerTab === "sticker"} onClick={() => setMediaPickerTab("sticker")} className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${mediaPickerTab === "sticker" ? "bg-white/[0.12] text-white" : "text-white/45 hover:text-white"}`}><StickerIcon />Figurinhas</button>
                     </div>
                     {mediaPickerTab === "emoji" && <div aria-label="Categorias de emojis" className="flex gap-1 overflow-x-auto border-b border-white/[0.07] px-2 pt-2 pb-0 scrollbar-none">
                       {EMOJI_CATEGORIES.map((cat, index) => <button key={cat.label} type="button" onClick={() => setEmojiCategory(index)} title={cat.label} aria-label={cat.label} className={`shrink-0 rounded-t-xl px-3 py-2 text-[18px] transition ${index === emojiCategory ? "bg-white/[0.08]" : "opacity-50 hover:opacity-100"}`}>{cat.icon}</button>)}
@@ -3318,6 +3343,23 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       {shareOpen && (
         <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} externalShareText={externalShareText} onClose={() => setShareOpen(false)} />
+      )}
+      {forwardMessage && (
+        <ForwardToContactModal
+          title="Encaminhar mensagem"
+          preview={forwardMessage.kind === "text" ? forwardMessage.content : forwardMessage.kind === "audio" ? "Mensagem de áudio" : forwardMessage.kind === "image" ? "Imagem" : forwardMessage.content}
+          url={shareLink}
+          label={forwardMessage.content || "Mensagem da Cloud"}
+          messageContent={forwardMessage.kind === "text" || forwardMessage.kind === "link" ? forwardMessage.content : undefined}
+          mediaKind={forwardMessage.kind === "audio" || forwardMessage.kind === "image" ? forwardMessage.kind : undefined}
+          mediaUrl={forwardMessage.mediaUrl}
+          mediaDurationMs={forwardMessage.audioDurationMs}
+          mediaFileName={forwardMessage.isSticker ? "figurinha.webp" : undefined}
+          forwardedOrigin="cloud"
+          contacts={contacts}
+          loading={loadingContacts}
+          onClose={() => setForwardMessage(null)}
+        />
       )}
 
       {guestSignupOpen && <GuestCloudSignupModal cloudTitle={cloud?.title || "esta cloud"} returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestSignupOpen(false)} />}

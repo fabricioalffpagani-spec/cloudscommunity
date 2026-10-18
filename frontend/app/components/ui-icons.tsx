@@ -5,6 +5,16 @@ type IconProps = {
   className?: string;
 };
 
+export function StickerIcon({ s = 17, className = "" }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+      <path d="M4 10a6 6 0 0 1 6-6h5a5 5 0 0 1 5 5v4a7 7 0 0 1-7 7h-3a6 6 0 0 1-6-6v-4Z" />
+      <path d="M14 20a6 6 0 0 1 6-6" />
+      <path d="m14 20 6-6" />
+    </svg>
+  );
+}
+
 export function SearchIcon({ s = 20, className = "" }: IconProps) {
   return (
     <svg

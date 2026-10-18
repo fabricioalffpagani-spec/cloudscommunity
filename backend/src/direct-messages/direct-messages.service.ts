@@ -536,7 +536,11 @@ export class DirectMessagesService {
           conversationId: input.conversationId,
           senderId: userId,
           type: 'audio',
-          content: input.forwarded ? '↗ Encaminhada' : null,
+          content: input.forwarded
+            ? input.forwardedOrigin === 'cloud'
+              ? '↗ Encaminhada de uma cloud'
+              : '↗ Encaminhada'
+            : null,
           mediaAssetId: mediaAsset.id,
           clientMessageId,
           replyToMessageId,
@@ -655,7 +659,11 @@ export class DirectMessagesService {
           conversationId: input.conversationId,
           senderId: userId,
           type: 'image',
-          content: input.forwarded ? '↗ Encaminhada' : null,
+          content: input.forwarded
+            ? input.forwardedOrigin === 'cloud'
+              ? '↗ Encaminhada de uma cloud'
+              : '↗ Encaminhada'
+            : null,
           mediaAssetId: mediaAsset.id,
           clientMessageId,
           replyToMessageId,
@@ -851,6 +859,28 @@ export class DirectMessagesService {
     });
 
     return this.getConversationById(userId, conversationId);
+  }
+
+  async setMessagePinned(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    pinned: boolean,
+  ): Promise<DirectMessagePayload> {
+    await this.requireConversationAccess(conversationId, userId);
+    const message = await this.prisma.directMessage.findFirst({
+      where: { id: messageId, conversationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!message) {
+      throw new BadRequestException({ message: 'Mensagem não encontrada.' });
+    }
+    const updated = await this.prisma.directMessage.update({
+      where: { id: messageId },
+      data: { isPinned: pinned },
+      include: this.messageInclude(),
+    });
+    return this.mapMessage(updated);
   }
 
   async getConversationById(
@@ -1184,6 +1214,7 @@ export class DirectMessagesService {
       replyToMessageId: message.replyToMessageId,
       readAt: message.readAt?.toISOString() ?? null,
       editedAt: message.editedAt?.toISOString() ?? null,
+      isPinned: message.isPinned,
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt.toISOString(),
       deletedAt: message.deletedAt?.toISOString() ?? null,

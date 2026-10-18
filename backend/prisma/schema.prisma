@@ -582,6 +582,7 @@ model DirectMessage {
   replyToMessageId String?        @db.Uuid
   readAt           DateTime?
   editedAt         DateTime?
+  isPinned         Boolean        @default(false)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   deletedAt        DateTime?
@@ -595,6 +596,7 @@ model DirectMessage {
   lastMessageOfConversation Conversation? @relation("ConversationLastMessage")
 
   @@index([conversationId, createdAt])
+  @@index([conversationId, isPinned])
   @@index([senderId])
   @@index([replyToMessageId])
   @@index([mediaAssetId])
