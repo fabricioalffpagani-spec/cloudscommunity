@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { generalInvitationText } from "../lib/cloud-invitation";
 
 function InviteArrowIcon({ size }: { size: number }) {
   return (
@@ -16,7 +17,7 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
 
   const invite = async () => {
     const url = new URL("/entrenoclouds", window.location.origin).href;
-    const text = "Vem pro Clouds comigo! ☁️\nÉ uma plataforma de conversas públicas ao vivo.\nCriei meu perfil aqui:";
+    const text = generalInvitationText;
     const invitation = `${text}\n${url}`;
     setNotice("");
 

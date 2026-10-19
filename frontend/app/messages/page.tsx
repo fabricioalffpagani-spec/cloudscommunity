@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
+import { parseForwardedContent } from "../lib/forwarded-content";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, StickerIcon, TrashIcon, XIcon } from "../components/ui-icons";
@@ -768,6 +769,15 @@ function Waveform({ active, paused, progress }: { active?: boolean; paused?: boo
   );
 }
 
+function ForwardedHeading({ content }: { content: string }) {
+  const info = parseForwardedContent(content);
+  if (!info.forwarded) return null;
+  return <div className="mb-2 text-[11px] font-medium leading-snug text-white/70">
+    <span className="block">↗ Encaminhada</span>
+    {info.origin ? <span>Da cloud <Link href={`/cloud/${encodeURIComponent(info.origin.id)}`} className="break-words font-semibold text-white" onClick={(event) => event.stopPropagation()}>{info.origin.name}</Link></span> : info.legacyCloud ? <span>De uma cloud</span> : null}
+  </div>;
+}
+
 function AudioMessageBubble({ msg }: { msg: Msg }) {
   const isRight = msg.side === "right";
   const isForwarded = /^(?:↗\s*)?(?:Encaminhada(?: de uma cloud)?|Mensagem encaminhada)$/i.test(msg.content.trim());
@@ -783,7 +793,7 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
     <div className={`flex flex-col ${isForwarded ? "gap-0" : "gap-1"}`}>
       {isForwarded && (
         <div className={`w-[272px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
-          ↗ {forwardedLabel}
+          <ForwardedHeading content={msg.content} />
         </div>
       )}
       <AudioWaveformPlayer
@@ -806,7 +816,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
   const [expanded, setExpanded] = useState(false);
   const isSticker = Boolean(msg.mediaFileName?.startsWith("figurinha"));
 
-  if (isSticker) return msg.mediaUrl ? <img src={msg.mediaUrl} alt="Figurinha enviada" className="mb-4 mt-4 h-36 w-36 object-contain" /> : null;
+  if (isSticker) return msg.mediaUrl ? <div>{isForwarded && <ForwardedHeading content={msg.content} />}<img src={msg.mediaUrl} alt="Figurinha enviada" className="mb-4 mt-4 h-36 w-36 object-contain" /></div> : null;
 
   return (
     <button
@@ -815,7 +825,7 @@ function ImageMessageBubble({ msg }: { msg: Msg }) {
       className={`overflow-hidden rounded-2xl border text-left transition ${isRight ? "rounded-br-[4px] border-[#9333EA]/30 bg-[#9333EA]" : "rounded-bl-[4px] border-white/[0.08] bg-[#1a0e3d]"}`}
       style={{ maxWidth: "320px" }}
     >
-      {isForwarded && <div className="px-3 pb-2 pt-2 text-[9px] font-medium uppercase tracking-[0.12em] text-white/60">↗ {forwardedLabel}</div>}
+      {isForwarded && <div className="px-3 pt-3"><ForwardedHeading content={msg.content} /></div>}
       {msg.mediaUrl ? (
         <img
           src={msg.mediaUrl}
@@ -1224,10 +1234,9 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   const openedByLongPressRef = useRef(false);
 
   const textContent = msg.kind === "text" ? msg.content : null;
-  const forwardedMarkerMatch = textContent?.match(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada(?: de uma cloud)?)\s*)+/);
-  const isForwardedMessage = Boolean(forwardedMarkerMatch);
-  const forwardedLabel = forwardedMarkerMatch && /de uma cloud/i.test(forwardedMarkerMatch[0]) ? "Encaminhada de uma cloud" : "Encaminhada";
-  const visibleTextContent = forwardedMarkerMatch ? textContent?.slice(forwardedMarkerMatch[0].length) ?? "" : textContent;
+  const forwardedInfo = textContent !== null ? parseForwardedContent(textContent) : null;
+  const isForwardedMessage = Boolean(forwardedInfo?.forwarded);
+  const visibleTextContent = forwardedInfo?.text ?? textContent;
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
   const cloudCommentReference = parseCloudCommentReference(textContent);
 
@@ -1361,12 +1370,13 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
             {cloudCommentReference.response && <div className="border-t border-white/20 bg-black/10 px-5 py-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">Resposta</p><p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-white">{cloudCommentReference.response}</p></div>}
           </div>
         ) : (
-          <div className={`relative rounded-2xl px-4 ${isForwardedMessage ? "min-w-[112px] pb-3 pt-6" : "py-3"} text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
-            {isForwardedMessage && <span className="pointer-events-none absolute left-3 top-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-white/40">↗ {forwardedLabel}</span>}
-            <span dangerouslySetInnerHTML={{ __html: highlightedContent || visibleTextContent || "" }} />
+          <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white ${isRight ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            {isForwardedMessage && <ForwardedHeading content={textContent ?? ""} />}
+            <span className="whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: highlightedContent || visibleTextContent || "" }} />
             {msg.pending && !msg.failed && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
           </div>
         )}
+        {isPinned && <span className="px-1 text-[11px] font-medium text-[#D8B4FE]">📌 Mensagem fixada</span>}
         {msg.failed && msg.kind === "text" && <button type="button" onClick={() => onRetry?.(msg)} className="px-1 text-[11px] font-semibold text-red-300 hover:text-red-200">Falha no envio · Tentar novamente</button>}
         {(msg.reactions?.length ?? 0) > 0 && <div className={`flex flex-wrap gap-1 px-1 ${isRight ? "justify-end" : "justify-start"}`}>
           {Object.entries((msg.reactions ?? []).reduce<Record<string, NonNullable<Msg["reactions"]>>>((groups, reaction) => {
@@ -1427,6 +1437,7 @@ function MessagesPageContent() {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Msg[]>>({});
+  const [pinsByConversation, setPinsByConversation] = useState<Record<string, Msg[]>>({});
   const [typingByConversation, setTypingByConversation] = useState<Record<string, boolean>>({});
   const [isLocallyTyping, setIsLocallyTyping] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -1887,7 +1898,11 @@ function MessagesPageContent() {
         setError("Não foi possível carregar as mensagens agora. Tente novamente em instantes.");
         return;
       }
-      const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
+      const payload = await readJson<{ ok: true; messages: BackendMessage[]; pinnedMessages?: BackendMessage[] }>(response);
+      setPinsByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (payload.pinnedMessages ?? []).map((message) => buildMessage(message, user)),
+      }));
       setMessagesByConversation((prev) => ({
         ...prev,
         [conversationId]: (prev[conversationId] ?? []).reduce(
@@ -2087,6 +2102,7 @@ function MessagesPageContent() {
           message.id === payload.messageId ? { ...message, isPinned: payload.isPinned } : message,
         ),
       }));
+      if (activeConversationIdRef.current === payload.conversationId) void loadMessages(payload.conversationId);
     });
 
     socket.on("message:new", (message: BackendMessage) => {
@@ -2138,6 +2154,12 @@ function MessagesPageContent() {
           m.id === mapped.id ? mapped : m
         ),
       }));
+      setPinsByConversation((prev) => ({
+        ...prev,
+        [message.conversationId]: (prev[message.conversationId] ?? []).map((pin) =>
+          pin.id === mapped.id ? mapped : pin,
+        ),
+      }));
     });
 
     socket.on("message:deleted", (payload: { messageId: string }) => {
@@ -2145,6 +2167,13 @@ function MessagesPageContent() {
         const updated: Record<string, Msg[]> = {};
         for (const [convId, msgs] of Object.entries(prev)) {
           updated[convId] = msgs.filter((m) => m.id !== payload.messageId);
+        }
+        return updated;
+      });
+      setPinsByConversation((prev) => {
+        const updated: Record<string, Msg[]> = {};
+        for (const [convId, pins] of Object.entries(prev)) {
+          updated[convId] = pins.filter((message) => message.id !== payload.messageId);
         }
         return updated;
       });
@@ -2358,6 +2387,10 @@ function MessagesPageContent() {
       ...prev,
       [conversationId]: (prev[conversationId] || []).filter((m) => m.id !== msg.id),
     }));
+    setPinsByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] ?? []).filter((pin) => pin.id !== msg.id),
+    }));
 
     try {
       await fetch(
@@ -2436,12 +2469,21 @@ function MessagesPageContent() {
 
   const togglePinnedMessage = useCallback(async (msg: Msg) => {
     const nextPinned = !msg.isPinned;
-    const update = (pinned: boolean) => setMessagesByConversation((current) => ({
-      ...current,
-      [msg.conversationId]: (current[msg.conversationId] ?? []).map((message) =>
-        message.id === msg.id ? { ...message, isPinned: pinned } : message,
-      ),
-    }));
+    const update = (pinned: boolean) => {
+      setMessagesByConversation((current) => ({
+        ...current,
+        [msg.conversationId]: (current[msg.conversationId] ?? []).map((message) =>
+          message.id === msg.id ? { ...message, isPinned: pinned } : message,
+        ),
+      }));
+      setPinsByConversation((current) => {
+        const otherPins = (current[msg.conversationId] ?? []).filter((message) => message.id !== msg.id);
+        return {
+          ...current,
+          [msg.conversationId]: pinned ? [{ ...msg, isPinned: true }, ...otherPins] : otherPins,
+        };
+      });
+    };
     update(nextPinned);
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(msg.conversationId)}/messages/${encodeURIComponent(msg.id)}/pin`, {
@@ -2764,6 +2806,13 @@ function MessagesPageContent() {
           {activeConversation?.blockedByPeer && <div className="border-b border-white/[0.07] bg-[#251545] px-5 py-3 text-center text-[13px] text-[#D8B4FE]">Esta pessoa bloqueou você. Suas novas mensagens não serão entregues.</div>}
           {activeConversation?.blockedByMe && <div className="border-b border-white/[0.07] bg-[#251545] px-5 py-3 text-center text-[13px] text-[#D8B4FE]">Você bloqueou esta pessoa. Desbloqueie-a para voltar a enviar mensagens.</div>}
 
+          {activeConversationId && (pinsByConversation[activeConversationId] ?? []).map((pinned) => (
+            <div key={pinned.id} className="flex items-center gap-3 border-b border-white/[0.07] bg-[#1a0e3d] px-5 py-2">
+              <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#D8B4FE]">Mensagem fixada</p><p className="truncate text-[13px] text-white/80">{pinned.kind === "audio" ? "Áudio" : pinned.kind === "image" ? "Imagem" : parseForwardedContent(pinned.content).text}</p></div>
+              <button type="button" aria-label="Desafixar mensagem" title="Desafixar mensagem" onClick={() => void togglePinnedMessage(pinned)} className="rounded-full px-2 py-1 text-white/70 hover:bg-white/10">×</button>
+            </div>
+          ))}
+
           {messageSearch.trim() && (
             <div className="border-b border-white/[0.07] bg-[#1a0e3d] px-5 py-2 text-[12px] text-white/60">
               {filteredMessages.length === 0 
@@ -3079,7 +3128,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.linkUrl ?? "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.linkUrl ?? "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, cloudOrigin: parseForwardedContent(message.content).origin ?? undefined, forwardedOrigin: parseForwardedContent(message.content).origin ? "cloud" : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
       )}
     </div>
   );
@@ -3101,7 +3150,3 @@ export default function MessagesPage() {
     </Suspense>
   );
 }
-
-
-
-

@@ -240,6 +240,19 @@ export class DirectMessagesService {
     return messages.reverse().map((message) => this.mapMessage(message));
   }
 
+  async listPinnedMessages(
+    userId: string,
+    conversationId: string,
+  ): Promise<DirectMessagePayload[]> {
+    await this.requireConversationAccess(conversationId, userId);
+    const messages = await this.prisma.directMessage.findMany({
+      where: { conversationId, deletedAt: null, isPinned: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: this.messageInclude(),
+    });
+    return messages.map((message) => this.mapMessage(message));
+  }
+
   async toggleReaction(
     userId: string,
     conversationId: string,
@@ -362,7 +375,12 @@ export class DirectMessagesService {
         include: this.messageInclude(),
       });
 
-      const preview = truncatePreview(content);
+      const preview = truncatePreview(
+        content.replace(
+          /^↗\s*Encaminhada \[cloud:[^\]\s]+\](?:\s|$)/i,
+          '↗ Encaminhada ',
+        ),
+      );
       const unreadField =
         conversation.participantOneId === userId
           ? 'participantTwoUnreadCount'
@@ -538,7 +556,9 @@ export class DirectMessagesService {
           type: 'audio',
           content: input.forwarded
             ? input.forwardedOrigin === 'cloud'
-              ? '↗ Encaminhada de uma cloud'
+              ? input.cloudId?.trim() && input.cloudName?.trim()
+                ? `↗ Encaminhada [cloud:${encodeURIComponent(input.cloudId.slice(0, 200))}:${encodeURIComponent(input.cloudName.slice(0, 200))}]`
+                : '↗ Encaminhada de uma cloud'
               : '↗ Encaminhada'
             : null,
           mediaAssetId: mediaAsset.id,
@@ -661,7 +681,9 @@ export class DirectMessagesService {
           type: 'image',
           content: input.forwarded
             ? input.forwardedOrigin === 'cloud'
-              ? '↗ Encaminhada de uma cloud'
+              ? input.cloudId?.trim() && input.cloudName?.trim()
+                ? `↗ Encaminhada [cloud:${encodeURIComponent(input.cloudId.slice(0, 200))}:${encodeURIComponent(input.cloudName.slice(0, 200))}]`
+                : '↗ Encaminhada de uma cloud'
               : '↗ Encaminhada'
             : null,
           mediaAssetId: mediaAsset.id,

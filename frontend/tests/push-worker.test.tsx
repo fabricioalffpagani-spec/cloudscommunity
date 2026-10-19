@@ -132,6 +132,7 @@ describe("push service worker", () => {
     });
 
     expect(worker.showNotification).toHaveBeenCalledTimes(1);
+    expect(worker.showNotification).toHaveBeenCalledWith("Ana: Oi", expect.objectContaining({ icon: "/clouds_icon.png", badge: "/clouds_icon.png" }));
   });
 
   it("shows each direct message when the conversation is not focused", async () => {

@@ -6,6 +6,7 @@ import { ProfileAvatarViewer } from "../../components/ProfileAvatarViewer";
 import { useParams, useRouter } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
+import { HypeCount } from "../../components/HypeCount";
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
@@ -151,7 +152,7 @@ function formatMemberSince(value?: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(date);
 }
 
-function FieldStat({ value, label, description, onClick }: { value: string | number; label: string; description: string; onClick?: () => void }) {
+function FieldStat({ value, label, description, onClick }: { value: React.ReactNode; label: string; description: string; onClick?: () => void }) {
   return (
     <LongPressHint hint={description}>
       <div onClick={onClick} className={`group relative ${onClick ? "cursor-pointer hover:opacity-80 transition" : ""}`}>
@@ -163,13 +164,13 @@ function FieldStat({ value, label, description, onClick }: { value: string | num
   );
 }
 
-function ProfileListRow({ user, actionLabel, onAction, actioning }: { user: FollowListUser; actionLabel?: string; onAction?: () => void; actioning?: boolean }) {
+function ProfileListRow({ user, actionLabel, onAction, actioning, showHypes = true }: { user: FollowListUser; actionLabel?: string; onAction?: () => void; actioning?: boolean; showHypes?: boolean }) {
   return <div className="flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5">
     <Link href={`/users/${user.username}`} className="flex min-w-0 flex-1 items-center gap-3">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] font-bold text-white">{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" /> : user.displayName.charAt(0).toUpperCase()}</div>
       <div className="min-w-0"><p className="truncate font-semibold text-white">{user.displayName}</p><p className="truncate text-sm text-white/50">@{user.username}</p></div>
     </Link>
-    {user.hypesCount !== undefined && <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[#FF7A18]"><FlameIcon s={22} filled /><span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7C3AED] px-1 text-[9px] font-extrabold leading-none text-white">{user.hypesCount}</span></span>}
+    {showHypes && user.hypesCount !== undefined && <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center text-[#FF7A18]"><FlameIcon s={22} filled /><span className="absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7C3AED] px-1 text-[9px] font-extrabold leading-none text-white">{user.hypesCount}</span></span>}
     {actionLabel && onAction && <button type="button" disabled={actioning} onClick={onAction} className="shrink-0 rounded-full border border-white/15 px-3 py-1.5 text-[12px] font-semibold text-white/80 transition hover:border-red-400/60 hover:text-red-300 disabled:opacity-50">{actioning ? "..." : actionLabel}</button>}
   </div>;
 }
@@ -610,7 +611,7 @@ export default function UserProfilePage() {
             <FieldStat value={following} label="Following" description="Perfis que esta pessoa segue." onClick={openFollowingModal} />
             <div className="h-8 w-px bg-white/10" />
             <FieldStat value={cloudsCount} label="Clouds" description="Clouds publicadas por este perfil." />
-            {profile.showHypesCount && <><div className="h-8 w-px bg-white/10" /><FieldStat value={hypesCount} label="Hypes" description={isOwnProfile ? "Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações" : "Total de hypes recebidos em clouds"} onClick={openHypesModal} /></>}
+            {profile.showHypesCount && <><div className="h-8 w-px bg-white/10" /><FieldStat value={<HypeCount count={hypesCount} />} label="Hypes" description={isOwnProfile ? "Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações" : "Total de hypes recebidos em clouds"} onClick={openHypesModal} /></>}
           </div>
 
           <div className="mt-3 flex items-center gap-3 text-[13px] text-white/30">
@@ -713,7 +714,7 @@ export default function UserProfilePage() {
                 <p className="text-center text-white/50 py-4">Nenhum seguidor ainda</p>
               ) : (
                 <div className="space-y-3">
-                  {followersList.map((user) => <ProfileListRow key={user.id} user={user} actionLabel={isOwnProfile ? "Remover seguidor" : undefined} onAction={isOwnProfile ? () => removeFollower(user) : undefined} actioning={actioningUserId === user.id} />)}
+                  {followersList.map((user) => <ProfileListRow key={user.id} user={user} showHypes={false} actionLabel={isOwnProfile ? "Remover seguidor" : undefined} onAction={isOwnProfile ? () => removeFollower(user) : undefined} actioning={actioningUserId === user.id} />)}
                 </div>
               )}
             </div>

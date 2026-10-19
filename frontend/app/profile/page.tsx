@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
+import { HypeCount } from "../components/HypeCount";
 import { LongPressHint } from "../components/LongPressHint";
 import {
   SessionUserAvatar,
@@ -671,7 +672,7 @@ export default function ProfilePage() {
             <div className="h-8 w-px bg-white/10" />
             <LongPressHint hint="Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações">
             <button type="button" onClick={openHypesModal} className="group relative transition hover:opacity-80">
-              <p className="text-[20px] font-bold text-white">{hypesCount}</p>
+              <p className="text-[20px] font-bold text-white"><HypeCount count={hypesCount} /></p>
               <p className="text-[11px] uppercase tracking-widest text-white/40">Hypes</p>
               <span role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-48 -translate-x-1/2 rounded-lg border border-white/10 bg-[#1a0e3d] px-2 py-1.5 text-center text-[11px] leading-snug text-white/80 opacity-0 shadow-xl transition group-hover:opacity-100">Total de hypes recebidos em suas Clouds. Você pode ocultar essa informação do seu perfil nas configurações</span>
             </button>

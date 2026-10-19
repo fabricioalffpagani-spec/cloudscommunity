@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { FlameIcon } from "./FlameIcon";
+import { cloudInvitation, invitationCountdown } from "../lib/cloud-invitation";
 
 export type FeedCloud = {
   id: string;
@@ -48,16 +49,17 @@ function useSiteOrigin() {
   );
 }
 
-function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; onClose: () => void }) {
+function ShareModal({ cloudId, cloudTitle, cloudUrl, createdAt, duration, participants, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; createdAt: Date; duration: string; participants?: number; onClose: () => void }) {
+  const invitation = () => cloudInvitation({ title: cloudTitle, url: cloudUrl, remaining: invitationCountdown(createdAt, duration), participants });
   useEffect(() => { void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" }); }, [cloudId]);
   const shareNatively = async () => {
     if (!navigator.share) {
-      await navigator.clipboard.writeText(cloudUrl);
+      await navigator.clipboard.writeText(invitation());
       onClose();
       return;
     }
     try {
-      await navigator.share({ title: `Clouds — ${cloudTitle}`, text: `Veja esta Cloud: ${cloudTitle}`, url: cloudUrl });
+      await navigator.share({ text: invitation() });
       onClose();
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) return;
@@ -87,7 +89,7 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
             Copiar link
           </button>
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(`Veja esta cloud: ${cloudUrl}`)}`}
+            href={`https://wa.me/?text=${encodeURIComponent(invitation())}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.06] px-4 py-2.5 text-[14px] font-semibold text-white/80 transition hover:bg-white/[0.1]"
@@ -232,7 +234,7 @@ export function CloudFeedCard({ cloud, onHypar, currentUserId }: { cloud: FeedCl
       </div>
 
       {shareOpen && (
-        <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={fullShareUrl} onClose={() => setShareOpen(false)} />
+        <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={fullShareUrl} createdAt={cloud.createdAt} duration={cloud.duration} participants={cloud.liveParticipants} onClose={() => setShareOpen(false)} />
       )}
     </article>
   );
