@@ -240,7 +240,10 @@ export class DirectMessagesService {
     return messages.reverse().map((message) => this.mapMessage(message));
   }
 
-  async listPinnedMessages(userId: string, conversationId: string): Promise<DirectMessagePayload[]> {
+  async listPinnedMessages(
+    userId: string,
+    conversationId: string,
+  ): Promise<DirectMessagePayload[]> {
     await this.requireConversationAccess(conversationId, userId);
     const messages = await this.prisma.directMessage.findMany({
       where: { conversationId, deletedAt: null, isPinned: true },
@@ -372,7 +375,12 @@ export class DirectMessagesService {
         include: this.messageInclude(),
       });
 
-      const preview = truncatePreview(content.replace(/^↗\s*Encaminhada \[cloud:[^\]\s]+\](?:\s|$)/i, '↗ Encaminhada '));
+      const preview = truncatePreview(
+        content.replace(
+          /^↗\s*Encaminhada \[cloud:[^\]\s]+\](?:\s|$)/i,
+          '↗ Encaminhada ',
+        ),
+      );
       const unreadField =
         conversation.participantOneId === userId
           ? 'participantTwoUnreadCount'

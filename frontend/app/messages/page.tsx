@@ -1898,7 +1898,11 @@ function MessagesPageContent() {
         setError("Não foi possível carregar as mensagens agora. Tente novamente em instantes.");
         return;
       }
-      const payload = await readJson<{ ok: true; messages: BackendMessage[] }>(response);
+      const payload = await readJson<{ ok: true; messages: BackendMessage[]; pinnedMessages?: BackendMessage[] }>(response);
+      setPinsByConversation((prev) => ({
+        ...prev,
+        [conversationId]: (payload.pinnedMessages ?? []).map((message) => buildMessage(message, user)),
+      }));
       setMessagesByConversation((prev) => ({
         ...prev,
         [conversationId]: (prev[conversationId] ?? []).reduce(
@@ -2098,6 +2102,7 @@ function MessagesPageContent() {
           message.id === payload.messageId ? { ...message, isPinned: payload.isPinned } : message,
         ),
       }));
+      if (activeConversationIdRef.current === payload.conversationId) void loadMessages(payload.conversationId);
     });
 
     socket.on("message:new", (message: BackendMessage) => {
@@ -2149,6 +2154,12 @@ function MessagesPageContent() {
           m.id === mapped.id ? mapped : m
         ),
       }));
+      setPinsByConversation((prev) => ({
+        ...prev,
+        [message.conversationId]: (prev[message.conversationId] ?? []).map((pin) =>
+          pin.id === mapped.id ? mapped : pin,
+        ),
+      }));
     });
 
     socket.on("message:deleted", (payload: { messageId: string }) => {
@@ -2156,6 +2167,13 @@ function MessagesPageContent() {
         const updated: Record<string, Msg[]> = {};
         for (const [convId, msgs] of Object.entries(prev)) {
           updated[convId] = msgs.filter((m) => m.id !== payload.messageId);
+        }
+        return updated;
+      });
+      setPinsByConversation((prev) => {
+        const updated: Record<string, Msg[]> = {};
+        for (const [convId, pins] of Object.entries(prev)) {
+          updated[convId] = pins.filter((message) => message.id !== payload.messageId);
         }
         return updated;
       });
@@ -2369,6 +2387,10 @@ function MessagesPageContent() {
       ...prev,
       [conversationId]: (prev[conversationId] || []).filter((m) => m.id !== msg.id),
     }));
+    setPinsByConversation((prev) => ({
+      ...prev,
+      [conversationId]: (prev[conversationId] ?? []).filter((pin) => pin.id !== msg.id),
+    }));
 
     try {
       await fetch(
@@ -2447,12 +2469,21 @@ function MessagesPageContent() {
 
   const togglePinnedMessage = useCallback(async (msg: Msg) => {
     const nextPinned = !msg.isPinned;
-    const update = (pinned: boolean) => setMessagesByConversation((current) => ({
-      ...current,
-      [msg.conversationId]: (current[msg.conversationId] ?? []).map((message) =>
-        message.id === msg.id ? { ...message, isPinned: pinned } : message,
-      ),
-    }));
+    const update = (pinned: boolean) => {
+      setMessagesByConversation((current) => ({
+        ...current,
+        [msg.conversationId]: (current[msg.conversationId] ?? []).map((message) =>
+          message.id === msg.id ? { ...message, isPinned: pinned } : message,
+        ),
+      }));
+      setPinsByConversation((current) => {
+        const otherPins = (current[msg.conversationId] ?? []).filter((message) => message.id !== msg.id);
+        return {
+          ...current,
+          [msg.conversationId]: pinned ? [{ ...msg, isPinned: true }, ...otherPins] : otherPins,
+        };
+      });
+    };
     update(nextPinned);
     try {
       const response = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(msg.conversationId)}/messages/${encodeURIComponent(msg.id)}/pin`, {

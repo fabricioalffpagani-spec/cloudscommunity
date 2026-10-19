@@ -50,11 +50,19 @@ describe('DirectMessagesService', () => {
     const requireAccess = jest.fn().mockResolvedValue({});
     Reflect.set(service, 'requireConversationAccess', requireAccess);
     Reflect.set(service, 'mapMessage', (message: unknown) => message);
-    await expect(service.listPinnedMessages('user-1', 'conversation-1')).resolves.toEqual([{ id: 'old-pin' }]);
+    await expect(
+      service.listPinnedMessages('user-1', 'conversation-1'),
+    ).resolves.toEqual([{ id: 'old-pin' }]);
     expect(requireAccess).toHaveBeenCalledWith('conversation-1', 'user-1');
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { conversationId: 'conversation-1', deletedAt: null, isPinned: true },
-    }));
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          conversationId: 'conversation-1',
+          deletedAt: null,
+          isPinned: true,
+        },
+      }),
+    );
   });
   it('persists a pin only for a message in an accessible conversation', async () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'message-1' });

@@ -93,7 +93,10 @@ export class DirectMessagesController {
 
     return {
       ok: true as const,
-      pinnedMessages: await this.directMessagesService.listPinnedMessages(session.user.id, conversationId),
+      pinnedMessages: await this.directMessagesService.listPinnedMessages(
+        session.user.id,
+        conversationId,
+      ),
       messages: await this.directMessagesService.listMessages(
         session.user.id,
         conversationId,
@@ -303,7 +306,8 @@ export class DirectMessagesController {
         forwarded: body.forwarded === true || body.forwarded === 'true',
         forwardedOrigin: body.forwardedOrigin === 'cloud' ? 'cloud' : undefined,
         cloudId: typeof body.cloudId === 'string' ? body.cloudId : undefined,
-        cloudName: typeof body.cloudName === 'string' ? body.cloudName : undefined,
+        cloudName:
+          typeof body.cloudName === 'string' ? body.cloudName : undefined,
       },
       file as MulterFile,
     );
@@ -359,7 +363,8 @@ export class DirectMessagesController {
         forwarded: body.forwarded === true || body.forwarded === 'true',
         forwardedOrigin: body.forwardedOrigin === 'cloud' ? 'cloud' : undefined,
         cloudId: typeof body.cloudId === 'string' ? body.cloudId : undefined,
-        cloudName: typeof body.cloudName === 'string' ? body.cloudName : undefined,
+        cloudName:
+          typeof body.cloudName === 'string' ? body.cloudName : undefined,
       },
       file as MulterFile,
     );
