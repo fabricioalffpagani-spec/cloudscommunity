@@ -105,6 +105,8 @@ export type SendAudioMessageInput = {
   durationMs?: number | null;
   forwarded?: boolean;
   forwardedOrigin?: 'cloud';
+  cloudId?: string;
+  cloudName?: string;
 };
 
 export type SendImageMessageInput = {
@@ -113,6 +115,8 @@ export type SendImageMessageInput = {
   replyToMessageId?: string;
   forwarded?: boolean;
   forwardedOrigin?: 'cloud';
+  cloudId?: string;
+  cloudName?: string;
 };
 
 export type SendLinkMessageInput = {

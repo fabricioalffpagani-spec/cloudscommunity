@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cloudForwardMarker, parseForwardedContent, type ForwardOrigin } from "../lib/forwarded-content";
 
 export type ForwardContact = {
   id: string;
@@ -20,6 +21,7 @@ export type ForwardItem = {
   mediaFileName?: string | null;
   forwarded?: boolean;
   forwardedOrigin?: "cloud";
+  cloudOrigin?: ForwardOrigin;
 };
 
 type Props = {
@@ -34,6 +36,7 @@ type Props = {
   mediaFileName?: string | null;
   forwarded?: boolean;
   forwardedOrigin?: "cloud";
+  cloudOrigin?: ForwardOrigin;
   contacts: ForwardContact[];
   loading?: boolean;
   externalShareText?: string;
@@ -41,13 +44,13 @@ type Props = {
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, contacts, loading = false, externalShareText, items, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, items, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
-  const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded, forwardedOrigin }];
+  const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded, forwardedOrigin, cloudOrigin }];
 
   const forward = async (contact: ForwardContact) => {
     setSendingTo(contact.id);
@@ -63,7 +66,9 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       const conversationId = conversationPayload.conversation.id as string;
       for (const item of forwardItems) {
       const clientMessageId = `forward-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const cleanMessageContent = item.messageContent?.replace(/^(?:↗\s*(?:Mensagem encaminhada|Encaminhada(?: de uma cloud)?)\s*)+/, "");
+      const parsedContent = item.messageContent !== undefined ? parseForwardedContent(item.messageContent) : null;
+      const cleanMessageContent = parsedContent?.text;
+      const origin = item.cloudOrigin ?? parsedContent?.origin;
       const isTextMessage = item.messageContent !== undefined;
       let forwardedLabel = item.label;
       if (item.forwarded && !isTextMessage) {
@@ -92,13 +97,14 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         formData.set("clientMessageId", clientMessageId);
         formData.set("forwarded", String(item.forwarded ?? true));
         if (item.forwardedOrigin) formData.set("forwardedOrigin", item.forwardedOrigin);
+        if (origin) { formData.set("cloudId", origin.id); formData.set("cloudName", origin.name); }
         if (item.mediaKind === "audio" && item.mediaDurationMs) formData.set("durationMs", String(item.mediaDurationMs));
         endpoint += item.mediaKind === "audio" ? "/audio" : "/image";
         body = formData;
       } else {
         endpoint += isTextMessage ? "/messages" : "/link";
         body = JSON.stringify(isTextMessage
-          ? { content: `↗ ${item.forwardedOrigin === "cloud" ? "Encaminhada de uma cloud" : "Encaminhada"}\n${cleanMessageContent ?? ""}`, clientMessageId }
+          ? { content: `${origin ? cloudForwardMarker(origin) : `↗ ${item.forwardedOrigin === "cloud" ? "Encaminhada de uma cloud" : "Encaminhada"}`}\n${cleanMessageContent ?? ""}`, clientMessageId }
           : { url: item.url, label: forwardedLabel, clientMessageId });
       }
 

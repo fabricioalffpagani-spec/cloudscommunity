@@ -1,4 +1,5 @@
-﻿"use client";
+"use client";
+import { cloudInvitation } from "../../lib/cloud-invitation";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useCallback, type KeyboardEvent, type ReactNode } from "react";
@@ -1614,6 +1615,15 @@ function CloudMessageBubble({
               <CloudPinIcon pinned={isPinned} />
             </button>
           )}
+          <button
+            type="button"
+            aria-label="Responder"
+            title="Responder"
+            onClick={() => onReply(msg)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-white transition hover:bg-white/15"
+          >
+            <CloudReplyIcon />
+          </button>
           {/* Quick emoji picker */}
           <div className="relative">
             <button
@@ -2902,8 +2912,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const { formatted: liveTimer, isExpired } = useCountdown(cloud);
   const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
   const shareLink = `${publicAppUrl || (typeof window !== "undefined" ? window.location.origin : "")}/cloud/${encodeURIComponent(cloudId)}?join=1`;
-  const participantsText = `${resolvedParticipants} ${resolvedParticipants === 1 ? "pessoa está" : "pessoas estão"} discutindo este tema ao vivo.`;
-  const externalShareText = `*${cloud?.title || "Cloud"}*\nFaltam *${liveTimer}* para participar.\n${participantsText}\nJunte-se a mim nessa conversa: ${shareLink}`;
+  const externalShareText = cloudInvitation({ title: cloud?.title || "Cloud", url: shareLink, remaining: liveTimer, participants: resolvedParticipants });
   const cloudVisibility = cloud?.visibility ?? (visibility === "private" ? "private" : "public");
   const isDarkCloud = cloudVisibility === "private";
 
@@ -3356,6 +3365,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           mediaDurationMs={forwardMessage.audioDurationMs}
           mediaFileName={forwardMessage.isSticker ? "figurinha.webp" : undefined}
           forwardedOrigin="cloud"
+          cloudOrigin={{ id: cloudId, name: cloud?.title || "Cloud" }}
           contacts={contacts}
           loading={loadingContacts}
           onClose={() => setForwardMessage(null)}

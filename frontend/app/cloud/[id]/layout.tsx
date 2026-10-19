@@ -4,13 +4,15 @@ const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const title = "Clouds Community";
 const description = "Conversas públicas e ao vivo sobre tudo. Entre na conversa.";
 
-export const metadata: Metadata = {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  return {
   title,
   description,
   openGraph: {
     title,
     description,
-    url: `${siteOrigin}/cloud`,
+    url: `${siteOrigin}/cloud/${encodeURIComponent(id)}?join=1`,
     siteName: "Clouds Community",
     type: "website",
     images: [
@@ -28,7 +30,8 @@ export const metadata: Metadata = {
     description,
     images: ["/cloud-conversation-invite.png"],
   },
-};
+  };
+}
 
 export default function CloudLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return children;

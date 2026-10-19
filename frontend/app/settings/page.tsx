@@ -82,9 +82,11 @@ function PanelConta() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loggingOut, setLoggingOut] = useState(false);
+  const initializedUserId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || initializedUserId.current === user.id) return;
+    initializedUserId.current = user.id;
     setNome(user.displayName || user.name || "");
   }, [user]);
 
@@ -214,6 +216,8 @@ function locationCity(value: string | null | undefined) {
 function PanelPerfil() {
   const { user, refresh } = useSessionUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const initializedUserId = useRef<string | null>(null);
+  const initialRegion = useRef({ country: "", city: "" });
   const [name, setName] = useState(user?.displayName || user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [pais, setPais] = useState(normalizeCountry(user?.location));
@@ -228,9 +232,11 @@ function PanelPerfil() {
   const displayName = getSessionUserDisplayName(user);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || initializedUserId.current === user.id) {
       return;
     }
+    initializedUserId.current = user.id;
+    initialRegion.current = { country: normalizeCountry(user.location), city: locationCity(user.location) };
 
     setName(user.displayName || user.name || "");
     setBio(user.bio || "");
@@ -240,15 +246,18 @@ function PanelPerfil() {
   }, [user]);
 
   const save = async () => {
-    if ((pais && !cidade.trim()) || (!pais && cidade.trim())) {
+    const regionChanged = pais !== initialRegion.current.country || cidade.trim() !== initialRegion.current.city;
+    if (regionChanged && ((pais && !cidade.trim()) || (!pais && cidade.trim()))) {
       setError("Informe país e cidade para salvar a região.");
       return;
     }
     setSaving(true); setError("");
     try {
       const location = pais && cidade.trim() ? `${pais}, ${cidade.trim()}` : "";
-      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, location, avatarUrl }) });
-      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Não foi possível salvar o perfil.");
+      const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, ...(regionChanged ? { location } : {}), avatarUrl }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) throw new Error(payload?.message ?? "Não foi possível salvar o perfil.");
+      initialRegion.current = { country: pais, city: cidade.trim() };
       await refresh(); setSaved(true); setTimeout(()=>setSaved(false),2000);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível salvar o perfil."); }
     finally { setSaving(false); }

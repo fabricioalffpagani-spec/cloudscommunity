@@ -8,6 +8,7 @@ import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExt
 import { useRouter, useSearchParams } from "next/navigation";
 import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
 import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
+import { cloudInvitation, invitationCountdown } from "./lib/cloud-invitation";
 
 const CloudChat = dynamic(() => import("./cloud/[id]/CloudChat"), {
   ssr: false,
@@ -590,10 +591,17 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
   const [contacts, setContacts] = useState<ShareContact[]>([]);
   const [contactsError, setContactsError] = useState<string | null>(null);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [shareCloud, setShareCloud] = useState<CloudApiPayload | null>(null);
 
-  useEffect(() => { void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" }); }, [cloudId]);
+  useEffect(() => {
+    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" });
+    let active = true;
+    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (active && data?.cloud) setShareCloud(data.cloud); }).catch(() => {});
+    return () => { active = false; };
+  }, [cloudId]);
 
-  const encodedText = encodeURIComponent(`Participe da Cloud "${cloudTitle}" aqui: ${cloudUrl}`);
+  const invitationText = cloudInvitation({ title: shareCloud?.title || cloudTitle, url: cloudUrl, remaining: shareCloud ? invitationCountdown(shareCloud.createdAt, shareCloud.duration) : undefined, participants: shareCloud?.membersCount });
+  const encodedText = encodeURIComponent(invitationText);
 
   useEffect(() => {
     if (view !== "contacts" || contacts.length > 0 || loadingContacts) return;
@@ -624,7 +632,7 @@ function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: strin
   };
 
   const handleNativeShare = async () => {
-    const shareData = { title: `Clouds — ${cloudTitle}`, text: `Participe da Cloud “${cloudTitle}”`, url: cloudUrl };
+    const shareData = { text: invitationText };
     if (navigator.share) {
       try {
         await navigator.share(shareData);

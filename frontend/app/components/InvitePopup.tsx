@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSessionUser } from "./session-user";
+import { generalInvitationText } from "../lib/cloud-invitation";
 
 // Aparece 5 min após autenticação
 const POPUP_DELAY_MS = 5 * 60 * 1000;
@@ -59,8 +60,9 @@ export function InvitePopup() {
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const inviteText = "Ei! Te convido a fazer parte do Clouds Community ☁️ — me acompanha por lá! Compartilhe suas opiniões e visões no Clouds, seu streaming de conversas. Entre agora:";
-  const inviteMessage = `${inviteText} ${inviteUrl}`;
+  const inviteText = generalInvitationText;
+  const inviteMessage = `${inviteText}
+${inviteUrl}`;
 
   useEffect(() => {
     const previewMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invitePreview") === "1";

@@ -37,27 +37,13 @@ describe("Mini Cloud leave", () => {
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
   });
-  it("keeps navigation, separate-window, and leave controls together", async () => {
+  it("keeps navigation and leave controls without the separate-window button", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
     render(<MiniCloudDock />);
     const expand = await screen.findByRole("button", { name: "Expandir Cloud" });
     expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Abrir Mini Cloud fora da aba" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
     expect(expand.parentElement).toHaveTextContent(/\d+:\d+/);
-  });
-
-  it("opens an independent desktop window that remains after the main tab navigates away", async () => {
-    const focus = vi.fn();
-    const open = vi.spyOn(window, "open").mockReturnValue({ focus } as unknown as Window);
-    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
-
-    render(<MiniCloudDock />);
-    fireEvent.click(await screen.findByRole("button", { name: "Abrir Mini Cloud fora da aba" }));
-
-    expect(open).toHaveBeenCalledWith("/mini-cloud", "clouds-mini-cloud", expect.stringContaining("width=384,height=480"));
-    expect(focus).toHaveBeenCalled();
-    expect(localStorage.getItem("clouds:mini-cloud-popout")).toBe("cloud-1");
-    open.mockRestore();
   });
 
   it("fills the external window without the internal dock margins or resize handle", async () => {

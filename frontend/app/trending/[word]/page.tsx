@@ -232,16 +232,16 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
       {/* ── Header ── */}
       <header className="hidden flex-none bg-transparent md:block">
-        <div className="mx-auto flex h-[100px] max-w-[1280px] items-end justify-between gap-4 px-8 pb-4">
-          <Link href="/" className="flex shrink-0 items-center gap-4 pb-2">
+        <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
+          <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
             <HeaderBrand />
           </Link>
-          <nav aria-label="Navegação" className="flex items-end gap-8 pb-2">
-            <Link href="/" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
-            <Link href="/read" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Read</Link>
-            <Link href="/meet" className="inline-flex h-12 items-center text-[20px] font-semibold text-white/50 transition hover:text-white">Meet</Link>
+          <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-16 pb-2">
+            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
+            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Read</Link>
+            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Meet</Link>
           </nav>
-          <div className="flex items-center gap-4 pb-2">
+          <div className="flex items-center justify-self-end gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
               <svg viewBox="0 0 24 24" width={28} height={28} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7.5" /><path d="M20 20l-3.5-3.5" /></svg>
             </button>
