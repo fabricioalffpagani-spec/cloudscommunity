@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { createContext, useContext, useCallback, useEffect, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 
 export type SessionUser = {
   id: string;
@@ -35,6 +35,7 @@ type SessionContextValue = {
   user: SessionUser | null;
   status: "loading" | "authenticated" | "anonymous" | "error";
   refresh: () => Promise<void>;
+  applyUser: (user: SessionUser) => void;
   incrementCloudCount: () => void;
   decrementCloudCount: () => void;
 };
@@ -49,6 +50,12 @@ type SessionPayload = {
 export function SessionUserProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
+  const revision = useRef(0);
+  const applyUser = useCallback((updatedUser: SessionUser) => {
+    revision.current += 1;
+    setUser(updatedUser);
+    setStatus("authenticated");
+  }, []);
   const incrementCloudCount = useCallback(() => {
     setUser((current) => current ? { ...current, cloudsCount: (current.cloudsCount ?? 0) + 1 } : current);
   }, []);
@@ -57,6 +64,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const refresh = useCallback(async () => {
+    const requestRevision = ++revision.current;
     setStatus((current) =>
       current === "authenticated" || current === "anonymous" ? current : "loading",
     );
@@ -71,6 +79,8 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
 
       const payload = (await response.json().catch(() => null)) as SessionPayload | null;
 
+      if (requestRevision !== revision.current) return;
+
       if (!response.ok || !payload?.user) {
         setUser(null);
         setStatus(response.status === 401 ? "anonymous" : "error");
@@ -80,6 +90,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
       setUser(payload.user);
       setStatus("authenticated");
     } catch {
+      if (requestRevision !== revision.current) return;
       setUser(null);
       setStatus("error");
     }
@@ -106,7 +117,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   }, [refresh]);
 
   return (
-    <SessionUserContext.Provider value={{ user, status, refresh, incrementCloudCount, decrementCloudCount }}>
+    <SessionUserContext.Provider value={{ user, status, refresh, applyUser, incrementCloudCount, decrementCloudCount }}>
       {children}
     </SessionUserContext.Provider>
   );

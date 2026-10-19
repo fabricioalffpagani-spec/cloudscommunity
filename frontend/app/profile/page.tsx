@@ -12,6 +12,7 @@ import {
   SessionUserLink,
   getSessionUserDisplayName,
   getSessionUserHandle,
+  type SessionUser,
   useSessionUser,
 } from "../components/session-user";
 import { MobileAppNav, MobileCloudEntryLink } from "../components/MobileAppChrome";
@@ -333,7 +334,7 @@ function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onR
 }
 
 export default function ProfilePage() {
-  const { user, status, refresh, decrementCloudCount } = useSessionUser();
+  const { user, status, refresh, applyUser, decrementCloudCount } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
   const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended">("all");
@@ -365,7 +366,7 @@ export default function ProfilePage() {
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || editing) {
       return;
     }
 
@@ -375,7 +376,7 @@ export default function ProfilePage() {
       location: user.location ?? "",
       avatarUrl: user.avatarUrl,
     });
-  }, [user]);
+  }, [user, editing]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -542,7 +543,8 @@ export default function ProfilePage() {
 
   const saveProfile = async () => {
     const location = draft.location.trim();
-    if (location && !hasCountryAndCity(location)) {
+    const locationChanged = location !== (user?.location?.trim() ?? "");
+    if (locationChanged && location && !hasCountryAndCity(location)) {
       setProfileError("Informe a região no formato País, cidade.");
       return;
     }
@@ -556,16 +558,16 @@ export default function ProfilePage() {
         body: JSON.stringify({
           displayName: draft.name.trim(),
           bio: draft.bio.trim(),
-          location,
+          ...(locationChanged ? { location } : {}),
           avatarUrl: draft.avatarUrl,
         }),
       });
-      const payload = await response.json().catch(() => null) as { message?: string } | null;
-      if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { ok?: boolean; message?: string; user?: SessionUser } | null;
+      if (!response.ok || payload?.ok === false || !payload?.user) {
         setProfileError(payload?.message || "Não foi possível salvar o perfil.");
         return;
       }
-      await refresh();
+      applyUser(payload.user);
       setEditing(false);
     } catch {
       setProfileError("Não foi possível salvar o perfil. Tente novamente.");

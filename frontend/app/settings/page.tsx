@@ -76,7 +76,7 @@ function TRow({ label, desc, checked, onChange }: { label:string; desc?:string; 
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 function PanelConta() {
-  const { user, status, refresh } = useSessionUser();
+  const { user, status, applyUser } = useSessionUser();
   const [nome, setNome] = useState("");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,8 +98,9 @@ function PanelConta() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ displayName: nome }),
       });
-      if (!response.ok) throw new Error((await response.json().catch(() => null))?.message ?? "Não foi possível salvar.");
-      await refresh();
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false || !payload?.user) throw new Error(payload?.message ?? "Não foi possível salvar.");
+      applyUser(payload.user);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Não foi possível salvar.");
@@ -214,7 +215,7 @@ function locationCity(value: string | null | undefined) {
 }
 
 function PanelPerfil() {
-  const { user, refresh } = useSessionUser();
+  const { user, applyUser } = useSessionUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initializedUserId = useRef<string | null>(null);
   const initialRegion = useRef({ country: "", city: "" });
@@ -256,9 +257,9 @@ function PanelPerfil() {
       const location = pais && cidade.trim() ? `${pais}, ${cidade.trim()}` : "";
       const response = await fetch("/api/auth/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, bio, ...(regionChanged ? { location } : {}), avatarUrl }) });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || payload?.ok === false) throw new Error(payload?.message ?? "Não foi possível salvar o perfil.");
+      if (!response.ok || payload?.ok === false || !payload?.user) throw new Error(payload?.message ?? "Não foi possível salvar o perfil.");
       initialRegion.current = { country: pais, city: cidade.trim() };
-      await refresh(); setSaved(true); setTimeout(()=>setSaved(false),2000);
+      applyUser(payload.user); setSaved(true); setTimeout(()=>setSaved(false),2000);
     } catch (err) { setError(err instanceof Error ? err.message : "Não foi possível salvar o perfil."); }
     finally { setSaving(false); }
   };

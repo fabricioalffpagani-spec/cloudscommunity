@@ -27,6 +27,48 @@ beforeEach(() => {
 });
 
 describe("Mini Cloud leave", () => {
+  it("reveals compact actions when a message is tapped on mobile", async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Olá mobile", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" } };
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => input.endsWith("/messages?take=30") ? { ok: true, json: async () => ({ messages: [message] }) } : { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) }));
+    render(<MiniCloudDock />);
+    const bubble = await screen.findByRole("button", { name: "Mostrar opções da mensagem" });
+    expect(bubble).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(bubble);
+    expect(bubble).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Responder mensagem" }).parentElement).toHaveClass("opacity-100");
+    fireEvent.click(screen.getByRole("button", { name: "Responder mensagem" }));
+    expect(screen.getByText(/Respondendo a Ana/)).toBeVisible();
+    fireEvent.click(bubble);
+    expect(bubble).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("allows replying, reacting and pinning from compact message actions", async () => {
+    localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1", title: "Teste", isAuthor: true, ownerUserId: "viewer" }));
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Olá", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" }, reactions: [] };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") return { ok: true, json: async () => ({ ok: true }) };
+      if (init?.method === "POST" && input.endsWith("/messages/m1")) return { ok: true, json: async () => ({ ok: true, reaction: { id: "r1", userId: "viewer", emoji: "👍" }, removed: false }) };
+      if (init?.method === "POST") return { ok: true, json: async () => ({ message: { ...message, id: "m2", content: "Resposta", sender: { id: "viewer", displayName: "Você" } } }) };
+      if (input.endsWith("/messages?take=30")) return { ok: true, json: async () => ({ messages: [message] }) };
+      return { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MiniCloudDock />);
+    await screen.findByText("Olá");
+    fireEvent.click(screen.getByRole("button", { name: "Reagir à mensagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reagir com 👍" }));
+    await screen.findByText("👍 1");
+    fireEvent.click(screen.getByRole("button", { name: "Fixar mensagem" }));
+    await screen.findByRole("button", { name: "Desafixar mensagem" });
+    fireEvent.click(screen.getByRole("button", { name: "Responder mensagem" }));
+    expect(screen.getByText(/Respondendo a Ana/)).toBeVisible();
+    fireEvent.change(screen.getByPlaceholderText("Mensagem..."), { target: { value: "Resposta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enviar" }));
+    await screen.findByText("Resposta");
+    expect(fetchMock.mock.calls.some(([url, options]) => url.endsWith("/messages") && options?.method === "POST" && JSON.parse(String(options.body)).replyToMessageId === "m1")).toBe(true);
+  });
+
   it("keeps the normal desktop dock inside the app without opening a popup", async () => {
     localStorage.setItem("clouds:mini-cloud-popout", "another-cloud");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -37,27 +79,13 @@ describe("Mini Cloud leave", () => {
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
   });
-  it("keeps navigation, separate-window, and leave controls together", async () => {
+  it("keeps navigation and leave controls without the separate-window button", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
     render(<MiniCloudDock />);
     const expand = await screen.findByRole("button", { name: "Expandir Cloud" });
     expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Abrir Mini Cloud fora da aba" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
     expect(expand.parentElement).toHaveTextContent(/\d+:\d+/);
-  });
-
-  it("opens an independent desktop window that remains after the main tab navigates away", async () => {
-    const focus = vi.fn();
-    const open = vi.spyOn(window, "open").mockReturnValue({ focus } as unknown as Window);
-    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
-
-    render(<MiniCloudDock />);
-    fireEvent.click(await screen.findByRole("button", { name: "Abrir Mini Cloud fora da aba" }));
-
-    expect(open).toHaveBeenCalledWith("/mini-cloud", "clouds-mini-cloud", expect.stringContaining("width=384,height=480"));
-    expect(focus).toHaveBeenCalled();
-    expect(localStorage.getItem("clouds:mini-cloud-popout")).toBe("cloud-1");
-    open.mockRestore();
   });
 
   it("fills the external window without the internal dock margins or resize handle", async () => {
