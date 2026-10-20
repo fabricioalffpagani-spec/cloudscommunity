@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessagesNavLink } from "../app/components/MessagesNavLink";
 import { MobileAppNav, useMobileFeedTabSwipe } from "../app/components/MobileAppChrome";
 import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
@@ -21,6 +21,11 @@ vi.mock("../app/components/session-user", () => ({
 function SwipeProbe() {
   return <div data-testid="swipe" {...useMobileFeedTabSwipe()} />;
 }
+
+beforeEach(() => {
+  window.localStorage.removeItem("clouds:pwa-install-reminder:u");
+  window.localStorage.removeItem("clouds:pwa-install-manual-complete:u");
+});
 
 afterEach(() => {
   navigation.pathname = "/";

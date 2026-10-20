@@ -237,8 +237,12 @@ describe('Talk / Read regression', () => {
   it('includes the actual start time when serializing a scheduled cloud', () => {
     const { service, cloud } = setup();
     const startedAt = new Date('2026-10-20T10:00:00.000Z');
-    const map = service as unknown as { mapCloud: (value: unknown) => { startedAt: string | null } };
-    expect(map.mapCloud({ ...cloud, startedAt }).startedAt).toBe(startedAt.toISOString());
+    const map = service as unknown as {
+      mapCloud: (value: unknown) => { startedAt: string | null };
+    };
+    expect(map.mapCloud({ ...cloud, startedAt }).startedAt).toBe(
+      startedAt.toISOString(),
+    );
   });
   it('lists active public clouds and private clouds for invited members', async () => {
     const { service, prisma } = setup();

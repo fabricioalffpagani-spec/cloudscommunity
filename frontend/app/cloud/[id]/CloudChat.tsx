@@ -2078,14 +2078,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     }
     // Minimizar escolhe o dock integrado; a janela externa tem ação própria.
     window.localStorage.removeItem("clouds:mini-cloud-popout");
-    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));
+    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString(), startedAt: cloud?.startedAt }));
     window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
     if (window.history.length > 1) {
       router.back();
       return;
     }
     router.push("/");
-  }, [cloud?.createdAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router, user?.id]);
+  }, [cloud?.createdAt, cloud?.startedAt, cloud?.duration, cloudId, createdAt, duration, isCloudAuthor, resolvedTitle, router, user?.id]);
 
   useEffect(() => {
     // Authenticated entries wait for membership confirmation. Guests viewing a

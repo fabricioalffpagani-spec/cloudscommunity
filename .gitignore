@@ -113,6 +113,10 @@ Desktop.ini
 **/.tmp/
 **/.temp/
 frontend/matches.txt
+/frontend/node-compile-cache/
+/frontend/.vitest-tmp/
+/frontend/*/client/
+/frontend/*/ssr/
 /query
 /start
 # Orphan legacy root lock; application locks remain versioned.

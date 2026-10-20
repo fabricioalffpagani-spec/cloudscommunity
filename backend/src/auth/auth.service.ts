@@ -88,7 +88,10 @@ type UserStats = {
 export class AuthService {
   private readonly resend: Resend | null;
 
-  constructor(private readonly prisma: PrismaService, @Optional() private readonly push?: PushNotificationsService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly push?: PushNotificationsService,
+  ) {
     const apiKey = process.env.RESEND_API_KEY?.trim();
     this.resend = apiKey ? new Resend(apiKey) : null;
   }
@@ -131,8 +134,16 @@ export class AuthService {
     validatePassword(password);
 
     const inviteCode = input.invitationCode?.trim().toUpperCase() || '';
-    const inviter = inviteCode ? await this.prisma.invitationCode.findUnique({ where: { code: inviteCode } }) : null;
-    if (inviteCode && !inviter) throw new BadRequestException({ message: 'Código de convite inválido.', fieldErrors: { invitationCode: 'Código de convite inválido.' } });
+    const inviter = inviteCode
+      ? await this.prisma.invitationCode.findUnique({
+          where: { code: inviteCode },
+        })
+      : null;
+    if (inviteCode && !inviter)
+      throw new BadRequestException({
+        message: 'Código de convite inválido.',
+        fieldErrors: { invitationCode: 'Código de convite inválido.' },
+      });
 
     const existingEmail = await this.prisma.user.findUnique({
       where: { email },
@@ -187,7 +198,10 @@ export class AuthService {
         },
       });
 
-      if (inviter) await tx.invitationReferral.create({ data: { invitedUserId: user.id, inviterUserId: inviter.userId } });
+      if (inviter)
+        await tx.invitationReferral.create({
+          data: { invitedUserId: user.id, inviterUserId: inviter.userId },
+        });
 
       return user;
     });
@@ -269,19 +283,54 @@ export class AuthService {
       });
     }
 
-    const { user, notification } = await this.prisma.$transaction(async (tx) => {
-      const claimed = await tx.emailVerificationToken.updateMany({ where: { id: verification.id, usedAt: null }, data: { usedAt: new Date() } });
-      if (claimed.count !== 1) throw new BadRequestException({ message: 'Este link de validação já foi utilizado.' });
-      const user = await tx.user.update({ where: { id: verification.user.id }, data: { status: 'active', emailVerifiedAt: new Date() }, include: { profile: true } });
-      const referral = await tx.invitationReferral.findUnique({ where: { invitedUserId: user.id } });
-      if (!referral || referral.creditedAt) return { user, notification: null };
-      const claimedReferral = await tx.invitationReferral.updateMany({ where: { invitedUserId: user.id, creditedAt: null }, data: { creditedAt: new Date() } });
-      if (!claimedReferral.count) return { user, notification: null };
-      const body = `${user.profile?.displayName || 'Um novo usuário'} entrou no Clouds com seu convite! +10 hypes foram adicionados em seu perfil!`;
-      const notification = await tx.notification.create({ data: { userId: referral.inviterUserId, type: 'system', entityType: 'user', entityId: user.id, title: 'Novo convite aceito', body } });
-      return { user, notification };
-    });
-    if (notification && this.push) void this.push.send(notification.userId, { title: notification.title, body: notification.body, url: '/profile', tag: notification.id }).catch(() => undefined);
+    const { user, notification } = await this.prisma.$transaction(
+      async (tx) => {
+        const claimed = await tx.emailVerificationToken.updateMany({
+          where: { id: verification.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+        if (claimed.count !== 1)
+          throw new BadRequestException({
+            message: 'Este link de validação já foi utilizado.',
+          });
+        const user = await tx.user.update({
+          where: { id: verification.user.id },
+          data: { status: 'active', emailVerifiedAt: new Date() },
+          include: { profile: true },
+        });
+        const referral = await tx.invitationReferral.findUnique({
+          where: { invitedUserId: user.id },
+        });
+        if (!referral || referral.creditedAt)
+          return { user, notification: null };
+        const claimedReferral = await tx.invitationReferral.updateMany({
+          where: { invitedUserId: user.id, creditedAt: null },
+          data: { creditedAt: new Date() },
+        });
+        if (!claimedReferral.count) return { user, notification: null };
+        const body = `${user.profile?.displayName || 'Um novo usuário'} entrou no Clouds com seu convite! +10 hypes foram adicionados em seu perfil!`;
+        const notification = await tx.notification.create({
+          data: {
+            userId: referral.inviterUserId,
+            type: 'system',
+            entityType: 'user',
+            entityId: user.id,
+            title: 'Novo convite aceito',
+            body,
+          },
+        });
+        return { user, notification };
+      },
+    );
+    if (notification && this.push)
+      void this.push
+        .send(notification.userId, {
+          title: notification.title,
+          body: notification.body,
+          url: '/profile',
+          tag: notification.id,
+        })
+        .catch(() => undefined);
     const session = await this.createSession(user.id, meta);
 
     return {
@@ -1074,18 +1123,25 @@ export class AuthService {
   }
 
   private async loadUserStats(userId: string): Promise<UserStats> {
-    const [followersCount, followingCount, cloudsCount, cloudHypes, referralCount] =
-      await Promise.all([
-        this.prisma.follow.count({ where: { followingId: userId } }),
-        this.prisma.follow.count({ where: { followerId: userId } }),
-        this.prisma.cloud.count({
-          where: { authorId: userId, deletedAt: null },
-        }),
-        this.prisma.cloudHype.count({
-          where: { cloud: { authorId: userId, deletedAt: null } },
-        }),
-        this.prisma.invitationReferral.count({ where: { inviterUserId: userId, creditedAt: { not: null } } }),
-      ]);
+    const [
+      followersCount,
+      followingCount,
+      cloudsCount,
+      cloudHypes,
+      referralCount,
+    ] = await Promise.all([
+      this.prisma.follow.count({ where: { followingId: userId } }),
+      this.prisma.follow.count({ where: { followerId: userId } }),
+      this.prisma.cloud.count({
+        where: { authorId: userId, deletedAt: null },
+      }),
+      this.prisma.cloudHype.count({
+        where: { cloud: { authorId: userId, deletedAt: null } },
+      }),
+      this.prisma.invitationReferral.count({
+        where: { inviterUserId: userId, creditedAt: { not: null } },
+      }),
+    ]);
 
     return {
       followersCount,

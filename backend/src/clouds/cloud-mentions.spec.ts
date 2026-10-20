@@ -180,16 +180,40 @@ describe('Cloud structured mentions', () => {
   it('alternates participant activity between general and comment previews while keeping the throttle', async () => {
     const { service, prisma, push } = setup();
     prisma.cloudMember.findMany.mockReturnValue([{ userId: otherId }]);
-    prisma.notification.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ metadata: { activityVariant: 'general' } });
-    await service.createMessage('session', cloudId, { type: 'text', content: 'Olá pessoal' });
-    expect(push.send).toHaveBeenCalledWith(otherId, expect.objectContaining({ title: 'Alguém comentou em Teste: Olá pessoal' }));
+    prisma.notification.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ metadata: { activityVariant: 'general' } });
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Olá pessoal',
+    });
+    expect(push.send).toHaveBeenCalledWith(
+      otherId,
+      expect.objectContaining({
+        title: 'Alguém comentou em Teste: Olá pessoal',
+      }),
+    );
 
-    prisma.notification.findFirst.mockReset().mockResolvedValueOnce(null).mockResolvedValueOnce({ metadata: { activityVariant: 'comment' } });
-    await service.createMessage('session', cloudId, { type: 'text', content: 'Outra mensagem' });
-    expect(push.send).toHaveBeenLastCalledWith(otherId, expect.objectContaining({ title: 'Novos comentários na cloud Teste' }));
+    prisma.notification.findFirst
+      .mockReset()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ metadata: { activityVariant: 'comment' } });
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Outra mensagem',
+    });
+    expect(push.send).toHaveBeenLastCalledWith(
+      otherId,
+      expect.objectContaining({ title: 'Novos comentários na cloud Teste' }),
+    );
 
-    prisma.notification.findFirst.mockReset().mockResolvedValueOnce({ id: 'recent' });
-    await service.createMessage('session', cloudId, { type: 'text', content: 'Mensagem recente' });
+    prisma.notification.findFirst
+      .mockReset()
+      .mockResolvedValueOnce({ id: 'recent' });
+    await service.createMessage('session', cloudId, {
+      type: 'text',
+      content: 'Mensagem recente',
+    });
     expect(push.send).toHaveBeenCalledTimes(2);
   });
 

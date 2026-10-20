@@ -6,11 +6,40 @@ import { DirectMessagesGateway } from '../direct-messages/direct-messages.gatewa
 
 describe('invitation previews', () => {
   it('returns only the profile belonging to the invitation code', async () => {
-    const prisma = { invitationCode: { findUnique: jest.fn().mockResolvedValue({ userId: 'sender' }) }, user: { findUnique: jest.fn().mockResolvedValue({ profile: { displayName: 'Ana', username: 'ana', avatarUrl: 'data:image/png;base64,abc' } }) } };
-    const service = new UsersService(prisma as unknown as PrismaService, {} as AuthService, {} as PushNotificationsService, {} as DirectMessagesGateway);
-    expect(await service.invitationPreview('ana1234')).toEqual({ ok: true, profile: { displayName: 'Ana', username: 'ana', avatarUrl: 'data:image/png;base64,abc' } });
-    expect(prisma.invitationCode.findUnique).toHaveBeenCalledWith({ where: { code: 'ANA1234' } });
-    expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'sender' } }));
+    const prisma = {
+      invitationCode: {
+        findUnique: jest.fn().mockResolvedValue({ userId: 'sender' }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          profile: {
+            displayName: 'Ana',
+            username: 'ana',
+            avatarUrl: 'data:image/png;base64,abc',
+          },
+        }),
+      },
+    };
+    const service = new UsersService(
+      prisma as unknown as PrismaService,
+      {} as AuthService,
+      {} as PushNotificationsService,
+      {} as DirectMessagesGateway,
+    );
+    expect(await service.invitationPreview('ana1234')).toEqual({
+      ok: true,
+      profile: {
+        displayName: 'Ana',
+        username: 'ana',
+        avatarUrl: 'data:image/png;base64,abc',
+      },
+    });
+    expect(prisma.invitationCode.findUnique).toHaveBeenCalledWith({
+      where: { code: 'ANA1234' },
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'sender' } }),
+    );
     expect(await service.invitationPreview('../other')).toEqual({ ok: false });
   });
 });

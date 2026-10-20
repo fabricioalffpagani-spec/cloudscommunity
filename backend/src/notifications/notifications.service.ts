@@ -102,7 +102,15 @@ export class NotificationsService {
           : null,
       isRead: item.isRead,
       createdAt: item.createdAt.toISOString(),
-      actor: actorById.get(item.entityId) ?? (item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata) && typeof item.metadata.actorUserId === 'string' ? actorById.get(item.metadata.actorUserId) : undefined) ?? null,
+      actor:
+        actorById.get(item.entityId) ??
+        (item.metadata &&
+        typeof item.metadata === 'object' &&
+        !Array.isArray(item.metadata) &&
+        typeof item.metadata.actorUserId === 'string'
+          ? actorById.get(item.metadata.actorUserId)
+          : undefined) ??
+        null,
     }));
 
     const unreadCount = await this.prisma.notification.count({

@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
 import { clampMiniCloudPosition } from "../lib/mini-cloud-position";
+import { cloudElapsedSeconds } from "../lib/cloud-start-time";
 import { CloudSystemMessage } from "./CloudSystemMessage";
 import { useSessionUser } from "./session-user";
 
-type Cloud = { id: string; title: string; isAuthor: boolean; ownerUserId: string; duration?: string; createdAt?: string };
+type Cloud = { id: string; title: string; isAuthor: boolean; ownerUserId: string; duration?: string; createdAt?: string; startedAt?: string | null };
 type Reaction = { id: string; emoji: string; userId: string };
 type Msg = { id: string; cloudId: string; type: string; content: string | null; createdAt: string; sender: { id: string; displayName: string; avatarUrl?: string | null }; reactions?: Reaction[]; replyTo?: { sender: string; content: string | null } | null };
 
@@ -92,7 +93,7 @@ export function MiniCloudDock() {
       if (cancelled || !payload?.cloud?.createdAt || read(user?.id)?.id !== cloudId) return;
       setCloud((current) => {
         if (current?.id !== cloudId) return current;
-        const next = { ...current, duration: payload.cloud.duration, createdAt: payload.cloud.createdAt };
+        const next = { ...current, duration: payload.cloud.duration, createdAt: payload.cloud.createdAt, startedAt: payload.cloud.startedAt };
         localStorage.setItem("clouds:minimized-cloud", JSON.stringify(next));
         setEnded(payload.cloud.status === "ended");
         return next;
@@ -120,7 +121,7 @@ export function MiniCloudDock() {
     return () => { active = false; socket.emit("cloud:leave", { cloudId }); socket.removeAllListeners(); socket.disconnect(); socketRef.current = null; };
   }, [cloud?.id, user?.id]);
 
-  const hasEnded = ended || Boolean(cloud && duration(cloud.duration) - Math.floor((now - new Date(cloud.createdAt ?? now).getTime()) / 1000) <= 0);
+  const hasEnded = ended || Boolean(cloud && duration(cloud.duration) - cloudElapsedSeconds({ createdAt: cloud.createdAt ?? new Date(now).toISOString(), startedAt: cloud.startedAt }, now) <= 0);
   useEffect(() => {
     if (!cloud?.id || !hasEnded) return;
     setEnded(true);
@@ -131,7 +132,7 @@ export function MiniCloudDock() {
   }, [cloud?.id, hasEnded, isPopoutWindow, router]);
 
   if (!cloud || cloud.ownerUserId !== user?.id || (isPoppedOut && !isPopoutWindow)) return null;
-  const remaining = Math.max(0, duration(cloud.duration) - Math.floor((now - new Date(cloud.createdAt ?? now).getTime()) / 1000));
+  const remaining = Math.max(0, duration(cloud.duration) - cloudElapsedSeconds({ createdAt: cloud.createdAt ?? new Date(now).toISOString(), startedAt: cloud.startedAt }, now));
   const hours = Math.floor(remaining / 3600), minutes = Math.floor((remaining % 3600) / 60), secs = remaining % 60;
   const clock = hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}` : `${minutes}:${String(secs).padStart(2, "0")}`;
   const expand = () => {
@@ -230,8 +231,19 @@ export function MiniCloudDock() {
 
   const width = isMobile ? Math.min(280, window.innerWidth - 16) : size.width;
   const height = isMobile ? Math.min(268, window.innerHeight - 16) : size.height;
+  const openInSeparateWindow = () => {
+    localStorage.setItem(POPOUT_KEY, cloud.id);
+    dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+    const popup = window.open("/mini-cloud", "clouds-mini-cloud", `popup=yes,width=${Math.round(width)},height=${Math.round(height)},resizable=yes,scrollbars=no`);
+    if (popup) {
+      popup.focus();
+      return;
+    }
+    localStorage.removeItem(POPOUT_KEY);
+    dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+  };
   const dock = <aside style={isPopoutWindow ? { width: "100%", height: "100dvh" } : { transform: `translate(${pos.x}px,${pos.y}px)`, width, height, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - 16px)" }} className={`${isPopoutWindow ? "relative" : "fixed bottom-[calc(8px+env(safe-area-inset-bottom))] right-[calc(8px+env(safe-area-inset-right))] rounded-2xl border border-[#A855F7]/50 shadow-[0_20px_55px_rgba(0,0,0,.55)] sm:bottom-4 sm:right-4"} z-[90] flex flex-col overflow-hidden bg-black`}>
-    <div onPointerDown={(event) => { if (isPopoutWindow || (event.target as HTMLElement).closest("button")) return; drag.current = { x: event.clientX - pos.x, y: event.clientY - pos.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (drag.current) setPos(clampMiniCloudPosition(event.clientX - drag.current.x, event.clientY - drag.current.y, width, height, window.innerWidth, window.innerHeight)); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} className={`flex items-center border-b border-white/10 px-2 py-2 ${isPopoutWindow ? "" : "cursor-move touch-none"}`}><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" /><p className="ml-1 min-w-0 flex-1 truncate text-[13px] font-bold text-white">{cloud.title}</p><div className="ml-2 flex shrink-0 items-center gap-0.5"><span className="mr-0.5 text-[14px] font-bold tabular-nums text-[#D8B4FE]">{clock}</span><button type="button" onClick={expand} aria-label="Expandir Cloud" className="flex h-8 w-8 items-center justify-center text-[25px] leading-none text-white hover:text-[#D8B4FE]">↗</button><button type="button" onClick={() => { setLeaveError(""); setLeaveConfirmOpen(true); }} aria-label="Sair da Cloud" className="flex h-8 w-8 items-center justify-center text-[27px] leading-none text-white hover:text-[#D8B4FE]">×</button></div></div>
+    <div onPointerDown={(event) => { if (isPopoutWindow || (event.target as HTMLElement).closest("button")) return; drag.current = { x: event.clientX - pos.x, y: event.clientY - pos.y }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => { if (drag.current) setPos(clampMiniCloudPosition(event.clientX - drag.current.x, event.clientY - drag.current.y, width, height, window.innerWidth, window.innerHeight)); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} className={`flex items-center border-b border-white/10 px-2 py-2 ${isPopoutWindow ? "" : "cursor-move touch-none"}`}><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" /><p className="ml-1 min-w-0 flex-1 truncate text-[13px] font-bold text-white">{cloud.title}</p><div className="ml-2 flex shrink-0 items-center gap-0.5"><span className="mr-0.5 text-[14px] font-bold tabular-nums text-[#D8B4FE]">{clock}</span>{!isMobile && !isPopoutWindow && <button type="button" onClick={openInSeparateWindow} aria-label="Abrir Mini Cloud fora da aba" title="Manter Mini Cloud aberta fora do site" className="flex h-8 w-8 items-center justify-center text-[18px] leading-none text-white hover:text-[#D8B4FE]">▣</button>}<button type="button" onClick={expand} aria-label="Expandir Cloud" className="flex h-8 w-8 items-center justify-center text-[25px] leading-none text-white hover:text-[#D8B4FE]">↗</button><button type="button" onClick={() => { setLeaveError(""); setLeaveConfirmOpen(true); }} aria-label="Sair da Cloud" className="flex h-8 w-8 items-center justify-center text-[27px] leading-none text-white hover:text-[#D8B4FE]">×</button></div></div>
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">{messages.map((message) => {
       if (message.type === "system") return <CloudSystemMessage key={message.id} message={{ content: message.content, senderId: message.sender?.id ?? "", senderName: message.sender?.displayName ?? "Alguém", senderAvatarUrl: message.sender?.avatarUrl }} />;
       const own = Boolean(user?.id && message.sender?.id === user.id);

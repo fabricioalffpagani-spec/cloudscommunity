@@ -2506,16 +2506,29 @@ export class CloudService {
     let activityVariant: 'general' | 'comment' | undefined;
     if (commentPreview !== undefined) {
       const previous = await this.prisma.notification.findFirst({
-        where: { userId, type: 'cloud_activity', entityType: 'cloud', entityId: cloud.id },
+        where: {
+          userId,
+          type: 'cloud_activity',
+          entityType: 'cloud',
+          entityId: cloud.id,
+        },
         orderBy: { createdAt: 'desc' },
         select: { metadata: true },
       });
-      const metadata = previous?.metadata as { activityVariant?: string } | null | undefined;
-      activityVariant = commentPreview && metadata?.activityVariant !== 'comment' && previous ? 'comment' : 'general';
-      title = activityVariant === 'comment'
-        ? `Alguém comentou em ${cloud.title}: ${commentPreview}`.slice(0, 180)
-        : `Novos comentários na cloud ${cloud.title}`.slice(0, 180);
-      body = activityVariant === 'comment' ? commentPreview : `Há novos comentários em “${cloud.title}”.`;
+      const metadata = previous?.metadata as
+        { activityVariant?: string } | null | undefined;
+      activityVariant =
+        commentPreview && metadata?.activityVariant !== 'comment' && previous
+          ? 'comment'
+          : 'general';
+      title =
+        activityVariant === 'comment'
+          ? `Alguém comentou em ${cloud.title}: ${commentPreview}`.slice(0, 180)
+          : `Novos comentários na cloud ${cloud.title}`.slice(0, 180);
+      body =
+        activityVariant === 'comment'
+          ? commentPreview
+          : `Há novos comentários em “${cloud.title}”.`;
     }
 
     const notification = await this.prisma.notification.create({
@@ -2676,7 +2689,12 @@ export class CloudService {
             `Novos comentários na Cloud ${cloud.title}`,
             `Há novos comentários em “${cloud.title}”.`,
             cloud,
-            type === 'text' ? (created.content || '').replace(/\s+/g, ' ').trim().slice(0, 140) : '',
+            type === 'text'
+              ? (created.content || '')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+                  .slice(0, 140)
+              : '',
           ),
         ),
     );

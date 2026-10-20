@@ -7,8 +7,42 @@ import { PushNotificationsService } from '../infrastructure/push/push-notificati
 describe('activity notifications', () => {
   it('resolves the profile for a user notification', async () => {
     const service = new NotificationsService(
-      { notification: { findMany: jest.fn().mockResolvedValue([{ id: 'n', userId: 'recipient', type: 'system', entityType: 'user', entityId: 'actor', title: 'Convite', body: 'Entrou', metadata: null, isRead: false, createdAt: new Date() }]), count: jest.fn().mockResolvedValue(1) }, user: { findMany: jest.fn().mockResolvedValue([{ id: 'actor', profile: { username: 'ana', displayName: 'Ana', avatarUrl: null } }]) } } as unknown as PrismaService,
-      { resolveSession: jest.fn().mockResolvedValue({ user: { id: 'recipient' } }) } as unknown as AuthService,
+      {
+        notification: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'n',
+              userId: 'recipient',
+              type: 'system',
+              entityType: 'user',
+              entityId: 'actor',
+              title: 'Convite',
+              body: 'Entrou',
+              metadata: null,
+              isRead: false,
+              createdAt: new Date(),
+            },
+          ]),
+          count: jest.fn().mockResolvedValue(1),
+        },
+        user: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'actor',
+              profile: {
+                username: 'ana',
+                displayName: 'Ana',
+                avatarUrl: null,
+              },
+            },
+          ]),
+        },
+      } as unknown as PrismaService,
+      {
+        resolveSession: jest
+          .fn()
+          .mockResolvedValue({ user: { id: 'recipient' } }),
+      } as unknown as AuthService,
       {} as UsersService,
       {} as PushNotificationsService,
     );

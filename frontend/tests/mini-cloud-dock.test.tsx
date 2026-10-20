@@ -79,13 +79,28 @@ describe("Mini Cloud leave", () => {
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
   });
-  it("keeps navigation and leave controls without the separate-window button", async () => {
+  it("keeps navigation, leave and the separate-window control on desktop", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
     render(<MiniCloudDock />);
     const expand = await screen.findByRole("button", { name: "Expandir Cloud" });
     expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Abrir Mini Cloud fora da aba" })).toBeVisible();
     expect(expand.parentElement).toHaveTextContent(/\d+:\d+/);
+  });
+
+  it("opens the Mini Cloud in a separate window from the desktop dock", async () => {
+    const focus = vi.fn();
+    const open = vi.spyOn(window, "open").mockReturnValue({ focus } as unknown as Window);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+    try {
+      render(<MiniCloudDock />);
+      fireEvent.click(await screen.findByRole("button", { name: "Abrir Mini Cloud fora da aba" }));
+      expect(open).toHaveBeenCalledWith("/mini-cloud", "clouds-mini-cloud", expect.stringContaining("popup=yes"));
+      expect(focus).toHaveBeenCalled();
+      expect(localStorage.getItem("clouds:mini-cloud-popout")).toBe("cloud-1");
+    } finally {
+      open.mockRestore();
+    }
   });
 
   it("fills the external window without the internal dock margins or resize handle", async () => {
@@ -169,6 +184,17 @@ describe("Mini Cloud leave", () => {
 
     expect(await screen.findByRole("button", { name: "Continuar essa conversa" })).toBeVisible();
     expect(screen.queryByRole("textbox", { name: "mini-cloud-message" })).not.toBeInTheDocument();
+  });
+  it("counts a scheduled Cloud from its start time in the Mini Cloud", async () => {
+    const createdAt = new Date(Date.now() - 301_000).toISOString();
+    const startedAt = new Date(Date.now() - 60_000).toISOString();
+    localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1", title: "Agendada", isAuthor: false, ownerUserId: "viewer", duration: "5min", createdAt, startedAt }));
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => ({ json: async () => input.endsWith("/messages?take=30") ? { messages: [] } : { cloud: { createdAt, startedAt, duration: "5min", status: "active" } } })));
+
+    render(<MiniCloudDock />);
+
+    expect(await screen.findByRole("textbox")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Continuar essa conversa" })).not.toBeInTheDocument();
   });
   it("keeps a compact mobile dock draggable without an external-window control", async () => {
     const originalWidth = window.innerWidth;

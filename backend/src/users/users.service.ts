@@ -703,7 +703,11 @@ export class UsersService {
         where: { followingId: current.user.id },
         select: { followerId: true },
       }),
-      this.prisma.invitationReferral.groupBy({ by: ['inviterUserId'], where: { creditedAt: { not: null } }, _count: { _all: true } }),
+      this.prisma.invitationReferral.groupBy({
+        by: ['inviterUserId'],
+        where: { creditedAt: { not: null } },
+        _count: { _all: true },
+      }),
     ]);
 
     const countAuthors = (entries: Array<{ cloud: { authorId: string } }>) => {
@@ -722,7 +726,12 @@ export class UsersService {
     const popularRecentCounts = countAuthors(recentHypes);
     const popularAllTimeCounts = countAuthors(allHypes);
     for (const referral of referrals) {
-      if (referral.inviterUserId !== current.user.id) popularAllTimeCounts.set(referral.inviterUserId, (popularAllTimeCounts.get(referral.inviterUserId) ?? 0) + referral._count._all * 10);
+      if (referral.inviterUserId !== current.user.id)
+        popularAllTimeCounts.set(
+          referral.inviterUserId,
+          (popularAllTimeCounts.get(referral.inviterUserId) ?? 0) +
+            referral._count._all * 10,
+        );
     }
     const followerIds = followers.map((follower) => follower.followerId);
     const nearbyCounts = new Map<string, number>();
@@ -1124,7 +1133,9 @@ export class UsersService {
       this.prisma.cloudHype.count({
         where: { cloud: { authorId: user.id, deletedAt: null } },
       }),
-      this.prisma.invitationReferral.count({ where: { inviterUserId: user.id, creditedAt: { not: null } } }),
+      this.prisma.invitationReferral.count({
+        where: { inviterUserId: user.id, creditedAt: { not: null } },
+      }),
       currentUserId && currentUserId !== user.id
         ? this.prisma.userBlock.findFirst({
             where: {
@@ -1396,9 +1407,18 @@ export class UsersService {
 
   async invitationPreview(code: string) {
     if (!/^[a-z0-9]{1,7}$/i.test(code)) return { ok: false };
-    const invitation = await this.prisma.invitationCode.findUnique({ where: { code: code.toUpperCase() } });
+    const invitation = await this.prisma.invitationCode.findUnique({
+      where: { code: code.toUpperCase() },
+    });
     if (!invitation) return { ok: false };
-    const user = await this.prisma.user.findUnique({ where: { id: invitation.userId }, select: { profile: { select: { displayName: true, username: true, avatarUrl: true } } } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: invitation.userId },
+      select: {
+        profile: {
+          select: { displayName: true, username: true, avatarUrl: true },
+        },
+      },
+    });
     if (!user?.profile) return { ok: false };
     return { ok: true, profile: user.profile };
   }
@@ -1409,17 +1429,33 @@ export class UsersService {
   ): Promise<{ ok: true; inviteUrl: string; code: string }> {
     void identifier;
     const current = await this.requireSession(token);
-    let invitation = await this.prisma.invitationCode.findUnique({ where: { userId: current.user.id } });
+    let invitation = await this.prisma.invitationCode.findUnique({
+      where: { userId: current.user.id },
+    });
     for (let attempt = 0; !invitation && attempt < 20; attempt++) {
-      const prefix = (current.user.profile?.username ?? 'user').replace(/[^a-z0-9]/gi, '').slice(0, 3).toUpperCase().padEnd(3, 'X');
+      const prefix = (current.user.profile?.username ?? 'user')
+        .replace(/[^a-z0-9]/gi, '')
+        .slice(0, 3)
+        .toUpperCase()
+        .padEnd(3, 'X');
       const code = `${prefix}${randomBytes(4).readUInt32BE().toString(36).toUpperCase().padStart(7, '0').slice(-4)}`;
-      try { invitation = await this.prisma.invitationCode.create({ data: { userId: current.user.id, code } }); }
-      catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-        invitation = await this.prisma.invitationCode.findUnique({ where: { userId: current.user.id } });
+      try {
+        invitation = await this.prisma.invitationCode.create({
+          data: { userId: current.user.id, code },
+        });
+      } catch (error) {
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2002'
+        )
+          throw error;
+        invitation = await this.prisma.invitationCode.findUnique({
+          where: { userId: current.user.id },
+        });
       }
     }
-    if (!invitation) throw new Error('Não foi possível criar o código de convite.');
+    if (!invitation)
+      throw new Error('Não foi possível criar o código de convite.');
 
     const appUrl =
       process.env.APP_WEB_ORIGIN?.split(',')[0]?.trim() ??
