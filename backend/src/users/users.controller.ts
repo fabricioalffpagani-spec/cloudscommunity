@@ -103,6 +103,11 @@ export class UsersController {
     return this.usersService.getInviteContacts(extractSessionToken(req));
   }
 
+  @Get('invitation-preview/:code')
+  async invitationPreview(@Param('code') code: string) {
+    return this.usersService.invitationPreview(code);
+  }
+
   @Post('send-invite')
   async sendInvite(@Req() req: Request, @Body() body: { identifier: string }) {
     return this.usersService.sendInvite(

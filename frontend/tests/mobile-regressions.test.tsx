@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MessagesNavLink } from "../app/components/MessagesNavLink";
 import { MobileAppNav, useMobileFeedTabSwipe } from "../app/components/MobileAppChrome";
 import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
@@ -21,6 +21,11 @@ vi.mock("../app/components/session-user", () => ({
 function SwipeProbe() {
   return <div data-testid="swipe" {...useMobileFeedTabSwipe()} />;
 }
+
+beforeEach(() => {
+  window.localStorage.removeItem("clouds:pwa-install-reminder:u");
+  window.localStorage.removeItem("clouds:pwa-install-manual-complete:u");
+});
 
 afterEach(() => {
   navigation.pathname = "/";
@@ -71,18 +76,28 @@ describe("mobile regressions", () => {
     expect(await screen.findByRole("link", { name: /1 contato/ })).toBeVisible();
   });
 
-  it("shows the install reminder on desktop six minutes after registration", () => {
+  it("shows the install reminder two minutes and thirty seconds after registration", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T00:06:00.000Z"));
+    vi.setSystemTime(new Date("2026-10-14T00:02:29.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    render(<PwaInstallPrompt />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Adicione um atalho para o Clouds na tela inicial para economizar tempo!");
+  });
+
+  it("does not show the mobile install reminder on desktop", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:10:00.000Z"));
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     render(<PwaInstallPrompt />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Adicione um atalho para o Clouds na tela inicial para economizar tempo!");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("does not remind an iPhone user again after they confirm adding the shortcut", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-14T00:06:00.000Z"));
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
     const stored = new Map<string, string>();
     Object.defineProperty(window, "localStorage", {
       configurable: true,
@@ -99,6 +114,32 @@ describe("mobile regressions", () => {
     first.unmount();
     render(<PwaInstallPrompt />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("waits until a hidden mobile page becomes visible before showing the reminder", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:02:29.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    render(<PwaInstallPrompt />);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    visibility.mockReturnValue("visible");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    visibility.mockRestore();
+  });
+
+  it("does not immediately reopen when browser storage is unavailable", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:02:30.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    Object.defineProperty(window, "localStorage", { configurable: true, get: () => { throw new Error("storage denied"); } });
+    render(<PwaInstallPrompt />);
+    fireEvent.click(screen.getByRole("button", { name: "Não" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(24 * 60 * 60_000));
+    expect(screen.getByRole("dialog")).toBeVisible();
   });
 
   it("swipes left from Talk to Read and then Meet", () => {

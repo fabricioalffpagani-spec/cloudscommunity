@@ -66,6 +66,10 @@ export class AuthController {
         acceptedTerms: body.acceptedTerms === true,
         acceptedCommunityRules: body.acceptedCommunityRules === true,
         returnTo: typeof body.returnTo === 'string' ? body.returnTo : undefined,
+        invitationCode:
+          typeof body.invitationCode === 'string'
+            ? body.invitationCode
+            : undefined,
       },
       {
         ipAddress: req.ip ?? null,

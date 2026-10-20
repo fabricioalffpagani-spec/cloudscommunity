@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { BellIcon, XIcon } from "./ui-icons";
 import { useSessionUser } from "./session-user";
@@ -53,6 +54,7 @@ async function enableNativeNotifications() {
 }
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -154,19 +156,22 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 const messageCloudId = notification.metadata?.cloudId;
                 const messageId = notification.metadata?.messageId ?? notification.entityId;
                 const cloudMessageHref = messageCloudId && (notification.type === "cloud_mention" || notification.type === "cloud_comment")
-                  ? `/cloud/${encodeURIComponent(messageCloudId)}?message=${encodeURIComponent(messageId)}`
+                  ? `/cloud/${encodeURIComponent(messageCloudId)}/notification?message=${encodeURIComponent(messageId)}`
                   : null;
                 const cloudHref = notification.entityType === "cloud"
-                  ? `/cloud/${encodeURIComponent(notification.entityId)}`
+                  ? `/cloud/${encodeURIComponent(notification.entityId)}/notification`
                   : null;
-                const href = cloudMessageHref ?? cloudHref ?? notification.actor?.profileUrl ?? (notification.type === "direct_message" ? "/messages" : "/");
+                const conversationId = notification.metadata?.conversationId ?? (notification.entityType === "conversation" ? notification.entityId : null);
+                const messageHref = notification.type === "direct_message" ? (conversationId ? `/messages?conversation=${encodeURIComponent(conversationId)}` : notification.actor?.id ? `/messages?id=${encodeURIComponent(notification.actor.id)}` : "/messages") : null;
+                const href = cloudMessageHref ?? cloudHref ?? messageHref ?? notification.actor?.profileUrl ?? null;
                 const alreadyFollowingBack = followingBack.has(notification.id);
                 const continuation = notification.type === "cloud_continuation" ? notification.metadata : null;
 
                 return (
-                  <div key={notification.id} className="border-b border-white/[0.05] px-4 py-3 last:border-b-0">
+                  <div key={notification.id} onClick={(event) => { if (!href || (event.target as HTMLElement).closest("a, button")) return; onClose(); router.push(href); }} className={`border-b border-white/[0.05] px-4 py-3 last:border-b-0 ${href ? "cursor-pointer" : ""}`}>
                     <div className="flex items-start gap-3">
-                      <Link href={href} className="mt-0.5 shrink-0">
+                      <div className="mt-0.5 shrink-0">
+                        {href ? <Link href={href} onClick={onClose} aria-label={`Abrir ${notification.title}`}>
                         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">
                           {notification.actor?.avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -175,21 +180,22 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                             initials
                           )}
                         </div>
-                      </Link>
+                        </Link> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">{initials}</div>}
+                      </div>
                       <div className="min-w-0 flex-1">
-                        {cloudMessageHref || cloudHref ? (
-                          <Link href={href} className="text-[13px] font-semibold text-white hover:underline">{notification.title}</Link>
+                        {href ? (
+                          <Link href={href} onClick={onClose} className="text-[13px] font-semibold text-white hover:underline">{notification.title}</Link>
                         ) : (
                           <p className="text-[13px] font-semibold text-white">{notification.title}</p>
                         )}
                         {continuation?.continuationCloudId && continuation?.originCloudId ? (
                           <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">
                             Criou a Cloud{" "}
-                            <Link href={`/?cloud=${encodeURIComponent(continuation.continuationCloudId)}`} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.continuationCloudTitle ?? "continuação"}</Link>{" "}
+                            <Link href={`/cloud/${encodeURIComponent(continuation.continuationCloudId)}/notification`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.continuationCloudTitle ?? "continuação"}</Link>{" "}
                             com base em{" "}
-                            <Link href={`/read?cloud=${encodeURIComponent(continuation.originCloudId)}`} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.originCloudTitle ?? "sua Cloud"}</Link>.
+                            <Link href={`/cloud/${encodeURIComponent(continuation.originCloudId)}/notification`} onClick={onClose} className="font-semibold text-[#D8B4FE] hover:text-white hover:underline">{continuation.originCloudTitle ?? "sua Cloud"}</Link>.
                           </p>
-                        ) : <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">{notification.body}</p>}
+                        ) : href ? <Link href={href} onClick={onClose} className="mt-0.5 block text-[12px] leading-relaxed text-white/55 hover:text-white">{notification.body}</Link> : <p className="mt-0.5 text-[12px] leading-relaxed text-white/55">{notification.body}</p>}
                         <p className="mt-1 text-[11px] text-white/30">{formatRelativeTime(notification.createdAt)}</p>
 
                         {notification.type === "follow_request" && !notification.accepted && (

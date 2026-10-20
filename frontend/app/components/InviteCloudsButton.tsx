@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { generalInvitationText } from "../lib/cloud-invitation";
+import { useSessionUser } from "./session-user";
 
 function InviteArrowIcon({ size }: { size: number }) {
   return (
@@ -14,10 +15,24 @@ function InviteArrowIcon({ size }: { size: number }) {
 
 export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
+  const { user } = useSessionUser();
+  const [invitation, setInvitation] = useState<{ ownerId: string; url: string } | null>(null);
+  const url = invitation && user && invitation.ownerId === user.id ? invitation.url : "";
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const ownerId = user.id;
+    void fetch("/api/users/send-invite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: user.email }) })
+      .then(async (response) => { if (!response.ok) throw new Error(); const data = await response.json() as { inviteUrl: string }; if (!cancelled) setInvitation({ ownerId, url: data.inviteUrl }); })
+      .catch(() => { if (!cancelled) setNotice("Não foi possível criar seu convite."); });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const invite = async () => {
-    const url = new URL("/entrenoclouds", window.location.origin).href;
-    const text = generalInvitationText;
+    if (!user) { setNotice("Entre na sua conta para convidar amigos."); return; }
+    if (!url) { setNotice("Seu convite ainda está sendo preparado."); return; }
+    const text = generalInvitationText(user.displayName || user.name || user.username);
     const invitation = `${text}\n${url}`;
     setNotice("");
 

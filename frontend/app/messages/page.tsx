@@ -12,6 +12,7 @@ import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayI
 import { AudioWaveformPlayer } from "../components/AudioWaveformPlayer";
 import { ForwardToContactModal, type ForwardContact } from "../components/ForwardToContactModal";
 import { MessageMenuPortal } from "../components/MessageMenuPortal";
+import { ConversationListPreview } from "../components/ConversationListPreview";
 import { messagesConversationHref, requestedConversationId } from "../lib/navigation-memory";
 import { buildMessageContactList } from "../lib/message-contacts";
 import { useComposerPanLock } from "../lib/composer-pan-lock";
@@ -2063,7 +2064,7 @@ function MessagesPageContent() {
       }
     });
 
-    socket.on("disconnect", () => { setConnectionState("disconnected"); presenceByUserIdRef.current = {}; setPresenceByUserId({}); });
+    socket.on("disconnect", () => { setConnectionState("disconnected"); presenceByUserIdRef.current = {}; setPresenceByUserId({}); setTypingByConversation({}); });
     socket.on("connect_error", () => setConnectionState("disconnected"));
 
     socket.on("presence:update", (payload: { userId: string; status: "online" | "offline" }) => {
@@ -2694,7 +2695,7 @@ function MessagesPageContent() {
                           <span className="shrink-0 text-[12px] text-white/40">{conversation.time}</span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5">
-                          <span className="truncate text-[13px] text-white/50">{conversation.lastMessage || "No messages yet"}</span>
+                          <ConversationListPreview isTyping={Boolean(typingByConversation[conversation.id])} lastMessage={conversation.lastMessage} />
                           {(conversation.unread ?? 0) > 0 && <span className="ml-auto shrink-0 rounded-full bg-[#9333EA] px-1.5 py-0.5 text-[11px] font-bold text-white">{conversation.unread}</span>}
                         </div>
                       </div>

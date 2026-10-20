@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReadFeed, type ReadCloud } from "../app/components/ReadFeed";
 import { CloudPreview } from "../app/components/CloudPreview";
@@ -27,6 +27,24 @@ describe("Read", () => {
       expect(status).toHaveTextContent(/Encerrad/);
       expect(card.querySelector(".read-card-center")?.nextElementSibling).toBe(action);
     }
+  });
+  it("shares the archived conversation through native sharing and contacts", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, share });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/users/following") return { ok: true, json: async () => ({ users: [{ id: "friend", username: "amigo", displayName: "Amigo", avatarUrl: null }] }) };
+      if (url === "/api/direct-messages/conversations") return { ok: true, json: async () => ({ conversation: { id: "dm-1" } }) };
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: `Compartilhar ${cloud.title}` }));
+    expect(await screen.findByText("Amigo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compartilhar com…" }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining(`/cloud/${cloud.id}/conversation?from=read`) })));
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/direct-messages/conversations/dm-1/link", expect.objectContaining({ body: expect.stringContaining(`/cloud/${cloud.id}/conversation?from=read`) })));
+    vi.unstubAllGlobals();
   });
   it("does not open the read-only conversation with a mobile swipe", () => {
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);

@@ -22,4 +22,6 @@ export function invitationCountdown(createdAt: string | Date, duration: string, 
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}` : `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-export const generalInvitationText = "Vem pro Clouds comigo! ☁️\nÉ uma plataforma de conversas públicas ao vivo.\nCriei meu perfil aqui:";
+export function generalInvitationText(name?: string | null): string {
+  return `${name?.trim() || "Alguém"} está te convidando para o Clouds! Descubra conversas acontecendo agora...`;
+}

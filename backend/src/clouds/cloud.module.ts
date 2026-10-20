@@ -6,6 +6,7 @@ import { SocketIoRedisModule } from '../infrastructure/socket-io-redis/socket-io
 import { ChatPresenceModule } from '../infrastructure/chat-presence/chat-presence.module';
 import { CloudController } from './cloud.controller';
 import { CloudPremiereNotificationsService } from './cloud-premiere-notifications.service';
+import { CloudEndingNotificationsService } from './cloud-ending-notifications.service';
 import { CloudInterestRecommendationsService } from './cloud-interest-recommendations.service';
 import { CloudMessagesGateway } from './cloud.gateway';
 import { CloudService } from './cloud.service';
@@ -25,6 +26,7 @@ import { CloudTopicClassifierService } from './topic-classification/cloud-topic-
     CloudMessagesGateway,
     CloudTopicClassifierService,
     CloudPremiereNotificationsService,
+    CloudEndingNotificationsService,
     CloudInterestRecommendationsService,
   ],
   exports: [CloudTopicClassifierService],

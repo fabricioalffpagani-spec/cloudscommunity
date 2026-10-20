@@ -13,7 +13,6 @@ import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
 import { cacheFeed, getCachedFeed } from "../lib/feed-cache";
-import { ReadWelcomeHint } from "../components/ReadWelcomeHint";
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -49,24 +48,6 @@ function ReadPageContent() {
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>(initialScope);
-  const [readHintPhase, setReadHintPhase] = useState<"hidden" | "visible" | "fading">("hidden");
-
-  useEffect(() => {
-    if (!user?.id || !window.matchMedia("(max-width: 767px)").matches) return;
-    const storageKey = `clouds:read-first-visit:${user.id}`;
-    if (window.localStorage.getItem(storageKey)) return;
-
-    // Mark immediately so the welcome is shown only once for this account on
-    // this device, even if the user leaves Read before its fade-out completes.
-    window.localStorage.setItem(storageKey, "1");
-    setReadHintPhase("visible");
-    const fadeTimer = window.setTimeout(() => setReadHintPhase("fading"), 2300);
-    const hideTimer = window.setTimeout(() => setReadHintPhase("hidden"), 3000);
-    return () => {
-      window.clearTimeout(fadeTimer);
-      window.clearTimeout(hideTimer);
-    };
-  }, [user?.id]);
 
   const deleteCloud = async (cloudId: string) => {
     const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
@@ -125,7 +106,6 @@ function ReadPageContent() {
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
       {searchOpen && <SearchModal onClose={() => setSearchOpen(false)} />}
-      {readHintPhase !== "hidden" && <ReadWelcomeHint fading={readHintPhase === "fading"} />}
       <header className="hidden flex-none bg-transparent md:block">
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">

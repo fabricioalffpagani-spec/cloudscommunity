@@ -56,15 +56,18 @@ function InstagramIcon() {
 export function InvitePopup() {
   const { user, status } = useSessionUser();
   const [visible, setVisible] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState(() => typeof window === "undefined" ? "" : `${window.location.origin}/entrenoclouds`);
+  const [invitation, setInvitation] = useState<{ ownerId: string; url: string } | null>(null);
+  const inviteUrl = invitation && user && invitation.ownerId === user.id ? invitation.url : "";
   const [copiedPlatform, setCopiedPlatform] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const inviteText = generalInvitationText;
+  const inviteText = generalInvitationText(user?.displayName || user?.name || user?.username);
   const inviteMessage = `${inviteText}
 ${inviteUrl}`;
 
   useEffect(() => {
+    let cancelled = false;
+    setVisible(false);
     const previewMode = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("invitePreview") === "1";
     if (!previewMode && (status !== "authenticated" || !user?.id)) return;
 
@@ -88,14 +91,14 @@ ${inviteUrl}`;
         });
         if (res.ok) {
           const data = await res.json() as { ok: true; inviteUrl: string };
-          if (data.inviteUrl) setInviteUrl(data.inviteUrl);
+          if (!cancelled && data.inviteUrl) setInvitation({ ownerId: userId, url: data.inviteUrl });
         }
       } catch { /* silent */ }
 
-      setVisible(true);
+      if (!cancelled) setVisible(true);
     }, previewMode ? 0 : POPUP_DELAY_MS);
 
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => { cancelled = true; if (timerRef.current) clearTimeout(timerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, user?.id]);
 
@@ -105,6 +108,7 @@ ${inviteUrl}`;
   };
 
   const handleShare = async (platform: "whatsapp" | "instagram") => {
+    if (!inviteUrl) return;
     try {
       await navigator.clipboard.writeText(inviteMessage);
     } catch { /* silent */ }
@@ -176,7 +180,7 @@ ${inviteUrl}`;
               Convide seus contatos para o Clouds
             </p>
             <p className="mt-1.5 text-[11px] text-white/40 leading-snug">
-              Compartilhe nas redes sociais
+              Ao acessar seu convite, seus amigos encontrarão seu código já preenchido no cadastro.
             </p>
           </div>
         </div>
@@ -185,12 +189,13 @@ ${inviteUrl}`;
       {/* Sharing options */}
       <div className="bg-[#0E0A1F] px-4 py-4 space-y-3">
         {typeof navigator !== "undefined" && "share" in navigator && (
-          <button type="button" onClick={() => void shareNatively()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-[14px] font-bold text-white transition hover:bg-[#6D28D9]">
+          <button type="button" disabled={!inviteUrl} onClick={() => void shareNatively()} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-[14px] font-bold text-white transition hover:bg-[#6D28D9] disabled:opacity-50">
             Compartilhar convite
           </button>
         )}
         <button
           type="button"
+          disabled={!inviteUrl}
           onClick={() => void handleShare("whatsapp")}
           className="flex w-full items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#15161C] px-4 py-3.5 text-left transition hover:border-white/20 hover:bg-white/[0.06] active:scale-[0.98]"
         >
@@ -214,6 +219,7 @@ ${inviteUrl}`;
 
         <button
           type="button"
+          disabled={!inviteUrl}
           onClick={() => void handleShare("instagram")}
           className="flex w-full items-center gap-4 rounded-2xl border border-white/[0.07] bg-[#15161C] px-4 py-3.5 text-left transition hover:border-white/20 hover:bg-white/[0.06] active:scale-[0.98]"
         >

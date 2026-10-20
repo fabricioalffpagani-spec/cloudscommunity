@@ -40,11 +40,12 @@ type Props = {
   contacts: ForwardContact[];
   loading?: boolean;
   externalShareText?: string;
+  externalSharePrompt?: string;
   items?: ForwardItem[];
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, items, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, externalSharePrompt = "Esse papo tem a cara de alguém? Convide amigos para participar!", items, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
@@ -197,6 +198,15 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
     }
   };
 
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setExternalShareNotice("Link copiado.");
+    } catch {
+      setExternalShareNotice("Não foi possível copiar o link.");
+    }
+  };
+
   const shareOnWhatsApp = () => {
     const text = externalShareText || `${preview || title}\n${url}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
@@ -221,15 +231,18 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{items && items.length > 1 ? `${items.length} mensagens selecionadas para encaminhar` : preview}</p>}
         {externalShareText && (
           <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:hidden">
-            <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
+            <p className="text-[13px] font-semibold text-white">{externalSharePrompt}</p>
             <button type="button" onClick={() => void shareNatively()} className="mt-3 w-full rounded-full bg-[#9333EA] px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Compartilhar com…</button>
+            <button type="button" onClick={() => void copyShareLink()} className="mt-2 w-full rounded-full border border-white/20 px-4 py-2 text-[13px] font-semibold text-white">Copiar link</button>
             {externalShareNotice && <p role="status" className="mt-2 text-[11px] font-medium text-[#D8B4FE]">{externalShareNotice}</p>}
           </section>
         )}
         {externalShareText && (
           <section className="mb-5 hidden rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:block">
-            <p className="text-[13px] font-semibold text-white">Esse papo tem a cara de alguém? Convide amigos para participar!</p>
+            <p className="text-[13px] font-semibold text-white">{externalSharePrompt}</p>
             <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void shareNatively()} className="rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-semibold text-white">Compartilhar com apps</button>
+              <button type="button" onClick={() => void copyShareLink()} className="rounded-full border border-white/20 px-3 py-2 text-[12px] font-semibold text-white">Copiar link</button>
               <button type="button" onClick={shareOnWhatsApp} className="rounded-full bg-[#25D366] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">WhatsApp</button>
               <button type="button" onClick={() => void shareToMobileApp("Instagram", "https://www.instagram.com/direct/inbox/")} className="rounded-full bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110">Instagram Direct</button>
               <button type="button" onClick={shareOnX} className="rounded-full bg-black px-3 py-2 text-[12px] font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/10">X</button>
