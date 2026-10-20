@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { HypeCount } from "../components/HypeCount";
+import { ProfileInvitation } from "../components/ProfileInvitation";
 import { LongPressHint } from "../components/LongPressHint";
 import {
   SessionUserAvatar,
@@ -337,7 +338,7 @@ export default function ProfilePage() {
   const { user, status, refresh, applyUser, decrementCloudCount } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
-  const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended">("all");
+  const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended" | "invites">("all");
   const [cloudsLoading, setCloudsLoading] = useState(true);
   const [cloudToDelete, setCloudToDelete] = useState<ProfileCloud | null>(null);
   const [queueCloud, setQueueCloud] = useState<ProfileCloud | null>(null);
@@ -591,6 +592,7 @@ export default function ProfilePage() {
     active: "Não há Clouds ativas no momento.",
     scheduled: "Não há Clouds agendadas.",
     ended: "Não há Clouds encerradas.",
+    invites: "",
   }[cloudFilter];
   const hypesCount = user?.hypesCount ?? 0;
   const memberSince = formatMemberSince(user?.createdAt);
@@ -689,8 +691,8 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-10">
-          <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">{([['all', 'Todas'], ['active', 'Ativas'], ['scheduled', 'Agendadas'], ['ended', 'Encerradas']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
-          {cloudsLoading ? (
+          <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">{([['all', 'Todas'], ['active', 'Ativas'], ['scheduled', 'Agendadas'], ['ended', 'Encerradas'], ['invites', 'Convites']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
+          {cloudFilter === "invites" ? <ProfileInvitation /> : cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>

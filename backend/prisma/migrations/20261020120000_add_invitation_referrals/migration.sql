@@ -1,0 +1,3 @@
+CREATE TABLE "InvitationCode" ("userId" UUID NOT NULL PRIMARY KEY, "code" VARCHAR(7) NOT NULL UNIQUE, CONSTRAINT "InvitationCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE);
+CREATE TABLE "InvitationReferral" ("invitedUserId" UUID NOT NULL PRIMARY KEY, "inviterUserId" UUID NOT NULL, "creditedAt" TIMESTAMP(3), "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "InvitationReferral_invitedUserId_fkey" FOREIGN KEY ("invitedUserId") REFERENCES "User"("id") ON DELETE CASCADE, CONSTRAINT "InvitationReferral_inviterUserId_fkey" FOREIGN KEY ("inviterUserId") REFERENCES "User"("id") ON DELETE CASCADE);
+CREATE INDEX "InvitationReferral_inviterUserId_creditedAt_idx" ON "InvitationReferral"("inviterUserId", "creditedAt");

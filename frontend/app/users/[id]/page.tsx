@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 import { HypeCount } from "../../components/HypeCount";
+import { ProfileInvitation } from "../../components/ProfileInvitation";
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
@@ -258,7 +259,7 @@ export default function UserProfilePage() {
   const [loadingHypes, setLoadingHypes] = useState(false);
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [cloudTab, setCloudTab] = useState<"all" | "active" | "scheduled" | "ended">("all");
+  const [cloudTab, setCloudTab] = useState<"all" | "active" | "scheduled" | "ended" | "invites">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -482,6 +483,7 @@ export default function UserProfilePage() {
   const memberSince = formatMemberSince(profile?.createdAt);
   const bio = profile?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
   const isOwnProfile = Boolean(profile?.isSelf || sessionUser?.id === profile?.id);
+  const canViewInvitations = Boolean(sessionUser?.id && profile?.id === sessionUser.id);
   const activeClouds = profile?.activeClouds ?? [];
   const endedClouds = profile?.endedClouds ?? [];
   const scheduledClouds = activeClouds.filter((cloud) => Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now));
@@ -687,8 +689,9 @@ export default function UserProfilePage() {
                   {label} <span className={selected ? "text-white/75" : "text-white/40"}>{count}</span>
                 </button>;
               })}
+              {canViewInvitations && <button type="button" role="tab" aria-selected={cloudTab === "invites"} onClick={() => setCloudTab("invites")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "invites" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Convites</button>}
             </div>
-            {visibleClouds.length > 0 ? (
+            {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : visibleClouds.length > 0 ? (
               <div className="grid gap-3">
                 {visibleClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} viewerId={sessionUser?.id} />)}
               </div>

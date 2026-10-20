@@ -1,0 +1,27 @@
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/@testing-library/react/dist/index.js", {"importedNames":["render","screen"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/node_modules/vitest/dist/index.js", {"importedNames":["describe","expect","it"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/app/components/MobileLaunchScreen.tsx", {"importedNames":["MobileLaunchScreen"]});
+const __vite_ssr_import_3__ = await __vite_ssr_import__("/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/tests/mobile-launch-screen.test.tsx";
+
+(0,__vite_ssr_import_1__.describe)("PWA launch screen", () => {
+	(0,__vite_ssr_import_1__.it)("shows the existing Clouds Community wordmark under the logo on mobile", () => {
+		(0,__vite_ssr_import_0__.render)(/* @__PURE__ */ (0,__vite_ssr_import_3__.jsxDEV)((0,__vite_ssr_import_2__.MobileLaunchScreen), {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 7,
+			columnNumber: 12
+		}, this));
+		const screenElement = __vite_ssr_import_0__.screen.getByLabelText("Abrindo Clouds Community");
+		(0,__vite_ssr_import_1__.expect)(screenElement).toHaveClass("flex", "md:hidden");
+		(0,__vite_ssr_import_1__.expect)(screenElement.querySelector("img")).toBeInTheDocument();
+		(0,__vite_ssr_import_1__.expect)(screenElement).toHaveTextContent("Clouds");
+		(0,__vite_ssr_import_1__.expect)(screenElement).toHaveTextContent("Community");
+	});
+});
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUE7QUFDQTtBQUNBOzs7Ozs7O0FBRUEsbUNBQVMsMkJBQTJCO0NBQ2xDLDZCQUFHLCtFQUErRTtFQUNoRixpREFBTyxvQ0FBQywyQ0FBRCxDQUFxQjs7OztVQUFDO0VBQzdCLE1BQU0sZ0JBQWdCLDZCQUFPLGVBQWUsMEJBQTBCO0VBQ3RFLGlDQUFPLGFBQWEsQ0FBQyxDQUFDLFlBQVksUUFBUSxXQUFXO0VBQ3JELGlDQUFPLGNBQWMsY0FBYyxLQUFLLENBQUMsQ0FBQyxDQUFDLGtCQUFrQjtFQUM3RCxpQ0FBTyxhQUFhLENBQUMsQ0FBQyxrQkFBa0IsUUFBUTtFQUNoRCxpQ0FBTyxhQUFhLENBQUMsQ0FBQyxrQkFBa0IsV0FBVztDQUNyRCxDQUFDO0FBQ0gsQ0FBQyIsIm5hbWVzIjpbXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsibW9iaWxlLWxhdW5jaC1zY3JlZW4udGVzdC50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgcmVuZGVyLCBzY3JlZW4gfSBmcm9tIFwiQHRlc3RpbmctbGlicmFyeS9yZWFjdFwiO1xyXG5pbXBvcnQgeyBkZXNjcmliZSwgZXhwZWN0LCBpdCB9IGZyb20gXCJ2aXRlc3RcIjtcclxuaW1wb3J0IHsgTW9iaWxlTGF1bmNoU2NyZWVuIH0gZnJvbSBcIi4uL2FwcC9jb21wb25lbnRzL01vYmlsZUxhdW5jaFNjcmVlblwiO1xyXG5cclxuZGVzY3JpYmUoXCJQV0EgbGF1bmNoIHNjcmVlblwiLCAoKSA9PiB7XHJcbiAgaXQoXCJzaG93cyB0aGUgZXhpc3RpbmcgQ2xvdWRzIENvbW11bml0eSB3b3JkbWFyayB1bmRlciB0aGUgbG9nbyBvbiBtb2JpbGVcIiwgKCkgPT4ge1xyXG4gICAgcmVuZGVyKDxNb2JpbGVMYXVuY2hTY3JlZW4gLz4pO1xyXG4gICAgY29uc3Qgc2NyZWVuRWxlbWVudCA9IHNjcmVlbi5nZXRCeUxhYmVsVGV4dChcIkFicmluZG8gQ2xvdWRzIENvbW11bml0eVwiKTtcclxuICAgIGV4cGVjdChzY3JlZW5FbGVtZW50KS50b0hhdmVDbGFzcyhcImZsZXhcIiwgXCJtZDpoaWRkZW5cIik7XHJcbiAgICBleHBlY3Qoc2NyZWVuRWxlbWVudC5xdWVyeVNlbGVjdG9yKFwiaW1nXCIpKS50b0JlSW5UaGVEb2N1bWVudCgpO1xyXG4gICAgZXhwZWN0KHNjcmVlbkVsZW1lbnQpLnRvSGF2ZVRleHRDb250ZW50KFwiQ2xvdWRzXCIpO1xyXG4gICAgZXhwZWN0KHNjcmVlbkVsZW1lbnQpLnRvSGF2ZVRleHRDb250ZW50KFwiQ29tbXVuaXR5XCIpO1xyXG4gIH0pO1xyXG59KTtcclxuIl0sImZpbGUiOiIvdGVzdHMvbW9iaWxlLWxhdW5jaC1zY3JlZW4udGVzdC50c3gifQ==
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC90ZXN0cy9tb2JpbGUtbGF1bmNoLXNjcmVlbi50ZXN0LnRzeCIsIi90ZXN0cy9tb2JpbGUtbGF1bmNoLXNjcmVlbi50ZXN0LnRzeCIsW11d

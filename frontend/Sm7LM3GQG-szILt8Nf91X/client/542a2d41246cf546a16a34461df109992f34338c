@@ -1,0 +1,24 @@
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/vitest/dist/index.js", {"importedNames":["describe","expect","it","vi"]});
+__vite_ssr_import_0__.vi.mock("../app/lib/invitation-preview", () => ({ getInvitationPreview: __vite_ssr_import_0__.vi.fn(async (code) => code === "ANA1234" ? {
+	displayName: "Ana",
+	username: "ana",
+	avatarUrl: "data:image/png;base64,AAAA"
+} : null) }));
+const __vi_import_0__ = await __vite_ssr_dynamic_import__("/app/entrenoclouds/page.tsx");
+
+
+(0,__vite_ssr_import_0__.describe)("invitation link preview", () => {
+	(0,__vite_ssr_import_0__.it)("uses the sender's name and an image tied to the invitation code", async () => {
+		const metadata = await __vi_import_0__.generateMetadata({ searchParams: Promise.resolve({ ref: "ANA1234" }) });
+		(0,__vite_ssr_import_0__.expect)(metadata.description).toBe("Ana está te convidando para o Clouds! Descubra conversas acontecendo agora...");
+		(0,__vite_ssr_import_0__.expect)(metadata.openGraph?.images).toEqual([{
+			url: "/entrenoclouds/preview?ref=ANA1234",
+			width: 600,
+			height: 600
+		}]);
+	});
+});
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUE7QUFHQSx5QkFBRyxLQUFLLHdDQUF3QyxFQUFFLHNCQUFzQix5QkFBRyxHQUFHLE9BQU8sU0FBaUIsU0FBUyxZQUFZO0NBQUUsYUFBYTtDQUFPLFVBQVU7Q0FBTyxXQUFXO0FBQTZCLElBQUksSUFBSSxFQUFFLEVBQUU7QUFGdE47OztBQUlBLG1DQUFTLGlDQUFpQztDQUN4Qyw2QkFBRyxtRUFBbUUsWUFBWTtFQUNoRixNQUFNLFdBQVcsTUFBTSxpQ0FBaUIsRUFBRSxjQUFjLFFBQVEsUUFBUSxFQUFFLEtBQUssVUFBVSxDQUFDLEVBQUUsQ0FBQztFQUM3RixpQ0FBTyxTQUFTLFdBQVcsQ0FBQyxDQUFDLEtBQUssK0VBQStFO0VBQ2pILGlDQUFPLFNBQVMsV0FBVyxNQUFNLENBQUMsQ0FBQyxRQUFRLENBQUM7R0FBRSxLQUFLO0dBQXNDLE9BQU87R0FBSyxRQUFRO0VBQUksQ0FBQyxDQUFDO0NBQ3JILENBQUM7QUFDSCxDQUFDIiwibmFtZXMiOltdLCJpZ25vcmVMaXN0IjpbXSwic291cmNlcyI6WyJpbnZpdGF0aW9uLXByZXZpZXcudGVzdC50c3giXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHsgZGVzY3JpYmUsIGV4cGVjdCwgaXQsIHZpIH0gZnJvbSBcInZpdGVzdFwiO1xuaW1wb3J0IHsgZ2VuZXJhdGVNZXRhZGF0YSB9IGZyb20gXCIuLi9hcHAvZW50cmVub2Nsb3Vkcy9wYWdlXCI7XG5cbnZpLm1vY2soXCIuLi9hcHAvbGliL2ludml0YXRpb24tcHJldmlld1wiLCAoKSA9PiAoeyBnZXRJbnZpdGF0aW9uUHJldmlldzogdmkuZm4oYXN5bmMgKGNvZGU6IHN0cmluZykgPT4gY29kZSA9PT0gXCJBTkExMjM0XCIgPyB7IGRpc3BsYXlOYW1lOiBcIkFuYVwiLCB1c2VybmFtZTogXCJhbmFcIiwgYXZhdGFyVXJsOiBcImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxBQUFBXCIgfSA6IG51bGwpIH0pKTtcblxuZGVzY3JpYmUoXCJpbnZpdGF0aW9uIGxpbmsgcHJldmlld1wiLCAoKSA9PiB7XG4gIGl0KFwidXNlcyB0aGUgc2VuZGVyJ3MgbmFtZSBhbmQgYW4gaW1hZ2UgdGllZCB0byB0aGUgaW52aXRhdGlvbiBjb2RlXCIsIGFzeW5jICgpID0+IHtcbiAgICBjb25zdCBtZXRhZGF0YSA9IGF3YWl0IGdlbmVyYXRlTWV0YWRhdGEoeyBzZWFyY2hQYXJhbXM6IFByb21pc2UucmVzb2x2ZSh7IHJlZjogXCJBTkExMjM0XCIgfSkgfSk7XG4gICAgZXhwZWN0KG1ldGFkYXRhLmRlc2NyaXB0aW9uKS50b0JlKFwiQW5hIGVzdMOhIHRlIGNvbnZpZGFuZG8gcGFyYSBvIENsb3VkcyEgRGVzY3VicmEgY29udmVyc2FzIGFjb250ZWNlbmRvIGFnb3JhLi4uXCIpO1xuICAgIGV4cGVjdChtZXRhZGF0YS5vcGVuR3JhcGg/LmltYWdlcykudG9FcXVhbChbeyB1cmw6IFwiL2VudHJlbm9jbG91ZHMvcHJldmlldz9yZWY9QU5BMTIzNFwiLCB3aWR0aDogNjAwLCBoZWlnaHQ6IDYwMCB9XSk7XG4gIH0pO1xufSk7XG4iXSwiZmlsZSI6Ii90ZXN0cy9pbnZpdGF0aW9uLXByZXZpZXcudGVzdC50c3gifQ==
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC90ZXN0cy9pbnZpdGF0aW9uLXByZXZpZXcudGVzdC50c3giLCIvdGVzdHMvaW52aXRhdGlvbi1wcmV2aWV3LnRlc3QudHN4IixbXV0=

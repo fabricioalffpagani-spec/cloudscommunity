@@ -20,6 +20,7 @@ import { useComposerPanLock } from "../../lib/composer-pan-lock";
 import { buildMentionCandidates } from "../../lib/mention-candidates";
 import { recordStickerUse } from "../../lib/sticker-usage";
 import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
+import { cloudElapsedSeconds } from "../../lib/cloud-start-time";
 
 type CloudPayload = {
   id: string;
@@ -30,6 +31,7 @@ type CloudPayload = {
   status: string;
   authorId: string;
   createdAt?: string;
+  startedAt?: string | null;
   visibility?: "public" | "private";
   author: {
     id: string;
@@ -134,6 +136,7 @@ type CloudMeta = {
   duration: string;
   editCount?: number;
   createdAt: string;
+  startedAt?: string | null;
   membersCount: number;
   description?: string | null;
   authorId?: string;
@@ -468,6 +471,7 @@ function normalizeCloud(payload: CloudPayload) {
     duration: payload.duration,
     editCount: payload.editCount ?? 0,
     createdAt: payload.createdAt ?? new Date().toISOString(),
+    startedAt: payload.startedAt,
     status: payload.status,
     authorId: payload.authorId,
     membersCount: payload.membersCount,
@@ -530,7 +534,7 @@ function useCountdown(meta: CloudMeta | null) {
       return { formatted: "0:00", remaining: 0, isExpired: false };
     }
 
-    const elapsed = Math.floor((now - new Date(meta.createdAt).getTime()) / 1000);
+    const elapsed = cloudElapsedSeconds(meta, now);
     const remaining = Math.max(parseDurationSeconds(meta.duration) - elapsed, 0);
 
     return {
@@ -538,7 +542,7 @@ function useCountdown(meta: CloudMeta | null) {
       remaining,
       isExpired: remaining <= 0,
     };
-  }, [meta?.createdAt, meta?.duration, now]);
+  }, [meta?.createdAt, meta?.startedAt, meta?.duration, now]);
 }
 
 function HeaderClockIcon() {
@@ -1753,8 +1757,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const outgoingTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTypingPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const incomingTypingTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const minimizingRef = useRef(false);
-  const leftOnMobileExitRef = useRef(false);
 
   useEffect(() => {
     activeCloudIdRef.current = cloudId;
@@ -1892,40 +1894,6 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
   const isCloudAuthor = Boolean(user?.id && cloud?.authorId && user.id === cloud.authorId);
 
-  useEffect(() => {
-    if (!window.matchMedia("(max-width: 767px)").matches || status !== "authenticated" || !user) return;
-
-    const leaveCloud = () => {
-      if (minimizingRef.current || leftOnMobileExitRef.current) return;
-      leftOnMobileExitRef.current = true;
-      const minimized = window.localStorage.getItem("clouds:minimized-cloud");
-      try {
-        if (minimized && JSON.parse(minimized).id === cloudId) {
-          window.localStorage.removeItem("clouds:minimized-cloud");
-          window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
-        }
-      } catch { /* ignore invalid persisted state */ }
-      const leaveUrl = `/api/clouds/${encodeURIComponent(cloudId)}/${isCloudAuthor ? "exit" : "leave"}`;
-      // A regular fetch can be aborted as Android navigates away after the
-      // browser-back gesture. Beacon keeps the persisted leave request alive,
-      // so the server can create the system message and broadcast members.
-      if (navigator.sendBeacon?.(leaveUrl)) return;
-      void fetch(leaveUrl, {
-        method: "POST",
-        credentials: "include",
-        keepalive: true,
-      }).catch(() => undefined);
-    };
-
-    // Browser back (including Android's gesture/button) leaves the active
-    // Cloud. Do not turn that navigation into a Mini Cloud.
-    window.addEventListener("popstate", leaveCloud);
-    window.addEventListener("pagehide", leaveCloud);
-    return () => {
-      window.removeEventListener("popstate", leaveCloud);
-      window.removeEventListener("pagehide", leaveCloud);
-    };
-  }, [cloudId, isCloudAuthor, status, user]);
   const isPrivateCloud = (cloud?.visibility ?? visibility ?? "public") === "private";
   const typingPeople = Object.entries(typingUserIds)
     .filter(([, isTyping]) => isTyping)
@@ -2104,7 +2072,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [titleLongPressTimer]);
 
   const minimizeCloud = useCallback(() => {
-    minimizingRef.current = true;
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      router.push("/");
+      return;
+    }
     // Minimizar escolhe o dock integrado; a janela externa tem ação própria.
     window.localStorage.removeItem("clouds:mini-cloud-popout");
     window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString() }));

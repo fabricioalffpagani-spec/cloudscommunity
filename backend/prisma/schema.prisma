@@ -529,6 +529,30 @@ model CloudPremiereDelivery {
   @@index([userId, createdAt])
 }
 
+model InvitationCode {
+  userId    String @id @db.Uuid
+  code      String @unique @db.VarChar(7)
+}
+
+model InvitationReferral {
+  invitedUserId String   @id @db.Uuid
+  inviterUserId String   @db.Uuid
+  creditedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([inviterUserId, creditedAt])
+}
+
+model CloudEndingDelivery {
+  id        String   @id @default(uuid()) @db.Uuid
+  cloudId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@unique([cloudId, userId])
+  @@index([userId, createdAt])
+}
+
 model CloudInterestRecommendationDelivery {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid

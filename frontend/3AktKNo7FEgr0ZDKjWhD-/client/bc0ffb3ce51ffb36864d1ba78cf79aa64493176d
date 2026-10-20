@@ -1,0 +1,48 @@
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/@testing-library/react/dist/index.js", {"importedNames":["render","screen"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/node_modules/vitest/dist/index.js", {"importedNames":["afterEach","describe","expect","it","vi"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/app/signup/page.tsx", {"importedNames":["default"]});
+const __vite_ssr_import_3__ = await __vite_ssr_import__("/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/tests/signup-invitation.test.tsx";
+
+(0,__vite_ssr_import_1__.afterEach)(() => {
+	window.history.replaceState({}, "", "/");
+});
+(0,__vite_ssr_import_1__.describe)("signup invitation", () => {
+	(0,__vite_ssr_import_1__.it)("prefills and locks a code received by link", async () => {
+		window.history.replaceState({}, "", "/signup?ref=ABC1234");
+		__vite_ssr_import_1__.vi.stubGlobal("fetch", __vite_ssr_import_1__.vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({ available: true })
+		}));
+		(0,__vite_ssr_import_0__.render)(/* @__PURE__ */ (0,__vite_ssr_import_3__.jsxDEV)((0,__vite_ssr_import_2__.default), {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 11,
+			columnNumber: 12
+		}, this));
+		const field = await __vite_ssr_import_0__.screen.findByLabelText(/Código de convite/i);
+		(0,__vite_ssr_import_1__.expect)(field).toHaveValue("ABC1234");
+		(0,__vite_ssr_import_1__.expect)(field).toHaveAttribute("readonly");
+	});
+	(0,__vite_ssr_import_1__.it)("allows manual entry when there is no invitation link", async () => {
+		window.history.replaceState({}, "", "/signup");
+		__vite_ssr_import_1__.vi.stubGlobal("fetch", __vite_ssr_import_1__.vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({ available: true })
+		}));
+		(0,__vite_ssr_import_0__.render)(/* @__PURE__ */ (0,__vite_ssr_import_3__.jsxDEV)((0,__vite_ssr_import_2__.default), {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 20,
+			columnNumber: 12
+		}, this));
+		const field = await __vite_ssr_import_0__.screen.findByLabelText(/Código de convite/i);
+		(0,__vite_ssr_import_1__.expect)(field).toHaveValue("");
+		(0,__vite_ssr_import_1__.expect)(field).not.toHaveAttribute("readonly");
+	});
+});
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUE7QUFDQTtBQUNBOzs7Ozs7O0FBRUEsMENBQWdCO0NBQUUsT0FBTyxRQUFRLGFBQWEsQ0FBQyxHQUFHLElBQUksR0FBRztBQUFHLENBQUM7QUFFN0QsbUNBQVMsMkJBQTJCO0NBQ2xDLDZCQUFHLDhDQUE4QyxZQUFZO0VBQzNELE9BQU8sUUFBUSxhQUFhLENBQUMsR0FBRyxJQUFJLHFCQUFxQjtFQUN6RCx5QkFBRyxXQUFXLFNBQVMseUJBQUcsR0FBRyxDQUFDLENBQUMsa0JBQWtCO0dBQUUsSUFBSTtHQUFNLE1BQU0sYUFBYSxFQUFFLFdBQVcsS0FBSztFQUFHLENBQUMsQ0FBQztFQUN2RyxpREFBTyxvQ0FBQyxnQ0FBRCxDQUFhOzs7O1VBQUM7RUFDckIsTUFBTSxRQUFRLE1BQU0sNkJBQU8sZ0JBQWdCLG9CQUFvQjtFQUMvRCxpQ0FBTyxLQUFLLENBQUMsQ0FBQyxZQUFZLFNBQVM7RUFDbkMsaUNBQU8sS0FBSyxDQUFDLENBQUMsZ0JBQWdCLFVBQVU7Q0FDMUMsQ0FBQztDQUVELDZCQUFHLHdEQUF3RCxZQUFZO0VBQ3JFLE9BQU8sUUFBUSxhQUFhLENBQUMsR0FBRyxJQUFJLFNBQVM7RUFDN0MseUJBQUcsV0FBVyxTQUFTLHlCQUFHLEdBQUcsQ0FBQyxDQUFDLGtCQUFrQjtHQUFFLElBQUk7R0FBTSxNQUFNLGFBQWEsRUFBRSxXQUFXLEtBQUs7RUFBRyxDQUFDLENBQUM7RUFDdkcsaURBQU8sb0NBQUMsZ0NBQUQsQ0FBYTs7OztVQUFDO0VBQ3JCLE1BQU0sUUFBUSxNQUFNLDZCQUFPLGdCQUFnQixvQkFBb0I7RUFDL0QsaUNBQU8sS0FBSyxDQUFDLENBQUMsWUFBWSxFQUFFO0VBQzVCLGlDQUFPLEtBQUssQ0FBQyxDQUFDLElBQUksZ0JBQWdCLFVBQVU7Q0FDOUMsQ0FBQztBQUNILENBQUMiLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbInNpZ251cC1pbnZpdGF0aW9uLnRlc3QudHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IHJlbmRlciwgc2NyZWVuIH0gZnJvbSBcIkB0ZXN0aW5nLWxpYnJhcnkvcmVhY3RcIjtcbmltcG9ydCB7IGFmdGVyRWFjaCwgZGVzY3JpYmUsIGV4cGVjdCwgaXQsIHZpIH0gZnJvbSBcInZpdGVzdFwiO1xuaW1wb3J0IFNpZ251cFBhZ2UgZnJvbSBcIi4uL2FwcC9zaWdudXAvcGFnZVwiO1xuXG5hZnRlckVhY2goKCkgPT4geyB3aW5kb3cuaGlzdG9yeS5yZXBsYWNlU3RhdGUoe30sIFwiXCIsIFwiL1wiKTsgfSk7XG5cbmRlc2NyaWJlKFwic2lnbnVwIGludml0YXRpb25cIiwgKCkgPT4ge1xuICBpdChcInByZWZpbGxzIGFuZCBsb2NrcyBhIGNvZGUgcmVjZWl2ZWQgYnkgbGlua1wiLCBhc3luYyAoKSA9PiB7XG4gICAgd2luZG93Lmhpc3RvcnkucmVwbGFjZVN0YXRlKHt9LCBcIlwiLCBcIi9zaWdudXA/cmVmPUFCQzEyMzRcIik7XG4gICAgdmkuc3R1Ykdsb2JhbChcImZldGNoXCIsIHZpLmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoeyBvazogdHJ1ZSwganNvbjogYXN5bmMgKCkgPT4gKHsgYXZhaWxhYmxlOiB0cnVlIH0pIH0pKTtcbiAgICByZW5kZXIoPFNpZ251cFBhZ2UgLz4pO1xuICAgIGNvbnN0IGZpZWxkID0gYXdhaXQgc2NyZWVuLmZpbmRCeUxhYmVsVGV4dCgvQ8OzZGlnbyBkZSBjb252aXRlL2kpO1xuICAgIGV4cGVjdChmaWVsZCkudG9IYXZlVmFsdWUoXCJBQkMxMjM0XCIpO1xuICAgIGV4cGVjdChmaWVsZCkudG9IYXZlQXR0cmlidXRlKFwicmVhZG9ubHlcIik7XG4gIH0pO1xuXG4gIGl0KFwiYWxsb3dzIG1hbnVhbCBlbnRyeSB3aGVuIHRoZXJlIGlzIG5vIGludml0YXRpb24gbGlua1wiLCBhc3luYyAoKSA9PiB7XG4gICAgd2luZG93Lmhpc3RvcnkucmVwbGFjZVN0YXRlKHt9LCBcIlwiLCBcIi9zaWdudXBcIik7XG4gICAgdmkuc3R1Ykdsb2JhbChcImZldGNoXCIsIHZpLmZuKCkubW9ja1Jlc29sdmVkVmFsdWUoeyBvazogdHJ1ZSwganNvbjogYXN5bmMgKCkgPT4gKHsgYXZhaWxhYmxlOiB0cnVlIH0pIH0pKTtcbiAgICByZW5kZXIoPFNpZ251cFBhZ2UgLz4pO1xuICAgIGNvbnN0IGZpZWxkID0gYXdhaXQgc2NyZWVuLmZpbmRCeUxhYmVsVGV4dCgvQ8OzZGlnbyBkZSBjb252aXRlL2kpO1xuICAgIGV4cGVjdChmaWVsZCkudG9IYXZlVmFsdWUoXCJcIik7XG4gICAgZXhwZWN0KGZpZWxkKS5ub3QudG9IYXZlQXR0cmlidXRlKFwicmVhZG9ubHlcIik7XG4gIH0pO1xufSk7XG4iXSwiZmlsZSI6Ii90ZXN0cy9zaWdudXAtaW52aXRhdGlvbi50ZXN0LnRzeCJ9
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC90ZXN0cy9zaWdudXAtaW52aXRhdGlvbi50ZXN0LnRzeCIsIi90ZXN0cy9zaWdudXAtaW52aXRhdGlvbi50ZXN0LnRzeCIsW11d

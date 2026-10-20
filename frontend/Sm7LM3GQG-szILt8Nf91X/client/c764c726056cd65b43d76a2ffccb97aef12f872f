@@ -1,0 +1,66 @@
+__vite_ssr_exportName__("CloudSystemMessage", () => { try { return CloudSystemMessage } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/next/link.js", {"importedNames":["default"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/app/components/session-user.tsx", {"importedNames":["UserAvatar"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+"use client";
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/app/components/CloudSystemMessage.tsx";
+
+function CloudSystemMessage({ message }) {
+	return /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)("div", {
+		className: "flex w-full justify-center py-1.5",
+		children: /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)("div", {
+			className: "flex items-center gap-2 rounded-full border border-white/[0.05] bg-white/[0.06] px-3 py-1.5",
+			children: [message.senderAvatarUrl ? /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)((0,__vite_ssr_import_0__.default), {
+				href: `/users/${encodeURIComponent(message.senderId)}`,
+				"aria-label": `Ver perfil de ${message.senderName}`,
+				children: /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)((0,__vite_ssr_import_1__.UserAvatar), {
+					user: {
+						id: message.senderId,
+						username: message.senderId,
+						displayName: message.senderName,
+						avatarUrl: message.senderAvatarUrl
+					},
+					size: 20
+				}, void 0, false, {
+					fileName: _jsxFileName,
+					lineNumber: 24,
+					columnNumber: 13
+				}, this)
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 20,
+				columnNumber: 11
+			}, this) : /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)((0,__vite_ssr_import_0__.default), {
+				href: `/users/${encodeURIComponent(message.senderId)}`,
+				"aria-label": `Ver perfil de ${message.senderName}`,
+				className: "flex h-5 w-5 items-center justify-center rounded-full bg-[#7C3AED] text-[10px] font-bold text-white",
+				children: message.senderName.charAt(0).toUpperCase()
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 35,
+				columnNumber: 11
+			}, this), /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)("span", {
+				className: "text-[12px] font-medium text-white/60",
+				children: message.content
+			}, void 0, false, {
+				fileName: _jsxFileName,
+				lineNumber: 43,
+				columnNumber: 9
+			}, this)]
+		}, void 0, true, {
+			fileName: _jsxFileName,
+			lineNumber: 18,
+			columnNumber: 7
+		}, this)
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 17,
+		columnNumber: 5
+	}, this);
+}
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUEsQ0FBQTtBQUVBO0FBQ0E7O0FBSEE7Ozs7O0FBS08sU0FBUyxtQkFBbUIsRUFDakMsV0FRQztDQUNELE9BQ0UsaURBQUMsT0FBRDtFQUFLLFdBQVU7WUFDYixpREFBQyxPQUFEO0dBQUssV0FBVTthQUFmLENBQ0csUUFBUSxrQkFDUCxvREFBQyxnQ0FBRDtJQUNFLE1BQU0sVUFBVSxtQkFBbUIsUUFBUSxRQUFRO0lBQ25ELGNBQVksaUJBQWlCLFFBQVE7Y0FFckMsb0RBQUMsbUNBQUQ7S0FDRSxNQUFNO01BQ0osSUFBSSxRQUFRO01BQ1osVUFBVSxRQUFRO01BQ2xCLGFBQWEsUUFBUTtNQUNyQixXQUFXLFFBQVE7S0FDckI7S0FDQSxNQUFNO0lBQ1A7Ozs7O0dBQ0c7Ozs7Y0FFTixvREFBQyxnQ0FBRDtJQUNFLE1BQU0sVUFBVSxtQkFBbUIsUUFBUSxRQUFRO0lBQ25ELGNBQVksaUJBQWlCLFFBQVE7SUFDckMsV0FBVTtjQUVULFFBQVEsV0FBVyxPQUFPLENBQUMsQ0FBQyxDQUFDLFlBQVk7R0FDdEM7Ozs7YUFFUixpREFBQyxRQUFEO0lBQU0sV0FBVTtjQUNiLFFBQVE7R0FDTDs7OztXQUNIOzs7Ozs7Q0FDRjs7Ozs7QUFFVCIsIm5hbWVzIjpbXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiQ2xvdWRTeXN0ZW1NZXNzYWdlLnRzeCJdLCJzb3VyY2VzQ29udGVudCI6WyJcInVzZSBjbGllbnRcIjtcclxuXHJcbmltcG9ydCBMaW5rIGZyb20gXCJuZXh0L2xpbmtcIjtcclxuaW1wb3J0IHsgVXNlckF2YXRhciB9IGZyb20gXCIuL3Nlc3Npb24tdXNlclwiO1xyXG5cclxuZXhwb3J0IGZ1bmN0aW9uIENsb3VkU3lzdGVtTWVzc2FnZSh7XHJcbiAgbWVzc2FnZSxcclxufToge1xyXG4gIG1lc3NhZ2U6IHtcclxuICAgIGNvbnRlbnQ6IHN0cmluZyB8IG51bGw7XHJcbiAgICBzZW5kZXJJZDogc3RyaW5nO1xyXG4gICAgc2VuZGVyTmFtZTogc3RyaW5nO1xyXG4gICAgc2VuZGVyQXZhdGFyVXJsPzogc3RyaW5nIHwgbnVsbDtcclxuICB9O1xyXG59KSB7XHJcbiAgcmV0dXJuIChcclxuICAgIDxkaXYgY2xhc3NOYW1lPVwiZmxleCB3LWZ1bGwganVzdGlmeS1jZW50ZXIgcHktMS41XCI+XHJcbiAgICAgIDxkaXYgY2xhc3NOYW1lPVwiZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTIgcm91bmRlZC1mdWxsIGJvcmRlciBib3JkZXItd2hpdGUvWzAuMDVdIGJnLXdoaXRlL1swLjA2XSBweC0zIHB5LTEuNVwiPlxyXG4gICAgICAgIHttZXNzYWdlLnNlbmRlckF2YXRhclVybCA/IChcclxuICAgICAgICAgIDxMaW5rXHJcbiAgICAgICAgICAgIGhyZWY9e2AvdXNlcnMvJHtlbmNvZGVVUklDb21wb25lbnQobWVzc2FnZS5zZW5kZXJJZCl9YH1cclxuICAgICAgICAgICAgYXJpYS1sYWJlbD17YFZlciBwZXJmaWwgZGUgJHttZXNzYWdlLnNlbmRlck5hbWV9YH1cclxuICAgICAgICAgID5cclxuICAgICAgICAgICAgPFVzZXJBdmF0YXJcclxuICAgICAgICAgICAgICB1c2VyPXt7XHJcbiAgICAgICAgICAgICAgICBpZDogbWVzc2FnZS5zZW5kZXJJZCxcclxuICAgICAgICAgICAgICAgIHVzZXJuYW1lOiBtZXNzYWdlLnNlbmRlcklkLFxyXG4gICAgICAgICAgICAgICAgZGlzcGxheU5hbWU6IG1lc3NhZ2Uuc2VuZGVyTmFtZSxcclxuICAgICAgICAgICAgICAgIGF2YXRhclVybDogbWVzc2FnZS5zZW5kZXJBdmF0YXJVcmwsXHJcbiAgICAgICAgICAgICAgfX1cclxuICAgICAgICAgICAgICBzaXplPXsyMH1cclxuICAgICAgICAgICAgLz5cclxuICAgICAgICAgIDwvTGluaz5cclxuICAgICAgICApIDogKFxyXG4gICAgICAgICAgPExpbmtcclxuICAgICAgICAgICAgaHJlZj17YC91c2Vycy8ke2VuY29kZVVSSUNvbXBvbmVudChtZXNzYWdlLnNlbmRlcklkKX1gfVxyXG4gICAgICAgICAgICBhcmlhLWxhYmVsPXtgVmVyIHBlcmZpbCBkZSAke21lc3NhZ2Uuc2VuZGVyTmFtZX1gfVxyXG4gICAgICAgICAgICBjbGFzc05hbWU9XCJmbGV4IGgtNSB3LTUgaXRlbXMtY2VudGVyIGp1c3RpZnktY2VudGVyIHJvdW5kZWQtZnVsbCBiZy1bIzdDM0FFRF0gdGV4dC1bMTBweF0gZm9udC1ib2xkIHRleHQtd2hpdGVcIlxyXG4gICAgICAgICAgPlxyXG4gICAgICAgICAgICB7bWVzc2FnZS5zZW5kZXJOYW1lLmNoYXJBdCgwKS50b1VwcGVyQ2FzZSgpfVxyXG4gICAgICAgICAgPC9MaW5rPlxyXG4gICAgICAgICl9XHJcbiAgICAgICAgPHNwYW4gY2xhc3NOYW1lPVwidGV4dC1bMTJweF0gZm9udC1tZWRpdW0gdGV4dC13aGl0ZS82MFwiPlxyXG4gICAgICAgICAge21lc3NhZ2UuY29udGVudH1cclxuICAgICAgICA8L3NwYW4+XHJcbiAgICAgIDwvZGl2PlxyXG4gICAgPC9kaXY+XHJcbiAgKTtcclxufVxyXG4iXSwiZmlsZSI6Ii9hcHAvY29tcG9uZW50cy9DbG91ZFN5c3RlbU1lc3NhZ2UudHN4In0=
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC9hcHAvY29tcG9uZW50cy9DbG91ZFN5c3RlbU1lc3NhZ2UudHN4IiwiL2FwcC9jb21wb25lbnRzL0Nsb3VkU3lzdGVtTWVzc2FnZS50c3giLFtdXQ==

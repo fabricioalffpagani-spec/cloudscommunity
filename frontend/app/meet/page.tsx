@@ -182,7 +182,6 @@ function MeetPageContent() {
   const [mutating, setMutating] = useState<string | null>(null);
   const [meetData, setMeetData] = useState<MeetPayload | null>(null);
   const [meetLoading, setMeetLoading] = useState(true);
-  const [hypePeriod, setHypePeriod] = useState<"recent" | "all">("recent");
   const [meetCategory, setMeetCategory] = useState<"popular" | "nearby" | "new">("popular");
 
   const normalizedQuery = useMemo(() => normalize(searchQuery), [searchQuery]);
@@ -224,21 +223,23 @@ function MeetPageContent() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadMeet = async () => {
-      setMeetLoading(true);
+    const loadMeet = async (initial = false) => {
+      if (initial) setMeetLoading(true);
       try {
         const response = await fetch("/api/users/meet", { cache: "no-store" });
         const payload = await response.json().catch(() => null) as MeetPayload | null;
         if (!cancelled && response.ok && payload?.ok) {
           setMeetData(payload);
         }
+      } catch {
+        // Keep the last successful ranking if a refresh fails.
       } finally {
-        if (!cancelled) setMeetLoading(false);
+        if (!cancelled && initial) setMeetLoading(false);
       }
     };
 
-    void loadMeet();
-    const refreshTimer = window.setInterval(() => { void loadMeet(); }, 30_000);
+    void loadMeet(true);
+    const refreshTimer = window.setInterval(() => { if (document.visibilityState === "visible") void loadMeet(); }, 5_000);
     const refreshOnFocus = () => {
       if (document.visibilityState === "visible") void loadMeet();
     };
@@ -371,17 +372,16 @@ function MeetPageContent() {
             </div>
             <section>
               <div className="mb-7 flex items-center justify-between gap-5">
-                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis que mais receberam hypes em suas clouds." : meetCategory === "nearby" ? "Perfis que seus seguidores também acompanham." : "Pessoas que acabaram de entrar no Clouds."}</h2>
-                {meetCategory === "popular" && <div className="flex shrink-0 rounded-full border border-[#37337b] bg-[#0d0b38]/70 p-1 text-[15px] font-semibold"><button type="button" onClick={() => setHypePeriod("recent")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "recent" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>24h</button><button type="button" onClick={() => setHypePeriod("all")} className={`rounded-full px-4 py-2 transition ${hypePeriod === "all" ? "bg-[#9333EA] text-white" : "text-[#aaa6ef] hover:text-white"}`}>Geral</button></div>}
+                <h2 className="text-[23px] font-bold text-white">{meetCategory === "popular" ? "Perfis em destaque:" : meetCategory === "nearby" ? "Perfis que seus seguidores também acompanham." : "Pessoas que acabaram de entrar no Clouds."}</h2>
               </div>
               <div className="flex flex-col gap-4">
-                {(meetCategory === "popular" ? (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime) : meetCategory === "nearby" ? meetData?.nearby : meetData?.newUsers)?.map((item) => {
+                {(meetCategory === "popular" ? meetData?.popularAllTime : meetCategory === "nearby" ? meetData?.nearby : meetData?.newUsers)?.map((item) => {
                   const hypes = "hypes" in item ? item.hypes : 0;
                   const mutualFollowersCount = "mutualFollowersCount" in item ? item.mutualFollowersCount : 0;
                   return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : meetCategory === "nearby" ? `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum` : "Novo no Clouds"} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
                 })}
                 {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
-                {!meetLoading && meetCategory === "popular" && (hypePeriod === "recent" ? meetData?.popularRecent : meetData?.popularAllTime)?.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
+                {!meetLoading && meetCategory === "popular" && meetData?.popularAllTime.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}
                 {!meetLoading && meetCategory === "nearby" && meetData?.nearby.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Suas conexões ainda não geraram sugestões.</p>}
                 {!meetLoading && meetCategory === "new" && meetData?.newUsers.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há novos perfis para mostrar.</p>}
               </div>

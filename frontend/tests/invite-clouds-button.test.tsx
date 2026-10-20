@@ -1,18 +1,23 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InviteCloudsButton } from "../app/components/InviteCloudsButton";
+
+vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user: { id: "u1", email: "test@example.com", displayName: "Ana" } }) }));
+beforeEach(() => vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ inviteUrl: `${window.location.origin}/entrenoclouds?ref=ABC1234` }) })));
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("InviteCloudsButton", () => {
-  const invitationText = "Vem pro Clouds comigo! ☁️\nÉ uma plataforma de conversas públicas ao vivo.\nCriei meu perfil aqui:";
-  const inviteUrl = `${window.location.origin}/entrenoclouds`;
+  const invitationText = "Ana está te convidando para o Clouds! Descubra conversas acontecendo agora...";
+  const inviteUrl = `${window.location.origin}/entrenoclouds?ref=ABC1234`;
 
   it("opens native sharing with the branded invitation link and text", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, share });
     render(<InviteCloudsButton />);
 
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.click(screen.getByRole("button", { name: "Convidar pessoas para o Clouds" }));
 
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
@@ -27,6 +32,8 @@ describe("InviteCloudsButton", () => {
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<InviteCloudsButton compact />);
 
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.click(screen.getByRole("button", { name: "Convidar pessoas para o Clouds" }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${invitationText}\n${inviteUrl}`));
@@ -40,6 +47,8 @@ describe("InviteCloudsButton", () => {
     vi.stubGlobal("navigator", { ...navigator, share });
     render(<InviteCloudsButton compact />);
 
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.click(screen.getByRole("button", { name: "Convidar pessoas para o Clouds" }));
 
     await waitFor(() => expect(share).toHaveBeenCalledTimes(2));

@@ -2483,6 +2483,7 @@ export class CloudService {
       title: string;
       createdAt: Date;
     },
+    commentPreview?: string,
   ): Promise<void> {
     const intervalMs = this.cloudActivityNotificationIntervalMs(
       cloud.createdAt,
@@ -2502,6 +2503,21 @@ export class CloudService {
 
     if (recentActivity) return;
 
+    let activityVariant: 'general' | 'comment' | undefined;
+    if (commentPreview !== undefined) {
+      const previous = await this.prisma.notification.findFirst({
+        where: { userId, type: 'cloud_activity', entityType: 'cloud', entityId: cloud.id },
+        orderBy: { createdAt: 'desc' },
+        select: { metadata: true },
+      });
+      const metadata = previous?.metadata as { activityVariant?: string } | null | undefined;
+      activityVariant = commentPreview && metadata?.activityVariant !== 'comment' && previous ? 'comment' : 'general';
+      title = activityVariant === 'comment'
+        ? `Alguém comentou em ${cloud.title}: ${commentPreview}`.slice(0, 180)
+        : `Novos comentários na cloud ${cloud.title}`.slice(0, 180);
+      body = activityVariant === 'comment' ? commentPreview : `Há novos comentários em “${cloud.title}”.`;
+    }
+
     const notification = await this.prisma.notification.create({
       data: {
         userId,
@@ -2510,6 +2526,7 @@ export class CloudService {
         entityId: cloud.id,
         title,
         body,
+        ...(activityVariant ? { metadata: { activityVariant } } : {}),
       },
     });
     await this.pushNotifications.send(userId, {
@@ -2659,6 +2676,7 @@ export class CloudService {
             `Novos comentários na Cloud ${cloud.title}`,
             `Há novos comentários em “${cloud.title}”.`,
             cloud,
+            type === 'text' ? (created.content || '').replace(/\s+/g, ' ').trim().slice(0, 140) : '',
           ),
         ),
     );
@@ -3329,6 +3347,7 @@ export class CloudService {
       visibility:
         cloud.visibility === CloudVisibility.private ? 'private' : 'public',
       createdAt: cloud.createdAt.toISOString(),
+      startedAt: cloud.startedAt?.toISOString() ?? null,
       updatedAt: cloud.updatedAt.toISOString(),
       endedAt: cloud.endedAt?.toISOString() ?? null,
       scheduledAt: cloud.scheduledAt?.toISOString() ?? null,

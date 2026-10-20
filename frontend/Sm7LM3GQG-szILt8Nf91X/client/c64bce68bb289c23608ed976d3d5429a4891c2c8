@@ -1,0 +1,47 @@
+__vite_ssr_exportName__("generateMetadata", () => { try { return generateMetadata } catch {} });
+__vite_ssr_exportName__("default", () => { try { return EnterCloudsPage } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/app/components/InvitationRedirect.tsx", {"importedNames":["InvitationRedirect"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/app/lib/invitation-preview.ts", {"importedNames":["getInvitationPreview"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/app/lib/cloud-invitation.ts", {"importedNames":["generalInvitationText"]});
+const __vite_ssr_import_3__ = await __vite_ssr_import__("/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/app/entrenoclouds/page.tsx";
+
+async function generateMetadata({ searchParams }) {
+	const ref = (await searchParams).ref ?? "";
+	const profile = await (0,__vite_ssr_import_1__.getInvitationPreview)(ref);
+	const description = (0,__vite_ssr_import_2__.generalInvitationText)(profile?.displayName || profile?.username);
+	const image = `/entrenoclouds/preview?ref=${encodeURIComponent(ref)}`;
+	return {
+		title: "Clouds Community",
+		description,
+		openGraph: {
+			title: "Clouds Community",
+			description,
+			images: [{
+				url: image,
+				width: 600,
+				height: 600
+			}]
+		},
+		twitter: {
+			card: "summary",
+			title: "Clouds Community",
+			description,
+			images: [image]
+		}
+	};
+};
+function EnterCloudsPage() {
+	return /* @__PURE__ */ (0,__vite_ssr_import_3__.jsxDEV)((0,__vite_ssr_import_0__.InvitationRedirect), {}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 17,
+		columnNumber: 10
+	}, this);
+}
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUEsQ0FBQTs7QUFDQTtBQUNBO0FBQ0E7Ozs7Ozs7QUFJTyxlQUFlLGlCQUFpQixFQUFFLGdCQUEwQztDQUNqRixNQUFNLE9BQU8sTUFBTSxhQUFZLENBQUUsT0FBTztDQUN4QyxNQUFNLFVBQVUsTUFBTSwrQ0FBcUIsR0FBRztDQUM5QyxNQUFNLGNBQWMsZ0RBQXNCLFNBQVMsZUFBZSxTQUFTLFFBQVE7Q0FDbkYsTUFBTSxRQUFRLDhCQUE4QixtQkFBbUIsR0FBRztDQUNsRSxPQUFPO0VBQUUsT0FBTztFQUFvQjtFQUFhLFdBQVc7R0FBRSxPQUFPO0dBQW9CO0dBQWEsUUFBUSxDQUFDO0lBQUUsS0FBSztJQUFPLE9BQU87SUFBSyxRQUFRO0dBQUksQ0FBQztFQUFFO0VBQUcsU0FBUztHQUFFLE1BQU07R0FBVyxPQUFPO0dBQW9CO0dBQWEsUUFBUSxDQUFDLEtBQUs7RUFBRTtDQUFFO0FBQ25QO0FBRWUsU0FBUyxrQkFBa0I7Q0FDeEMsT0FBTyxvREFBQywyQ0FBRCxDQUFxQjs7Ozs7QUFDOUIiLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbInBhZ2UudHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB0eXBlIHsgTWV0YWRhdGEgfSBmcm9tIFwibmV4dFwiO1xyXG5pbXBvcnQgeyBJbnZpdGF0aW9uUmVkaXJlY3QgfSBmcm9tIFwiLi4vY29tcG9uZW50cy9JbnZpdGF0aW9uUmVkaXJlY3RcIjtcclxuaW1wb3J0IHsgZ2V0SW52aXRhdGlvblByZXZpZXcgfSBmcm9tIFwiLi4vbGliL2ludml0YXRpb24tcHJldmlld1wiO1xyXG5pbXBvcnQgeyBnZW5lcmFsSW52aXRhdGlvblRleHQgfSBmcm9tIFwiLi4vbGliL2Nsb3VkLWludml0YXRpb25cIjtcclxuXHJcbnR5cGUgUHJvcHMgPSB7IHNlYXJjaFBhcmFtczogUHJvbWlzZTx7IHJlZj86IHN0cmluZyB9PiB9O1xyXG5cclxuZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIGdlbmVyYXRlTWV0YWRhdGEoeyBzZWFyY2hQYXJhbXMgfTogUHJvcHMpOiBQcm9taXNlPE1ldGFkYXRhPiB7XHJcbiAgY29uc3QgcmVmID0gKGF3YWl0IHNlYXJjaFBhcmFtcykucmVmID8/IFwiXCI7XHJcbiAgY29uc3QgcHJvZmlsZSA9IGF3YWl0IGdldEludml0YXRpb25QcmV2aWV3KHJlZik7XHJcbiAgY29uc3QgZGVzY3JpcHRpb24gPSBnZW5lcmFsSW52aXRhdGlvblRleHQocHJvZmlsZT8uZGlzcGxheU5hbWUgfHwgcHJvZmlsZT8udXNlcm5hbWUpO1xyXG4gIGNvbnN0IGltYWdlID0gYC9lbnRyZW5vY2xvdWRzL3ByZXZpZXc/cmVmPSR7ZW5jb2RlVVJJQ29tcG9uZW50KHJlZil9YDtcclxuICByZXR1cm4geyB0aXRsZTogXCJDbG91ZHMgQ29tbXVuaXR5XCIsIGRlc2NyaXB0aW9uLCBvcGVuR3JhcGg6IHsgdGl0bGU6IFwiQ2xvdWRzIENvbW11bml0eVwiLCBkZXNjcmlwdGlvbiwgaW1hZ2VzOiBbeyB1cmw6IGltYWdlLCB3aWR0aDogNjAwLCBoZWlnaHQ6IDYwMCB9XSB9LCB0d2l0dGVyOiB7IGNhcmQ6IFwic3VtbWFyeVwiLCB0aXRsZTogXCJDbG91ZHMgQ29tbXVuaXR5XCIsIGRlc2NyaXB0aW9uLCBpbWFnZXM6IFtpbWFnZV0gfSB9O1xyXG59XHJcblxyXG5leHBvcnQgZGVmYXVsdCBmdW5jdGlvbiBFbnRlckNsb3Vkc1BhZ2UoKSB7XHJcbiAgcmV0dXJuIDxJbnZpdGF0aW9uUmVkaXJlY3QgLz47XHJcbn1cclxuIl0sImZpbGUiOiIvYXBwL2VudHJlbm9jbG91ZHMvcGFnZS50c3gifQ==
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC9hcHAvZW50cmVub2Nsb3Vkcy9wYWdlLnRzeCIsIi9hcHAvZW50cmVub2Nsb3Vkcy9wYWdlLnRzeCIsW11d

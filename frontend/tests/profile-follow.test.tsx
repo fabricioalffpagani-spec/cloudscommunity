@@ -44,6 +44,18 @@ const result = (user: ReturnType<typeof profile>, ok = true) => ({
 beforeEach(() => sessionRefresh.mockReset());
 
 describe("profile follow counters", () => {
+  it("does not expose the invitations tab on another user's profile", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(profile(false))));
+    render(<PublicProfilePage />);
+    await screen.findByRole("button", { name: "Follow" });
+    expect(screen.queryByRole("tab", { name: "Convites" })).not.toBeInTheDocument();
+  });
+
+  it("shows the invitations tab on the signed-in user's profile", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result({ ...profile(false), id: "viewer", isSelf: true })));
+    render(<PublicProfilePage />);
+    expect(await screen.findByRole("tab", { name: "Convites" })).toBeInTheDocument();
+  });
   it("updates after successful follow and unfollow without waiting for polling", async () => {
     const fetchMock = vi
       .fn()

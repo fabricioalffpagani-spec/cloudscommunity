@@ -1,0 +1,54 @@
+__vite_ssr_exportName__("NotificationCloudRedirect", () => { try { return NotificationCloudRedirect } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/next/navigation.js", {"importedNames":["useRouter","useSearchParams"]});
+const __vite_ssr_import_1__ = await __vite_ssr_import__("/node_modules/react/index.js", {"importedNames":["useEffect","useState"]});
+const __vite_ssr_import_2__ = await __vite_ssr_import__("/node_modules/react/jsx-dev-runtime.js", {"importedNames":["jsxDEV"]});
+"use client";
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/app/components/NotificationCloudRedirect.tsx";
+
+function NotificationCloudRedirect({ cloudId }) {
+	const router = (0,__vite_ssr_import_0__.useRouter)();
+	const searchParams = (0,__vite_ssr_import_0__.useSearchParams)();
+	const messageId = searchParams.get("message");
+	const [error, setError] = (0,__vite_ssr_import_1__.useState)(false);
+	(0,__vite_ssr_import_1__.useEffect)(() => {
+		let cancelled = false;
+		const id = encodeURIComponent(cloudId);
+		void fetch(`/api/clouds/${id}`, { cache: "no-store" }).then(async (response) => {
+			if (!response.ok) throw new Error("Cloud indisponível");
+			const payload = await response.json();
+			if (!payload.cloud?.status) throw new Error("Cloud indisponível");
+			if (cancelled) return;
+			if (payload.cloud.status === "active") {
+				const message = messageId ? `&message=${encodeURIComponent(messageId)}` : "";
+				router.replace(`/cloud/${id}?join=1${message}`);
+			} else if (payload.cloud.status === "ended" || payload.cloud.status === "archived") {
+				router.replace(`/cloud/${id}/conversation?from=read`);
+			} else {
+				setError(true);
+			}
+		}).catch(() => {
+			if (!cancelled) setError(true);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		cloudId,
+		messageId,
+		router
+	]);
+	return /* @__PURE__ */ (0,__vite_ssr_import_2__.jsxDEV)("div", {
+		className: "flex min-h-screen items-center justify-center bg-[#030208] px-6 text-center text-white",
+		children: error ? "Não foi possível abrir esta cloud. Ela pode não estar mais disponível." : "Abrindo a cloud..."
+	}, void 0, false, {
+		fileName: _jsxFileName,
+		lineNumber: 32,
+		columnNumber: 10
+	}, this);
+}
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQUEsQ0FBQTtBQUVBO0FBQ0E7O0FBSEE7Ozs7O0FBS08sU0FBUywwQkFBMEIsRUFBRSxXQUFnQztDQUMxRSxNQUFNLFNBQVMscUNBQVU7Q0FDekIsTUFBTSxlQUFlLDJDQUFnQjtDQUNyQyxNQUFNLFlBQVksYUFBYSxJQUFJLFNBQVM7Q0FDNUMsTUFBTSxDQUFDLE9BQU8sWUFBWSxtQ0FBUyxLQUFLO0NBRXhDLDBDQUFnQjtFQUNkLElBQUksWUFBWTtFQUNoQixNQUFNLEtBQUssbUJBQW1CLE9BQU87RUFDckMsS0FBSyxNQUFNLGVBQWUsTUFBTSxFQUFFLE9BQU8sV0FBVyxDQUFDLENBQUMsQ0FBQyxLQUFLLE9BQU8sYUFBYTtHQUM5RSxJQUFJLENBQUMsU0FBUyxJQUFJLE1BQU0sSUFBSSxNQUFNLG9CQUFvQjtHQUN0RCxNQUFNLFVBQVUsTUFBTSxTQUFTLEtBQUs7R0FDcEMsSUFBSSxDQUFDLFFBQVEsT0FBTyxRQUFRLE1BQU0sSUFBSSxNQUFNLG9CQUFvQjtHQUNoRSxJQUFJLFdBQVc7R0FDZixJQUFJLFFBQVEsTUFBTSxXQUFXLFVBQVU7SUFDckMsTUFBTSxVQUFVLFlBQVksWUFBWSxtQkFBbUIsU0FBUyxNQUFNO0lBQzFFLE9BQU8sUUFBUSxVQUFVLEdBQUcsU0FBUyxTQUFTO0dBQ2hELE9BQU8sSUFBSSxRQUFRLE1BQU0sV0FBVyxXQUFXLFFBQVEsTUFBTSxXQUFXLFlBQVk7SUFDbEYsT0FBTyxRQUFRLFVBQVUsR0FBRyx3QkFBd0I7R0FDdEQsT0FBTztJQUNMLFNBQVMsSUFBSTtHQUNmO0VBQ0YsQ0FBQyxDQUFDLENBQUMsWUFBWTtHQUFFLElBQUksQ0FBQyxXQUFXLFNBQVMsSUFBSTtFQUFHLENBQUM7RUFDbEQsYUFBYTtHQUFFLFlBQVk7RUFBTTtDQUNuQyxHQUFHO0VBQUM7RUFBUztFQUFXO0NBQU0sQ0FBQztDQUUvQixPQUFPLGlEQUFDLE9BQUQ7RUFBSyxXQUFVO1lBQTBGLFFBQVEsMkVBQTJFO0NBQTBCOzs7OztBQUMvTiIsIm5hbWVzIjpbXSwiaWdub3JlTGlzdCI6W10sInNvdXJjZXMiOlsiTm90aWZpY2F0aW9uQ2xvdWRSZWRpcmVjdC50c3giXSwic291cmNlc0NvbnRlbnQiOlsiXCJ1c2UgY2xpZW50XCI7XG5cbmltcG9ydCB7IHVzZVJvdXRlciwgdXNlU2VhcmNoUGFyYW1zIH0gZnJvbSBcIm5leHQvbmF2aWdhdGlvblwiO1xuaW1wb3J0IHsgdXNlRWZmZWN0LCB1c2VTdGF0ZSB9IGZyb20gXCJyZWFjdFwiO1xuXG5leHBvcnQgZnVuY3Rpb24gTm90aWZpY2F0aW9uQ2xvdWRSZWRpcmVjdCh7IGNsb3VkSWQgfTogeyBjbG91ZElkOiBzdHJpbmcgfSkge1xuICBjb25zdCByb3V0ZXIgPSB1c2VSb3V0ZXIoKTtcbiAgY29uc3Qgc2VhcmNoUGFyYW1zID0gdXNlU2VhcmNoUGFyYW1zKCk7XG4gIGNvbnN0IG1lc3NhZ2VJZCA9IHNlYXJjaFBhcmFtcy5nZXQoXCJtZXNzYWdlXCIpO1xuICBjb25zdCBbZXJyb3IsIHNldEVycm9yXSA9IHVzZVN0YXRlKGZhbHNlKTtcblxuICB1c2VFZmZlY3QoKCkgPT4ge1xuICAgIGxldCBjYW5jZWxsZWQgPSBmYWxzZTtcbiAgICBjb25zdCBpZCA9IGVuY29kZVVSSUNvbXBvbmVudChjbG91ZElkKTtcbiAgICB2b2lkIGZldGNoKGAvYXBpL2Nsb3Vkcy8ke2lkfWAsIHsgY2FjaGU6IFwibm8tc3RvcmVcIiB9KS50aGVuKGFzeW5jIChyZXNwb25zZSkgPT4ge1xuICAgICAgaWYgKCFyZXNwb25zZS5vaykgdGhyb3cgbmV3IEVycm9yKFwiQ2xvdWQgaW5kaXNwb27DrXZlbFwiKTtcbiAgICAgIGNvbnN0IHBheWxvYWQgPSBhd2FpdCByZXNwb25zZS5qc29uKCkgYXMgeyBjbG91ZD86IHsgc3RhdHVzPzogc3RyaW5nIH0gfTtcbiAgICAgIGlmICghcGF5bG9hZC5jbG91ZD8uc3RhdHVzKSB0aHJvdyBuZXcgRXJyb3IoXCJDbG91ZCBpbmRpc3BvbsOtdmVsXCIpO1xuICAgICAgaWYgKGNhbmNlbGxlZCkgcmV0dXJuO1xuICAgICAgaWYgKHBheWxvYWQuY2xvdWQuc3RhdHVzID09PSBcImFjdGl2ZVwiKSB7XG4gICAgICAgIGNvbnN0IG1lc3NhZ2UgPSBtZXNzYWdlSWQgPyBgJm1lc3NhZ2U9JHtlbmNvZGVVUklDb21wb25lbnQobWVzc2FnZUlkKX1gIDogXCJcIjtcbiAgICAgICAgcm91dGVyLnJlcGxhY2UoYC9jbG91ZC8ke2lkfT9qb2luPTEke21lc3NhZ2V9YCk7XG4gICAgICB9IGVsc2UgaWYgKHBheWxvYWQuY2xvdWQuc3RhdHVzID09PSBcImVuZGVkXCIgfHwgcGF5bG9hZC5jbG91ZC5zdGF0dXMgPT09IFwiYXJjaGl2ZWRcIikge1xuICAgICAgICByb3V0ZXIucmVwbGFjZShgL2Nsb3VkLyR7aWR9L2NvbnZlcnNhdGlvbj9mcm9tPXJlYWRgKTtcbiAgICAgIH0gZWxzZSB7XG4gICAgICAgIHNldEVycm9yKHRydWUpO1xuICAgICAgfVxuICAgIH0pLmNhdGNoKCgpID0+IHsgaWYgKCFjYW5jZWxsZWQpIHNldEVycm9yKHRydWUpOyB9KTtcbiAgICByZXR1cm4gKCkgPT4geyBjYW5jZWxsZWQgPSB0cnVlOyB9O1xuICB9LCBbY2xvdWRJZCwgbWVzc2FnZUlkLCByb3V0ZXJdKTtcblxuICByZXR1cm4gPGRpdiBjbGFzc05hbWU9XCJmbGV4IG1pbi1oLXNjcmVlbiBpdGVtcy1jZW50ZXIganVzdGlmeS1jZW50ZXIgYmctWyMwMzAyMDhdIHB4LTYgdGV4dC1jZW50ZXIgdGV4dC13aGl0ZVwiPntlcnJvciA/IFwiTsOjbyBmb2kgcG9zc8OtdmVsIGFicmlyIGVzdGEgY2xvdWQuIEVsYSBwb2RlIG7Do28gZXN0YXIgbWFpcyBkaXNwb27DrXZlbC5cIiA6IFwiQWJyaW5kbyBhIGNsb3VkLi4uXCJ9PC9kaXY+O1xufVxuIl0sImZpbGUiOiIvYXBwL2NvbXBvbmVudHMvTm90aWZpY2F0aW9uQ2xvdWRSZWRpcmVjdC50c3gifQ==
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC9hcHAvY29tcG9uZW50cy9Ob3RpZmljYXRpb25DbG91ZFJlZGlyZWN0LnRzeCIsIi9hcHAvY29tcG9uZW50cy9Ob3RpZmljYXRpb25DbG91ZFJlZGlyZWN0LnRzeCIsW11d

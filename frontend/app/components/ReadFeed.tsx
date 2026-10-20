@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFeedPosition } from "../lib/feed-position";
 import { CloudParticipantsSheet } from "./CloudParticipantsSheet";
+import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 
 export type ReadCloud = {
   id: string;
@@ -23,12 +24,27 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
+  const [shareCloud, setShareCloud] = useState<ReadCloud | null>(null);
+  const [contacts, setContacts] = useState<ForwardContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, onActiveIndex: setActiveIndex });
   const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
+
+  useEffect(() => {
+    if (!shareCloud) return;
+    let active = true;
+    setLoadingContacts(true);
+    fetch("/api/users/following", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data: { users?: ForwardContact[] }) => { if (active) setContacts((data.users ?? []).filter((contact) => contact.id !== currentUserId)); })
+      .catch(() => { if (active) setContacts([]); })
+      .finally(() => { if (active) setLoadingContacts(false); });
+    return () => { active = false; };
+  }, [shareCloud, currentUserId]);
 
   const navigateFeed = (direction: number) => {
     const nextIndex = Math.max(0, Math.min(clouds.length - 1, activeIndex + direction));
@@ -123,6 +139,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
             <Link href={`/cloud/${cloud.id}/conversation?from=read&scope=${encodeURIComponent(scope ?? "for-you")}`} className="read-card-action mx-auto mb-3 mt-4 inline-flex min-w-[min(306px,calc(100%-3rem))] items-center justify-center rounded-full border border-[#A855F7] px-7 py-3 text-[16px] font-medium text-white transition hover:bg-[#A855F7]/10 md:mb-4 md:py-4">Ler</Link>
             <div className="read-card-footer relative mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12px] text-white/65 md:mb-10 md:gap-x-6 md:px-10 md:text-[14px]">
               <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
+              <button type="button" onClick={() => setShareCloud(cloud)} aria-label={`Compartilhar ${cloud.title}`} className="inline-flex items-center gap-2 transition hover:text-[#C084FC]"><ShareIcon />Compartilhar</button>
               {cloud.author.id === currentUserId && <button type="button" onClick={() => { setDeleteError(""); setCloudToDelete(cloud); }} className="rounded-full border border-red-400/30 px-3 py-1.5 text-[12px] font-semibold text-red-300 transition hover:bg-red-500/10">Excluir cloud</button>}
             </div>
           </article>;
@@ -130,6 +147,10 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       </div>
       {clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}
       {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles} onClose={() => setParticipantsCloudId(null)} />}
+      {shareCloud && (() => {
+        const url = `${window.location.origin}/cloud/${encodeURIComponent(shareCloud.id)}/conversation?from=read`;
+        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
+      })()}
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">
           <h2 id="delete-cloud-title" className="text-[18px] font-bold text-white">Excluir Cloud?</h2>
@@ -140,6 +161,10 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       </div>}
     </div>
   );
+}
+
+function ShareIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" /></svg>;
 }
 
 function LockIcon() {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useSessionUser } from "./session-user";
 import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
 
 const reminderKey = (userId: string) => `clouds:pwa-install-reminder:${userId}`;
 const manualInstallCompleteKey = (userId: string) => `clouds:pwa-install-manual-complete:${userId}`;
-const FIRST_REMINDER_DELAY_MS = 6 * 60_000;
+const FIRST_REMINDER_DELAY_MS = 150_000;
 const REMINDER_INTERVAL_MS = 24 * 60 * 60_000;
 
 function readReminder(userId: string) {
@@ -51,11 +51,18 @@ function isIos() {
   return /iPad|iPhone|iPod/.test(window.navigator.userAgent);
 }
 
+function isMobile() {
+  return /Android|iPad|iPhone|iPod/i.test(window.navigator.userAgent)
+    || window.matchMedia("(max-width: 767px)").matches;
+}
+
 export function PwaInstallPrompt() {
   const { user, status } = useSessionUser();
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [iosInstallHelpOpen, setIosInstallHelpOpen] = useState(false);
+  const fallbackReminder = useRef<{ userId: string; timestamp: number } | null>(null);
+  const fallbackStart = useRef<{ userId: string; timestamp: number } | null>(null);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -88,21 +95,29 @@ export function PwaInstallPrompt() {
   }, []);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user || open || isInstalled() || hasConfirmedManualInstall(user.id)) return;
-    const createdAt = new Date(user.createdAt).getTime();
-    if (Number.isNaN(createdAt)) return;
-    const lastReminder = readReminder(user.id);
+    if (status !== "authenticated" || !user || open || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id)) return;
+    let createdAt = new Date(user.createdAt).getTime();
+    if (!Number.isFinite(createdAt)) {
+      if (fallbackStart.current?.userId !== user.id) fallbackStart.current = { userId: user.id, timestamp: Date.now() };
+      createdAt = fallbackStart.current.timestamp;
+    }
+    const storedReminder = readReminder(user.id);
+    const lastReminder = Math.max(Number.isFinite(storedReminder) ? storedReminder : 0, fallbackReminder.current?.userId === user.id ? fallbackReminder.current.timestamp : 0);
     const dueAt = lastReminder > 0 ? lastReminder + REMINDER_INTERVAL_MS : createdAt + FIRST_REMINDER_DELAY_MS;
     const showWhenDue = () => {
-      if (isInstalled() || Date.now() < dueAt) return;
-      saveReminder(user.id, Date.now());
+      if (document.visibilityState === "hidden" || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id) || Date.now() < dueAt) return;
+      const now = Date.now();
+      fallbackReminder.current = { userId: user.id, timestamp: now };
+      saveReminder(user.id, now);
       setInstallPrompt((current) => current ?? getRememberedInstallPrompt());
       setOpen(true);
     };
     showWhenDue();
     const timer = window.setTimeout(showWhenDue, Math.max(0, dueAt - Date.now()));
-    return () => window.clearTimeout(timer);
-  }, [open, status, user]);
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") showWhenDue(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", onVisibilityChange); };
+  }, [open, status, user?.id, user?.createdAt]);
 
   const decline = () => {
     setOpen(false);

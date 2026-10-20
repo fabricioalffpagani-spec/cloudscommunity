@@ -1,10 +1,12 @@
 "use client";
 
+import { BirthDateInput } from "../components/BirthDateInput";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SignupErrors = Partial<
-  Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "terms" | "form", string>
+  Record<"email" | "name" | "birthDate" | "username" | "password" | "confirmPassword" | "terms" | "form" | "invitationCode", string>
 >;
 
 type FieldState = "idle" | "checking" | "available" | "taken" | "invalid" | "error";
@@ -31,6 +33,7 @@ type SignupDraft = {
   password: string;
   acceptedTerms: boolean;
   acceptedCommunityRules: boolean;
+  invitationCode: string;
 };
 
 function EyeIcon({ open }: { open: boolean }) {
@@ -133,7 +136,9 @@ export default function SignupPage() {
     confirmPassword: "",
     acceptedTerms: false,
     acceptedCommunityRules: false,
+    invitationCode: "",
   });
+  const [invitationLocked, setInvitationLocked] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(60);
   const [resendMessage, setResendMessage] = useState("");
   const [errors, setErrors] = useState<SignupErrors>({});
@@ -145,6 +150,11 @@ export default function SignupPage() {
   const [emailState, setEmailState] = useState<FieldState>("idle");
   const [usernameState, setUsernameState] = useState<FieldState>("idle");
   const signupDraftRef = useRef<SignupDraft | null>(null);
+
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) { setForm((current) => ({ ...current, invitationCode: ref.toUpperCase() })); setInvitationLocked(true); }
+  }, []);
 
   const normalizedEmail = useMemo(() => form.email.trim().toLowerCase(), [form.email]);
   const normalizedUsername = useMemo(
@@ -401,6 +411,7 @@ export default function SignupPage() {
         password: form.password,
         acceptedTerms: form.acceptedTerms,
         acceptedCommunityRules: form.acceptedCommunityRules,
+        invitationCode: form.invitationCode.trim().toUpperCase(),
       };
 
       signupDraftRef.current = draft;
@@ -494,17 +505,14 @@ export default function SignupPage() {
                     <label htmlFor="birthDate" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Aniversário
                     </label>
-                    <input
-                      id="birthDate"
-                      type="date"
-                      min="1925-01-01"
-                      value={form.birthDate}
-                      onChange={(event) => updateField("birthDate", event.target.value)}
-                      className={`w-full rounded-2xl border bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none transition focus:border-[#A855F7] ${
-                        birthDateMessage ? "border-red-500/70" : "border-white/[0.08]"
-                      }`}
-                    />
+                    <BirthDateInput id="birthDate" value={form.birthDate} onChange={(value) => updateField("birthDate", value)} invalid={Boolean(birthDateMessage)} />
                     {birthDateMessage && <p className="mt-2 text-[12px] text-red-300">{birthDateMessage}</p>}
+                  </div>
+
+                  <div>
+                    <label htmlFor="invitationCode" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">Código de convite <span className="normal-case tracking-normal text-white/45">(opcional)</span></label>
+                    <input id="invitationCode" value={form.invitationCode} readOnly={invitationLocked} maxLength={7} onChange={(event) => updateField("invitationCode", event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="Código de quem convidou você" className="w-full rounded-2xl border border-white/[0.08] bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none focus:border-[#A855F7]" />
+                    {errors.invitationCode && <p className="mt-2 text-[12px] text-red-300">{errors.invitationCode}</p>}
                   </div>
 
                   <div>

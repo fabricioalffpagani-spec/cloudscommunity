@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BirthDateInput } from "./BirthDateInput";
 
 type Props = { cloudTitle: string; returnTo: string; onClose: () => void };
 
@@ -20,6 +21,7 @@ export function GuestCloudSignupModal({ cloudTitle, returnTo, onClose }: Props) 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (!form.birthDate) return setError("Informe sua data de nascimento.");
     if (ageFrom(form.birthDate) < 16) return setError("Você precisa ter pelo menos 16 anos para participar.");
     if (form.password !== form.confirmPassword) return setError("As senhas não coincidem.");
     if (!form.accepted) return setError("Aceite o Documento completo da plataforma para continuar.");
@@ -41,7 +43,7 @@ export function GuestCloudSignupModal({ cloudTitle, returnTo, onClose }: Props) 
         <input required type="email" value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="E-mail" className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" />
         <input required value={form.name} onChange={(event) => update("name", event.target.value)} placeholder="Nome" className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" />
         <input required minLength={4} maxLength={15} value={form.username} onChange={(event) => update("username", event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="Nome de usuário" className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" />
-        <label className="block text-[12px] text-white/55">Aniversário<input required type="date" value={form.birthDate} onChange={(event) => update("birthDate", event.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" /></label>
+        <div><label htmlFor="guestBirthDate" className="mb-1.5 block text-[12px] text-white/55">Aniversário</label><BirthDateInput id="guestBirthDate" value={form.birthDate} onChange={(value) => update("birthDate", value)} /></div>
         <input required type="password" minLength={8} value={form.password} onChange={(event) => update("password", event.target.value)} placeholder="Defina uma senha" className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" />
         <input required type="password" value={form.confirmPassword} onChange={(event) => update("confirmPassword", event.target.value)} placeholder="Confirme sua senha" className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 text-[14px] text-white outline-none focus:border-[#A855F7]" />
         <label className="flex gap-2 text-[11px] leading-relaxed text-white/60"><input type="checkbox" checked={form.accepted} onChange={(event) => update("accepted", event.target.checked)} className="mt-0.5 accent-[#A855F7]" /><span>Li e aceito o <a href="/legal/documentos-da-plataforma.pdf" target="_blank" rel="noreferrer" className="text-[#D8B4FE] underline">Documento completo da plataforma (PDF)</a>, que reúne todos os termos, regras e políticas.</span></label>

@@ -83,6 +83,7 @@ export type CloudPayload = {
   visibility: CloudVisibilityValue;
   status: string;
   createdAt: string;
+  startedAt: string | null;
   updatedAt: string;
   endedAt: string | null;
   scheduledAt: string | null;

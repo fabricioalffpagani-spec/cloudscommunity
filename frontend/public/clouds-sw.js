@@ -65,7 +65,7 @@ self.addEventListener("push", (event) => {
         ? unreadMessages.join("\n")
         : data.body || "Você tem uma nova notificação.",
       icon: "/clouds_icon.png",
-      badge: "/clouds_icon.png",
+      badge: "/clouds-notification-badge-official.png",
       tag,
       renotify: Boolean(data.messageId),
       data: { url: data.url || "/", messageId: data.messageId },

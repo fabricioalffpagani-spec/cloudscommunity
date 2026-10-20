@@ -37,7 +37,7 @@ export class NotificationsService {
     const actorIds = [
       ...new Set(
         items.flatMap((item) => {
-          if (item.type === 'follow' || item.type === 'follow_request')
+          if (item.entityType === 'user' || item.entityType === 'follow')
             return [item.entityId];
           if (
             item.type === 'cloud_continuation' &&
@@ -102,7 +102,7 @@ export class NotificationsService {
           : null,
       isRead: item.isRead,
       createdAt: item.createdAt.toISOString(),
-      actor: actorById.get(item.entityId) ?? null,
+      actor: actorById.get(item.entityId) ?? (item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata) && typeof item.metadata.actorUserId === 'string' ? actorById.get(item.metadata.actorUserId) : undefined) ?? null,
     }));
 
     const unreadCount = await this.prisma.notification.count({

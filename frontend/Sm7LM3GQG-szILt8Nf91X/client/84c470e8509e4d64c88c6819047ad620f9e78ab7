@@ -1,0 +1,52 @@
+const __vite_ssr_import_0__ = await __vite_ssr_import__("/node_modules/vitest/dist/index.js", {"importedNames":["afterEach","describe","expect","it","vi"]});
+__vite_ssr_import_0__.vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({
+	status: "authenticated",
+	user: {
+		id: "owner",
+		email: "owner@example.com",
+		displayName: "Ana"
+	}
+}) }));
+const __vi_import_0__ = await __vite_ssr_dynamic_import__("/node_modules/@testing-library/react/dist/index.js");
+const __vi_import_1__ = await __vite_ssr_dynamic_import__("/app/components/InvitePopup.tsx");
+const __vi_import_2__ = await __vite_ssr_dynamic_import__("/node_modules/react/jsx-dev-runtime.js");
+
+
+
+var _jsxFileName = "C:/Users/Fortrek/Downloads/cloudscommunity/frontend/tests/invite-popup-sharing.test.tsx";
+
+(0,__vite_ssr_import_0__.afterEach)(() => window.history.replaceState({}, "", "/"));
+(0,__vite_ssr_import_0__.describe)("invitation popup", () => {
+	(0,__vite_ssr_import_0__.it)("shares the personalized link with the sender's code", async () => {
+		window.history.replaceState({}, "", "/?invitePreview=1");
+		const url = "https://clouds.test/entrenoclouds?ref=ABC1234";
+		const share = __vite_ssr_import_0__.vi.fn().mockResolvedValue(undefined);
+		__vite_ssr_import_0__.vi.stubGlobal("navigator", {
+			...navigator,
+			share
+		});
+		__vite_ssr_import_0__.vi.stubGlobal("fetch", __vite_ssr_import_0__.vi.fn().mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				ok: true,
+				inviteUrl: url
+			})
+		}));
+		__vi_import_0__.render(/* @__PURE__ */ __vi_import_2__.jsxDEV(__vi_import_1__.InvitePopup, {}, void 0, false, {
+			fileName: _jsxFileName,
+			lineNumber: 15,
+			columnNumber: 12
+		}, this));
+		const button = await __vi_import_0__.screen.findByRole("button", { name: "Compartilhar convite" });
+		(0,__vite_ssr_import_0__.expect)(button).toBeEnabled();
+		__vi_import_0__.fireEvent.click(button);
+		await __vi_import_0__.waitFor(() => (0,__vite_ssr_import_0__.expect)(share).toHaveBeenCalledWith(__vite_ssr_import_0__.expect.objectContaining({
+			url,
+			text: "Ana está te convidando para o Clouds! Descubra conversas acontecendo agora..."
+		})));
+	});
+});
+//# sourceMappingSource=vite-generated
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJtYXBwaW5ncyI6IkFBQ0E7QUFHQSx5QkFBRyxLQUFLLHlDQUF5QyxFQUFFLHVCQUF1QjtDQUFFLFFBQVE7Q0FBaUIsTUFBTTtFQUFFLElBQUk7RUFBUyxPQUFPO0VBQXFCLGFBQWE7Q0FBTTtBQUFFLEdBQUcsRUFBRTtBQUpoTDtBQUVBOzs7Ozs7O0FBR0EsMENBQWdCLE9BQU8sUUFBUSxhQUFhLENBQUMsR0FBRyxJQUFJLEdBQUcsQ0FBQztBQUV4RCxtQ0FBUywwQkFBMEI7Q0FDakMsNkJBQUcsdURBQXVELFlBQVk7RUFDcEUsT0FBTyxRQUFRLGFBQWEsQ0FBQyxHQUFHLElBQUksbUJBQW1CO0VBQ3ZELE1BQU0sTUFBTTtFQUNaLE1BQU0sUUFBUSx5QkFBRyxHQUFHLENBQUMsQ0FBQyxrQkFBa0IsU0FBUztFQUNqRCx5QkFBRyxXQUFXLGFBQWE7R0FBRSxHQUFHO0dBQVc7RUFBTSxDQUFDO0VBQ2xELHlCQUFHLFdBQVcsU0FBUyx5QkFBRyxHQUFHLENBQUMsQ0FBQyxrQkFBa0I7R0FBRSxJQUFJO0dBQU0sTUFBTSxhQUFhO0lBQUUsSUFBSTtJQUFNLFdBQVc7R0FBSTtFQUFHLENBQUMsQ0FBQztFQUNoSCx1QkFBTyx1Q0FBQyw2QkFBRCxDQUFjOzs7O1VBQUM7RUFDdEIsTUFBTSxTQUFTLE1BQU0sdUJBQU8sV0FBVyxVQUFVLEVBQUUsTUFBTSx1QkFBdUIsQ0FBQztFQUNqRixpQ0FBTyxNQUFNLENBQUMsQ0FBQyxZQUFZO0VBQzNCLDBCQUFVLE1BQU0sTUFBTTtFQUN0QixNQUFNLDhCQUFjLGlDQUFPLEtBQUssQ0FBQyxDQUFDLHFCQUFxQiw2QkFBTyxpQkFBaUI7R0FBRTtHQUFLLE1BQU07RUFBZ0YsQ0FBQyxDQUFDLENBQUM7Q0FDakwsQ0FBQztBQUNILENBQUMiLCJuYW1lcyI6W10sImlnbm9yZUxpc3QiOltdLCJzb3VyY2VzIjpbImludml0ZS1wb3B1cC1zaGFyaW5nLnRlc3QudHN4Il0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGZpcmVFdmVudCwgcmVuZGVyLCBzY3JlZW4sIHdhaXRGb3IgfSBmcm9tIFwiQHRlc3RpbmctbGlicmFyeS9yZWFjdFwiO1xuaW1wb3J0IHsgYWZ0ZXJFYWNoLCBkZXNjcmliZSwgZXhwZWN0LCBpdCwgdmkgfSBmcm9tIFwidml0ZXN0XCI7XG5pbXBvcnQgeyBJbnZpdGVQb3B1cCB9IGZyb20gXCIuLi9hcHAvY29tcG9uZW50cy9JbnZpdGVQb3B1cFwiO1xuXG52aS5tb2NrKFwiLi4vYXBwL2NvbXBvbmVudHMvc2Vzc2lvbi11c2VyXCIsICgpID0+ICh7IHVzZVNlc3Npb25Vc2VyOiAoKSA9PiAoeyBzdGF0dXM6IFwiYXV0aGVudGljYXRlZFwiLCB1c2VyOiB7IGlkOiBcIm93bmVyXCIsIGVtYWlsOiBcIm93bmVyQGV4YW1wbGUuY29tXCIsIGRpc3BsYXlOYW1lOiBcIkFuYVwiIH0gfSkgfSkpO1xuYWZ0ZXJFYWNoKCgpID0+IHdpbmRvdy5oaXN0b3J5LnJlcGxhY2VTdGF0ZSh7fSwgXCJcIiwgXCIvXCIpKTtcblxuZGVzY3JpYmUoXCJpbnZpdGF0aW9uIHBvcHVwXCIsICgpID0+IHtcbiAgaXQoXCJzaGFyZXMgdGhlIHBlcnNvbmFsaXplZCBsaW5rIHdpdGggdGhlIHNlbmRlcidzIGNvZGVcIiwgYXN5bmMgKCkgPT4ge1xuICAgIHdpbmRvdy5oaXN0b3J5LnJlcGxhY2VTdGF0ZSh7fSwgXCJcIiwgXCIvP2ludml0ZVByZXZpZXc9MVwiKTtcbiAgICBjb25zdCB1cmwgPSBcImh0dHBzOi8vY2xvdWRzLnRlc3QvZW50cmVub2Nsb3Vkcz9yZWY9QUJDMTIzNFwiO1xuICAgIGNvbnN0IHNoYXJlID0gdmkuZm4oKS5tb2NrUmVzb2x2ZWRWYWx1ZSh1bmRlZmluZWQpO1xuICAgIHZpLnN0dWJHbG9iYWwoXCJuYXZpZ2F0b3JcIiwgeyAuLi5uYXZpZ2F0b3IsIHNoYXJlIH0pO1xuICAgIHZpLnN0dWJHbG9iYWwoXCJmZXRjaFwiLCB2aS5mbigpLm1vY2tSZXNvbHZlZFZhbHVlKHsgb2s6IHRydWUsIGpzb246IGFzeW5jICgpID0+ICh7IG9rOiB0cnVlLCBpbnZpdGVVcmw6IHVybCB9KSB9KSk7XG4gICAgcmVuZGVyKDxJbnZpdGVQb3B1cCAvPik7XG4gICAgY29uc3QgYnV0dG9uID0gYXdhaXQgc2NyZWVuLmZpbmRCeVJvbGUoXCJidXR0b25cIiwgeyBuYW1lOiBcIkNvbXBhcnRpbGhhciBjb252aXRlXCIgfSk7XG4gICAgZXhwZWN0KGJ1dHRvbikudG9CZUVuYWJsZWQoKTtcbiAgICBmaXJlRXZlbnQuY2xpY2soYnV0dG9uKTtcbiAgICBhd2FpdCB3YWl0Rm9yKCgpID0+IGV4cGVjdChzaGFyZSkudG9IYXZlQmVlbkNhbGxlZFdpdGgoZXhwZWN0Lm9iamVjdENvbnRhaW5pbmcoeyB1cmwsIHRleHQ6IFwiQW5hIGVzdMOhIHRlIGNvbnZpZGFuZG8gcGFyYSBvIENsb3VkcyEgRGVzY3VicmEgY29udmVyc2FzIGFjb250ZWNlbmRvIGFnb3JhLi4uXCIgfSkpKTtcbiAgfSk7XG59KTtcbiJdLCJmaWxlIjoiL3Rlc3RzL2ludml0ZS1wb3B1cC1zaGFyaW5nLnRlc3QudHN4In0=
+
+//# vitestCache=W3siZmlsZSI6IjEiLCJpZCI6IjEiLCJ1cmwiOiIyIiwiaW1wb3J0ZWRVcmxzIjoiMyIsIm1hcHBpbmdzIjpmYWxzZX0sIkM6L1VzZXJzL0ZvcnRyZWsvRG93bmxvYWRzL2Nsb3Vkc2NvbW11bml0eS9mcm9udGVuZC90ZXN0cy9pbnZpdGUtcG9wdXAtc2hhcmluZy50ZXN0LnRzeCIsIi90ZXN0cy9pbnZpdGUtcG9wdXAtc2hhcmluZy50ZXN0LnRzeCIsW11d
