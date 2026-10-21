@@ -9,7 +9,9 @@ describe('invitation previews', () => {
     const prisma = {
       invitationCode: {
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) => Promise.resolve(data)),
       },
     };
     const service = new UsersService(
@@ -18,10 +20,42 @@ describe('invitation previews', () => {
       {} as PushNotificationsService,
       {} as DirectMessagesGateway,
     );
-    jest.spyOn(service as any, 'requireSession').mockResolvedValue({ user: { id: 'sender', profile: { username: 'ana_17' } } });
+    jest.spyOn(service as any, 'requireSession').mockResolvedValue({
+      user: { id: 'sender', profile: { username: 'ana_17' } },
+    });
     const result = await service.sendInvite('session', '');
     expect(result.code).toMatch(/^ANAX[0-9]{3}$/);
     expect(result.inviteUrl).toContain(`ref=${result.code}`);
+  });
+
+  it('skips a new code already reserved by an old invitation link', async () => {
+    const prisma = {
+      invitationCode: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ userId: 'previous-inviter' })
+          .mockResolvedValue(null),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }) => Promise.resolve(data)),
+      },
+    };
+    const service = new UsersService(
+      prisma as unknown as PrismaService,
+      {} as AuthService,
+      {} as PushNotificationsService,
+      {} as DirectMessagesGateway,
+    );
+    jest.spyOn(service as any, 'requireSession').mockResolvedValue({
+      user: { id: 'sender', profile: { username: 'ana' } },
+    });
+
+    const result = await service.sendInvite('session', '');
+
+    expect(result.code).toMatch(/^ANAX[0-9]{3}$/);
+    expect(prisma.invitationCode.findUnique).toHaveBeenCalledTimes(3);
+    expect(prisma.invitationCode.create).toHaveBeenCalledTimes(1);
   });
 
   it('returns only the profile belonging to the invitation code', async () => {
@@ -60,5 +94,34 @@ describe('invitation previews', () => {
       expect.objectContaining({ where: { id: 'sender' } }),
     );
     expect(await service.invitationPreview('../other')).toEqual({ ok: false });
+  });
+
+  it('still previews a previously shared invitation code after migration', async () => {
+    const prisma = {
+      invitationCode: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ userId: 'sender' }),
+      },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          profile: { displayName: 'Ana', username: 'ana', avatarUrl: null },
+        }),
+      },
+    };
+    const service = new UsersService(
+      prisma as unknown as PrismaService,
+      {} as AuthService,
+      {} as PushNotificationsService,
+      {} as DirectMessagesGateway,
+    );
+
+    expect(await service.invitationPreview('ana1234')).toMatchObject({
+      ok: true,
+    });
+    expect(prisma.invitationCode.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { legacyCode: 'ANA1234' },
+    });
   });
 });

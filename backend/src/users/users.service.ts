@@ -1407,9 +1407,14 @@ export class UsersService {
 
   async invitationPreview(code: string) {
     if (!/^[a-z0-9]{1,7}$/i.test(code)) return { ok: false };
-    const invitation = await this.prisma.invitationCode.findUnique({
-      where: { code: code.toUpperCase() },
-    });
+    const normalizedCode = code.toUpperCase();
+    const invitation =
+      (await this.prisma.invitationCode.findUnique({
+        where: { code: normalizedCode },
+      })) ??
+      (await this.prisma.invitationCode.findUnique({
+        where: { legacyCode: normalizedCode },
+      }));
     if (!invitation) return { ok: false };
     const user = await this.prisma.user.findUnique({
       where: { id: invitation.userId },
@@ -1440,6 +1445,10 @@ export class UsersService {
     const start = randomInt(1000);
     for (let attempt = 0; !invitation && attempt < 1000; attempt++) {
       const code = `${letters}${((start + attempt) % 1000).toString().padStart(3, '0')}`;
+      const legacyCollision = await this.prisma.invitationCode.findUnique({
+        where: { legacyCode: code },
+      });
+      if (legacyCollision) continue;
       try {
         invitation = await this.prisma.invitationCode.create({
           data: { userId: current.user.id, code },

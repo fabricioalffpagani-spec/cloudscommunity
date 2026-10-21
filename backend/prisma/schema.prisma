@@ -530,8 +530,9 @@ model CloudPremiereDelivery {
 }
 
 model InvitationCode {
-  userId    String @id @db.Uuid
-  code      String @unique @db.VarChar(7)
+  userId     String  @id @db.Uuid
+  code       String  @unique @db.VarChar(7)
+  legacyCode String? @unique @db.VarChar(7)
 }
 
 model InvitationReferral {
