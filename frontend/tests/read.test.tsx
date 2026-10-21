@@ -12,21 +12,83 @@ const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2
 const onDelete = vi.fn<(cloudId: string) => Promise<void>>().mockResolvedValue(undefined);
 
 describe("Read", () => {
+  it("dismisses the options on outside click or Escape, while allowing menu interaction", () => {
+    render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outra Cloud" }]} currentUserId="viewer" onDelete={onDelete} />);
+    const [first, second] = screen.getAllByRole("button", { name: "Mais opções da Cloud" });
+    fireEvent.click(first);
+    const option = screen.getByRole("button", { name: "Enviar para" });
+    fireEvent.click(option.parentElement as HTMLElement);
+    expect(option).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Outra Cloud"));
+    expect(screen.queryByRole("button", { name: "Enviar para" })).not.toBeInTheDocument();
+    fireEvent.click(first);
+    fireEvent.click(second);
+    expect(first).toHaveAttribute("aria-expanded", "false");
+    expect(second).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(second).toHaveAttribute("aria-expanded", "false");
+  });
   it("shows an empty archive without a join action", () => {
     render(<ReadFeed clouds={[]} onDelete={onDelete} />);
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
-  it("keeps Ler immediately above the ended status at the bottom of each card", () => {
+  it("keeps only the ended status in the footer across screen sizes", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Título extenso ".repeat(14) }]} onDelete={onDelete} />);
     for (const card of container.querySelectorAll("[data-cloud-page]")) {
       const action = card.querySelector(".read-card-action");
       const status = card.querySelector(".read-card-footer");
-      expect(action).toHaveTextContent("Ler");
-      expect(action?.nextElementSibling).toBe(status);
+      expect(action).toBeNull();
       expect(status).toHaveTextContent(/Encerrad/);
-      expect(card.querySelector(".read-card-center")?.nextElementSibling).toBe(action);
+      expect(status?.querySelector("button")).toBeNull();
+      expect(card.querySelector(".read-card-center")?.nextElementSibling).toBe(status);
     }
+  });
+  it("offers sharing and reporting to other users and sends the report", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReadFeed clouds={[cloud]} currentUserId="viewer" onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    expect(screen.getByRole("button", { name: "Enviar para" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Excluir a Cloud" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar Cloud" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Denunciar" }));
+    fireEvent.click(screen.getByRole("button", { name: /Spam ou publicidade/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar denúncia" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/reports", expect.objectContaining({ method: "POST", body: JSON.stringify({ reportedId: "user-maria", reasons: ["Spam ou publicidade"] }) })));
+    expect(await screen.findByText("Denúncia enviada")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+  it("opens the editor from the creator's Read menu and applies the saved values", async () => {
+    const saved = { id: cloud.id, title: "Atualizada", duration: "30min", description: "Nova", editCount: 3 };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cloud: saved }) }));
+    const onEdited = vi.fn();
+    render(<ReadFeed clouds={[{ ...cloud, duration: "10min", description: "Antes", editCount: 2 }]} currentUserId="user-maria" onDelete={onDelete} onEdited={onEdited} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editar Cloud" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Título/ }), { target: { value: "Atualizada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar edição" }));
+    await waitFor(() => expect(onEdited).toHaveBeenCalledWith(saved));
+    expect(screen.queryByRole("dialog", { name: "Editar Cloud" })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+  it("offers the creator deletion, but not reporting, and confirms before deleting", async () => {
+    onDelete.mockClear();
+    render(<ReadFeed clouds={[cloud]} currentUserId="user-maria" onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    expect(screen.queryByRole("button", { name: "Denunciar" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Excluir a Cloud" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^Excluir$/ }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith("cloud-1"));
+  });
+  it("opens sharing from the mobile menu", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ users: [] }) }));
+    render(<ReadFeed clouds={[cloud]} currentUserId="viewer" onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar para" }));
+    expect(await screen.findByText("Compartilhar Cloud")).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
   it("shares the archived conversation through native sharing and contacts", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
@@ -38,7 +100,8 @@ describe("Read", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
-    fireEvent.click(screen.getByRole("button", { name: `Compartilhar ${cloud.title}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar para" }));
     expect(await screen.findByText("Amigo")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Compartilhar com…" }));
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining(`/cloud/${cloud.id}/conversation?from=read`) })));
@@ -50,7 +113,7 @@ describe("Read", () => {
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     vi.stubGlobal("PointerEvent", MouseEvent);
-    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`);
+    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque ou clique duas vezes para ler a conversa.`);
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 60, clientY: 45 });
     expect(pushMock).not.toHaveBeenCalled();
@@ -61,12 +124,24 @@ describe("Read", () => {
     render(<ReadFeed clouds={[cloud]} onDelete={onDelete} />);
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     vi.stubGlobal("PointerEvent", MouseEvent);
-    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque duas vezes para ler a conversa.`);
+    const topic = screen.getByLabelText(`Cloud ${cloud.title}. Toque ou clique duas vezes para ler a conversa.`);
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerDown(topic, { clientX: 160, clientY: 40 });
     fireEvent.pointerUp(topic, { clientX: 160, clientY: 40 });
     expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation?from=read&scope=for-you");
+  });
+  it("opens the archived conversation by double click or keyboard on desktop", () => {
+    pushMock.mockClear();
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    render(<ReadFeed clouds={[cloud]} scope="following" onDelete={onDelete} />);
+    const topic = screen.getByRole("button", { name: /Toque ou clique duas vezes/ });
+    fireEvent.doubleClick(topic);
+    fireEvent.keyDown(topic, { key: "Enter" });
+    expect(pushMock).toHaveBeenCalledTimes(2);
+    expect(pushMock).toHaveBeenCalledWith("/cloud/cloud-1/conversation?from=read&scope=following");
+    expect(screen.getByRole("button", { name: "Mais opções da Cloud" }).parentElement).not.toHaveClass("md:hidden");
+    vi.unstubAllGlobals();
   });
   it("leaves desktop wheel scrolling native across archived topics", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outro assunto" }]} onDelete={onDelete} />);
@@ -142,6 +217,22 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("allows the creator to edit a private Cloud description after it ends", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "user-maria", displayName: "Maria", username: "maria", avatarUrl: null } }) };
+      if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, authorId: "user-maria", visibility: "private", description: "Antes" }, messages: [] }) };
+      if (init?.method === "PATCH") return { ok: true, json: async () => ({ cloud: { description: "Depois" } }) };
+      return { ok: false, json: async () => ({}) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Editar descrição" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Descrição/ }), { target: { value: "Depois" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar descrição" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ description: "Depois" }) })));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Informações da Cloud" })).not.toBeInTheDocument());
+    vi.unstubAllGlobals();
+  });
   it("shares the archived Cloud from the conversation header", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, share });

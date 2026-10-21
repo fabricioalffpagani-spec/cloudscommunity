@@ -342,6 +342,13 @@ function replyPreview(message: Msg): string {
   return parseLinkPreview(message.linkLabel, message.linkUrl);
 }
 
+function isPrivateCloudInvitation(message: Msg): boolean {
+  try {
+    const label = JSON.parse(message.linkLabel || "{}");
+    return label.type === "cloud_invitation" && label.cloudVisibility === "private";
+  } catch { return false; }
+}
+
 function previewForMessage(message: BackendMessage) {
   if (message.type === "audio") {
     const duration = formatDuration(message.mediaAsset?.durationMs ?? null);
@@ -795,7 +802,7 @@ function AudioMessageBubble({ msg }: { msg: Msg }) {
   return (
     <div className={`flex flex-col ${isForwarded ? "gap-0" : "gap-1"}`}>
       {isForwarded && (
-        <div className={`w-[272px] rounded-t-2xl px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] ${isRight ? "bg-[#9333EA] text-white/60" : "border border-white/[0.08] bg-[#1c1530] text-white/40"}`}>
+        <div className="w-[min(340px,calc(100vw-7rem))] max-w-full rounded-t-2xl bg-[#8a20e9] px-3 py-2 text-[9px] font-medium uppercase tracking-[0.12em] text-white/70">
           <ForwardedHeading content={msg.content} />
         </div>
       )}
@@ -1173,7 +1180,7 @@ function DmMsgMenu({
       label: copied ? "Copiado!" : "Copiar",
       icon: <DmMenuCopyIcon />,
       action: handleCopy,
-      show: copyable,
+      show: copyable && !isPrivateCloudInvitation(msg),
     },
     {
       label: translating ? "Traduzindo…" : translated ? "Traduzido ✓" : "Traduzir",
@@ -1198,7 +1205,7 @@ function DmMsgMenu({
       label: "Encaminhar",
       icon: <DmMenuForwardIcon />,
       action: () => { onForward?.(msg); onClose(); },
-      show: true,
+      show: !isPrivateCloudInvitation(msg),
     },
     {
       label: "Salvar figurinha",
@@ -2422,11 +2429,13 @@ function MessagesPageContent() {
   }, []);
 
   const handleForwardMsg = useCallback((msg: Msg) => {
+    if (isPrivateCloudInvitation(msg)) return;
     setForwardSelection([msg]);
     setForwardSelectionMode(true);
   }, []);
 
   const toggleForwardSelection = useCallback((msg: Msg) => {
+    if (isPrivateCloudInvitation(msg)) return;
     setForwardSelection((current) => current.some((item) => item.id === msg.id)
       ? current.filter((item) => item.id !== msg.id)
       : [...current, msg]);

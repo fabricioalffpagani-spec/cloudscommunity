@@ -17,7 +17,7 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
   const { user } = useSessionUser();
   const [invitation, setInvitation] = useState<{ ownerId: string; url: string } | null>(null);
-  const url = invitation && user && invitation.ownerId === user.id ? invitation.url : "";
+  const url = invitation && user && invitation.ownerId === user.id ? (() => { const link = new URL(invitation.url); link.searchParams.set("preview", "avatar"); return link.toString(); })() : "";
 
   useEffect(() => {
     if (!user) return;

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import PublicProfilePage from "../app/users/[id]/page";
 
@@ -44,17 +44,55 @@ const result = (user: ReturnType<typeof profile>, ok = true) => ({
 beforeEach(() => sessionRefresh.mockReset());
 
 describe("profile follow counters", () => {
+  it("shows another profile's Cloud details in a portal and dismisses them on outside click", async () => {
+    const data = { ...profile(false), activeClouds: [{ id: "live", title: "Cloud ativa", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt: null, participantProfiles: [], visibility: "public", href: "/cloud/live" }], endedClouds: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(data)));
+    render(<PublicProfilePage />);
+    await screen.findByText("Cloud ativa");
+    fireEvent.click(screen.getByRole("button", { name: "Opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Informações da Cloud" }));
+    const backdrop = screen.getByTestId("cloud-details-backdrop");
+    expect(backdrop.parentElement).toBe(document.body);
+    expect(screen.getByRole("dialog", { name: "Informações da Cloud" })).toBeInTheDocument();
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole("dialog", { name: "Informações da Cloud" })).not.toBeInTheDocument();
+  });
+  it("closes another profile's Cloud menu on an outside click", async () => {
+    const data = { ...profile(false), activeClouds: [{ id: "live", title: "Cloud ativa", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt: null, participantProfiles: [], visibility: "public", href: "/cloud/live" }], endedClouds: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(data)));
+    await (async () => { render(<PublicProfilePage />); await screen.findByText("Cloud ativa"); })();
+    const trigger = screen.getByRole("button", { name: "Opções da Cloud" });
+    fireEvent.click(trigger);
+    const option = screen.getByRole("button", { name: "Informações da Cloud" });
+    fireEvent.click(option.parentElement as HTMLElement);
+    expect(option).toBeInTheDocument();
+    fireEvent.click(document.body);
+    expect(screen.queryByRole("button", { name: "Informações da Cloud" })).not.toBeInTheDocument();
+  });
+  it("shows scheduled Clouds with calendar and reminder on another profile", async () => {
+    const scheduledAt = new Date(Date.now() + 86400000).toISOString();
+    const data = { ...profile(false), activeClouds: [{ id: "scheduled", title: "Cloud futura", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt, participantProfiles: [], visibility: "public", href: "/cloud/scheduled" }], endedClouds: [] };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/join") ? { ok: true } : result(data)));
+    render(<PublicProfilePage />);
+    const title = await screen.findByText("Cloud futura");
+    const card = title.closest("article") as HTMLElement;
+    expect(within(card).getByText("Agendada")).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Ver data de estreia" }));
+    expect(within(card).getByText(/^Estreia em/)).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Avisar-me na estreia" }));
+    expect(await within(card).findByRole("button", { name: "Lembrete ativado" })).toBeDisabled();
+  });
   it("does not expose the invitations tab on another user's profile", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(profile(false))));
     render(<PublicProfilePage />);
     await screen.findByRole("button", { name: "Follow" });
-    expect(screen.queryByRole("tab", { name: "Convites" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Meus Convites" })).not.toBeInTheDocument();
   });
 
   it("shows the invitations tab on the signed-in user's profile", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result({ ...profile(false), id: "viewer", isSelf: true })));
     render(<PublicProfilePage />);
-    expect(await screen.findByRole("tab", { name: "Convites" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Meus Convites" })).toBeInTheDocument();
   });
   it("updates after successful follow and unfollow without waiting for polling", async () => {
     const fetchMock = vi

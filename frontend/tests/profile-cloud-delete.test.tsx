@@ -32,7 +32,7 @@ const cloud = (id: string, title: string) => ({
   href: `/cloud/${id}`,
 });
 
-function setup(deleteSucceeds: boolean) {
+function setup(deleteSucceeds: boolean, profileClouds: Array<Record<string, unknown>> = [cloud("a", "Cloud A"), cloud("b", "Cloud B")]) {
   let deleted = false;
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -64,7 +64,7 @@ function setup(deleteSucceeds: boolean) {
           ok: true,
           json: async () => ({
             ok: true,
-            clouds: [cloud("a", "Cloud A"), cloud("b", "Cloud B")],
+            clouds: profileClouds,
           }),
         };
       if (url === "/api/clouds/a" && init?.method === "DELETE") {
@@ -102,6 +102,57 @@ async function requestDeletion() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("profile Cloud deletion", () => {
+  it("shows Cloud information above the cards and closes it only on the backdrop", async () => {
+    setup(true, [{ ...cloud("a", "Cloud A"), description: "Descrição longa ".repeat(100) }, cloud("b", "Cloud B")]);
+    await screen.findByText("Cloud A");
+    fireEvent.click(screen.getAllByRole("button", { name: "Opções da Cloud" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Informações da Cloud" }));
+    const dialog = screen.getByRole("dialog", { name: "Informações da Cloud" });
+    const backdrop = screen.getByTestId("cloud-details-backdrop");
+    expect(backdrop.parentElement).toBe(document.body);
+    expect(dialog).toHaveClass("overflow-y-auto");
+    expect(dialog).toHaveTextContent("Descrição longa");
+    fireEvent.click(dialog);
+    expect(dialog).toBeInTheDocument();
+    fireEvent.click(backdrop);
+    expect(screen.queryByRole("dialog", { name: "Informações da Cloud" })).not.toBeInTheDocument();
+  });
+  it("closes the Cloud menu on an outside click without closing it on an inside click", async () => {
+    setup(true);
+    await screen.findByText("Cloud A");
+    const trigger = screen.getAllByRole("button", { name: "Opções da Cloud" })[0];
+    fireEvent.click(trigger);
+    const option = screen.getByRole("button", { name: "Informações da Cloud" });
+    fireEvent.click(option.parentElement as HTMLElement);
+    expect(option).toBeInTheDocument();
+    fireEvent.click(document.body);
+    expect(screen.queryByRole("button", { name: "Informações da Cloud" })).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+  it("shows live, scheduled and ended Clouds in order with schedule controls", async () => {
+    const active = { ...cloud("live", "Cloud ativa"), status: "active", createdAt: new Date().toISOString(), endedAt: null };
+    const scheduled = { ...cloud("scheduled", "Cloud agendada"), status: "active", scheduledAt: new Date(Date.now() + 86400000).toISOString(), endedAt: null };
+    setup(true, [cloud("ended", "Cloud encerrada"), scheduled, active]);
+    await screen.findByText("Cloud ativa");
+    const cards = screen.getAllByRole("article");
+    expect(cards.map((card) => within(card).getByRole("heading").textContent)).toEqual(["Cloud ativa", "Cloud agendada", "Cloud encerrada"]);
+    expect(within(cards[0]).getByText(/Ao vivo/)).toBeInTheDocument();
+    expect(within(cards[1]).getByText(/Agendada/)).toBeInTheDocument();
+    fireEvent.click(within(cards[1]).getByRole("button", { name: "Ver data de estreia" }));
+    expect(within(cards[1]).getByText(/^Estreia em/)).toBeInTheDocument();
+    expect(within(cards[1]).getByRole("button", { name: "Avisar-me na estreia" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Minhas Clouds" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Meus Convites" })).toBeInTheDocument();
+  });
+  it("shows the ended status and date without repeating the status", async () => {
+    setup(true);
+    const title = await screen.findByText("Cloud A");
+    const card = title.closest("article");
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText(/^Encerrada em /)).toBeInTheDocument();
+    expect(within(card as HTMLElement).queryByText(/Encerrada Encerrada/)).not.toBeInTheDocument();
+  });
+
   it("removes the Cloud and decrements the count after a successful deletion", async () => {
     setup(true);
     await requestDeletion();

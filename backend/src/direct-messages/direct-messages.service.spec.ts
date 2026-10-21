@@ -41,6 +41,17 @@ function createPrismaMock() {
 }
 
 describe('DirectMessagesService', () => {
+  it('rejects private Cloud links from non-creators and to uninvited recipients', async () => {
+    const id = '12345678-1234-1234-1234-123456789012';
+    const cloud = { findUnique: jest.fn().mockResolvedValue({ authorId: 'owner', visibility: 'private' }) };
+    const cloudMember = { findFirst: jest.fn().mockResolvedValue(null) };
+    const service = new DirectMessagesService({ cloud, cloudMember } as unknown as PrismaService, {} as never);
+    Reflect.set(service, 'requireConversationAccess', jest.fn().mockResolvedValue({ participantOneId: 'owner', participantTwoId: 'other' }));
+    Reflect.set(service, 'assertCanContact', jest.fn().mockResolvedValue(undefined));
+    const input = { conversationId: 'conversation', url: `https://clouds.test/cloud/${id}`, label: 'Cloud' };
+    await expect(service.sendLinkMessage('other', input)).rejects.toThrow('Somente o criador');
+    await expect(service.sendLinkMessage('owner', input)).rejects.toThrow('precisa ser convidada');
+  });
   it('loads pinned messages only from the authorized conversation, including older messages', async () => {
     const findMany = jest.fn().mockResolvedValue([{ id: 'old-pin' }]);
     const service = new DirectMessagesService(

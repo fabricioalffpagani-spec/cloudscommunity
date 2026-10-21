@@ -151,7 +151,7 @@ function ReadPageContent() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center md:block">
-            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} onEdited={(updated) => { const next = clouds.map((cloud) => cloud.id === updated.id ? { ...cloud, title: updated.title, duration: updated.duration, description: updated.description, editCount: updated.editCount } : cloud); setClouds(next); cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", next); }} />
           </div>
         )}
       </main>

@@ -325,6 +325,7 @@ export class CloudService {
 
   private async readableArchiveWhere(
     userId: string,
+    includePrivateMembership = false,
   ): Promise<Prisma.CloudWhereInput> {
     const blocks = await this.prisma.userBlock.findMany({
       where: { OR: [{ blockerId: userId }, { blockedId: userId }] },
@@ -333,7 +334,7 @@ export class CloudService {
     return {
       deletedAt: null,
       status: CloudStatus.ended,
-      visibility: CloudVisibility.public,
+      ...(includePrivateMembership ? {} : { visibility: CloudVisibility.public }),
       authorId: {
         notIn: blocks.map((block) =>
           block.blockerId === userId ? block.blockedId : block.blockerId,
@@ -342,8 +343,9 @@ export class CloudService {
       bans: { none: { userId } },
       OR: [
         { authorId: userId },
-        { author: { profile: { is: { isPrivate: false } } } },
-        { author: { followers: { some: { followerId: userId } } } },
+        { ...(includePrivateMembership ? { visibility: CloudVisibility.public } : {}), author: { profile: { is: { isPrivate: false } } } },
+        { ...(includePrivateMembership ? { visibility: CloudVisibility.public } : {}), author: { followers: { some: { followerId: userId } } } },
+        ...(includePrivateMembership ? [{ visibility: CloudVisibility.private, members: { some: { userId } } }] : []),
       ],
     };
   }
@@ -377,6 +379,9 @@ export class CloudService {
       select: {
         id: true,
         title: true,
+        duration: true,
+        content: true,
+        editCount: true,
         endedAt: true,
         author: {
           select: {
@@ -418,6 +423,9 @@ export class CloudService {
       clouds: clouds.map((cloud) => ({
         id: cloud.id,
         title: cloud.title,
+        duration: cloud.duration,
+        description: cloud.content,
+        editCount: cloud.editCount,
         endedAt: cloud.endedAt?.toISOString() ?? null,
         messagesCount: cloud._count.messages,
         participantsCount: cloud._count.members,
@@ -515,7 +523,7 @@ export class CloudService {
     await this.expireDueClouds();
     const cloud = await this.prisma.cloud.findFirst({
       where: {
-        ...(await this.readableArchiveWhere(current.user.id)),
+        ...(await this.readableArchiveWhere(current.user.id, true)),
         id: cloudId,
       },
       include: this.cloudInclude(),
@@ -629,7 +637,10 @@ export class CloudService {
       where: {
         deletedAt: null,
         authorId: current.user.id,
-        status: { in: [CloudStatus.active, CloudStatus.ended] },
+        OR: [
+          { status: CloudStatus.active },
+          { status: CloudStatus.ended, visibility: CloudVisibility.public },
+        ],
       },
       include: this.cloudInclude(),
       orderBy: { createdAt: 'desc' },
@@ -1183,7 +1194,7 @@ export class CloudService {
     input: UpdateCloudInput,
   ): Promise<{
     ok: true;
-    cloud: { id: string; title: string; duration: string; editCount: number };
+    cloud: { id: string; title: string; duration: string; editCount: number; description?: string | null };
   }> {
     const current = await this.requireSession(token);
     const cloud = await this.prisma.cloud.findFirst({
@@ -1199,6 +1210,21 @@ export class CloudService {
       throw new UnauthorizedException({
         message: 'Apenas o criador pode editar esta cloud.',
       });
+    }
+
+    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 2000)) {
+      throw new BadRequestException({ message: 'A descrição deve ter até 2000 caracteres.' });
+    }
+
+    const changesTitleOrDuration = input.title !== undefined || input.duration !== undefined;
+    if (!changesTitleOrDuration && input.description !== undefined) {
+      const updated = await this.prisma.cloud.update({
+        where: { id: cloudId, authorId: current.user.id, deletedAt: null },
+        data: { content: input.description.trim() || null },
+        select: { id: true, title: true, duration: true, editCount: true, content: true },
+      });
+      const { content, ...rest } = updated;
+      return { ok: true, cloud: { ...rest, description: content } };
     }
 
     if (cloud.editCount >= 3) {
@@ -1233,6 +1259,7 @@ export class CloudService {
       title: string;
       duration: string;
       editCount: number;
+      content?: string | null;
     };
     try {
       updated = await this.prisma.cloud.update({
@@ -1246,9 +1273,10 @@ export class CloudService {
         data: {
           title,
           duration: normalizedDuration,
+          ...(input.description !== undefined ? { content: input.description.trim() || null } : {}),
           editCount: { increment: 1 },
         },
-        select: { id: true, title: true, duration: true, editCount: true },
+        select: { id: true, title: true, duration: true, editCount: true, ...(input.description !== undefined ? { content: true } : {}) },
       });
     } catch (error) {
       if (
@@ -1261,7 +1289,8 @@ export class CloudService {
       }
       throw error;
     }
-    return { ok: true, cloud: updated };
+    const { content, ...rest } = updated;
+    return { ok: true, cloud: { ...rest, ...(input.description !== undefined ? { description: content ?? null } : {}) } };
   }
 
   async removeMember(
@@ -2878,10 +2907,10 @@ export class CloudService {
     const current = await this.requireSession(token);
     const cloud = await this.requireCloudAccess(cloudId, current.user.id);
 
-    // A private invite link can only be generated by its host or an invited
-    // member. This prevents authenticated outsiders from minting links.
     if (cloud.visibility === CloudVisibility.private) {
-      await this.requireCloudMembership(cloudId, current.user.id);
+      if (cloud.authorId !== current.user.id) {
+        throw new UnauthorizedException({ message: 'Somente o criador pode convidar para esta Cloud.' });
+      }
     }
 
     let inviteToken: string;
@@ -2950,6 +2979,10 @@ export class CloudService {
           message: 'Convite inválido ou expirado.',
         });
       }
+      if (cloud.visibility === CloudVisibility.private) {
+        const current = await this.requireSession(token);
+        await this.requireCloudVisibility(cloud, current.user.id);
+      }
       return {
         ok: true,
         invite: {
@@ -2984,6 +3017,10 @@ export class CloudService {
 
       if (invite.expiresAt && invite.expiresAt < new Date()) {
         throw new BadRequestException({ message: 'Este convite expirou.' });
+      }
+      if (invite.cloud.visibility === CloudVisibility.private) {
+        const current = await this.requireSession(token);
+        await this.requireCloudVisibility(invite.cloud, current.user.id);
       }
 
       return {

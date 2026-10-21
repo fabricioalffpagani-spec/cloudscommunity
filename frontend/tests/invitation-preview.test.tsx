@@ -9,4 +9,9 @@ describe("invitation link preview", () => {
     expect(metadata.description).toBe("Ana está te convidando para o Clouds! Descubra conversas acontecendo agora...");
     expect(metadata.openGraph?.images).toEqual([{ url: "/entrenoclouds/preview?ref=ANA1234", width: 600, height: 600 }]);
   });
+  it("selects the avatar-only preview for links shared from the arrow", async () => {
+    const metadata = await generateMetadata({ searchParams: Promise.resolve({ ref: "ANA1234", preview: "avatar" }) });
+    expect(metadata.openGraph?.images).toEqual([{ url: "/entrenoclouds/preview?ref=ANA1234&style=avatar", width: 600, height: 600 }]);
+    expect(metadata.twitter?.images).toEqual(["/entrenoclouds/preview?ref=ANA1234&style=avatar"]);
+  });
 });

@@ -37,7 +37,7 @@ export function ProfileInvitation() {
       <div className="min-w-0"><p className="flex items-center justify-center gap-2 text-2xl font-extrabold text-white sm:text-4xl"><img src="/logo_clouds.png" alt="" className="h-8 w-8 shrink-0 object-contain sm:h-10 sm:w-10" />Clouds</p><p className="tracking-[.3em] text-[#a000f5]">COMMUNITY</p><button type="button" disabled={!invite} onClick={() => { if (invite) void navigator.clipboard.writeText(invite.code).then(() => setNotice("Código copiado.")).catch(() => setNotice("Não foi possível copiar o código.")); }} className="mt-5 w-full rounded-full border border-white/20 px-2 py-3 font-bold tracking-[.2em] text-white">{invite?.code ?? "..."} ⧉</button></div>
     </div>
     <p className="mt-5 text-sm leading-relaxed text-white/70">Aumente a posição de seu perfil na aba Meet e seja recomendado a mais pessoas trazendo seus amigos para o Clouds. Acumule +10 hypes no seu perfil a cada novo usuário que adentrar à plataforma com seu código!</p>
-    <button type="button" disabled={!invite} onClick={() => void share()} className="mt-5 w-full max-w-sm rounded-full bg-[#a000f5] px-6 py-3 font-bold text-white disabled:opacity-50">Chamar amigos (+10 hypes)</button>
+    <button type="button" disabled={!invite} onClick={() => void share()} className="mt-5 w-full max-w-sm rounded-full bg-[#a000f5] px-6 py-3 font-bold text-white disabled:opacity-50">Chamar amigos (+10 hypes p/usuário)</button>
     <p className="mt-3 text-sm text-white/70">Ao acessar seu convite, seus amigos encontrarão seu código já preenchido no cadastro.</p>
     {notice && <p role="status" className="mt-2 text-sm text-white/70">{notice}</p>}
   </div>;

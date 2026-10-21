@@ -128,6 +128,7 @@ export type CreateCloudInput = {
 export type UpdateCloudInput = {
   title?: string;
   duration?: string;
+  description?: string;
 };
 
 export type ListCloudMessagesQuery = {
