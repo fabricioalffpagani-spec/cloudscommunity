@@ -5,6 +5,25 @@ import { PushNotificationsService } from '../infrastructure/push/push-notificati
 import { DirectMessagesGateway } from '../direct-messages/direct-messages.gateway';
 
 describe('invitation previews', () => {
+  it('generates new codes with four letters and three digits', async () => {
+    const prisma = {
+      invitationCode: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockImplementation(({ data }) => Promise.resolve(data)),
+      },
+    };
+    const service = new UsersService(
+      prisma as unknown as PrismaService,
+      {} as AuthService,
+      {} as PushNotificationsService,
+      {} as DirectMessagesGateway,
+    );
+    jest.spyOn(service as any, 'requireSession').mockResolvedValue({ user: { id: 'sender', profile: { username: 'ana_17' } } });
+    const result = await service.sendInvite('session', '');
+    expect(result.code).toMatch(/^ANAX[0-9]{3}$/);
+    expect(result.inviteUrl).toContain(`ref=${result.code}`);
+  });
+
   it('returns only the profile belonging to the invitation code', async () => {
     const prisma = {
       invitationCode: {

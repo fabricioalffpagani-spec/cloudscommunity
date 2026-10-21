@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
 import { parseForwardedContent } from "../lib/forwarded-content";
+import { sharedCloudLink } from "../lib/shared-cloud-link";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
 import { ArrowLeftIcon, BellIcon, CheckIcon, GearIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SearchIcon, SendIcon, StickerIcon, TrashIcon, XIcon } from "../components/ui-icons";
@@ -334,8 +335,9 @@ function parseLinkPreview(rawLabel: string | null | undefined, fallbackUrl?: str
 function replyPreview(message: Msg): string {
   if (message.kind !== "link") return message.content || "Mídia";
   try {
-    const parsed = JSON.parse(message.linkLabel || "{}") as { type?: string; cloudTitle?: string };
+    const parsed = JSON.parse(message.linkLabel || "{}") as { type?: string; cloudTitle?: string; label?: string };
     if (parsed.type === "cloud_invitation") return parsed.cloudTitle || "Convite para Cloud";
+    if (parsed.type === "forwarded_link") return parsed.label || "Link compartilhado";
   } catch { /* regular link */ }
   return parseLinkPreview(message.linkLabel, message.linkUrl);
 }
@@ -878,6 +880,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
   }
 
   const isCloudInvite = cloudInviteData !== null;
+  const sharedCloud = typeof window !== "undefined" ? sharedCloudLink(msg.linkUrl, window.location.origin) : null;
 
   if (sharedProfile) {
     return (
@@ -962,6 +965,21 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
           </div>
         </div>
         {msg.pending && <p className="mt-1 text-right text-[11px] text-white/40">enviando...</p>}
+      </a>
+    );
+  }
+
+  if (sharedCloud && msg.linkUrl) {
+    const title = label === msg.linkUrl || /^https?:\/\//i.test(label) ? "Cloud compartilhada" : label;
+    return (
+      <a href={msg.linkUrl} className="block w-[min(360px,100%)] overflow-hidden rounded-3xl text-left text-white transition-opacity hover:opacity-90" style={{ background: "linear-gradient(135deg, #7C3AED 0%, #9333EA 60%, #A855F7 100%)" }}>
+        <div className="px-5 pt-5 pb-4">
+          {isExternal && <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/70">Conteúdo encaminhado</p>}
+          <p className="mb-3 text-[12px] font-semibold text-white/80">Cloud compartilhada · {sharedCloud === "read" ? "Read" : "Talk"}</p>
+          <p className="break-words text-[22px] font-extrabold leading-tight sm:text-2xl">{title}</p>
+        </div>
+        <div className="px-4 pb-4"><span className="flex min-h-11 items-center justify-center rounded-2xl bg-white/20 px-4 py-3 text-[15px] font-bold text-white">{sharedCloud === "read" ? "Ler" : "Entrar na Cloud"}</span></div>
+        {msg.pending && <p className="mt-2 text-xs text-white/70">enviando...</p>}
       </a>
     );
   }
@@ -1354,7 +1372,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
         />}
       </div>}
       {selectionMode && <button type="button" aria-label={selected ? "Desmarcar mensagem" : "Selecionar mensagem"} onClick={() => onToggleSelection?.(msg)} className={`h-6 w-6 shrink-0 rounded-full border-2 ${selected ? "border-[#A855F7] bg-[#9333EA]" : "border-white/50 bg-black/20"}`}>{selected && <span className="block text-center text-[14px] leading-5 text-white">✓</span>}</button>}
-      <div className={`relative flex flex-col gap-1 transition-transform duration-200 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: "72%", transform: showSwipeTime ? `translateX(${isRight ? -44 : 44}px)` : "translateX(0)" }}>
+      <div className={`relative flex flex-col gap-1 transition-transform duration-200 ${isRight ? "items-end" : "items-start"}`} style={{ maxWidth: msg.kind === "link" && typeof window !== "undefined" && sharedCloudLink(msg.linkUrl, window.location.origin) ? "85%" : "72%", transform: showSwipeTime ? `translateX(${isRight ? -44 : 44}px)` : "translateX(0)" }}>
         {showSwipeTime && <span data-message-swipe-time className={`absolute top-1/2 z-10 -translate-y-1/2 whitespace-nowrap text-[11px] text-white/65 ${isRight ? "left-full ml-2" : "right-full mr-2"}`}>{msg.time}</span>}
         {msg.kind === "audio" ? (
           <AudioMessageBubble msg={msg} />
@@ -3129,7 +3147,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.linkUrl ?? "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.linkUrl ?? "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, cloudOrigin: parseForwardedContent(message.content).origin ?? undefined, forwardedOrigin: parseForwardedContent(message.content).origin ? "cloud" : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "link" ? replyPreview(forwardMsg) : "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.kind === "link" ? replyPreview(message) : "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, cloudOrigin: parseForwardedContent(message.content).origin ?? undefined, forwardedOrigin: parseForwardedContent(message.content).origin ? "cloud" : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
       )}
     </div>
   );
