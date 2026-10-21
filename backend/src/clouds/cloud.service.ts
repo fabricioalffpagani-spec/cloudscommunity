@@ -334,7 +334,9 @@ export class CloudService {
     return {
       deletedAt: null,
       status: CloudStatus.ended,
-      ...(includePrivateMembership ? {} : { visibility: CloudVisibility.public }),
+      ...(includePrivateMembership
+        ? {}
+        : { visibility: CloudVisibility.public }),
       authorId: {
         notIn: blocks.map((block) =>
           block.blockerId === userId ? block.blockedId : block.blockerId,
@@ -343,9 +345,26 @@ export class CloudService {
       bans: { none: { userId } },
       OR: [
         { authorId: userId },
-        { ...(includePrivateMembership ? { visibility: CloudVisibility.public } : {}), author: { profile: { is: { isPrivate: false } } } },
-        { ...(includePrivateMembership ? { visibility: CloudVisibility.public } : {}), author: { followers: { some: { followerId: userId } } } },
-        ...(includePrivateMembership ? [{ visibility: CloudVisibility.private, members: { some: { userId } } }] : []),
+        {
+          ...(includePrivateMembership
+            ? { visibility: CloudVisibility.public }
+            : {}),
+          author: { profile: { is: { isPrivate: false } } },
+        },
+        {
+          ...(includePrivateMembership
+            ? { visibility: CloudVisibility.public }
+            : {}),
+          author: { followers: { some: { followerId: userId } } },
+        },
+        ...(includePrivateMembership
+          ? [
+              {
+                visibility: CloudVisibility.private,
+                members: { some: { userId } },
+              },
+            ]
+          : []),
       ],
     };
   }
@@ -1194,7 +1213,13 @@ export class CloudService {
     input: UpdateCloudInput,
   ): Promise<{
     ok: true;
-    cloud: { id: string; title: string; duration: string; editCount: number; description?: string | null };
+    cloud: {
+      id: string;
+      title: string;
+      duration: string;
+      editCount: number;
+      description?: string | null;
+    };
   }> {
     const current = await this.requireSession(token);
     const cloud = await this.prisma.cloud.findFirst({
@@ -1212,16 +1237,28 @@ export class CloudService {
       });
     }
 
-    if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 2000)) {
-      throw new BadRequestException({ message: 'A descrição deve ter até 2000 caracteres.' });
+    if (
+      input.description !== undefined &&
+      (typeof input.description !== 'string' || input.description.length > 2000)
+    ) {
+      throw new BadRequestException({
+        message: 'A descrição deve ter até 2000 caracteres.',
+      });
     }
 
-    const changesTitleOrDuration = input.title !== undefined || input.duration !== undefined;
+    const changesTitleOrDuration =
+      input.title !== undefined || input.duration !== undefined;
     if (!changesTitleOrDuration && input.description !== undefined) {
       const updated = await this.prisma.cloud.update({
         where: { id: cloudId, authorId: current.user.id, deletedAt: null },
         data: { content: input.description.trim() || null },
-        select: { id: true, title: true, duration: true, editCount: true, content: true },
+        select: {
+          id: true,
+          title: true,
+          duration: true,
+          editCount: true,
+          content: true,
+        },
       });
       const { content, ...rest } = updated;
       return { ok: true, cloud: { ...rest, description: content } };
@@ -1273,10 +1310,18 @@ export class CloudService {
         data: {
           title,
           duration: normalizedDuration,
-          ...(input.description !== undefined ? { content: input.description.trim() || null } : {}),
+          ...(input.description !== undefined
+            ? { content: input.description.trim() || null }
+            : {}),
           editCount: { increment: 1 },
         },
-        select: { id: true, title: true, duration: true, editCount: true, ...(input.description !== undefined ? { content: true } : {}) },
+        select: {
+          id: true,
+          title: true,
+          duration: true,
+          editCount: true,
+          ...(input.description !== undefined ? { content: true } : {}),
+        },
       });
     } catch (error) {
       if (
@@ -1290,7 +1335,15 @@ export class CloudService {
       throw error;
     }
     const { content, ...rest } = updated;
-    return { ok: true, cloud: { ...rest, ...(input.description !== undefined ? { description: content ?? null } : {}) } };
+    return {
+      ok: true,
+      cloud: {
+        ...rest,
+        ...(input.description !== undefined
+          ? { description: content ?? null }
+          : {}),
+      },
+    };
   }
 
   async removeMember(
@@ -2909,7 +2962,9 @@ export class CloudService {
 
     if (cloud.visibility === CloudVisibility.private) {
       if (cloud.authorId !== current.user.id) {
-        throw new UnauthorizedException({ message: 'Somente o criador pode convidar para esta Cloud.' });
+        throw new UnauthorizedException({
+          message: 'Somente o criador pode convidar para esta Cloud.',
+        });
       }
     }
 

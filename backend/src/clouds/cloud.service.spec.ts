@@ -378,19 +378,23 @@ describe('Talk / Read regression', () => {
   it('restricts private archive lookup to the author or invited members', async () => {
     const { service, prisma } = setup();
     await service.getArchivedMessages('token', cloudId);
-    expect(prisma.cloud.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        id: cloudId,
-        OR: expect.arrayContaining([{ visibility: 'private', members: { some: { userId: 'viewer' } } }]),
-        bans: { none: { userId: 'viewer' } },
-      }),
-    }));
+    const query = prisma.cloud.findFirst.mock.calls[0][0] as {
+      where: { id: string; OR: unknown[]; bans: unknown };
+    };
+    expect(query.where.id).toBe(cloudId);
+    expect(query.where.OR).toContainEqual({
+      visibility: 'private',
+      members: { some: { userId: 'viewer' } },
+    });
+    expect(query.where.bans).toEqual({ none: { userId: 'viewer' } });
   });
   it('does not let invited members create private Cloud invites', async () => {
     const { service, prisma, cloud } = setup();
     cloud.visibility = 'private';
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
-    await expect(service.createInvite('token', cloudId)).rejects.toThrow(UnauthorizedException);
+    await expect(service.createInvite('token', cloudId)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
   it('does not fetch messages when the archive is inaccessible', async () => {
     const { service, prisma } = setup();
@@ -619,12 +623,31 @@ describe('Talk / Read regression', () => {
     const { service, prisma, auth, cloud } = setup();
     cloud.editCount = 3;
     auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
-    prisma.cloud.update.mockResolvedValue({ id: cloudId, title: 'Topic', duration: '10min', editCount: 3, content: 'Nova descrição' });
-    await expect(service.update('token', cloudId, { description: ' Nova descrição ' })).resolves.toMatchObject({ cloud: { description: 'Nova descrição', editCount: 3 } });
-    expect(prisma.cloud.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: cloudId, authorId: 'author', deletedAt: null }, data: { content: 'Nova descrição' } }));
-    await expect(service.update('token', cloudId, { description: 'x'.repeat(2001) })).rejects.toThrow(BadRequestException);
+    prisma.cloud.update.mockResolvedValue({
+      id: cloudId,
+      title: 'Topic',
+      duration: '10min',
+      editCount: 3,
+      content: 'Nova descrição',
+    });
+    await expect(
+      service.update('token', cloudId, { description: ' Nova descrição ' }),
+    ).resolves.toMatchObject({
+      cloud: { description: 'Nova descrição', editCount: 3 },
+    });
+    expect(prisma.cloud.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: cloudId, authorId: 'author', deletedAt: null },
+        data: { content: 'Nova descrição' },
+      }),
+    );
+    await expect(
+      service.update('token', cloudId, { description: 'x'.repeat(2001) }),
+    ).rejects.toThrow(BadRequestException);
     auth.resolveSession.mockResolvedValue({ user: { id: 'viewer' } });
-    await expect(service.update('token', cloudId, { description: 'Outra' })).rejects.toThrow(UnauthorizedException);
+    await expect(
+      service.update('token', cloudId, { description: 'Outra' }),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
   it('accepts 40 characters on edit and rejects 41 on create and edit', async () => {

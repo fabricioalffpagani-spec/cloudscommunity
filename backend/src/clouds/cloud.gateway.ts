@@ -295,7 +295,13 @@ export class CloudMessagesGateway
 
   broadcastCloudUpdated(
     cloudId: string,
-    cloud: { id: string; title: string; duration: string; editCount: number; description?: string | null },
+    cloud: {
+      id: string;
+      title: string;
+      duration: string;
+      editCount: number;
+      description?: string | null;
+    },
   ) {
     this.server
       .to(this.cloudRoom(cloudId))
