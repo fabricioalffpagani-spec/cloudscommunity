@@ -7,6 +7,10 @@ import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
 import { HypeCount } from "../components/HypeCount";
 import { ProfileInvitation } from "../components/ProfileInvitation";
+import { CloudDetailsDialog } from "../components/CloudDetailsDialog";
+import { CloudDescriptionEditor } from "../components/CloudDescriptionEditor";
+import { ProfileScheduleActions } from "../components/ProfileScheduleActions";
+import { useDismissMenu } from "../lib/use-dismiss-menu";
 import { LongPressHint } from "../components/LongPressHint";
 import {
   SessionUserAvatar,
@@ -260,35 +264,21 @@ type ProfileCloud = {
 const CLOUD_REPORT_REASONS = ["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Conteúdo sexual inapropriado", "Ameaças", "Outro"];
 
 function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onReminderActivated }: { cloud: ProfileCloud; now: number; viewerId?: string; authorAvatarUrl?: string | null; onDelete?: (cloud: ProfileCloud) => void; onReminderActivated?: (cloud: ProfileCloud) => void }) {
-  const createdAt = new Date(cloud.createdAt);
+  const createdAt = new Date(cloud.scheduledAt || cloud.createdAt);
   const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - createdAt.getTime()) / 1000), 0);
   const isEnded = cloud.status === "ended";
   const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
   const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > now);
-  const isLive = !isEnded && remainingSeconds > 0;
-  const [reminderSet, setReminderSet] = useState(() => Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)));
+  const isLive = !isEnded && !isScheduled;
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useDismissMenu(menuOpen, () => setMenuOpen(false));
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [description, setDescription] = useState(cloud.description ?? null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReasons, setReportReasons] = useState<string[]>([]);
   const [reporting, setReporting] = useState(false);
   const [reportError, setReportError] = useState("");
   const isHost = Boolean(viewerId && cloud.authorId === viewerId);
-
-  useEffect(() => {
-    if (viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId)) {
-      setReminderSet(true);
-    }
-  }, [cloud.participantProfiles, viewerId]);
-
-  const activateReminder = async () => {
-    if (reminderSet) return;
-    const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
-    if (response.ok) {
-      setReminderSet(true);
-      onReminderActivated?.(cloud);
-    }
-  };
 
   const sendReport = async () => {
     if (reportReasons.length === 0 || reporting) return;
@@ -315,20 +305,21 @@ function ProfileCloudCard({ cloud, now, viewerId, authorAvatarUrl, onDelete, onR
   const statusLabel = isScheduled ? "Agendada" : isLive ? "Ao vivo" : "Encerrada";
   const statusDetail = isScheduled && scheduledDate
     ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`
-    : isEnded && cloud.endedAt
-      ? `Encerrada em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}`
+    : isEnded
+      ? cloud.endedAt ? `em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}` : ""
       : `Encerra em ${formatCountdown(remainingSeconds)}`;
   const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
   const visibleParticipants = participants.slice(0, 3);
   return (
-    <article className={`cloud-card relative flex min-h-[180px] min-w-0 w-full flex-col overflow-visible rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${menuOpen ? "z-30" : "z-0"}`}>
+    <article className={`cloud-card relative flex min-h-[180px] min-w-0 w-full flex-col overflow-visible rounded-2xl border p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${isLive ? "border-[#C084FC] bg-[#321066] ring-1 ring-[#A855F7]/50" : "border-[#8B5CF6]/35 bg-[#1a0e3d]/75"} ${menuOpen ? "z-30" : "z-0"}`}>
       <div className="flex items-center justify-between gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold text-white">{authorAvatarUrl ? <img src={authorAvatarUrl} alt="" className="h-full w-full object-cover" /> : cloud.title.slice(0, 1).toUpperCase()}</span>
-        <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
+        <div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{visibleParticipants.map((participant) => <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold text-white">{participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} className="h-full w-full object-cover" /> : participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > visibleParticipants.length && <span title={`${participants.length - visibleParticipants.length} participantes a mais`} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold text-white">+{participants.length - visibleParticipants.length}</span>}</div><div ref={menuRef} className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="flex h-8 w-7 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10">⋮</button>{menuOpen && <div className="absolute right-0 top-9 z-50 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-2xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/[0.07]">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); setReportError(""); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}{isHost && onDelete && <button type="button" onClick={() => { onDelete(cloud); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Excluir Cloud permanentemente</button>}</div>}</div></div>
       </div>
       <MobileCloudEntryLink href={isEnded ? `/cloud/${cloud.id}/conversation` : cloud.href} className="flex min-w-0 flex-1 items-center justify-center py-5 text-center"><h3 lang="pt-BR" className={`min-w-0 break-words [overflow-wrap:anywhere] hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></MobileCloudEntryLink>
-      <p className="text-center text-[11px] text-white/50">{statusLabel} {statusDetail}</p>
-      {detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="sticky top-0 z-10 flex items-center justify-between gap-4 bg-[#15161C]"><h2 className="text-[18px] font-bold">Informações da Cloud</h2><button type="button" aria-label="Fechar informações" onClick={() => setDetailsOpen(false)} className="shrink-0 p-1 text-xl text-white/50">×</button></div><div className="mt-4 min-w-0 space-y-2 text-[14px] text-white/70"><p><span className="text-white/40">Duração: </span>{cloud.duration}</p><p><span className="text-white/40">Participantes: </span>{cloud.participantProfiles?.length ?? 0}</p><p><span className="text-white/40">Comentários: </span>{cloud.messagesCount ?? 0}</p><p><span className="text-white/40">Status: </span>{statusLabel}</p><p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><span className="text-white/40">Descrição: </span>{cloud.description?.trim() || "Sem descrição."}</p></div></div></div>}
+      <p className={`text-center text-[12px] font-semibold ${isLive ? "text-[#e9d5ff]" : "text-white/60"}`}>{statusLabel} {statusDetail}</p>
+      {isScheduled && cloud.scheduledAt && <ProfileScheduleActions cloudId={cloud.id} scheduledAt={cloud.scheduledAt} initiallyReminded={Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId))} onReminderActivated={() => onReminderActivated?.(cloud)} />}
+      {detailsOpen && <CloudDetailsDialog onClose={() => setDetailsOpen(false)}><div className="mt-4 min-w-0 space-y-2 text-[14px] text-white/70"><p><span className="text-white/40">Duração: </span>{cloud.duration}</p><p><span className="text-white/40">Participantes: </span>{cloud.participantProfiles?.length ?? 0}</p><p><span className="text-white/40">Comentários: </span>{cloud.messagesCount ?? 0}</p><p><span className="text-white/40">Status: </span>{statusLabel}</p><p className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><span className="text-white/40">Descrição: </span>{description?.trim() || "Sem descrição."}</p></div>{isHost && <CloudDescriptionEditor cloudId={cloud.id} description={description} onSaved={setDescription} />}</CloudDetailsDialog>}
       {reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#15161C] p-5"><div className="flex items-center justify-between gap-4"><h2 className="text-[18px] font-bold">Denunciar Cloud</h2><button type="button" onClick={() => setReportOpen(false)} className="text-xl text-white/50">×</button></div><p className="mt-2 text-[13px] leading-relaxed text-white/60">Selecione os motivos. A denúncia será encaminhada para cloudscomunidade@gmail.com.</p><div className="mt-4 space-y-2">{CLOUD_REPORT_REASONS.map((reason) => <label key={reason} className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] text-white/80"><input type="checkbox" checked={reportReasons.includes(reason)} onChange={() => setReportReasons((current) => current.includes(reason) ? current.filter((item) => item !== reason) : [...current, reason])} className="h-4 w-4 accent-[#A855F7]" />{reason}</label>)}</div>{reportError && <p role="alert" className="mt-3 text-[13px] text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button type="button" onClick={() => setReportOpen(false)} className="rounded-full px-4 py-2 text-[13px] text-white/70">Cancelar</button><button type="button" disabled={reportReasons.length === 0 || reporting} onClick={() => void sendReport()} className="rounded-full bg-red-500 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}
     </article>
   );
@@ -338,7 +329,7 @@ export default function ProfilePage() {
   const { user, status, refresh, applyUser, decrementCloudCount } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
-  const [cloudFilter, setCloudFilter] = useState<"all" | "active" | "scheduled" | "ended" | "invites">("all");
+  const [cloudFilter, setCloudFilter] = useState<"all" | "invites">("all");
   const [cloudsLoading, setCloudsLoading] = useState(true);
   const [cloudToDelete, setCloudToDelete] = useState<ProfileCloud | null>(null);
   const [queueCloud, setQueueCloud] = useState<ProfileCloud | null>(null);
@@ -396,7 +387,7 @@ export default function ProfilePage() {
         const payload = await response.json().catch(() => null) as { ok?: boolean; clouds?: ProfileCloud[] } | null;
 
         if (!cancelled) {
-          setClouds(response.ok && Array.isArray(payload?.clouds) ? payload.clouds : []);
+          setClouds(response.ok && Array.isArray(payload?.clouds) ? payload.clouds.filter((cloud) => !(cloud.status === "ended" && cloud.visibility === "private")) : []);
         }
       } catch {
         if (!cancelled) {
@@ -583,17 +574,10 @@ export default function ProfilePage() {
   const followers = user?.followersCount ?? 0;
   const following = user?.followingCount ?? 0;
   const cloudsCount = user?.cloudsCount ?? 0;
-  const filteredClouds = useMemo(() => clouds.filter((cloud) => {
-    const scheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now);
-    return cloudFilter === "all" || (cloudFilter === "scheduled" && scheduled) || (cloudFilter === "ended" && cloud.status === "ended") || (cloudFilter === "active" && cloud.status === "active" && !scheduled);
-  }), [cloudFilter, clouds, now]);
-  const emptyCloudMessage = {
-    all: "Você ainda não publicou nenhuma Cloud.",
-    active: "Não há Clouds ativas no momento.",
-    scheduled: "Não há Clouds agendadas.",
-    ended: "Não há Clouds encerradas.",
-    invites: "",
-  }[cloudFilter];
+  const filteredClouds = useMemo(() => [...clouds].sort((a, b) => {
+    const rank = (cloud: ProfileCloud) => cloud.status === "ended" ? 2 : cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now ? 1 : 0;
+    return rank(a) - rank(b);
+  }), [clouds, now]);
   const hypesCount = user?.hypesCount ?? 0;
   const memberSince = formatMemberSince(user?.createdAt);
   const region = user?.location || "Sem região informada";
@@ -691,7 +675,7 @@ export default function ProfilePage() {
         </div>
 
         <div className="mt-10">
-          <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">{([['all', 'Todas'], ['active', 'Ativas'], ['scheduled', 'Agendadas'], ['ended', 'Encerradas'], ['invites', 'Convites']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
+          <div role="tablist" aria-label="Conteúdo do perfil" className="mb-6 flex justify-center gap-3 pb-2">{([['all', 'Minhas Clouds'], ['invites', 'Meus Convites']] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={cloudFilter === value} onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
           {cloudFilter === "invites" ? <ProfileInvitation /> : cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
@@ -703,7 +687,7 @@ export default function ProfilePage() {
               ))}
             </div>
           ) : (
-            <div className="min-h-48 px-4 py-12 text-center"><p className="text-[15px] font-medium text-white">{emptyCloudMessage}</p>{user && (cloudFilter === "scheduled" ? <Link href="/?create=1&schedule=1" className="mt-5 inline-flex rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Agende uma cloud</Link> : <Link href="/?create=1" className="mt-5 inline-flex rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Crie uma cloud</Link>)}</div>
+            <div className="min-h-48 px-4 py-12 text-center"><p className="text-[15px] font-medium text-white">Você ainda não publicou nenhuma Cloud.</p>{user && <Link href="/?create=1" className="mt-5 inline-flex rounded-full bg-[#9333EA] px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]">Crie uma cloud</Link>}</div>
           )}
         </div>
       </div>

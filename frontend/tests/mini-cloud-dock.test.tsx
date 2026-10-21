@@ -210,9 +210,13 @@ describe("Mini Cloud leave", () => {
       expect(dock).toHaveStyle({ width: "280px", height: "268px" });
       expect(screen.queryByRole("separator", { name: "Redimensionar Mini Cloud" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Abrir Mini Cloud fora da aba" })).not.toBeInTheDocument();
-      const handle = dock?.firstElementChild as HTMLElement;
+      const handle = screen.getByRole("group", { name: "Arrastar MiniCloud" });
+      expect(handle).toHaveAttribute("title", "Arraste para mover a MiniCloud");
+      expect(handle).toHaveTextContent("⠿");
       handle.setPointerCapture = vi.fn();
       fireEvent.pointerDown(handle, { pointerId: 1, clientX: 300, clientY: 600 });
+      fireEvent.pointerMove(handle, { pointerId: 2, clientX: 200, clientY: 500 });
+      expect(dock).toHaveStyle({ transform: "translate(0px,0px)" });
       fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100, clientY: 400 });
       fireEvent.pointerUp(handle, { pointerId: 1 });
       expect(dock).toHaveStyle({ transform: "translate(-102px,-200px)" });
@@ -221,6 +225,9 @@ describe("Mini Cloud leave", () => {
       fireEvent.pointerMove(messageScroller, { pointerId: 2, clientX: 120, clientY: 300 });
       expect(dock).toHaveStyle({ transform: "translate(-102px,-200px)" });
       expect(screen.getByRole("textbox")).toBeVisible();
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Expandir Cloud" }), { pointerId: 3, clientX: 100, clientY: 400 });
+      fireEvent.pointerMove(handle, { pointerId: 3, clientX: 200, clientY: 300 });
+      expect(dock).toHaveStyle({ transform: "translate(-102px,-200px)" });
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
       Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });

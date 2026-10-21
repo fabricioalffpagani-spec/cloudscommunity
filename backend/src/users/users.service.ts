@@ -1247,7 +1247,7 @@ export class UsersService {
               authorId: user.id,
               deletedAt: null,
               status: CloudStatus.ended,
-              ...cloudVisibilityFilter,
+              visibility: 'public',
             },
             orderBy: [{ endedAt: 'desc' }, { createdAt: 'desc' }],
             select: {

@@ -266,7 +266,7 @@ export class CloudController {
   @Patch(':id')
   async update(
     @Param('id') id: string,
-    @Body() body: { title?: string; duration?: string },
+    @Body() body: { title?: string; duration?: string; description?: string },
     @Req() req: Request,
   ) {
     const result = await this.cloudService.update(

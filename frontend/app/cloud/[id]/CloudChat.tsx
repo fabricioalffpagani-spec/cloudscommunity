@@ -1723,6 +1723,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [cloudEditOpen, setCloudEditOpen] = useState(false);
   const [cloudTitleDraft, setCloudTitleDraft] = useState("");
   const [cloudDurationDraft, setCloudDurationDraft] = useState("10min");
+  const [cloudDescriptionDraft, setCloudDescriptionDraft] = useState("");
   const [isSavingCloudEdit, setIsSavingCloudEdit] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
@@ -1998,9 +1999,10 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloud, cloudId, isCloudAuthor, isDeletingCloud, router]);
 
   const openCloudEdit = useCallback(() => {
-    if (!cloud || !isCloudAuthor || (cloud.editCount ?? 0) >= 3) return;
+    if (!cloud || !isCloudAuthor) return;
     setCloudTitleDraft(cloud.title);
     setCloudDurationDraft(cloud.duration);
+    setCloudDescriptionDraft(cloud.description ?? "");
     setCloudEditOpen(true);
   }, [cloud, isCloudAuthor]);
 
@@ -2017,9 +2019,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: cloudTitleDraft, duration: cloudDurationDraft }),
+        body: JSON.stringify({ ...(cloudTitleDraft.trim() !== cloud.title || cloudDurationDraft !== cloud.duration ? { title: cloudTitleDraft, duration: cloudDurationDraft } : {}), description: cloudDescriptionDraft }),
       });
-      const payload = await readJson<{ ok: true; cloud: { id: string; title: string; duration: string; editCount: number } }>(response);
+      const payload = await readJson<{ ok: true; cloud: { id: string; title: string; duration: string; editCount: number; description: string | null } }>(response);
       setCloud((current) => current ? { ...current, ...payload.cloud } : current);
       setCloudEditOpen(false);
     } catch (editError) {
@@ -2027,7 +2029,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     } finally {
       setIsSavingCloudEdit(false);
     }
-  }, [cloud, cloudDurationDraft, cloudId, cloudTitleDraft, isCloudAuthor, isSavingCloudEdit]);
+  }, [cloud, cloudDescriptionDraft, cloudDurationDraft, cloudId, cloudTitleDraft, isCloudAuthor, isSavingCloudEdit]);
 
   const resolvedTitle = cloud?.title || title || "Cloud";
 
@@ -2072,14 +2074,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [titleLongPressTimer]);
 
   const minimizeCloud = useCallback(() => {
+    // Minimizar escolhe o dock integrado; a janela externa tem ação própria.
+    window.localStorage.removeItem("clouds:mini-cloud-popout");
+    if (user?.id) {
+      window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString(), startedAt: cloud?.startedAt }));
+      window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+    }
     if (window.matchMedia("(max-width: 767px)").matches) {
       router.push("/");
       return;
     }
-    // Minimizar escolhe o dock integrado; a janela externa tem ação própria.
-    window.localStorage.removeItem("clouds:mini-cloud-popout");
-    window.localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: cloudId, title: resolvedTitle, isAuthor: isCloudAuthor, ownerUserId: user?.id, duration: cloud?.duration ?? duration ?? "", createdAt: cloud?.createdAt ?? createdAt ?? new Date().toISOString(), startedAt: cloud?.startedAt }));
-    window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
     if (window.history.length > 1) {
       router.back();
       return;
@@ -2891,9 +2895,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   // disponível e pode ser continuada em uma nova Cloud.
   useEffect(() => {
     if (isExpired && cloud) {
-      router.replace(`/read?cloud=${encodeURIComponent(cloudId)}`);
+      router.replace(isPrivateCloud ? `/cloud/${encodeURIComponent(cloudId)}/conversation` : `/read?cloud=${encodeURIComponent(cloudId)}`);
     }
-  }, [isExpired, cloud, cloudId, router]);
+  }, [isExpired, cloud, cloudId, router, isPrivateCloud]);
 
   if (status === "loading" || loadingCloud) {
     return (
@@ -2951,14 +2955,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   </button>
                 )}
               </div>
-              <button
+              {!isPrivateCloud && <button
                 type="button"
                 aria-label="Encaminhar"
                 onClick={() => setShareOpen(true)}
                 className="cloud-share-pulse group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
               >
                 <HeaderForwardIcon />
-              </button>
+              </button>}
             </>
           )}
 
@@ -3008,7 +3012,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#11141F] shadow-xl"
               >
-                {isCloudAuthor && (cloud?.editCount ?? 0) < 3 && (
+                {isCloudAuthor && (
                   <button
                     type="button"
                     onClick={() => {
@@ -3019,7 +3023,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   >
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/70">✎</span>
                     Editar Cloud
-                    <span className="ml-auto text-[11px] text-white/40">restam {3 - (cloud?.editCount ?? 0)}</span>
+                    <span className="ml-auto text-[11px] text-white/40">título e duração: {Math.max(0, 3 - (cloud?.editCount ?? 0))} restante(s)</span>
                   </button>
                 )}
                 {isCloudAuthor && (
@@ -3488,19 +3492,20 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
       {cloudEditOpen && isCloudAuthor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#15161C] p-6">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/10 bg-[#15161C] p-6">
             <div className="mb-5 flex items-center justify-between gap-4">
-              <div><h3 className="text-[18px] font-bold">Editar Cloud</h3><p className="mt-1 text-[12px] text-white/50">Você ainda pode editar esta Cloud {Math.max(0, 3 - (cloud?.editCount ?? 0))} vez(es).</p></div>
+              <div><h3 className="text-[18px] font-bold">Editar Cloud</h3><p className="mt-1 text-[12px] text-white/50">Título e duração: {Math.max(0, 3 - (cloud?.editCount ?? 0))} edição(ões) restante(s). A descrição pode ser alterada a qualquer momento.</p></div>
               <button type="button" aria-label="Fechar edição" onClick={() => setCloudEditOpen(false)} disabled={isSavingCloudEdit} className="text-xl text-white/50 transition hover:text-white disabled:opacity-50">×</button>
             </div>
             <label className="block text-[13px] font-medium text-white/75">Título <span className="text-white/40">({cloudTitleDraft.length}/40)</span>
-              <input value={cloudTitleDraft} maxLength={40} onChange={(event) => setCloudTitleDraft(event.target.value)} disabled={isSavingCloudEdit} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50" />
+              <input value={cloudTitleDraft} maxLength={40} onChange={(event) => setCloudTitleDraft(event.target.value)} disabled={isSavingCloudEdit || (cloud?.editCount ?? 0) >= 3} className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50" />
             </label>
             <label className="mt-4 block text-[13px] font-medium text-white/75">Duração
-              <select value={cloudDurationDraft} onChange={(event) => setCloudDurationDraft(event.target.value)} disabled={isSavingCloudEdit} className="mt-2 w-full rounded-xl border border-white/10 bg-[#1f1830] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50">
+              <select value={cloudDurationDraft} onChange={(event) => setCloudDurationDraft(event.target.value)} disabled={isSavingCloudEdit || (cloud?.editCount ?? 0) >= 3} className="mt-2 w-full rounded-xl border border-white/10 bg-[#1f1830] px-3 py-2.5 text-sm text-white outline-none transition focus:border-[#A855F7] disabled:opacity-50">
                 <option value="10min">10 minutos</option><option value="30min">30 minutos</option><option value="2h">2 horas</option><option value="5h">5 horas</option><option value="24h">24 horas</option>
               </select>
             </label>
+            <label className="mt-4 block text-[13px] font-medium text-white/75">Descrição <span className="text-white/40">({cloudDescriptionDraft.length}/2000)</span><textarea value={cloudDescriptionDraft} maxLength={2000} rows={4} onChange={(event) => setCloudDescriptionDraft(event.target.value)} disabled={isSavingCloudEdit} className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none focus:border-[#A855F7] disabled:opacity-50" /></label>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setCloudEditOpen(false)} disabled={isSavingCloudEdit} className="rounded-full bg-white/[0.06] px-4 py-2 text-[13px] text-white/80 transition hover:bg-white/[0.12] disabled:opacity-50">Cancelar</button>
               <button type="button" onClick={() => void saveCloudEdit()} disabled={isSavingCloudEdit || !cloudTitleDraft.trim()} className="rounded-full bg-[#9333EA] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-50">{isSavingCloudEdit ? "Salvando..." : "Salvar edição"}</button>

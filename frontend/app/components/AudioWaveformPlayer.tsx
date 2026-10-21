@@ -77,7 +77,7 @@ type Props = {
   flatTop?: boolean;
 };
 
-export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isOwn = false, roundedCorner = "right", flatTop = false }: Props) {
+export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, flatTop = false }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [decodedPeaks, setDecodedPeaks] = useState<number[]>(() => Array.from({ length: BAR_COUNT }, () => 0.3));
   const [playing, setPlaying] = useState(false);
@@ -170,36 +170,33 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
     const a = audioRef.current;
     if (!a || !duration || duration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
     const x = e.clientX - rect.left;
     const ratio = Math.min(1, Math.max(0, x / rect.width));
     a.currentTime = ratio * duration;
     setCurrent(ratio * duration);
   }, [duration]);
 
+  const handleSeekKey = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !duration || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const target = event.key === "Home" ? 0 : event.key === "End" ? duration : Math.max(0, Math.min(duration, audio.currentTime + (event.key === "ArrowRight" ? 5 : -5)));
+    audio.currentTime = target;
+    setCurrent(target);
+  }, [duration]);
+
   const displayTime = playing ? formatTime(current) : formatTime(duration || (durationMs ? durationMs / 1000 : 0));
-
-  // colors tuned to match screenshot: deep purple pill
-  const containerClass = isOwn
-    ? "bg-[#9333EA]"
-    : "bg-[#1c1530] border border-white/[0.08]";
-
-  const pillRadius = flatTop
-    ? (roundedCorner === "right" ? "rounded-b-2xl rounded-br-[4px]" : "rounded-b-2xl rounded-bl-[4px]")
-    : (roundedCorner === "right" ? "rounded-2xl rounded-br-[4px]" : "rounded-2xl rounded-bl-[4px]");
-
-  const playButtonClass = isOwn
-    ? "bg-white/25 hover:bg-white/30 text-white backdrop-blur"
-    : "bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-[0_0_12px_rgba(124,58,237,0.35)]";
 
   return (
     <div
-      className={`flex w-[min(272px,calc(100vw-8rem))] min-w-0 items-start gap-3 px-3 pb-2.5 pt-4 sm:w-[272px] ${pillRadius} ${containerClass}`}
+      className={`flex w-[min(340px,calc(100vw-7rem))] max-w-full min-w-0 items-center gap-2 bg-[#8a20e9] px-3 py-3 sm:gap-3 sm:px-4 sm:py-4 ${flatTop ? "rounded-b-2xl" : "rounded-2xl"}`}
     >
       <button
         type="button"
         onClick={toggle}
         aria-label={playing ? "Pausar áudio" : "Reproduzir áudio"}
-        className={`-mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition ${playButtonClass}`}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20 text-white transition hover:bg-white/30 sm:h-12 sm:w-12"
       >
         {playing ? (
           <svg viewBox="0 0 24 24" width={14} height={14} fill="currentColor" aria-hidden="true">
@@ -213,34 +210,32 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
         )}
       </button>
 
-      <div className="flex flex-1 flex-col justify-center gap-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <div
-          className="flex items-center justify-between cursor-pointer select-none"
-          style={{ height: 28 }}
+          className="flex h-9 min-w-0 flex-1 cursor-pointer select-none items-center gap-[2px] overflow-hidden"
           onClick={handleSeek}
-          role="progressbar"
-          aria-valuenow={Math.round(progress * 100)}
+          onKeyDown={handleSeekKey}
+          role="slider"
+          tabIndex={0}
+          aria-label="Posição do áudio"
+          aria-valuenow={Math.round(current)}
           aria-valuemin={0}
-          aria-valuemax={100}
+          aria-valuemax={Math.round(duration)}
+          aria-valuetext={`${formatTime(current)} de ${formatTime(duration)}`}
         >
           {bars.map((peak, i) => {
             const isPlayed = i < progressBars;
             const h = decoded
               ? Math.max(4, Math.round(peak * 22 + 4)) // 4..26 px
-              : Math.round(6 + Math.random() * 6);
+              : 8;
 
             // colors
-            let bg: string;
-            if (isOwn) {
-              bg = isPlayed ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.38)";
-            } else {
-              bg = isPlayed ? "#A855F7" : "rgba(255,255,255,0.28)";
-            }
+            const bg = isPlayed ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.38)";
 
             return (
               <span
                 key={i}
-                className="block w-[3px] rounded-full transition-colors duration-100"
+                className="block min-w-[1px] flex-1 rounded-full transition-colors duration-100"
                 style={{
                   height: `${h}px`,
                   background: bg,
@@ -250,12 +245,12 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
             );
           })}
         </div>
-        <div className="flex items-center justify-between gap-2 text-[11px] leading-none">
+        <div className="flex shrink-0 items-center gap-1.5 text-[11px] leading-none">
           <select
             aria-label="Velocidade de reprodução"
             value={playbackRate}
             onChange={handlePlaybackRateChange}
-            className={`cursor-pointer rounded-full border-0 px-1.5 py-0.5 text-[11px] font-medium outline-none ${isOwn ? "bg-white/15 text-white/90" : "bg-white/10 text-white/70"}`}
+            className="cursor-pointer rounded-full border-0 bg-white/20 px-1.5 py-2 text-[11px] font-semibold text-white outline-none sm:px-2 sm:text-xs"
           >
             {PLAYBACK_RATES.map((rate) => (
               <option key={rate} value={rate} className="bg-[#1c1530] text-white">
@@ -263,7 +258,7 @@ export function AudioWaveformPlayer({ src, peaks: providedPeaks, durationMs, isO
               </option>
             ))}
           </select>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums ${isOwn ? "bg-white/15 text-white/90" : "bg-white/10 text-white/70"}`}>
+          <span className="rounded-full bg-white/20 px-2 py-2 text-[11px] font-semibold tabular-nums text-white sm:text-xs">
             {displayTime}
           </span>
         </div>

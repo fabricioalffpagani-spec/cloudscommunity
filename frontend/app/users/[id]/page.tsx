@@ -8,6 +8,8 @@ import { useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 import { HypeCount } from "../../components/HypeCount";
 import { ProfileInvitation } from "../../components/ProfileInvitation";
+import { CloudDetailsDialog } from "../../components/CloudDetailsDialog";
+import { ProfileScheduleActions } from "../../components/ProfileScheduleActions";
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
@@ -201,9 +203,11 @@ function parseDurationSeconds(duration: string) {
 }
 
 function ActiveCloudCard({ cloud, now, hostAvatarUrl, hostInitial, viewerId }: { cloud: PublicUserProfile["activeClouds"][number] | PublicUserProfile["endedClouds"][number]; now: number; hostAvatarUrl: string | null; hostInitial: string; viewerId?: string }) {
-  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(cloud.createdAt).getTime()) / 1000), 0);
-  const ended = "endedAt" in cloud && Boolean(cloud.endedAt);
-  const live = !ended && remainingSeconds > 0;
+  const remainingSeconds = Math.max(parseDurationSeconds(cloud.duration) - Math.floor((now - new Date(("scheduledAt" in cloud && cloud.scheduledAt) || cloud.createdAt).getTime()) / 1000), 0);
+  const ended = "endedAt" in cloud;
+  const scheduledAt = "scheduledAt" in cloud ? cloud.scheduledAt : null;
+  const scheduled = Boolean(!ended && scheduledAt && new Date(scheduledAt).getTime() > now);
+  const live = !ended && !scheduled;
   const isHost = cloud.authorId === viewerId;
 
   const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
@@ -231,7 +235,7 @@ function ActiveCloudCard({ cloud, now, hostAvatarUrl, hostInitial, viewerId }: {
     } catch (error) { setReportError(error instanceof Error ? error.message : "Não foi possível enviar a denúncia."); }
     finally { setReporting(false); }
   };
-  return <article className="relative flex min-h-[180px] w-full flex-col rounded-2xl border border-[#8B5CF6]/35 bg-[#1a0e3d]/75 p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm"><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</div><div className="relative"><button type="button" onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className="text-center text-[11px] text-white/50">{live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada em ${ended && cloud.endedAt ? new Date(cloud.endedAt).toLocaleDateString("pt-BR") : "agora"}`}</p>{detailsOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-sm overflow-x-hidden overflow-y-auto rounded-2xl bg-[#15161C] p-5"><div className="sticky top-0 z-10 flex items-center justify-between bg-[#15161C]"><h2 className="text-lg font-bold">Informações da Cloud</h2><button type="button" aria-label="Fechar informações" onClick={() => setDetailsOpen(false)} className="shrink-0 p-1">×</button></div><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></div></div>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
+  return <article className={`relative flex min-h-[180px] w-full flex-col rounded-2xl border p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${live ? "border-[#C084FC] bg-[#321066] ring-1 ring-[#A855F7]/50" : "border-[#8B5CF6]/35 bg-[#1a0e3d]/75"}`}><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</div><div ref={menuRef} className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className={`text-center text-[12px] font-semibold ${live ? "text-[#e9d5ff]" : "text-white/60"}`}>{scheduled ? "Agendada" : live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada${ended && cloud.endedAt ? ` em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR")}` : ""}`}</p>{scheduled && scheduledAt && <ProfileScheduleActions cloudId={cloud.id} scheduledAt={scheduledAt} initiallyReminded={Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId))} />}{detailsOpen && <CloudDetailsDialog onClose={() => setDetailsOpen(false)}><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></CloudDetailsDialog>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
 }
 
 export default function UserProfilePage() {
@@ -259,7 +263,7 @@ export default function UserProfilePage() {
   const [loadingHypes, setLoadingHypes] = useState(false);
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [cloudTab, setCloudTab] = useState<"all" | "active" | "scheduled" | "ended" | "invites">("all");
+  const [cloudTab, setCloudTab] = useState<"all" | "invites">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -488,9 +492,7 @@ export default function UserProfilePage() {
   const endedClouds = profile?.endedClouds ?? [];
   const scheduledClouds = activeClouds.filter((cloud) => Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > now));
   const liveClouds = activeClouds.filter((cloud) => !cloud.scheduledAt || new Date(cloud.scheduledAt).getTime() <= now);
-  const visibleClouds = cloudTab === "all"
-    ? [...liveClouds, ...scheduledClouds, ...endedClouds]
-    : cloudTab === "active" ? liveClouds : cloudTab === "scheduled" ? scheduledClouds : endedClouds;
+  const visibleClouds = [...liveClouds, ...scheduledClouds, ...endedClouds];
   const participatingNow = profile?.participatingNow ?? null;
 
   const waText = profile
@@ -681,22 +683,15 @@ export default function UserProfilePage() {
 
           <section className="mt-10 w-full text-left" aria-label="Clouds do perfil">
             <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
-              {(["all", "active", "scheduled", "ended"] as const).map((tab) => {
-                const selected = cloudTab === tab;
-                const label = { all: "Todas", active: "Ativas", scheduled: "Agendadas", ended: "Encerradas" }[tab];
-                const count = { all: liveClouds.length + scheduledClouds.length + endedClouds.length, active: liveClouds.length, scheduled: scheduledClouds.length, ended: endedClouds.length }[tab];
-                return <button key={tab} type="button" role="tab" aria-selected={selected} onClick={() => setCloudTab(tab)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${selected ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>
-                  {label} <span className={selected ? "text-white/75" : "text-white/40"}>{count}</span>
-                </button>;
-              })}
-              {canViewInvitations && <button type="button" role="tab" aria-selected={cloudTab === "invites"} onClick={() => setCloudTab("invites")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "invites" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Convites</button>}
+              <button type="button" role="tab" aria-selected={cloudTab === "all"} onClick={() => setCloudTab("all")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "all" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>{isOwnProfile ? "Minhas Clouds" : "Clouds"}</button>
+              {canViewInvitations && <button type="button" role="tab" aria-selected={cloudTab === "invites"} onClick={() => setCloudTab("invites")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "invites" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Meus Convites</button>}
             </div>
             {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : visibleClouds.length > 0 ? (
               <div className="grid gap-3">
                 {visibleClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} viewerId={sessionUser?.id} />)}
               </div>
             ) : (
-              <p className="py-8 text-center text-[14px] text-white/60">{cloudTab === "all" ? (isOwnProfile ? "As clouds que criar aparecerão aqui. Você pode ocultá-las de seu perfil nas configurações." : "Sem Clouds publicadas no momento") : cloudTab === "active" ? "Sem Clouds ativas no momento" : cloudTab === "scheduled" ? "Sem Clouds agendadas no momento" : "Sem Clouds encerradas no momento"}</p>
+              <p className="py-8 text-center text-[14px] text-white/60">{isOwnProfile ? "As clouds que criar aparecerão aqui. Você pode ocultá-las de seu perfil nas configurações." : "Sem Clouds publicadas no momento"}</p>
             )}
           </section>
         </div>

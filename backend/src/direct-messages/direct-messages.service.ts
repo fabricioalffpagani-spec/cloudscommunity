@@ -755,6 +755,60 @@ export class DirectMessagesService {
       userId,
     );
     await this.assertCanContact(userId, this.getPeerId(conversation, userId));
+    const cloudPath = parsedUrl.pathname.match(
+      /^\/cloud\/([0-9a-f-]{36})(?:\/conversation)?\/?$/i,
+    );
+    if (cloudPath) {
+      const cloud = await this.prisma.cloud.findUnique({
+        where: { id: cloudPath[1] },
+        select: { authorId: true, visibility: true },
+      });
+      if (cloud?.visibility === 'private') {
+        if (cloud.authorId !== userId)
+          throw new BadRequestException({
+            message:
+              'Somente o criador pode enviar convites para esta Cloud privada.',
+          });
+        const member = await this.prisma.cloudMember.findFirst({
+          where: {
+            cloudId: cloudPath[1],
+            userId: this.getPeerId(conversation, userId),
+          },
+          select: { id: true },
+        });
+        if (!member)
+          throw new BadRequestException({
+            message: 'A pessoa precisa ser convidada para esta Cloud privada.',
+          });
+      }
+    }
+    const invitePath = parsedUrl.pathname.match(/^\/invite\/([^/]+)\/?$/);
+    if (invitePath) {
+      const invite = await this.prisma.cloudInvite.findUnique({
+        where: { token: invitePath[1] },
+        include: {
+          cloud: { select: { id: true, authorId: true, visibility: true } },
+        },
+      });
+      if (invite?.cloud.visibility === 'private') {
+        if (invite.cloud.authorId !== userId)
+          throw new BadRequestException({
+            message:
+              'Somente o criador pode enviar convites para esta Cloud privada.',
+          });
+        const member = await this.prisma.cloudMember.findFirst({
+          where: {
+            cloudId: invite.cloud.id,
+            userId: this.getPeerId(conversation, userId),
+          },
+          select: { id: true },
+        });
+        if (!member)
+          throw new BadRequestException({
+            message: 'A pessoa precisa ser convidada para esta Cloud privada.',
+          });
+      }
+    }
     const clientMessageId = input.clientMessageId?.trim() || null;
     const replyToMessageId = input.replyToMessageId?.trim() || null;
 
