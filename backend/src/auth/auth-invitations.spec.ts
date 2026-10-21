@@ -43,6 +43,49 @@ describe('invitation signup', () => {
     });
   });
 
+  it('accepts an invitation link shared before the code migration', async () => {
+    const tx = {
+      user: { create: jest.fn().mockResolvedValue({ id: 'new' }) },
+      invitationReferral: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      invitationCode: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce({ userId: 'inviter' }),
+      },
+      user: { findUnique: jest.fn().mockResolvedValue(null) },
+      profile: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn((fn: (value: typeof tx) => unknown) => fn(tx)),
+    };
+    const service = new AuthService(prisma as unknown as PrismaService);
+    Object.defineProperty(service, 'sendVerificationEmail', {
+      value: jest.fn().mockResolvedValue(undefined),
+    });
+
+    await service.signup(
+      {
+        email: 'legacy@example.com',
+        name: 'Legacy Invitee',
+        username: 'legacyuser',
+        password: 'Pass123!',
+        birthDate: '1990-01-01',
+        acceptedTerms: true,
+        acceptedCommunityRules: true,
+        invitationCode: 'abc1234',
+      },
+      { ipAddress: null, userAgent: null },
+    );
+
+    expect(prisma.invitationCode.findUnique).toHaveBeenNthCalledWith(2, {
+      where: { legacyCode: 'ABC1234' },
+    });
+    expect(tx.invitationReferral.create).toHaveBeenCalledWith({
+      data: { invitedUserId: 'new', inviterUserId: 'inviter' },
+    });
+  });
+
   it('rejects an unknown invitation code before creating an account', async () => {
     const prisma = {
       invitationCode: { findUnique: jest.fn().mockResolvedValue(null) },

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { ReadOnlyCloudMessage, type ReadOnlyMessage } from "./ReadOnlyCloudMessage";
 import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
+import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 
 type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
 type ArchivePayload = { cloud: { title: string }; messages: ArchivedMessage[] };
@@ -41,9 +42,24 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [contacts, setContacts] = useState<ForwardContact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialScrollPending = useRef(true);
   const previousScrollHeight = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!shareOpen) return;
+    let active = true;
+    setLoadingContacts(true);
+    void fetch("/api/users/following", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data: { users?: ForwardContact[] }) => { if (active) setContacts((data.users ?? []).filter((contact) => contact.id !== user?.id)); })
+      .catch(() => { if (active) setContacts([]); })
+      .finally(() => { if (active) setLoadingContacts(false); });
+    return () => { active = false; };
+  }, [shareOpen, user?.id]);
 
   const fetchPage = useCallback(async (cursor?: string) => {
     const suffix = fromReadFeed
@@ -133,6 +149,9 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
           <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
         </div>
       </div>
+      <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" /></svg>
+      </button>
     </header>
 
     {error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
@@ -153,6 +172,10 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
       {hasOlder && fromReadFeed && <button type="button" disabled={loadingOlder} onClick={() => void loadOlder()} className="mx-auto block rounded-full border border-white/15 px-5 py-2 text-sm text-white/70 transition hover:border-[#A855F7] hover:text-white disabled:opacity-50">{loadingOlder ? "Carregando..." : "Carregar mensagens seguintes"}</button>}
     </section>
 
+    {shareOpen && cloud && (() => {
+      const url = `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}/conversation?from=read`;
+      return <ForwardToContactModal title="Compartilhar Cloud" preview={cloud.title} url={url} label={cloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} externalShareText={`Venha ler a conversa “${cloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareOpen(false)} />;
+    })()}
     {replyTo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-5"><h2 className="text-lg font-bold">Responder a {replyTo.sender.displayName}</h2><p className="mt-2 break-words rounded-xl bg-white/5 p-3 text-sm text-white/60 [overflow-wrap:anywhere]">Em “{cloud?.title}”: “{replyTo.content ?? "Mensagem"}”</p><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Escreva sua resposta privada..." rows={4} className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-[#A855F7]" />{replyError && <p className="mt-2 text-xs text-red-300">{replyError}</p>}<div className="mt-4 flex justify-end gap-3"><button onClick={() => setReplyTo(null)} className="text-sm text-white/60">Cancelar</button><button disabled={sendingReply || !replyText.trim()} onClick={() => void sendReply()} className="rounded-full bg-[#9333EA] px-4 py-2 text-sm font-semibold disabled:opacity-50">{sendingReply ? "Enviando..." : "Enviar"}</button></div></div></div>}
 
     <footer className="shrink-0 border-t border-white/[0.07] bg-black px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">

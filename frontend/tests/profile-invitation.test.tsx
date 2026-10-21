@@ -13,7 +13,7 @@ describe("profile invitation", () => {
     render(<ProfileInvitation />);
     expect(await screen.findByText(/ANA1234/)).toBeInTheDocument();
     expect(screen.getByText("Ana")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chamar amigos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chamar amigos (+10 hypes)" }));
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ text: "Ana está te convidando para o Clouds! Descubra conversas acontecendo agora...", url: "https://clouds.test/entrenoclouds?ref=ANA1234" })));
   });
 
@@ -26,6 +26,6 @@ describe("profile invitation", () => {
     session.user = { id: "v", email: "v@example.com", name: "Bia", displayName: "Bia", username: "bia" };
     view.rerender(<ProfileInvitation />);
     expect(screen.queryByText(/ANA1234/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Chamar amigos" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Chamar amigos (+10 hypes)" })).toBeDisabled();
   });
 });

@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { CloudStatus, Prisma, UserStatus } from '@prisma/client';
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
@@ -1407,9 +1407,14 @@ export class UsersService {
 
   async invitationPreview(code: string) {
     if (!/^[a-z0-9]{1,7}$/i.test(code)) return { ok: false };
-    const invitation = await this.prisma.invitationCode.findUnique({
-      where: { code: code.toUpperCase() },
-    });
+    const normalizedCode = code.toUpperCase();
+    const invitation =
+      (await this.prisma.invitationCode.findUnique({
+        where: { code: normalizedCode },
+      })) ??
+      (await this.prisma.invitationCode.findUnique({
+        where: { legacyCode: normalizedCode },
+      }));
     if (!invitation) return { ok: false };
     const user = await this.prisma.user.findUnique({
       where: { id: invitation.userId },
@@ -1432,13 +1437,18 @@ export class UsersService {
     let invitation = await this.prisma.invitationCode.findUnique({
       where: { userId: current.user.id },
     });
-    for (let attempt = 0; !invitation && attempt < 20; attempt++) {
-      const prefix = (current.user.profile?.username ?? 'user')
-        .replace(/[^a-z0-9]/gi, '')
-        .slice(0, 3)
-        .toUpperCase()
-        .padEnd(3, 'X');
-      const code = `${prefix}${randomBytes(4).readUInt32BE().toString(36).toUpperCase().padStart(7, '0').slice(-4)}`;
+    const letters = (current.user.profile?.username ?? 'user')
+      .replace(/[^a-z]/gi, '')
+      .slice(0, 4)
+      .toUpperCase()
+      .padEnd(4, 'X');
+    const start = randomInt(1000);
+    for (let attempt = 0; !invitation && attempt < 1000; attempt++) {
+      const code = `${letters}${((start + attempt) % 1000).toString().padStart(3, '0')}`;
+      const legacyCollision = await this.prisma.invitationCode.findUnique({
+        where: { legacyCode: code },
+      });
+      if (legacyCollision) continue;
       try {
         invitation = await this.prisma.invitationCode.create({
           data: { userId: current.user.id, code },

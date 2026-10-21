@@ -135,9 +135,12 @@ export class AuthService {
 
     const inviteCode = input.invitationCode?.trim().toUpperCase() || '';
     const inviter = inviteCode
-      ? await this.prisma.invitationCode.findUnique({
+      ? ((await this.prisma.invitationCode.findUnique({
           where: { code: inviteCode },
-        })
+        })) ??
+        (await this.prisma.invitationCode.findUnique({
+          where: { legacyCode: inviteCode },
+        })))
       : null;
     if (inviteCode && !inviter)
       throw new BadRequestException({

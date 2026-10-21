@@ -142,6 +142,21 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("shares the archived Cloud from the conversation header", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, share });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud, messages: [] }) };
+      if (String(input) === "/api/users/following") return { ok: true, json: async () => ({ users: [] }) };
+      return { ok: true, json: async () => ({ user: null }) };
+    }));
+    render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
+    await screen.findByText("Nenhuma mensagem");
+    fireEvent.click(screen.getByRole("button", { name: "Compartilhar Cloud" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Compartilhar com…" }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining(`/cloud/${cloud.id}/conversation?from=read`) })));
+    vi.unstubAllGlobals();
+  });
   it("loads the first archive page when entered from Read", async () => {
     window.history.replaceState(null, "", "/cloud/cloud-1/conversation?from=read");
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
