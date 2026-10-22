@@ -735,23 +735,54 @@ export class UsersService {
     }
     const followerIds = followers.map((follower) => follower.followerId);
     const nearbyCounts = new Map<string, number>();
-    const nearbyFollowers = new Map<string, Array<{ id: string; username: string; displayName: string; avatarUrl: string | null; profileUrl: string }>>();
+    const nearbyFollowers = new Map<
+      string,
+      Array<{
+        id: string;
+        username: string;
+        displayName: string;
+        avatarUrl: string | null;
+        profileUrl: string;
+      }>
+    >();
 
     if (followerIds.length > 0) {
       const followedByFollowers = await this.prisma.follow.findMany({
         where: {
           followerId: { in: followerIds },
           followingId: { not: current.user.id },
-          follower: { status: UserStatus.active, deletedAt: null, profile: { isNot: null }, blockedUsers: { none: { blockedId: current.user.id } }, blockedByUsers: { none: { blockerId: current.user.id } } },
+          follower: {
+            status: UserStatus.active,
+            deletedAt: null,
+            profile: { isNot: null },
+            blockedUsers: { none: { blockedId: current.user.id } },
+            blockedByUsers: { none: { blockerId: current.user.id } },
+          },
         },
-        select: { followingId: true, follower: { select: { id: true, profile: { select: { username: true, displayName: true, avatarUrl: true } } } } },
+        select: {
+          followingId: true,
+          follower: {
+            select: {
+              id: true,
+              profile: {
+                select: { username: true, displayName: true, avatarUrl: true },
+              },
+            },
+          },
+        },
       });
 
       for (const entry of followedByFollowers) {
         if (!entry.follower.profile) continue;
         const profile = entry.follower.profile;
         const list = nearbyFollowers.get(entry.followingId) ?? [];
-        list.push({ id: entry.follower.id, username: profile.username, displayName: profile.displayName, avatarUrl: profile.avatarUrl, profileUrl: `/users/${encodeURIComponent(profile.username)}` });
+        list.push({
+          id: entry.follower.id,
+          username: profile.username,
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          profileUrl: `/users/${encodeURIComponent(profile.username)}`,
+        });
         nearbyFollowers.set(entry.followingId, list);
         nearbyCounts.set(
           entry.followingId,
@@ -824,7 +855,13 @@ export class UsersService {
       nearby: nearbyRanked.flat().map(({ score, ...user }) => ({
         ...user,
         mutualFollowersCount: score,
-        mutualFollowers: (nearbyFollowers.get(user.id) ?? []).sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR') || a.username.localeCompare(b.username)).slice(0, 4),
+        mutualFollowers: (nearbyFollowers.get(user.id) ?? [])
+          .sort(
+            (a, b) =>
+              a.displayName.localeCompare(b.displayName, 'pt-BR') ||
+              a.username.localeCompare(b.username),
+          )
+          .slice(0, 4),
       })),
       newUsers: await Promise.all(
         newestUsers
@@ -840,11 +877,44 @@ export class UsersService {
     const current = await this.requireSession(token);
     const target = await this.requireTargetUser(identifier);
     const entries = await this.prisma.follow.findMany({
-      where: { followingId: target.id, follower: { status: UserStatus.active, deletedAt: null, profile: { isNot: null }, following: { some: { followingId: current.user.id } }, blockedUsers: { none: { blockedId: current.user.id } }, blockedByUsers: { none: { blockerId: current.user.id } } } },
-      select: { follower: { select: { id: true, profile: { select: { username: true, displayName: true, avatarUrl: true } } } } },
+      where: {
+        followingId: target.id,
+        follower: {
+          status: UserStatus.active,
+          deletedAt: null,
+          profile: { isNot: null },
+          following: { some: { followingId: current.user.id } },
+          blockedUsers: { none: { blockedId: current.user.id } },
+          blockedByUsers: { none: { blockerId: current.user.id } },
+        },
+      },
+      select: {
+        follower: {
+          select: {
+            id: true,
+            profile: {
+              select: { username: true, displayName: true, avatarUrl: true },
+            },
+          },
+        },
+      },
     });
-    const followers = entries.flatMap(({ follower }) => follower.profile ? [{ id: follower.id, ...follower.profile, profileUrl: `/users/${encodeURIComponent(follower.profile.username)}` }] : []);
-    followers.sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR') || a.username.localeCompare(b.username));
+    const followers = entries.flatMap(({ follower }) =>
+      follower.profile
+        ? [
+            {
+              id: follower.id,
+              ...follower.profile,
+              profileUrl: `/users/${encodeURIComponent(follower.profile.username)}`,
+            },
+          ]
+        : [],
+    );
+    followers.sort(
+      (a, b) =>
+        a.displayName.localeCompare(b.displayName, 'pt-BR') ||
+        a.username.localeCompare(b.username),
+    );
     return { ok: true, followers };
   }
 
@@ -1223,12 +1293,19 @@ export class UsersService {
             visibility: true,
             authorId: true,
             members: {
-              where: { leftAt: null },              orderBy: { joinedAt: 'asc' },
+              where: { leftAt: null },
+              orderBy: { joinedAt: 'asc' },
               select: {
                 userId: true,
                 user: {
                   select: {
-                    profile: { select: { displayName: true, username: true, avatarUrl: true } },
+                    profile: {
+                      select: {
+                        displayName: true,
+                        username: true,
+                        avatarUrl: true,
+                      },
+                    },
                   },
                 },
               },
@@ -1279,13 +1356,18 @@ export class UsersService {
               visibility: true,
               authorId: true,
               members: {
-                where: { leftAt: null },                orderBy: { joinedAt: 'asc' },
+                where: { leftAt: null },
+                orderBy: { joinedAt: 'asc' },
                 select: {
                   userId: true,
                   user: {
                     select: {
                       profile: {
-                        select: { displayName: true, username: true, avatarUrl: true },
+                        select: {
+                          displayName: true,
+                          username: true,
+                          avatarUrl: true,
+                        },
                       },
                     },
                   },
@@ -1317,34 +1399,108 @@ export class UsersService {
       href: `/cloud/${cloud.id}/conversation`,
     }));
 
-    const recloudRecords = canViewContent ? await this.prisma.recloud.findMany({
-      where: { userId: user.id, cloud: {
-        deletedAt: null, author: { deletedAt: null },
-        ...(currentUserId ? { bans: { none: { userId: currentUserId } } } : {}),
-        OR: [
-          { visibility: 'public', author: { profile: { isPrivate: false } } },
-          ...(currentUserId ? [
-            { visibility: 'public' as const, authorId: currentUserId },
-            { visibility: 'public' as const, author: { followers: { some: { followerId: currentUserId } } } },
-            { visibility: 'private' as const, status: CloudStatus.active, OR: [{ authorId: currentUserId }, { members: { some: { userId: currentUserId } } }] },
-          ] : []),
-        ],
-      } },
-      orderBy: { createdAt: 'desc' },
-      include: { cloud: { include: { author: { include: { profile: true } }, members: { where: { leftAt: null }, take: 4, orderBy: { joinedAt: 'asc' }, include: { user: { include: { profile: true } } } } } } },
-    }) : [];
-    const blockedAuthors = currentUserId ? await this.prisma.userBlock.findMany({
-      where: { OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }] }, select: { blockerId: true, blockedId: true },
-    }) : [];
-    const blockedIds = new Set(blockedAuthors.map((block) => block.blockerId === currentUserId ? block.blockedId : block.blockerId));
-    const reclouds: PublicUserProfilePayload['reclouds'] = recloudRecords.filter(({ cloud }) => !blockedIds.has(cloud.authorId) && !!cloud.author.profile).map(({ cloud }) => ({
-      id: cloud.id, title: cloud.title, description: cloud.content, duration: cloud.duration,
-      createdAt: cloud.createdAt.toISOString(), scheduledAt: cloud.scheduledAt?.toISOString() ?? null,
-      endedAt: cloud.endedAt?.toISOString() ?? null, status: cloud.status === CloudStatus.ended ? 'ended' : 'active',
-      authorId: cloud.authorId, author: { name: cloud.author.profile!.displayName, username: cloud.author.profile!.username, avatarUrl: cloud.author.profile!.avatarUrl },
-      participantProfiles: cloud.members.filter((m) => m.user.profile).map((m) => ({ id: m.userId, name: m.user.profile!.displayName, avatarUrl: m.user.profile!.avatarUrl })),
-      visibility: cloud.visibility, href: cloud.status === CloudStatus.ended ? `/cloud/${cloud.id}/conversation` : `/cloud/${cloud.id}?source=for-you`,
-    }));
+    const recloudRecords = canViewContent
+      ? await this.prisma.recloud.findMany({
+          where: {
+            userId: user.id,
+            cloud: {
+              deletedAt: null,
+              author: { deletedAt: null },
+              ...(currentUserId
+                ? { bans: { none: { userId: currentUserId } } }
+                : {}),
+              OR: [
+                {
+                  visibility: 'public',
+                  author: { profile: { isPrivate: false } },
+                },
+                ...(currentUserId
+                  ? [
+                      {
+                        visibility: 'public' as const,
+                        authorId: currentUserId,
+                      },
+                      {
+                        visibility: 'public' as const,
+                        author: {
+                          followers: { some: { followerId: currentUserId } },
+                        },
+                      },
+                      {
+                        visibility: 'private' as const,
+                        status: CloudStatus.active,
+                        OR: [
+                          { authorId: currentUserId },
+                          { members: { some: { userId: currentUserId } } },
+                        ],
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            cloud: {
+              include: {
+                author: { include: { profile: true } },
+                members: {
+                  where: { leftAt: null },
+                  take: 4,
+                  orderBy: { joinedAt: 'asc' },
+                  include: { user: { include: { profile: true } } },
+                },
+              },
+            },
+          },
+        })
+      : [];
+    const blockedAuthors = currentUserId
+      ? await this.prisma.userBlock.findMany({
+          where: {
+            OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }],
+          },
+          select: { blockerId: true, blockedId: true },
+        })
+      : [];
+    const blockedIds = new Set(
+      blockedAuthors.map((block) =>
+        block.blockerId === currentUserId ? block.blockedId : block.blockerId,
+      ),
+    );
+    const reclouds: PublicUserProfilePayload['reclouds'] = recloudRecords
+      .filter(
+        ({ cloud }) =>
+          !blockedIds.has(cloud.authorId) && !!cloud.author.profile,
+      )
+      .map(({ cloud }) => ({
+        id: cloud.id,
+        title: cloud.title,
+        description: cloud.content,
+        duration: cloud.duration,
+        createdAt: cloud.createdAt.toISOString(),
+        scheduledAt: cloud.scheduledAt?.toISOString() ?? null,
+        endedAt: cloud.endedAt?.toISOString() ?? null,
+        status: cloud.status === CloudStatus.ended ? 'ended' : 'active',
+        authorId: cloud.authorId,
+        author: {
+          name: cloud.author.profile!.displayName,
+          username: cloud.author.profile!.username,
+          avatarUrl: cloud.author.profile!.avatarUrl,
+        },
+        participantProfiles: cloud.members
+          .filter((m) => m.user.profile)
+          .map((m) => ({
+            id: m.userId,
+            name: m.user.profile!.displayName,
+            avatarUrl: m.user.profile!.avatarUrl,
+          })),
+        visibility: cloud.visibility,
+        href:
+          cloud.status === CloudStatus.ended
+            ? `/cloud/${cloud.id}/conversation`
+            : `/cloud/${cloud.id}?source=for-you`,
+      }));
 
     const participatingNow =
       canViewContent && (isSelf || profile.showParticipatingNow)

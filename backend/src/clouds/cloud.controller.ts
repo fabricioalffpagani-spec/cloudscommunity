@@ -174,13 +174,36 @@ export class CloudController {
   }
 
   @Patch(':id/admission')
-  async setAdmission(@Param('id') id: string, @Req() req: Request, @Body() body: Record<string, unknown>) {
-    if (typeof body.acceptingMembers !== 'boolean') throw new BadRequestException({ message: 'Informe se a Cloud recebe novos participantes.' });
-    const result = await this.cloudService.setAcceptingMembers(extractSessionToken(req), id, body.acceptingMembers);
+  async setAdmission(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Body() body: Record<string, unknown>,
+  ) {
+    if (typeof body.acceptingMembers !== 'boolean')
+      throw new BadRequestException({
+        message: 'Informe se a Cloud recebe novos participantes.',
+      });
+    const result = await this.cloudService.setAcceptingMembers(
+      extractSessionToken(req),
+      id,
+      body.acceptingMembers,
+    );
     if (result.message) {
-      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, result.message);
-      const { title, duration, editCount, description, acceptingMembers } = result.cloud;
-      this.cloudMessagesGateway.broadcastCloudUpdated(id, { id, title, duration, editCount, description, acceptingMembers });
+      await this.cloudMessagesGateway.broadcastMessageCreated(
+        null,
+        id,
+        result.message,
+      );
+      const { title, duration, editCount, description, acceptingMembers } =
+        result.cloud;
+      this.cloudMessagesGateway.broadcastCloudUpdated(id, {
+        id,
+        title,
+        duration,
+        editCount,
+        description,
+        acceptingMembers,
+      });
     }
     return { ok: true, acceptingMembers: result.cloud.acceptingMembers };
   }

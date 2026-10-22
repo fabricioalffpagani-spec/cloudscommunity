@@ -40,7 +40,8 @@ export class NotificationsService {
           if (item.entityType === 'user' || item.entityType === 'follow')
             return [item.entityId];
           if (
-            (item.type === 'cloud_continuation' || item.type === 'cloud_recloud') &&
+            (item.type === 'cloud_continuation' ||
+              item.type === 'cloud_recloud') &&
             item.metadata &&
             typeof item.metadata === 'object' &&
             !Array.isArray(item.metadata)
