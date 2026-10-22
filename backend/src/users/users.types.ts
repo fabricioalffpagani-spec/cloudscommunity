@@ -37,6 +37,13 @@ export type PublicUserProfilePayload = {
     duration: string;
     href: string;
   } | null;
+  reclouds: Array<{
+    id: string; title: string; description: string | null; duration: string; createdAt: string;
+    scheduledAt: string | null; endedAt: string | null; status: 'active' | 'ended';
+    authorId: string; author: { name: string; username: string; avatarUrl: string | null };
+    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    visibility: 'public' | 'private'; href: string;
+  }>;
   activeClouds: Array<{
     id: string;
     title: string;

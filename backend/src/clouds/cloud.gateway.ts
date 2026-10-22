@@ -301,6 +301,7 @@ export class CloudMessagesGateway
       duration: string;
       editCount: number;
       description?: string | null;
+      acceptingMembers?: boolean;
     },
   ) {
     this.server

@@ -429,6 +429,7 @@ export default function SignupPage() {
         return;
       }
       setStep(2);
+      window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: normalizedUsername } }));
       setResendCountdown(60);
       setResendMessage("");
       setSubmitting(false);

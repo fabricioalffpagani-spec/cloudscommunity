@@ -42,10 +42,11 @@ type Props = {
   externalShareText?: string;
   externalSharePrompt?: string;
   items?: ForwardItem[];
+  recloud?: { reclouded: boolean; busy: boolean; error: string; onToggle: () => void };
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, externalSharePrompt = "Esse papo tem a cara de alguém? Convide amigos para participar!", items, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, externalSharePrompt = "Esse papo tem a cara de alguém? Convide amigos para participar!", items, recloud, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
@@ -223,12 +224,13 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(event) => event.stopPropagation()}>
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-[16px] font-bold text-white">{title}</h3>
           <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
         </div>
         {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{items && items.length > 1 ? `${items.length} mensagens selecionadas para encaminhar` : preview}</p>}
+        {recloud && <div className="mb-4"><button type="button" disabled={recloud.busy} onClick={recloud.onToggle} className="w-full rounded-full border border-[#A855F7]/50 bg-[#7C3AED]/15 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]/30 disabled:opacity-50">{recloud.reclouded ? "Desfazer Recloud" : "Republicar no perfil"}</button>{recloud.error && <p role="alert" className="mt-2 text-[12px] text-red-300">{recloud.error}</p>}</div>}
         {externalShareText && (
           <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:hidden">
             <p className="text-[13px] font-semibold text-white">{externalSharePrompt}</p>

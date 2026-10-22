@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FlameIcon } from "./FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "./session-user";
@@ -148,6 +148,28 @@ function MobileAppNavContent({ active, force = false }: { active?: "home" | "mes
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user } = useSessionUser();
+  const [unreadNotifications, setUnreadNotifications] = useState(false);
+  useEffect(() => {
+    setUnreadNotifications(false);
+    if (!user?.id) { setUnreadNotifications(false); return; }
+    let active = true;
+    let requestId = 0;
+    const load = async () => {
+      const currentRequest = ++requestId;
+      try {
+        const response = await fetch("/api/notifications", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = await response.json() as { unreadCount?: number };
+        if (active && currentRequest === requestId) setUnreadNotifications((payload.unreadCount ?? 0) > 0);
+      } catch { /* Keep the previous state until the next refresh. */ }
+    };
+    const refresh = () => void load();
+    refresh();
+    const timer = window.setInterval(refresh, 5000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("clouds:notifications-read", refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("clouds:notifications-read", refresh); };
+  }, [user?.id]);
   const previewSuffix = searchParams.get("mobilePreview") === "1" ? "?mobilePreview=1" : "";
   const isActive = (id: NonNullable<typeof active>) => active === id || (id === "profile" && pathname.startsWith("/profile"));
   const color = (id: NonNullable<typeof active>) => isActive(id) ? "text-[#A855F7]" : "text-white";
@@ -158,7 +180,7 @@ function MobileAppNavContent({ active, force = false }: { active?: "home" | "mes
       <div className={`mx-auto ${color("messages")}`}><MessagesNavLink iconOnly active={isActive("messages")} href={`/messages${previewSuffix}`} /></div>
       <Link href={`/?create=1${previewSuffix ? "&mobilePreview=1" : ""}`} aria-label="Criar Cloud" className="mx-auto flex h-12 w-12 items-center justify-center"><img src="/ChatGPT%20Image%2024%20de%20set.%20de%202026%2C%2009_40_30.png" alt="" className="h-12 w-12 object-contain drop-shadow-[0_0_0.2px_white]" /></Link>
       <Link href={`/trending${previewSuffix}`} aria-label="Em alta" className={`mx-auto ${color("trending")}`}><FlameIcon s={27} /></Link>
-      <Link href={`/profile${previewSuffix}`} aria-label="Meu perfil" className={`mx-auto overflow-hidden rounded-full ${color("profile")}`}><SessionUserAvatar user={user} size={35} className="rounded-full" /></Link>
+      <Link href={`/profile${previewSuffix}`} aria-label={unreadNotifications ? "Meu perfil, notificações não visualizadas" : "Meu perfil"} className={`relative mx-auto rounded-full ${color("profile")}`}><SessionUserAvatar user={user} size={35} className="rounded-full" />{unreadNotifications && <span aria-hidden="true" className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-[#A855F7] ring-2 ring-[#060410]" />}</Link>
     </nav>
   );
 }

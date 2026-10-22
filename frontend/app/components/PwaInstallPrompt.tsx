@@ -7,6 +7,8 @@ import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInsta
 
 const reminderKey = (userId: string) => `clouds:pwa-install-reminder:${userId}`;
 const manualInstallCompleteKey = (userId: string) => `clouds:pwa-install-manual-complete:${userId}`;
+const signupReminderKey = (username: string) => `clouds:pwa-install-signup-reminder:${username.toLowerCase()}`;
+const signupCompleteKey = (username: string) => `clouds:pwa-install-signup-complete:${username.toLowerCase()}`;
 const FIRST_REMINDER_DELAY_MS = 150_000;
 const REMINDER_INTERVAL_MS = 24 * 60 * 60_000;
 
@@ -63,6 +65,7 @@ export function PwaInstallPrompt() {
   const [iosInstallHelpOpen, setIosInstallHelpOpen] = useState(false);
   const fallbackReminder = useRef<{ userId: string; timestamp: number } | null>(null);
   const fallbackStart = useRef<{ userId: string; timestamp: number } | null>(null);
+  const signupUsername = useRef<string | null>(null);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -76,9 +79,25 @@ export function PwaInstallPrompt() {
       clearRememberedInstallPrompt();
       setOpen(false);
     };
+    const onSignupComplete = (event: Event) => {
+      if (!isMobile() || isInstalled() || (user && hasConfirmedManualInstall(user.id))) return;
+      const username = (event as CustomEvent<{ username?: string }>).detail?.username;
+      signupUsername.current = username || null;
+      if (username) {
+        try { window.localStorage.setItem(signupReminderKey(username), String(Date.now())); } catch { /* Storage may be unavailable. */ }
+      }
+      if (user) {
+        const now = Date.now();
+        fallbackReminder.current = { userId: user.id, timestamp: now };
+        saveReminder(user.id, now);
+      }
+      setInstallPrompt((current) => current ?? getRememberedInstallPrompt());
+      setOpen(true);
+    };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("clouds:signup-complete", onSignupComplete);
     if ("serviceWorker" in navigator) {
       // O PWA não pode manter uma interface antiga depois de uma atualização.
       // A busca sem cache garante que o service worker recém-publicado seja
@@ -91,18 +110,24 @@ export function PwaInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("clouds:signup-complete", onSignupComplete);
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (status !== "authenticated" || !user || open || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id)) return;
+    let signupReminder = 0;
+    try {
+      if (user.username && window.localStorage.getItem(signupCompleteKey(user.username)) === "true") return;
+      signupReminder = user.username ? Number(window.localStorage.getItem(signupReminderKey(user.username)) || 0) : 0;
+    } catch { /* Storage may be unavailable. */ }
     let createdAt = new Date(user.createdAt).getTime();
     if (!Number.isFinite(createdAt)) {
       if (fallbackStart.current?.userId !== user.id) fallbackStart.current = { userId: user.id, timestamp: Date.now() };
       createdAt = fallbackStart.current.timestamp;
     }
     const storedReminder = readReminder(user.id);
-    const lastReminder = Math.max(Number.isFinite(storedReminder) ? storedReminder : 0, fallbackReminder.current?.userId === user.id ? fallbackReminder.current.timestamp : 0);
+    const lastReminder = Math.max(Number.isFinite(storedReminder) ? storedReminder : 0, Number.isFinite(signupReminder) ? signupReminder : 0, fallbackReminder.current?.userId === user.id ? fallbackReminder.current.timestamp : 0);
     const dueAt = lastReminder > 0 ? lastReminder + REMINDER_INTERVAL_MS : createdAt + FIRST_REMINDER_DELAY_MS;
     const showWhenDue = () => {
       if (document.visibilityState === "hidden" || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id) || Date.now() < dueAt) return;
@@ -117,7 +142,7 @@ export function PwaInstallPrompt() {
     const onVisibilityChange = () => { if (document.visibilityState === "visible") showWhenDue(); };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", onVisibilityChange); };
-  }, [open, status, user?.id, user?.createdAt]);
+  }, [open, status, user?.id, user?.username, user?.createdAt]);
 
   const decline = () => {
     setOpen(false);
@@ -150,14 +175,14 @@ export function PwaInstallPrompt() {
       <div className="fixed inset-0 z-[250] flex items-end bg-black/65 backdrop-blur-sm sm:items-center sm:justify-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="ios-install-title">
         <section className="w-full rounded-t-3xl border border-white/10 bg-[#171325] p-6 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-sm sm:rounded-3xl">
           <h2 id="ios-install-title" className="text-[20px] font-bold text-white">Adicione o Clouds à Tela de Início</h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-white/60">No Safari do iPhone ou iPad:</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-white/60">No navegador do iPhone ou iPad, adicione o Clouds à tela de início:</p>
           <ol className="mt-5 space-y-3 text-[14px] leading-relaxed text-white/85">
-            <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">1</span>Toque em <strong>Compartilhar</strong> na barra inferior.</li>
+            <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">1</span>Toque em <strong>Compartilhar</strong> no navegador.</li>
             <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">2</span>Escolha <strong>Adicionar à Tela de Início</strong> e confirme.</li>
           </ol>
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => setIosInstallHelpOpen(false)} className="rounded-full px-4 py-2.5 text-[14px] font-semibold text-white/65 transition hover:text-white">Voltar</button>
-            <button type="button" onClick={() => { if (user) confirmManualInstall(user.id); setIosInstallHelpOpen(false); setOpen(false); }} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Já adicionei o atalho</button>
+            <button type="button" onClick={() => { if (user) confirmManualInstall(user.id); if (signupUsername.current) { try { window.localStorage.setItem(signupCompleteKey(signupUsername.current), "true"); } catch { /* Storage may be unavailable. */ } } setIosInstallHelpOpen(false); setOpen(false); }} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Já adicionei o atalho</button>
           </div>
         </section>
       </div>
@@ -172,7 +197,7 @@ export function PwaInstallPrompt() {
         <p className="mt-2 text-[14px] leading-relaxed text-white/60">Abra o Clouds mais rápido, como um aplicativo.</p>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={decline} className="rounded-full px-4 py-2.5 text-[14px] font-semibold text-white/65 transition hover:text-white">Não</button>
-          <button type="button" onClick={() => void install()} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Adicionar atalho</button>
+          <button type="button" onClick={() => void install()} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Instalar agora</button>
         </div>
       </section>
     </div>

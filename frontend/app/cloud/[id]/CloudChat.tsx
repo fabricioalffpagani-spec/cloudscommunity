@@ -24,6 +24,7 @@ import { cloudElapsedSeconds } from "../../lib/cloud-start-time";
 
 type CloudPayload = {
   id: string;
+  acceptingMembers?: boolean;
   title: string;
   description: string | null;
   duration: string;
@@ -132,6 +133,7 @@ type CloudChatProps = {
 
 type CloudMeta = {
   id?: string;
+  acceptingMembers?: boolean;
   title: string;
   duration: string;
   editCount?: number;
@@ -466,6 +468,7 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
 function normalizeCloud(payload: CloudPayload) {
   return {
     id: payload.id,
+    acceptingMembers: payload.acceptingMembers ?? true,
     title: payload.title,
     description: payload.description,
     duration: payload.duration,
@@ -701,13 +704,13 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
         throw new Error("Seu navegador não oferece suporte à gravação de áudio.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
       );
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
       chunksRef.current = [];
-      streamRef.current = stream;
       recorderRef.current = recorder;
       secondsRef.current = 0;
       setSeconds(0);
@@ -1727,8 +1730,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [isSavingCloudEdit, setIsSavingCloudEdit] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [manageMembersOpen, setManageMembersOpen] = useState(false);
+  const [admissionBusy, setAdmissionBusy] = useState(false);
+  const [admissionError, setAdmissionError] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [recloudState, setRecloudState] = useState({ canRecloud: false, reclouded: false });
+  const [recloudError, setRecloudError] = useState("");
+  const [recloudBusy, setRecloudBusy] = useState(false);
   const [titleLongPressTimer, setTitleLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isTitleLongPress, setIsTitleLongPress] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
@@ -2275,7 +2283,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, {
         method: "POST",
         credentials: "include",
-      }).then((response) => {
+      }).then(async (response) => {
         if (response.ok) {
           const minimized = window.localStorage.getItem("clouds:minimized-cloud");
           if (minimized) {
@@ -2293,9 +2301,14 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           void loadMessages();
         } else {
           hasJoinedRef.current = false;
+          const payload = await response.json().catch(() => null) as { message?: string } | null;
+          setError(payload?.message || "Não foi possível entrar na Cloud.");
+          setLoadingCloud(false);
         }
       }).catch(() => {
         hasJoinedRef.current = false;
+        setError("Não foi possível entrar na Cloud. Tente novamente.");
+        setLoadingCloud(false);
       });
       return;
     }
@@ -2814,6 +2827,41 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     user.id !== cloud.authorId,
   );
 
+  const toggleAdmission = async () => {
+    if (!cloud || admissionBusy) return;
+    setAdmissionBusy(true); setAdmissionError("");
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/admission`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acceptingMembers: cloud.acceptingMembers === false }) });
+      const payload = await response.json().catch(() => null) as { acceptingMembers?: boolean; message?: string } | null;
+      if (!response.ok || typeof payload?.acceptingMembers !== "boolean") throw new Error(payload?.message || "Não foi possível alterar a entrada de participantes.");
+      const acceptingMembers = payload.acceptingMembers;
+      setCloud((previous) => previous ? { ...previous, acceptingMembers } : previous);
+    } catch (error) { setAdmissionError(error instanceof Error ? error.message : "Não foi possível alterar a entrada de participantes."); }
+    finally { setAdmissionBusy(false); }
+  };
+
+  useEffect(() => {
+    if (!user?.id || !cloud) return;
+    let cancelled = false;
+    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/recloud`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data: { canRecloud?: boolean; reclouded?: boolean } | null) => {
+        if (!cancelled && data) setRecloudState({ canRecloud: !!data.canRecloud, reclouded: !!data.reclouded });
+      }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [cloudId, user?.id, cloud?.members]);
+
+  const toggleRecloud = async () => {
+    setRecloudBusy(true);
+    setRecloudError("");
+    try {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/recloud`, { method: recloudState.reclouded ? "DELETE" : "POST" });
+      if (!response.ok) throw new Error();
+      setRecloudState((previous) => ({ ...previous, reclouded: !previous.reclouded }));
+    } catch { setRecloudError("Não foi possível atualizar o Recloud. Tente novamente."); }
+    finally { setRecloudBusy(false); }
+  };
+
   const handleBanMember = useCallback(async (userId: string) => {
     if (isBanningMemberId === userId) return;
     setIsBanningMemberId(userId);
@@ -3064,6 +3112,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">D</span>
                   Ver descrição
                 </button>}
+                {recloudState.canRecloud && <button type="button" disabled={recloudBusy} onClick={() => void toggleRecloud()} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 disabled:opacity-50"><span className="flex h-6 w-6 items-center justify-center">↻</span>{recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>}
+                {recloudError && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloudError}</p>}
                 {canReportCloud && (
                   <button
                     type="button"
@@ -3326,7 +3376,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       </div>
 
       {shareOpen && (
-        <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} externalShareText={externalShareText} onClose={() => setShareOpen(false)} />
+        <ForwardToContactModal title="Encaminhar Cloud" preview={cloud?.title || "Cloud"} url={shareLink} label={cloud?.title || "Cloud compartilhada"} contacts={contacts} loading={loadingContacts} externalShareText={externalShareText} recloud={recloudState.canRecloud ? { reclouded: recloudState.reclouded, busy: recloudBusy, error: recloudError, onToggle: () => void toggleRecloud() } : undefined} onClose={() => setShareOpen(false)} />
       )}
       {forwardMessage && (
         <ForwardToContactModal
@@ -3618,6 +3668,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
             <div className="mb-4 flex items-center justify-between shrink-0">
               <h3 className="text-[18px] font-bold">Gerenciar membros</h3>
               <button type="button" onClick={() => { setManageMembersOpen(false); setReportNotifCount(0); }} className="text-white/50 hover:text-white text-xl leading-none">×</button>
+            </div>
+
+            <div className="mb-4 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Entrada de novos participantes</p><p className="mt-1 text-xs leading-relaxed text-white/60">{cloud.acceptingMembers === false ? "Fechada. Novas pessoas não podem entrar e a Cloud fica oculta no feed." : "Aberta. Feche a entrada para impedir novos participantes e ocultar a Cloud do feed."}</p></div><button type="button" role="switch" aria-label="Permitir novos participantes" aria-checked={cloud.acceptingMembers !== false} disabled={admissionBusy} onClick={() => void toggleAdmission()} className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-50 ${cloud.acceptingMembers === false ? "bg-white/20" : "bg-[#9333EA]"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${cloud.acceptingMembers === false ? "left-1" : "left-6"}`} /></button></div>
+              {admissionError && <p role="alert" className="mt-2 text-xs text-red-300">{admissionError}</p>}
             </div>
 
             <div className="relative mb-4 shrink-0">

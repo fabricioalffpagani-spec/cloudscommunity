@@ -1,0 +1,1 @@
+ALTER TABLE "Cloud" ADD COLUMN "acceptingMembers" BOOLEAN NOT NULL DEFAULT true;

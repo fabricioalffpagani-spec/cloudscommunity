@@ -471,7 +471,7 @@ export class UsersService {
     await this.pushNotifications.send(requester.id, {
       title: acceptedNotification.title,
       body: acceptedNotification.body,
-      url: '/notifications',
+      url: '/profile?notifications=1',
       tag: acceptedNotification.id,
     });
 
@@ -1038,7 +1038,7 @@ export class UsersService {
     await this.pushNotifications.send(followingId, {
       title: followNotification.title,
       body: followNotification.body,
-      url: '/notifications',
+      url: '/profile?notifications=1',
       tag: followNotification.id,
     });
   }
@@ -1085,7 +1085,7 @@ export class UsersService {
     await this.pushNotifications.send(targetId, {
       title: requestNotification.title,
       body: requestNotification.body,
-      url: '/notifications',
+      url: '/profile?notifications=1',
       tag: requestNotification.id,
     });
   }
@@ -1299,6 +1299,35 @@ export class UsersService {
       href: `/cloud/${cloud.id}/conversation`,
     }));
 
+    const recloudRecords = canViewContent ? await this.prisma.recloud.findMany({
+      where: { userId: user.id, cloud: {
+        deletedAt: null, author: { deletedAt: null },
+        ...(currentUserId ? { bans: { none: { userId: currentUserId } } } : {}),
+        OR: [
+          { visibility: 'public', author: { profile: { isPrivate: false } } },
+          ...(currentUserId ? [
+            { visibility: 'public' as const, authorId: currentUserId },
+            { visibility: 'public' as const, author: { followers: { some: { followerId: currentUserId } } } },
+            { visibility: 'private' as const, status: CloudStatus.active, OR: [{ authorId: currentUserId }, { members: { some: { userId: currentUserId } } }] },
+          ] : []),
+        ],
+      } },
+      orderBy: { createdAt: 'desc' },
+      include: { cloud: { include: { author: { include: { profile: true } }, members: { where: { leftAt: null }, take: 4, orderBy: { joinedAt: 'asc' }, include: { user: { include: { profile: true } } } } } } },
+    }) : [];
+    const blockedAuthors = currentUserId ? await this.prisma.userBlock.findMany({
+      where: { OR: [{ blockerId: currentUserId }, { blockedId: currentUserId }] }, select: { blockerId: true, blockedId: true },
+    }) : [];
+    const blockedIds = new Set(blockedAuthors.map((block) => block.blockerId === currentUserId ? block.blockedId : block.blockerId));
+    const reclouds: PublicUserProfilePayload['reclouds'] = recloudRecords.filter(({ cloud }) => !blockedIds.has(cloud.authorId) && !!cloud.author.profile).map(({ cloud }) => ({
+      id: cloud.id, title: cloud.title, description: cloud.content, duration: cloud.duration,
+      createdAt: cloud.createdAt.toISOString(), scheduledAt: cloud.scheduledAt?.toISOString() ?? null,
+      endedAt: cloud.endedAt?.toISOString() ?? null, status: cloud.status === CloudStatus.ended ? 'ended' : 'active',
+      authorId: cloud.authorId, author: { name: cloud.author.profile!.displayName, username: cloud.author.profile!.username, avatarUrl: cloud.author.profile!.avatarUrl },
+      participantProfiles: cloud.members.filter((m) => m.user.profile).map((m) => ({ id: m.userId, name: m.user.profile!.displayName, avatarUrl: m.user.profile!.avatarUrl })),
+      visibility: cloud.visibility, href: cloud.status === CloudStatus.ended ? `/cloud/${cloud.id}/conversation` : `/cloud/${cloud.id}?source=for-you`,
+    }));
+
     const participatingNow =
       canViewContent && (isSelf || profile.showParticipatingNow)
         ? await this.prisma.cloudMember.findFirst({
@@ -1353,6 +1382,7 @@ export class UsersService {
             href: `/cloud/${participatingNow.cloud.id}`,
           }
         : null,
+      reclouds,
       activeClouds: serializedActiveClouds,
       endedClouds: serializedEndedClouds,
     };

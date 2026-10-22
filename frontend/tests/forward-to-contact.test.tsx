@@ -4,6 +4,21 @@ import { ForwardToContactModal } from "../app/components/ForwardToContactModal";
 
 afterEach(() => vi.unstubAllGlobals());
 
+describe("republicar pelo encaminhamento", () => {
+  it("oferece a ação e mostra o estado atualizado e erros", () => {
+    const toggle = vi.fn();
+    const props = { title: "Encaminhar Cloud", url: "/cloud/1", label: "Cloud", contacts: [], onClose: vi.fn() };
+    const { rerender } = render(<ForwardToContactModal {...props} recloud={{ reclouded: false, busy: false, error: "", onToggle: toggle }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Republicar no perfil" }));
+    expect(toggle).toHaveBeenCalledOnce();
+    rerender(<ForwardToContactModal {...props} recloud={{ reclouded: true, busy: true, error: "Falha ao republicar", onToggle: toggle }} />);
+    expect(screen.getByRole("button", { name: "Desfazer Recloud" })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Falha ao republicar");
+    rerender(<ForwardToContactModal {...props} />);
+    expect(screen.queryByRole("button", { name: /Republicar|Recloud/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("forwarded message origin", () => {
   it.each([
     ["cloud", "↗ Encaminhada de uma cloud\nConteúdo original"],

@@ -1,5 +1,7 @@
 "use client";
 
+import { RecloudCard, type Recloud } from "../../components/RecloudCard";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatarViewer } from "../../components/ProfileAvatarViewer";
@@ -13,6 +15,7 @@ import { ProfileScheduleActions } from "../../components/ProfileScheduleActions"
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
+import { useDismissMenu } from "../../lib/use-dismiss-menu";
 
 type FollowListUser = {
   id: string;
@@ -24,6 +27,7 @@ type FollowListUser = {
 };
 
 type PublicUserProfile = {
+  reclouds?: Recloud[];
   id: string;
   username: string;
   name: string;
@@ -249,6 +253,8 @@ export default function UserProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useDismissMenu(profileMenuOpen, () => setProfileMenuOpen(false));
   const [forwardOpen, setForwardOpen] = useState(false);
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -263,7 +269,7 @@ export default function UserProfilePage() {
   const [loadingHypes, setLoadingHypes] = useState(false);
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [cloudTab, setCloudTab] = useState<"all" | "invites">("all");
+  const [cloudTab, setCloudTab] = useState<"all" | "reclouds" | "invites">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -437,6 +443,8 @@ export default function UserProfilePage() {
         isFollowRequested: current.isBlockedByMe ? current.isFollowRequested : false,
         activeClouds: current.isBlockedByMe ? current.activeClouds : [],
         endedClouds: current.isBlockedByMe ? current.endedClouds : [],
+        reclouds: current.isBlockedByMe ? current.reclouds : [],
+        participatingNow: current.isBlockedByMe ? current.participatingNow : null,
       } : current);
     } catch (blockError) {
       setError(blockError instanceof Error ? blockError.message : "Não foi possível atualizar o bloqueio.");
@@ -552,6 +560,12 @@ export default function UserProfilePage() {
           >
             <ShareIcon />
           </button>
+          {!isOwnProfile && <div ref={profileMenuRef} className="relative">
+            <button type="button" aria-label="Mais opções do perfil" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-xl text-white/70 transition hover:bg-white/10">⋮</button>
+            {profileMenuOpen && <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl">
+              <button type="button" onClick={() => { setProfileMenuOpen(false); void toggleBlock(); }} disabled={mutating || profile.isBlockedByUser} className="w-full px-4 py-3 text-left text-[13px] text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">{profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear usuário" : "Bloquear usuário"}</button>
+            </div>}
+          </div>}
         </div>
       </div>
 
@@ -648,14 +662,6 @@ export default function UserProfilePage() {
                     Mensagem
                   </Link>
                 )}
-                <button
-                  type="button"
-                  onClick={toggleBlock}
-                  disabled={mutating || profile.isBlockedByUser}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 py-2.5 text-[14px] font-semibold text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear" : "Bloquear"}
-                </button>
               </>
           </div>}
 
@@ -681,12 +687,13 @@ export default function UserProfilePage() {
             </section>
           )}
 
-          <section className="mt-10 w-full text-left" aria-label="Clouds do perfil">
-            <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
-              <button type="button" role="tab" aria-selected={cloudTab === "all"} onClick={() => setCloudTab("all")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "all" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>{isOwnProfile ? "Minhas Clouds" : "Clouds"}</button>
+          <section className="mt-10 w-full border-t border-white/10 pt-6 text-left sm:border-t-0 sm:pt-0" aria-label="Clouds do perfil">
+            <div role="tablist" aria-label="Conteúdo do perfil" className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
+              <button type="button" role="tab" aria-selected={cloudTab === "all"} onClick={() => setCloudTab("all")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "all" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Minhas Clouds</button>
+              <button type="button" role="tab" aria-selected={cloudTab === "reclouds"} onClick={() => setCloudTab("reclouds")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "reclouds" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Reclouds</button>
               {canViewInvitations && <button type="button" role="tab" aria-selected={cloudTab === "invites"} onClick={() => setCloudTab("invites")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "invites" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Meus Convites</button>}
             </div>
-            {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : visibleClouds.length > 0 ? (
+            {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : cloudTab === "reclouds" ? ((profile?.reclouds ?? []).length ? <div className="grid gap-3">{profile?.reclouds?.map((cloud) => <RecloudCard key={cloud.id} cloud={cloud} onRemoved={isOwnProfile ? (id) => setProfile((current) => current ? { ...current, reclouds: current.reclouds?.filter((item) => item.id !== id) } : current) : undefined} />)}</div> : <p className="py-8 text-center text-white/60">Nenhum Recloud publicado.</p>) : visibleClouds.length > 0 ? (
               <div className="grid gap-3">
                 {visibleClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} viewerId={sessionUser?.id} />)}
               </div>

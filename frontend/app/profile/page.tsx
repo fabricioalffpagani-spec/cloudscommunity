@@ -1,5 +1,7 @@
 "use client";
 
+import { RecloudCard, type Recloud } from "../components/RecloudCard";
+
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -329,7 +331,9 @@ export default function ProfilePage() {
   const { user, status, refresh, applyUser, decrementCloudCount } = useSessionUser();
   const [editing, setEditing] = useState(false);
   const [clouds, setClouds] = useState<ProfileCloud[]>([]);
-  const [cloudFilter, setCloudFilter] = useState<"all" | "invites">("all");
+  const [cloudFilter, setCloudFilter] = useState<"all" | "reclouds" | "invites">("all");
+  const [reclouds, setReclouds] = useState<Recloud[]>([]);
+  const [recloudsLoading, setRecloudsLoading] = useState(false);
   const [cloudsLoading, setCloudsLoading] = useState(true);
   const [cloudToDelete, setCloudToDelete] = useState<ProfileCloud | null>(null);
   const [queueCloud, setQueueCloud] = useState<ProfileCloud | null>(null);
@@ -369,6 +373,18 @@ export default function ProfilePage() {
       avatarUrl: user.avatarUrl,
     });
   }, [user, editing]);
+
+  useEffect(() => {
+    if (!user?.username) return;
+    let cancelled = false;
+    setRecloudsLoading(true);
+    void fetch(`/api/users/${encodeURIComponent(user.username)}`, { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload: { user?: { reclouds?: Recloud[] } } | null) => { if (!cancelled) setReclouds(payload?.user?.reclouds ?? []); })
+      .catch(() => { if (!cancelled) setReclouds([]); })
+      .finally(() => { if (!cancelled) setRecloudsLoading(false); });
+    return () => { cancelled = true; };
+  }, [user?.username]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -617,7 +633,7 @@ export default function ProfilePage() {
         </Link>
         <div className="flex items-center gap-4">
           {/* <SessionUserLink showLabel className="hidden sm:inline-flex" /> */}
-          <NotificationsBell buttonClassName="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
+          <NotificationsBell openFromUrl buttonClassName="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10" />
           <Link href="/settings" aria-label="Configurações" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.06] text-white/70 transition hover:bg-white/10">
             <GearIcon s={20} />
           </Link>
@@ -674,9 +690,9 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="mt-10">
-          <div role="tablist" aria-label="Conteúdo do perfil" className="mb-6 flex justify-center gap-3 pb-2">{([['all', 'Minhas Clouds'], ['invites', 'Meus Convites']] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={cloudFilter === value} onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
-          {cloudFilter === "invites" ? <ProfileInvitation /> : cloudsLoading ? (
+        <div className="mt-10 border-t border-white/10 pt-6 sm:border-t-0 sm:pt-0">
+          <div role="tablist" aria-label="Conteúdo do perfil" className="mb-6 flex justify-center gap-2 pb-2">{([['all', 'Minhas Clouds'], ['reclouds', 'Reclouds'], ['invites', 'Meus Convites']] as const).map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={cloudFilter === value} onClick={() => setCloudFilter(value)} className={`shrink-0 rounded-full border px-3 py-2 text-[12px] font-semibold transition ${cloudFilter === value ? 'border-[#A855F7] bg-[#7C3AED] text-white' : 'border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white'}`}>{label}</button>)}</div>
+          {cloudFilter === "invites" ? <ProfileInvitation /> : cloudFilter === "reclouds" ? (recloudsLoading ? <p className="text-center text-white/60">Carregando Reclouds...</p> : reclouds.length ? <div className="grid gap-3">{reclouds.map((cloud) => <RecloudCard key={cloud.id} cloud={cloud} onRemoved={(id) => setReclouds((current) => current.filter((item) => item.id !== id))} />)}</div> : <p className="py-8 text-center text-white/60">Você ainda não republicou nenhuma Cloud.</p>) : cloudsLoading ? (
             <div className="rounded-2xl border border-white/[0.06] bg-[#120a2e] p-6 text-center text-[13px] text-white/45">
               Carregando suas clouds...
             </div>

@@ -31,6 +31,7 @@ export function GuestCloudSignupModal({ cloudTitle, returnTo, onClose }: Props) 
       const payload = await response.json().catch(() => null) as { message?: string; fieldErrors?: Record<string, string> } | null;
       if (!response.ok) throw new Error(payload?.fieldErrors?.email || payload?.fieldErrors?.username || payload?.fieldErrors?.password || payload?.fieldErrors?.birthDate || payload?.message || "Não foi possível concluir o cadastro.");
       setSent(true);
+      window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: form.username } }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível concluir o cadastro.");
     } finally { setSending(false); }

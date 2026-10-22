@@ -6,6 +6,7 @@ import { PwaInstallPrompt } from "../app/components/PwaInstallPrompt";
 import { installComposerPanLock } from "../app/lib/composer-pan-lock";
 
 const navigation = vi.hoisted(() => ({ pathname: "/", push: vi.fn(), prefetch: vi.fn() }));
+const session = vi.hoisted(() => ({ authenticated: true }));
 const originalUserAgent = window.navigator.userAgent;
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
 vi.mock("next/navigation", () => ({
@@ -14,7 +15,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("../app/components/session-user", () => ({
-  useSessionUser: () => ({ status: "authenticated", user: { id: "u", username: "tester", createdAt: "2026-10-14T00:00:00.000Z" } }),
+  useSessionUser: () => session.authenticated ? ({ status: "authenticated", user: { id: "u", username: "tester", createdAt: "2026-10-14T00:00:00.000Z" } }) : ({ status: "unauthenticated", user: null }),
   SessionUserAvatar: () => null,
 }));
 
@@ -25,10 +26,13 @@ function SwipeProbe() {
 beforeEach(() => {
   window.localStorage.removeItem("clouds:pwa-install-reminder:u");
   window.localStorage.removeItem("clouds:pwa-install-manual-complete:u");
+  window.localStorage.removeItem("clouds:pwa-install-signup-reminder:tester");
+  window.localStorage.removeItem("clouds:pwa-install-signup-complete:tester");
 });
 
 afterEach(() => {
   navigation.pathname = "/";
+  session.authenticated = true;
   navigation.push.mockClear();
   Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: originalUserAgent });
   if (originalLocalStorageDescriptor) Object.defineProperty(window, "localStorage", originalLocalStorageDescriptor);
@@ -106,7 +110,7 @@ describe("mobile regressions", () => {
     Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" });
     const first = render(<PwaInstallPrompt />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Adicionar atalho" }));
+    fireEvent.click(screen.getByRole("button", { name: "Instalar agora" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("Adicione o Clouds à Tela de Início");
     fireEvent.click(screen.getByRole("button", { name: "Já adicionei o atalho" }));
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -114,6 +118,51 @@ describe("mobile regressions", () => {
     first.unmount();
     render(<PwaInstallPrompt />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens the installation popup after signup and invokes the native prompt", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:00:10.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    const prompt = vi.fn().mockResolvedValue(undefined);
+    const event = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt, userChoice: Promise.resolve({ outcome: "accepted" }) });
+    render(<PwaInstallPrompt />);
+    act(() => { window.dispatchEvent(event); window.dispatchEvent(new Event("clouds:signup-complete")); });
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Instalar agora" })); });
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("remembers an iPhone installation confirmed during signup after the user signs in", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:03:00.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)" });
+    session.authenticated = false;
+    const view = render(<PwaInstallPrompt />);
+    act(() => window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })));
+    fireEvent.click(screen.getByRole("button", { name: "Instalar agora" }));
+    fireEvent.click(screen.getByRole("button", { name: "Já adicionei o atalho" }));
+    session.authenticated = true;
+    view.rerender(<PwaInstallPrompt />);
+    act(() => vi.advanceTimersByTime(25 * 60 * 60_000));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("waits a day after the signup popup is dismissed before reminding the same user", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:03:00.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    session.authenticated = false;
+    const view = render(<PwaInstallPrompt />);
+    act(() => window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })));
+    fireEvent.click(screen.getByRole("button", { name: "Não" }));
+    session.authenticated = true;
+    view.rerender(<PwaInstallPrompt />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(24 * 60 * 60_000));
+    expect(screen.getByRole("dialog")).toBeVisible();
   });
 
   it("waits until a hidden mobile page becomes visible before showing the reminder", () => {

@@ -10,7 +10,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   const ref = params.ref ?? "";
   const profile = await getInvitationPreview(ref);
   const description = generalInvitationText(profile?.displayName || profile?.username);
-  const image = `/entrenoclouds/preview?ref=${encodeURIComponent(ref)}${params.preview === "avatar" ? "&style=avatar" : ""}`;
+  const image = `/entrenoclouds/preview?ref=${encodeURIComponent(ref)}${params.preview === "avatar" ? "&style=avatar&v=2" : ""}`;
   return { title: "Clouds Community", description, openGraph: { title: "Clouds Community", description, images: [{ url: image, width: 600, height: 600 }] }, twitter: { card: "summary", title: "Clouds Community", description, images: [image] } };
 }
 

@@ -103,13 +103,9 @@ export default function InvitePage() {
       }
     } catch (err) {
       // If the join explicitly failed (not just auth), show the error instead of navigating
-      if (err instanceof Error && err.message !== "Não foi possível entrar na Cloud.") {
-        // network error — try to navigate anyway
-      } else if (err instanceof Error) {
-        setJoining(false);
-        setError(err.message);
-        return;
-      }
+      setJoining(false);
+      setError(err instanceof Error ? err.message : "Não foi possível entrar na Cloud.");
+      return;
     }
 
     // Navigate using hard redirect so Next.js fully loads the page

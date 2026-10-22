@@ -86,13 +86,44 @@ describe("profile follow counters", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(profile(false))));
     render(<PublicProfilePage />);
     await screen.findByRole("button", { name: "Follow" });
+    expect(screen.getByRole("tab", { name: "Minhas Clouds" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Reclouds" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Meus Convites" })).not.toBeInTheDocument();
+  });
+
+  it("switches between the visited user's Clouds and Reclouds", async () => {
+    const data = { ...profile(false), activeClouds: [{ id: "live", title: "Cloud da Ana", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt: null, participantProfiles: [], visibility: "public", href: "/cloud/live" }], endedClouds: [], reclouds: [{ id: "shared", title: "Cloud republicada", duration: "30min", href: "/cloud/shared", status: "active", scheduledAt: null, author: { name: "Criadora original", username: "criadora", avatarUrl: null } }] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(data)));
+    render(<PublicProfilePage />);
+    expect(await screen.findByText("Cloud da Ana")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Reclouds" }));
+    expect(screen.getByText("Cloud republicada")).toBeInTheDocument();
+    expect(screen.getByText("Criadora original").closest("a")).toHaveAttribute("href", "/users/criadora");
+    expect(screen.queryByText("Cloud da Ana")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Minhas Clouds" }));
+    expect(screen.getByText("Cloud da Ana")).toBeInTheDocument();
   });
 
   it("shows the invitations tab on the signed-in user's profile", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result({ ...profile(false), id: "viewer", isSelf: true })));
     render(<PublicProfilePage />);
     expect(await screen.findByRole("tab", { name: "Meus Convites" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Minhas Clouds" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Reclouds" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mais opções do perfil" })).not.toBeInTheDocument();
+  });
+  it("keeps blocking in the profile options and allows unblocking", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => url.endsWith("/block") ? { ok: true, json: async () => ({ ok: true }) } : result(profile(false)));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<PublicProfilePage />);
+    const options = await screen.findByRole("button", { name: "Mais opções do perfil" });
+    expect(screen.queryByRole("button", { name: "Bloquear usuário" })).not.toBeInTheDocument();
+    fireEvent.click(options);
+    fireEvent.click(screen.getByRole("button", { name: "Bloquear usuário" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/users/ana/block", { method: "POST" }));
+    fireEvent.click(options);
+    fireEvent.click(await screen.findByRole("button", { name: "Desbloquear usuário" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/users/ana/block", { method: "DELETE" }));
   });
   it("updates after successful follow and unfollow without waiting for polling", async () => {
     const fetchMock = vi

@@ -5,11 +5,13 @@ import { MiniCloudDock } from "../app/components/MiniCloudDock";
 
 const { push, back } = vi.hoisted(() => ({ push: vi.fn(), back: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, back, replace: vi.fn() }) }));
-vi.mock("../app/components/session-user", () => ({
-  useSessionUser: () => ({ user: { id: "viewer", username: "viewer", displayName: "Pessoa" }, status: "authenticated" }),
+vi.mock("../app/components/session-user", () => {
+  const user = { id: "viewer", username: "viewer", displayName: "Pessoa" };
+  return {
+  useSessionUser: () => ({ user, status: "authenticated" }),
   getSessionUserDisplayName: () => "Pessoa",
   UserAvatar: () => null,
-}));
+}; });
 vi.mock("socket.io-client", () => ({ io: () => ({ on: vi.fn(), emit: vi.fn(), removeAllListeners: vi.fn(), disconnect: vi.fn() }) }));
 
 beforeEach(() => {
@@ -46,4 +48,28 @@ it("continues to minimize on desktop before returning through browser history", 
   expect(JSON.parse(localStorage.getItem("clouds:minimized-cloud") ?? "null")).toMatchObject({ id: "cloud-1", ownerUserId: "viewer" });
   expect(await screen.findByRole("button", { name: "Expandir Cloud" })).toBeVisible();
   vi.restoreAllMocks();
+});
+
+it("allows the host to close and reopen admission from member management", async () => {
+  const originalFetch = vi.mocked(fetch);
+  originalFetch.mockImplementation(async (input, init) => {
+    if (String(input).endsWith('/admission')) return { ok: true, json: async () => ({ acceptingMembers: JSON.parse(String(init?.body)).acceptingMembers }) } as Response;
+    return original(input, init);
+  });
+  function original(input: RequestInfo | URL, init?: RequestInit) {
+    const url = String(input);
+    if (url.includes('/messages?')) return Promise.resolve({ ok: true, json: async () => ({ messages: [], pinnedMessage: null }) } as Response);
+    if (url.endsWith('/reports')) return Promise.resolve({ ok: true, json: async () => ({ reports: [] }) } as Response);
+    if (url === '/api/users/following') return Promise.resolve({ ok: true, json: async () => ({ users: [] }) } as Response);
+    return Promise.resolve({ ok: true, json: async () => ({ cloud: { id: 'cloud-1', title: 'Conversa', duration: '30min', createdAt: new Date().toISOString(), status: 'active', authorId: 'viewer', author: { id: 'viewer', name: 'Pessoa', username: 'viewer', avatarUrl: null }, membersCount: 1, members: [], visibility: 'public', acceptingMembers: true } }) } as Response);
+  }
+  render(<CloudChat cloudId="cloud-1" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Gerenciar membros' }));
+  const toggle = await screen.findByRole('switch', { name: 'Permitir novos participantes' });
+  expect(toggle).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+  expect(screen.getByText(/Novas pessoas não podem entrar/)).toBeInTheDocument();
+  fireEvent.click(toggle);
+  await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
 });

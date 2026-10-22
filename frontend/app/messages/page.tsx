@@ -607,13 +607,13 @@ function useAudioRecorder(onStop: (recording: RecordedAudio) => void) {
         throw new Error("Seu navegador não oferece suporte à gravação de áudio.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/ogg"].find((type) =>
         typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type),
       );
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
       chunksRef.current = [];
-      streamRef.current = stream;
       recorderRef.current = recorder;
       secondsRef.current = 0;
       setSeconds(0);

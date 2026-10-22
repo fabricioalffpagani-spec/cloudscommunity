@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -66,6 +67,21 @@ export class CloudController {
   @Get('stickers')
   async getSavedStickers(@Req() req: Request) {
     return this.cloudService.getSavedStickers(extractSessionToken(req));
+  }
+
+  @Get(':id/recloud')
+  async recloudStatus(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.recloudStatus(extractSessionToken(req), id);
+  }
+
+  @Post(':id/recloud')
+  async recloud(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.recloud(extractSessionToken(req), id);
+  }
+
+  @Delete(':id/recloud')
+  async removeRecloud(@Param('id') id: string, @Req() req: Request) {
+    return this.cloudService.removeRecloud(extractSessionToken(req), id);
   }
 
   @Get(':id/preview')
@@ -155,6 +171,18 @@ export class CloudController {
   @Post(':id/invite')
   async createInvite(@Param('id') id: string, @Req() req: Request) {
     return this.cloudService.createInvite(extractSessionToken(req), id);
+  }
+
+  @Patch(':id/admission')
+  async setAdmission(@Param('id') id: string, @Req() req: Request, @Body() body: Record<string, unknown>) {
+    if (typeof body.acceptingMembers !== 'boolean') throw new BadRequestException({ message: 'Informe se a Cloud recebe novos participantes.' });
+    const result = await this.cloudService.setAcceptingMembers(extractSessionToken(req), id, body.acceptingMembers);
+    if (result.message) {
+      await this.cloudMessagesGateway.broadcastMessageCreated(null, id, result.message);
+      const { title, duration, editCount, description, acceptingMembers } = result.cloud;
+      this.cloudMessagesGateway.broadcastCloudUpdated(id, { id, title, duration, editCount, description, acceptingMembers });
+    }
+    return { ok: true, acceptingMembers: result.cloud.acceptingMembers };
   }
 
   @Post(':id/join')
