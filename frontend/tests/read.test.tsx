@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ReadFeed, type ReadCloud } from "../app/components/ReadFeed";
 import { CloudPreview } from "../app/components/CloudPreview";
@@ -12,6 +12,31 @@ const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2
 const onDelete = vi.fn<(cloudId: string) => Promise<void>>().mockResolvedValue(undefined);
 
 describe("Read", () => {
+  it.each([375, 1280])("offers Recloud from the Read card menu at %ipx", async (width) => {
+    vi.stubGlobal("innerWidth", width);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/recloud')) return { ok: true, json: async () => init?.method ? { ok: true } : { canRecloud: true, reclouded: false } };
+      return { ok: true, json: async () => ({ userIds: [] }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReadFeed clouds={[cloud]} currentUserId="viewer" onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Republicar Cloud" }));
+    expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "POST" });
+    vi.unstubAllGlobals();
+  });
+  it("shows only connected participants and the overflow in the Read footer", async () => {
+    const people = Array.from({ length: 8 }, (_, i) => ({ id: `p${i}`, name: `Pessoa ${i}`, username: `pessoa${i}`, avatarUrl: null }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ userIds: people.slice(0, 7).map((p) => p.id) }) }));
+    render(<ReadFeed clouds={[{ ...cloud, participantProfiles: people }]} currentUserId="viewer" onDelete={onDelete} />);
+    expect(await screen.findByText("participaram dessa cloud")).toBeInTheDocument();
+    expect(screen.getByText("+3")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("7 perfis")).getByText("+1")).toBeInTheDocument();
+    expect(screen.queryByTitle("Pessoa 7")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Encerrada há/)).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
   it("dismisses the options on outside click or Escape, while allowing menu interaction", () => {
     render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Outra Cloud" }]} currentUserId="viewer" onDelete={onDelete} />);
     const [first, second] = screen.getAllByRole("button", { name: "Mais opções da Cloud" });
@@ -33,13 +58,13 @@ describe("Read", () => {
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
-  it("keeps only the ended status in the footer across screen sizes", () => {
+  it("keeps the footer free of the ended status across screen sizes", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Título extenso ".repeat(14) }]} onDelete={onDelete} />);
     for (const card of container.querySelectorAll("[data-cloud-page]")) {
       const action = card.querySelector(".read-card-action");
       const status = card.querySelector(".read-card-footer");
       expect(action).toBeNull();
-      expect(status).toHaveTextContent(/Encerrad/);
+      expect(status).not.toHaveTextContent(/Encerrad/);
       expect(status?.querySelector("button")).toBeNull();
       expect(card.querySelector(".read-card-center")?.nextElementSibling).toBe(status);
     }
@@ -217,6 +242,32 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("offers Recloud in the archived chat menu and forwarding dialog", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "viewer", username: "viewer", displayName: "Viewer" } }) };
+      if (url.endsWith("/recloud")) return { ok: true, json: async () => init?.method ? { ok: true } : { canRecloud: true, reclouded: false } };
+      if (url.includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, authorId: "user-maria", visibility: "public" }, messages: [] }) };
+      return { ok: true, json: async () => ({ users: [] }) };
+    }));
+    render(<SessionUserProvider><ArchivedConversation cloudId="cloud-1" /></SessionUserProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Republicar Cloud" }));
+    expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Compartilhar Cloud" }));
+    expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+  it("shows the end time and opens the archived participant list", async () => {
+    const participants = [{ id: "friend", name: "Amiga", username: "amiga", avatarUrl: null }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cloud: { ...cloud, participantProfiles: participants }, messages: [] }) }));
+    render(<SessionUserProvider><ArchivedConversation cloudId="cloud-1" /></SessionUserProvider>);
+    const trigger = await screen.findByRole("button", { name: "Ver participantes da Cloud" });
+    expect(within(screen.getByTestId("mobile-archive-status")).getByText(/Cloud encerrada há/)).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(within(screen.getByRole("dialog", { name: "Participantes" })).getByRole("link", { name: /Amiga/ })).toHaveAttribute("href", "/users/friend");
+    vi.unstubAllGlobals();
+  });
   it("allows the creator to edit a private Cloud description after it ends", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "user-maria", displayName: "Maria", username: "maria", avatarUrl: null } }) };
@@ -286,7 +337,7 @@ describe("Archived cloud conversation", () => {
     const { container } = render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
 
     expect(await screen.findByText("Minha mensagem")).toBeVisible();
-    expect(screen.getByText("Cloud encerrada")).toBeVisible();
+    expect(within(screen.getByTestId("mobile-archive-status")).getByText(/Cloud encerrada há/)).toBeVisible();
     expect(screen.getByText("Você")).toBeVisible();
     expect(screen.getAllByRole("link", { name: "Ver perfil de Maria" })[0]).toHaveAttribute("href", "/users/user-1");
     expect(screen.getByAltText("Imagem enviada")).toHaveAttribute("src", "/archive.png");

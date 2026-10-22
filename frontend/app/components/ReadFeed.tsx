@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFeedPosition } from "../lib/feed-position";
+import { ConnectedParticipants, useConnectionIds } from "./ConnectedParticipants";
+import { RecloudMenuItem } from "./RecloudAction";
 import { CloudParticipantsSheet } from "./CloudParticipantsSheet";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 import { CloudReportModal } from "./CloudReportModal";
@@ -25,7 +27,7 @@ export type ReadCloud = {
 
 export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete, onEdited }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void>; onEdited?: (cloud: EditableCloud) => void }) {
   const router = useRouter();
-  const [now, setNow] = useState(() => Date.now());
+  const connectionIds = useConnectionIds(currentUserId);
   const [cloudToDelete, setCloudToDelete] = useState<ReadCloud | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
@@ -63,10 +65,6 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
     setActiveIndex(nextIndex);
   };
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   const confirmDelete = async () => {
     if (!cloudToDelete) return;
@@ -123,6 +121,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
                   {currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setDeleteError(""); setCloudToDelete(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir a Cloud</button>}
                   {currentUserId && currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setEditingCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Editar Cloud</button>}
                   <button type="button" onClick={() => { setOptionsCloudId(null); setShareCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Enviar para</button>
+                  {currentUserId && <RecloudMenuItem cloudId={cloud.id} />}
                   {currentUserId && currentUserId !== cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setReportCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar</button>}
                 </div>}
               </div></div>
@@ -158,9 +157,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
               <h2 lang="pt-BR" className={`cloud-feed-title max-w-[88%] hyphens-auto break-words font-bold text-white ${cloud.title.length > 68 ? "text-[42px] leading-[1.16] tracking-[-.035em] md:text-[52px] md:leading-[1.1]" : "text-[52px] leading-[1.13] tracking-[-.045em] md:text-[60px] md:leading-[1.08] md:tracking-tight"}`} style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2>
             </div>
 
-            <div className="read-card-footer relative mb-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[12px] text-white/65 md:mb-10 md:gap-x-6 md:px-10 md:text-[14px]">
-              <span className="inline-flex shrink-0 items-center gap-1.5"><LockIcon />{endedLabel(cloud.endedAt, now)}</span>
-            </div>
+            <div className="read-card-footer mb-4 min-h-7 md:mb-10 md:px-10"><ConnectedParticipants participants={cloud.participantProfiles} ids={connectionIds} archived /></div>
           </article>;
         })}
       </div>
@@ -184,15 +181,3 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   );
 }
 
-function LockIcon() {
-  return <svg width="18" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="12" rx="2" /><path d="M8 10V6a4 4 0 0 1 8 0v4M12 15v3" /></svg>;
-}
-
-function endedLabel(endedAt: string | null, now: number) {
-  if (!endedAt) return "Encerrada";
-  const minutes = Math.max(0, Math.floor((now - new Date(endedAt).getTime()) / 60_000));
-  if (minutes < 1) return "Encerrada agora";
-  if (minutes < 60) return `Encerrada há ${minutes}min`;
-  if (minutes < 1440) return `Encerrada há ${Math.floor(minutes / 60)}h`;
-  return `Encerrada há ${Math.floor(minutes / 1440)}d`;
-}

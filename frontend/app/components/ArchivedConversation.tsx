@@ -7,11 +7,23 @@ import { ReadOnlyCloudMessage, type ReadOnlyMessage } from "./ReadOnlyCloudMessa
 import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
+import { useRecloud } from "./RecloudAction";
+import { useDismissMenu } from "../lib/use-dismiss-menu";
+import { CloudParticipantsSheet, type CloudParticipant } from "./CloudParticipantsSheet";
 import { CloudDetailsDialog } from "./CloudDetailsDialog";
 import { CloudDescriptionEditor } from "./CloudDescriptionEditor";
 
 type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
-type ArchivePayload = { cloud: { title: string; visibility?: "public" | "private"; authorId?: string; description?: string | null }; messages: ArchivedMessage[] };
+type ArchivePayload = { cloud: { title: string; visibility?: "public" | "private"; authorId?: string; description?: string | null; endedAt?: string | null; participantProfiles?: CloudParticipant[] }; messages: ArchivedMessage[] };
+
+function endedLabel(endedAt?: string | null) {
+  if (!endedAt) return "Cloud encerrada";
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(endedAt).getTime()) / 60_000));
+  if (minutes < 1) return "Cloud encerrada agora";
+  if (minutes < 60) return `Cloud encerrada há ${minutes}min`;
+  if (minutes < 1440) return `Cloud encerrada há ${Math.floor(minutes / 60)}h`;
+  return `Cloud encerrada há ${Math.floor(minutes / 1440)}d`;
+}
 
 function dateLabel(iso: string) {
   const date = new Date(iso);
@@ -45,6 +57,10 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const optionsRef = useDismissMenu(optionsOpen, () => setOptionsOpen(false));
+  const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
+  const [participantsOpen, setParticipantsOpen] = useState(false);
   const [descriptionEditOpen, setDescriptionEditOpen] = useState(false);
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -141,13 +157,13 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   let previousDate = "";
 
   return <main className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white" style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
-    <header className="flex shrink-0 items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
+    <header className="flex shrink-0 flex-wrap items-center gap-1.5 bg-black px-3 pb-3 pt-[max(.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-4 sm:pb-4 sm:pt-4">
       {fromReadFeed ? <button type="button" onClick={() => router.back()} aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></button> : <Link href={`/read?cloud=${encodeURIComponent(cloudId)}&scope=${readScope}`} aria-label="Voltar para Read" className="flex h-8 w-8 shrink-0 items-center justify-center text-white/70 transition hover:text-white sm:h-9 sm:w-9"><BackIcon /></Link>}
       <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden">
         <CloudTitleMarquee title={cloud?.title ?? "Conversa encerrada"} />
-        <div className="flex items-center gap-2 whitespace-nowrap text-[13px] text-white/50 sm:text-[16px]">
+        <div className="hidden items-center gap-2 whitespace-nowrap text-[13px] text-white/50 sm:flex sm:text-[16px]">
           <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-white/30 sm:h-3 sm:w-3" />
-          <span>Cloud encerrada</span>
+          <span>{endedLabel(cloud?.endedAt)}</span>
           <span className="text-white/20">|</span>
           <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
         </div>
@@ -156,7 +172,16 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
       {cloud?.visibility !== "private" && <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" /></svg>
       </button>}
+      {Boolean(cloud?.participantProfiles?.length) && <button type="button" onClick={() => setParticipantsOpen(true)} aria-label="Ver participantes da Cloud" className="flex shrink-0 -space-x-2 self-end rounded-full">{cloud!.participantProfiles!.slice(0, 4).map((person) => <span key={person.id} title={person.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1).toUpperCase()}</span>)}{cloud!.participantProfiles!.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-black bg-[#32106f] text-[10px] font-bold">+{cloud!.participantProfiles!.length - 4}</span>}</button>}
+      {recloud.canRecloud && <div ref={optionsRef} className="relative shrink-0"><button type="button" aria-label="Mais opções da Cloud" aria-expanded={optionsOpen} onClick={() => setOptionsOpen((open) => !open)} className="px-2 text-xl text-white/75">⋮</button>{optionsOpen && <div className="absolute right-0 top-8 z-30 w-48 rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-xl"><button type="button" disabled={recloud.busy} onClick={() => void recloud.toggle()} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">{recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>{recloud.error && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloud.error}</p>}</div>}</div>}
+      <div data-testid="mobile-archive-status" className="flex w-full items-center gap-2 pl-[2.375rem] text-[13px] text-white/60 sm:hidden">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/30" />
+        <span>{endedLabel(cloud?.endedAt)}</span>
+        <span className="text-white/20">|</span>
+        <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
+      </div>
     </header>
+    {participantsOpen && cloud && <CloudParticipantsSheet title={cloud.title} participants={cloud.participantProfiles ?? []} onClose={() => setParticipantsOpen(false)} />}
     {descriptionEditOpen && cloud && <CloudDetailsDialog onClose={() => setDescriptionEditOpen(false)}><CloudDescriptionEditor cloudId={cloudId} description={cloud.description ?? null} onSaved={(description) => { setCloud((current) => current ? { ...current, description } : current); setDescriptionEditOpen(false); }} /></CloudDetailsDialog>}
 
     {error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
@@ -179,7 +204,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
 
     {shareOpen && cloud && (() => {
       const url = `${window.location.origin}/cloud/${encodeURIComponent(cloudId)}/conversation?from=read`;
-      return <ForwardToContactModal title="Compartilhar Cloud" preview={cloud.title} url={url} label={cloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} externalShareText={`Venha ler a conversa “${cloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareOpen(false)} />;
+      return <ForwardToContactModal title="Compartilhar Cloud" preview={cloud.title} url={url} label={cloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${cloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareOpen(false)} />;
     })()}
     {replyTo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-5"><h2 className="text-lg font-bold">Responder a {replyTo.sender.displayName}</h2><p className="mt-2 break-words rounded-xl bg-white/5 p-3 text-sm text-white/60 [overflow-wrap:anywhere]">Em “{cloud?.title}”: “{replyTo.content ?? "Mensagem"}”</p><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Escreva sua resposta privada..." rows={4} className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-[#A855F7]" />{replyError && <p className="mt-2 text-xs text-red-300">{replyError}</p>}<div className="mt-4 flex justify-end gap-3"><button onClick={() => setReplyTo(null)} className="text-sm text-white/60">Cancelar</button><button disabled={sendingReply || !replyText.trim()} onClick={() => void sendReply()} className="rounded-full bg-[#9333EA] px-4 py-2 text-sm font-semibold disabled:opacity-50">{sendingReply ? "Enviando..." : "Enviar"}</button></div></div></div>}
 

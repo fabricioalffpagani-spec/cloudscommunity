@@ -112,6 +112,24 @@ function setup() {
 }
 
 describe('Recloud', () => {
+  it('allows former participants of an ended Cloud while requiring current membership in Talk', async () => {
+    const { service, prisma, cloud } = setup();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
+    await expect(service.recloudStatus('token', cloudId)).resolves.toMatchObject({ canRecloud: true });
+    expect(prisma.cloudMember.findFirst).toHaveBeenLastCalledWith({ where: { cloudId, userId: 'viewer' }, select: { id: true } });
+    await expect(service.recloud('token', cloudId)).resolves.toEqual({ ok: true });
+    cloud.status = 'active';
+    await service.recloudStatus('token', cloudId);
+    expect(prisma.cloudMember.findFirst).toHaveBeenLastCalledWith({ where: { cloudId, userId: 'viewer', leftAt: null }, select: { id: true } });
+  });
+  it('never offers Recloud to the author or users who did not participate', async () => {
+    const { service, prisma, auth } = setup();
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.recloudStatus('token', cloudId)).resolves.toMatchObject({ canRecloud: false });
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'host' });
+    await expect(service.recloudStatus('token', cloudId)).resolves.toMatchObject({ canRecloud: false });
+  });
   it('allows an active participant to recloud idempotently and remove it', async () => {
     const { service, prisma } = setup();
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
@@ -387,8 +405,8 @@ describe('Talk / Read regression', () => {
     expect(result.clouds[0].messagesCount).toBe(12);
     expect(query).toMatchObject({
       select: {
-        members: { where: { leftAt: null } },
-        _count: { select: { members: { where: { leftAt: null } } } },
+        members: { orderBy: { joinedAt: 'asc' } },
+        _count: { select: { members: true } },
       },
     });
   });

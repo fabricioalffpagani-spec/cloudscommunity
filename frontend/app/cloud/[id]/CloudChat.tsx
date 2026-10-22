@@ -2849,7 +2849,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
         if (!cancelled && data) setRecloudState({ canRecloud: !!data.canRecloud, reclouded: !!data.reclouded });
       }).catch(() => {});
     return () => { cancelled = true; };
-  }, [cloudId, user?.id, cloud?.members]);
+  }, [cloudId, user?.id, cloud?.members, actionMenuOpen, shareOpen]);
 
   const toggleRecloud = async () => {
     setRecloudBusy(true);

@@ -413,7 +413,6 @@ export class CloudService {
           },
         },
         members: {
-          where: { leftAt: null },
           orderBy: { joinedAt: 'asc' },
           select: {
             user: {
@@ -432,7 +431,7 @@ export class CloudService {
         },
         _count: {
           select: {
-            members: { where: { leftAt: null } },
+            members: true,
             messages: { where: { deletedAt: null, type: { not: 'system' } } },
           },
         },
@@ -574,7 +573,7 @@ export class CloudService {
     });
     return {
       ok: true,
-      cloud: this.mapCloud(cloud),
+      cloud: { ...this.mapCloud(cloud), participantProfiles: cloud.members.flatMap((member) => member.user.profile ? [{ id: member.user.id, name: member.user.profile.displayName, username: member.user.profile.username, avatarUrl: member.user.profile.avatarUrl }] : []) },
       messages: (fromStart ? messages : messages.reverse()).map((message) =>
         this.mapMessage(message),
       ),
@@ -651,11 +650,11 @@ export class CloudService {
 
   async recloudStatus(token: string | null, cloudId: string) {
     const current = await this.requireSession(token);
-    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null }, select: { id: true, authorId: true, visibility: true, author: { select: { profile: { select: { isPrivate: true } } } } } });
+    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null }, select: { id: true, authorId: true, status: true, visibility: true, author: { select: { profile: { select: { isPrivate: true } } } } } });
     if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
     await this.requireCloudVisibility(cloud, current.user.id);
     const [member, recloud] = await Promise.all([
-      this.prisma.cloudMember.findFirst({ where: { cloudId, userId: current.user.id, leftAt: null }, select: { id: true } }),
+      this.prisma.cloudMember.findFirst({ where: { cloudId, userId: current.user.id, ...(cloud.status === CloudStatus.ended ? {} : { leftAt: null }) }, select: { id: true } }),
       this.prisma.recloud.findUnique({ where: { cloudId_userId: { cloudId, userId: current.user.id } } }),
     ]);
     return { ok: true, canRecloud: cloud.authorId !== current.user.id && !!member, reclouded: !!recloud };
@@ -663,11 +662,16 @@ export class CloudService {
 
   async recloud(token: string | null, cloudId: string) {
     const current = await this.requireSession(token);
-    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null }, select: { id: true, authorId: true, visibility: true, author: { select: { profile: { select: { isPrivate: true } } } } } });
+    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null }, select: { id: true, authorId: true, status: true, visibility: true, author: { select: { profile: { select: { isPrivate: true } } } } } });
     if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
     if (cloud.authorId === current.user.id) throw new BadRequestException({ message: 'Você não pode republicar sua própria Cloud.' });
     await this.requireCloudVisibility(cloud, current.user.id);
-    await this.requireCloudMembership(cloudId, current.user.id);
+    if (cloud.status === CloudStatus.ended) {
+      const member = await this.prisma.cloudMember.findFirst({ where: { cloudId, userId: current.user.id }, select: { id: true } });
+      if (!member) throw new UnauthorizedException({ message: 'Você precisa ter participado desta Cloud para republicá-la.' });
+    } else {
+      await this.requireCloudMembership(cloudId, current.user.id);
+    }
     const actorName = current.user.profile?.displayName || current.user.profile?.username || 'Alguém';
     const notification = await this.prisma.$transaction(async (tx) => {
       const inserted = await tx.recloud.createMany({ data: [{ cloudId, userId: current.user.id }], skipDuplicates: true });
