@@ -44,6 +44,46 @@ const result = (user: ReturnType<typeof profile>, ok = true) => ({
 beforeEach(() => sessionRefresh.mockReset());
 
 describe("profile follow counters", () => {
+  it.each([375, 1280])("opens the complete Cloud participant list on a visited profile at %ipx", async (width) => {
+    vi.stubGlobal("innerWidth", width);
+    const participants = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, name: `Pessoa ${i}`, username: `pessoa${i}`, avatarUrl: null }));
+    const data = { ...profile(false), activeClouds: [{ id: "live", title: "Cloud ativa", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt: null, participantProfiles: participants, visibility: "public", href: "/cloud/live" }], endedClouds: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(data)));
+    render(<PublicProfilePage />);
+    await screen.findByText("Cloud ativa");
+    fireEvent.click(screen.getByRole("button", { name: "Ver participantes da Cloud" }));
+    const dialog = screen.getByRole("dialog", { name: "Participantes" });
+    expect(dialog.parentElement).toBe(document.body);
+    expect(within(dialog).getAllByRole("link")).toHaveLength(6);
+    expect(within(dialog).getByRole("link", { name: /Pessoa 5/ })).toHaveAttribute("href", "/users/p5");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    expect(screen.queryByRole("dialog", { name: "Participantes" })).not.toBeInTheDocument();
+  });
+
+  it.each([375, 1280])("shows mutual followers below the bio and opens their profiles at %ipx", async (width) => {
+    vi.stubGlobal("innerWidth", width);
+    const followers = Array.from({ length: 6 }, (_, i) => ({ id: `f${i}`, username: `pessoa${i}`, displayName: `Pessoa ${i}`, avatarUrl: `/avatar${i}.png`, profileUrl: `/users/pessoa${i}` }));
+    const data = { ...profile(false), bio: "Minha bio" };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/mutual-followers") ? { ok: true, json: async () => ({ followers }) } : result(data)));
+    render(<PublicProfilePage />);
+    const button = await screen.findByRole("button", { name: "Ver seguidores em comum com Ana" });
+    expect(button.previousElementSibling).toHaveTextContent("Minha bio");
+    expect(within(button).getByText("Seguido(a) por")).toBeInTheDocument();
+    expect(within(button).getByText("e 2 outras pessoas")).toBeInTheDocument();
+    expect(button.querySelectorAll("img")).toHaveLength(4);
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog", { name: "Seguidores em comum" });
+    expect(await within(dialog).findAllByRole("link")).toHaveLength(6);
+    expect(within(dialog).getByRole("link", { name: /Pessoa 5/ })).toHaveAttribute("href", "/users/pessoa5");
+  });
+
+  it("hides the mutual followers line when there are none", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.endsWith("/mutual-followers") ? { ok: true, json: async () => ({ followers: [] }) } : result(profile(false))));
+    render(<PublicProfilePage />);
+    await screen.findByRole("button", { name: "Follow" });
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/users/ana/mutual-followers", { cache: "no-store" }));
+    expect(screen.queryByRole("button", { name: "Ver seguidores em comum com Ana" })).toBeNull();
+  });
   it("shows another profile's Cloud details in a portal and dismisses them on outside click", async () => {
     const data = { ...profile(false), activeClouds: [{ id: "live", title: "Cloud ativa", authorId: "ana-id", duration: "30min", createdAt: new Date().toISOString(), scheduledAt: null, participantProfiles: [], visibility: "public", href: "/cloud/live" }], endedClouds: [] };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(result(data)));
@@ -126,13 +166,12 @@ describe("profile follow counters", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/users/ana/block", { method: "DELETE" }));
   });
   it("updates after successful follow and unfollow without waiting for polling", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(result(profile(false)))
-      .mockResolvedValueOnce(result(profile(true)))
-      .mockResolvedValueOnce(result(profile(true)))
-      .mockResolvedValueOnce(result(profile(false)))
-      .mockResolvedValueOnce(result(profile(false)));
+    let following = false;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/mutual-followers")) return { ok: true, json: async () => ({ followers: [] }) };
+      if (url.startsWith("/api/follow/")) following = init?.method === "POST";
+      return result(profile(following));
+    });
     vi.stubGlobal("fetch", fetchMock);
     render(<PublicProfilePage />);
     await screen.findByRole("button", { name: "Follow" });
@@ -153,16 +192,7 @@ describe("profile follow counters", () => {
   });
 
   it("keeps the previous count when the mutation fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce(result(profile(false)))
-        .mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ message: "Falhou" }),
-        }),
-    );
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url.startsWith("/api/follow/") ? { ok: false, json: async () => ({ message: "Falhou" }) } : url.endsWith("/mutual-followers") ? { ok: true, json: async () => ({ followers: [] }) } : result(profile(false))));
     render(<PublicProfilePage />);
     fireEvent.click(await screen.findByRole("button", { name: "Follow" }));
     await waitFor(() =>

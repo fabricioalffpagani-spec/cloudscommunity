@@ -129,6 +129,11 @@ export class UsersController {
     return this.usersService.getFollowers(extractSessionToken(req), identifier);
   }
 
+  @Get(':identifier/mutual-followers')
+  async mutualFollowers(@Req() req: Request, @Param('identifier') identifier: string) {
+    return this.usersService.getMutualFollowers(extractSessionToken(req), identifier);
+  }
+
   @Get(':identifier/following')
   async getUserFollowing(
     @Req() req: Request,

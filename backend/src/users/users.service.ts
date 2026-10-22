@@ -735,17 +735,24 @@ export class UsersService {
     }
     const followerIds = followers.map((follower) => follower.followerId);
     const nearbyCounts = new Map<string, number>();
+    const nearbyFollowers = new Map<string, Array<{ id: string; username: string; displayName: string; avatarUrl: string | null; profileUrl: string }>>();
 
     if (followerIds.length > 0) {
       const followedByFollowers = await this.prisma.follow.findMany({
         where: {
           followerId: { in: followerIds },
           followingId: { not: current.user.id },
+          follower: { status: UserStatus.active, deletedAt: null, profile: { isNot: null }, blockedUsers: { none: { blockedId: current.user.id } }, blockedByUsers: { none: { blockerId: current.user.id } } },
         },
-        select: { followingId: true },
+        select: { followingId: true, follower: { select: { id: true, profile: { select: { username: true, displayName: true, avatarUrl: true } } } } },
       });
 
       for (const entry of followedByFollowers) {
+        if (!entry.follower.profile) continue;
+        const profile = entry.follower.profile;
+        const list = nearbyFollowers.get(entry.followingId) ?? [];
+        list.push({ id: entry.follower.id, username: profile.username, displayName: profile.displayName, avatarUrl: profile.avatarUrl, profileUrl: `/users/${encodeURIComponent(profile.username)}` });
+        nearbyFollowers.set(entry.followingId, list);
         nearbyCounts.set(
           entry.followingId,
           (nearbyCounts.get(entry.followingId) ?? 0) + 1,
@@ -817,6 +824,7 @@ export class UsersService {
       nearby: nearbyRanked.flat().map(({ score, ...user }) => ({
         ...user,
         mutualFollowersCount: score,
+        mutualFollowers: (nearbyFollowers.get(user.id) ?? []).sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR') || a.username.localeCompare(b.username)).slice(0, 4),
       })),
       newUsers: await Promise.all(
         newestUsers
@@ -826,6 +834,18 @@ export class UsersService {
           ),
       ),
     };
+  }
+
+  async getMutualFollowers(token: string | null, identifier: string) {
+    const current = await this.requireSession(token);
+    const target = await this.requireTargetUser(identifier);
+    const entries = await this.prisma.follow.findMany({
+      where: { followingId: target.id, follower: { status: UserStatus.active, deletedAt: null, profile: { isNot: null }, following: { some: { followingId: current.user.id } }, blockedUsers: { none: { blockedId: current.user.id } }, blockedByUsers: { none: { blockerId: current.user.id } } } },
+      select: { follower: { select: { id: true, profile: { select: { username: true, displayName: true, avatarUrl: true } } } } },
+    });
+    const followers = entries.flatMap(({ follower }) => follower.profile ? [{ id: follower.id, ...follower.profile, profileUrl: `/users/${encodeURIComponent(follower.profile.username)}` }] : []);
+    followers.sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR') || a.username.localeCompare(b.username));
+    return { ok: true, followers };
   }
 
   async getNearbyUsers(token: string | null): Promise<UsersSearchResponse> {
@@ -1203,14 +1223,12 @@ export class UsersService {
             visibility: true,
             authorId: true,
             members: {
-              where: { leftAt: null },
-              take: 4,
-              orderBy: { joinedAt: 'asc' },
+              where: { leftAt: null },              orderBy: { joinedAt: 'asc' },
               select: {
                 userId: true,
                 user: {
                   select: {
-                    profile: { select: { displayName: true, avatarUrl: true } },
+                    profile: { select: { displayName: true, username: true, avatarUrl: true } },
                   },
                 },
               },
@@ -1234,6 +1252,7 @@ export class UsersService {
         .map((member) => ({
           id: member.userId,
           name: member.user.profile!.displayName,
+          username: member.user.profile!.username,
           avatarUrl: member.user.profile!.avatarUrl,
         })),
       visibility: cloud.visibility === 'private' ? 'private' : 'public',
@@ -1260,15 +1279,13 @@ export class UsersService {
               visibility: true,
               authorId: true,
               members: {
-                where: { leftAt: null },
-                take: 4,
-                orderBy: { joinedAt: 'asc' },
+                where: { leftAt: null },                orderBy: { joinedAt: 'asc' },
                 select: {
                   userId: true,
                   user: {
                     select: {
                       profile: {
-                        select: { displayName: true, avatarUrl: true },
+                        select: { displayName: true, username: true, avatarUrl: true },
                       },
                     },
                   },
@@ -1293,6 +1310,7 @@ export class UsersService {
         .map((member) => ({
           id: member.userId,
           name: member.user.profile!.displayName,
+          username: member.user.profile!.username,
           avatarUrl: member.user.profile!.avatarUrl,
         })),
       visibility: cloud.visibility === 'private' ? 'private' : 'public',

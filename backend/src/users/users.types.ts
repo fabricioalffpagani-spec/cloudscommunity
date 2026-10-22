@@ -55,6 +55,7 @@ export type PublicUserProfilePayload = {
     participantProfiles: Array<{
       id: string;
       name: string;
+      username: string;
       avatarUrl: string | null;
     }>;
     visibility: 'public' | 'private';
@@ -71,6 +72,7 @@ export type PublicUserProfilePayload = {
     participantProfiles: Array<{
       id: string;
       name: string;
+      username: string;
       avatarUrl: string | null;
     }>;
     visibility: 'public' | 'private';
@@ -100,7 +102,7 @@ export type MeetResponse = {
   ok: true;
   popularRecent: Array<PublicUserProfilePayload & { hypes: number }>;
   popularAllTime: Array<PublicUserProfilePayload & { hypes: number }>;
-  nearby: Array<PublicUserProfilePayload & { mutualFollowersCount: number }>;
+  nearby: Array<PublicUserProfilePayload & { mutualFollowersCount: number; mutualFollowers: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null; profileUrl: string }> }>;
   newUsers: PublicUserProfilePayload[];
 };
 

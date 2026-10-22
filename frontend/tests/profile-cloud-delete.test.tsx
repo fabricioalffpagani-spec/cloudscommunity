@@ -102,6 +102,18 @@ async function requestDeletion() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("profile Cloud deletion", () => {
+  it.each([375, 1280])("opens Cloud participants on the owner profile at %ipx", async (width) => {
+    vi.stubGlobal("innerWidth", width);
+    setup(true, [{ ...cloud("a", "Cloud A"), participantProfiles: [{ id: "owner", name: "Owner", username: "owner", avatarUrl: null }, { id: "member", name: "Participante", username: "participante", avatarUrl: null }] }]);
+    await screen.findByText("Cloud A");
+    fireEvent.click(screen.getByRole("button", { name: "Ver participantes da Cloud" }));
+    const dialog = screen.getByRole("dialog", { name: "Participantes" });
+    expect(dialog.parentElement).toBe(document.body);
+    expect(within(dialog).getByRole("link", { name: /Participante/ })).toHaveAttribute("href", "/users/member");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fechar" }));
+    expect(screen.queryByRole("dialog", { name: "Participantes" })).not.toBeInTheDocument();
+  });
+
   it("shows Cloud information above the cards and closes it only on the backdrop", async () => {
     setup(true, [{ ...cloud("a", "Cloud A"), description: "Descrição longa ".repeat(100) }, cloud("b", "Cloud B")]);
     await screen.findByText("Cloud A");
