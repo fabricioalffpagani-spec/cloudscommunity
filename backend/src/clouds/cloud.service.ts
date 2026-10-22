@@ -204,7 +204,9 @@ export class CloudService {
       where: {
         deletedAt: null,
         status: CloudStatus.active,
-        AND: [{ OR: [{ acceptingMembers: true }, { authorId: current.user.id }] }],
+        AND: [
+          { OR: [{ acceptingMembers: true }, { authorId: current.user.id }] },
+        ],
         OR: [
           { authorId: current.user.id },
           {
@@ -657,7 +659,11 @@ export class CloudService {
       this.prisma.cloudMember.findFirst({ where: { cloudId, userId: current.user.id, ...(cloud.status === CloudStatus.ended ? {} : { leftAt: null }) }, select: { id: true } }),
       this.prisma.recloud.findUnique({ where: { cloudId_userId: { cloudId, userId: current.user.id } } }),
     ]);
-    return { ok: true, canRecloud: cloud.authorId !== current.user.id && !!member, reclouded: !!recloud };
+    return {
+      ok: true,
+      canRecloud: cloud.authorId !== current.user.id && !!member,
+      reclouded: !!recloud,
+    };
   }
 
   async recloud(token: string | null, cloudId: string) {
@@ -674,30 +680,41 @@ export class CloudService {
     }
     const actorName = current.user.profile?.displayName || current.user.profile?.username || 'Alguém';
     const notification = await this.prisma.$transaction(async (tx) => {
-      const inserted = await tx.recloud.createMany({ data: [{ cloudId, userId: current.user.id }], skipDuplicates: true });
+      const inserted = await tx.recloud.createMany({
+        data: [{ cloudId, userId: current.user.id }],
+        skipDuplicates: true,
+      });
       if (!inserted.count) return null;
-      return tx.notification.create({ data: {
-        userId: cloud.authorId,
-        type: 'cloud_recloud',
-        entityType: 'cloud',
-        entityId: cloudId,
-        title: 'Novo Recloud',
-        body: `${actorName} republicou sua cloud em seu perfil`,
-        metadata: { actorUserId: current.user.id },
-      } });
+      return tx.notification.create({
+        data: {
+          userId: cloud.authorId,
+          type: 'cloud_recloud',
+          entityType: 'cloud',
+          entityId: cloudId,
+          title: 'Novo Recloud',
+          body: `${actorName} republicou sua cloud em seu perfil`,
+          metadata: { actorUserId: current.user.id },
+        },
+      });
     });
     if (notification) {
-      await this.pushNotifications.send(cloud.authorId, {
-        title: notification.title, body: notification.body,
-        url: `/cloud/${cloudId}/notification`, tag: notification.id,
-      }).catch(() => undefined);
+      await this.pushNotifications
+        .send(cloud.authorId, {
+          title: notification.title,
+          body: notification.body,
+          url: `/cloud/${cloudId}/notification`,
+          tag: notification.id,
+        })
+        .catch(() => undefined);
     }
     return { ok: true };
   }
 
   async removeRecloud(token: string | null, cloudId: string) {
     const current = await this.requireSession(token);
-    await this.prisma.recloud.deleteMany({ where: { cloudId, userId: current.user.id } });
+    await this.prisma.recloud.deleteMany({
+      where: { cloudId, userId: current.user.id },
+    });
     return { ok: true };
   }
 
@@ -1721,7 +1738,9 @@ export class CloudService {
   }> {
     const current = await this.requireSession(token);
 
-    const cloud = await this.prisma.cloud.findFirst({ where: { id: cloudId, deletedAt: null } });
+    const cloud = await this.prisma.cloud.findFirst({
+      where: { id: cloudId, deletedAt: null },
+    });
 
     if (!cloud) {
       throw new NotFoundException({ message: 'Cloud não encontrada.' });
@@ -2500,10 +2519,22 @@ export class CloudService {
     return cloud;
   }
 
-  private async requireAdmissionForAccess(cloud: { id: string; authorId: string; acceptingMembers: boolean }, viewerId?: string) {
+  private async requireAdmissionForAccess(
+    cloud: { id: string; authorId: string; acceptingMembers: boolean },
+    viewerId?: string,
+  ) {
     if (cloud.acceptingMembers !== false || viewerId === cloud.authorId) return;
-    const member = viewerId ? await this.prisma.cloudMember.findFirst({ where: { cloudId: cloud.id, userId: viewerId, leftAt: null }, select: { id: true } }) : null;
-    if (!member) throw new BadRequestException({ message: 'O/A host mudou as configurações da Cloud para não receber novos membros.' });
+    const member = viewerId
+      ? await this.prisma.cloudMember.findFirst({
+          where: { cloudId: cloud.id, userId: viewerId, leftAt: null },
+          select: { id: true },
+        })
+      : null;
+    if (!member)
+      throw new BadRequestException({
+        message:
+          'O/A host mudou as configurações da Cloud para não receber novos membros.',
+      });
   }
 
   private async requireCloudMembership(cloudId: string, userId: string) {
@@ -3253,19 +3284,51 @@ export class CloudService {
     }
   }
 
-  async setAcceptingMembers(token: string | null, cloudId: string, acceptingMembers: boolean) {
+  async setAcceptingMembers(
+    token: string | null,
+    cloudId: string,
+    acceptingMembers: boolean,
+  ) {
     const current = await this.requireSession(token);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Cloud" WHERE id = ${cloudId}::uuid FOR UPDATE`;
-      const cloud = await tx.cloud.findFirst({ where: { id: cloudId, deletedAt: null }, include: this.cloudInclude() });
-      if (!cloud) throw new NotFoundException({ message: 'Cloud não encontrada.' });
-      if (cloud.authorId !== current.user.id) throw new UnauthorizedException({ message: 'Apenas o criador pode alterar a entrada de participantes.' });
+      const cloud = await tx.cloud.findFirst({
+        where: { id: cloudId, deletedAt: null },
+        include: this.cloudInclude(),
+      });
+      if (!cloud)
+        throw new NotFoundException({ message: 'Cloud não encontrada.' });
+      if (cloud.authorId !== current.user.id)
+        throw new UnauthorizedException({
+          message: 'Apenas o criador pode alterar a entrada de participantes.',
+        });
       this.requireActiveCloud(cloud);
-      if (cloud.acceptingMembers === acceptingMembers) return { cloud: this.mapCloud(cloud), message: null };
-      const updated = await tx.cloud.update({ where: { id: cloudId }, data: { acceptingMembers }, include: this.cloudInclude() });
-      const name = current.user.profile?.displayName || current.user.profile?.username || 'Usuário';
-      const message = await tx.cloudMessage.create({ data: { cloudId, userId: current.user.id, type: 'system', content: acceptingMembers ? `${name} abriu a cloud para novos participantes` : `${name} fechou a cloud para novos participantes` }, include: this.messageInclude() });
-      return { cloud: this.mapCloud(updated), message: this.mapMessage(message, null) };
+      if (cloud.acceptingMembers === acceptingMembers)
+        return { cloud: this.mapCloud(cloud), message: null };
+      const updated = await tx.cloud.update({
+        where: { id: cloudId },
+        data: { acceptingMembers },
+        include: this.cloudInclude(),
+      });
+      const name =
+        current.user.profile?.displayName ||
+        current.user.profile?.username ||
+        'Usuário';
+      const message = await tx.cloudMessage.create({
+        data: {
+          cloudId,
+          userId: current.user.id,
+          type: 'system',
+          content: acceptingMembers
+            ? `${name} abriu a cloud para novos participantes`
+            : `${name} fechou a cloud para novos participantes`,
+        },
+        include: this.messageInclude(),
+      });
+      return {
+        cloud: this.mapCloud(updated),
+        message: this.mapMessage(message, null),
+      };
     });
   }
 
@@ -3281,72 +3344,82 @@ export class CloudService {
   }> {
     const current = await this.requireSession(token);
 
-    const { cloud, waiting, membershipChanged } = await this.prisma.$transaction(async (tx) => {
-    // Serialize admission with the host's settings change on the same row.
-    await tx.$queryRaw`SELECT id FROM "Cloud" WHERE id = ${cloudId}::uuid FOR UPDATE`;
-    const cloud = await tx.cloud.findFirst({ where: { id: cloudId, deletedAt: null } });
-
-    if (!cloud) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
-    }
-
-    // A scheduled Cloud accepts its waiting list before it opens, but its
-    // chat remains unavailable until the scheduled instant.
-    const waiting = Boolean(
-      cloud.scheduledAt && cloud.scheduledAt.getTime() > Date.now(),
-    );
-    if (!waiting) this.requireActiveCloud(cloud);
-
-    // Block banned users
-    const ban = await tx.cloudBan.findUnique({
-      where: { cloudId_userId: { cloudId, userId: current.user.id } },
-    });
-    if (ban) {
-      throw new UnauthorizedException({
-        message: 'Você foi banido desta cloud.',
-      });
-    }
-
-    // Private Clouds require a membership granted at creation time. Public
-    // Clouds continue to create membership on entry.
-    const existing = await tx.cloudMember.findFirst({
-      where: { cloudId, userId: current.user.id },
-    });
-
-    if (cloud.acceptingMembers === false && cloud.authorId !== current.user.id && (!existing || existing.leftAt !== null)) {
-      throw new BadRequestException({ message: 'O/A host mudou as configurações da Cloud para não receber novos membros.' });
-    }
-
-    if (
-      cloud.visibility === CloudVisibility.private &&
-      cloud.authorId !== current.user.id &&
-      !existing
-    ) {
-      throw new NotFoundException({ message: 'Cloud não encontrada.' });
-    }
-
-    let membershipChanged = false;
-    if (existing) {
-      if (existing.leftAt !== null) {
-        await tx.cloudMember.update({
-          where: { id: existing.id },
-          data: { leftAt: null, joinedAt: new Date() },
+    const { cloud, waiting, membershipChanged } =
+      await this.prisma.$transaction(async (tx) => {
+        // Serialize admission with the host's settings change on the same row.
+        await tx.$queryRaw`SELECT id FROM "Cloud" WHERE id = ${cloudId}::uuid FOR UPDATE`;
+        const cloud = await tx.cloud.findFirst({
+          where: { id: cloudId, deletedAt: null },
         });
-        membershipChanged = true;
-      }
-    } else {
-      await tx.cloudMember.create({
-        data: {
-          cloudId,
-          userId: current.user.id,
-          role: 'member',
-        },
-      });
-      membershipChanged = true;
-    }
 
-    return { cloud, waiting, membershipChanged };
-    });
+        if (!cloud) {
+          throw new NotFoundException({ message: 'Cloud não encontrada.' });
+        }
+
+        // A scheduled Cloud accepts its waiting list before it opens, but its
+        // chat remains unavailable until the scheduled instant.
+        const waiting = Boolean(
+          cloud.scheduledAt && cloud.scheduledAt.getTime() > Date.now(),
+        );
+        if (!waiting) this.requireActiveCloud(cloud);
+
+        // Block banned users
+        const ban = await tx.cloudBan.findUnique({
+          where: { cloudId_userId: { cloudId, userId: current.user.id } },
+        });
+        if (ban) {
+          throw new UnauthorizedException({
+            message: 'Você foi banido desta cloud.',
+          });
+        }
+
+        // Private Clouds require a membership granted at creation time. Public
+        // Clouds continue to create membership on entry.
+        const existing = await tx.cloudMember.findFirst({
+          where: { cloudId, userId: current.user.id },
+        });
+
+        if (
+          cloud.acceptingMembers === false &&
+          cloud.authorId !== current.user.id &&
+          (!existing || existing.leftAt !== null)
+        ) {
+          throw new BadRequestException({
+            message:
+              'O/A host mudou as configurações da Cloud para não receber novos membros.',
+          });
+        }
+
+        if (
+          cloud.visibility === CloudVisibility.private &&
+          cloud.authorId !== current.user.id &&
+          !existing
+        ) {
+          throw new NotFoundException({ message: 'Cloud não encontrada.' });
+        }
+
+        let membershipChanged = false;
+        if (existing) {
+          if (existing.leftAt !== null) {
+            await tx.cloudMember.update({
+              where: { id: existing.id },
+              data: { leftAt: null, joinedAt: new Date() },
+            });
+            membershipChanged = true;
+          }
+        } else {
+          await tx.cloudMember.create({
+            data: {
+              cloudId,
+              userId: current.user.id,
+              role: 'member',
+            },
+          });
+          membershipChanged = true;
+        }
+
+        return { cloud, waiting, membershipChanged };
+      });
 
     // A person may take part in only one live Cloud at a time. Joining a new
     // live Cloud ends every other active participation before the new entry is

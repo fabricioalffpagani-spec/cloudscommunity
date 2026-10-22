@@ -38,11 +38,23 @@ export type PublicUserProfilePayload = {
     href: string;
   } | null;
   reclouds: Array<{
-    id: string; title: string; description: string | null; duration: string; createdAt: string;
-    scheduledAt: string | null; endedAt: string | null; status: 'active' | 'ended';
-    authorId: string; author: { name: string; username: string; avatarUrl: string | null };
-    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
-    visibility: 'public' | 'private'; href: string;
+    id: string;
+    title: string;
+    description: string | null;
+    duration: string;
+    createdAt: string;
+    scheduledAt: string | null;
+    endedAt: string | null;
+    status: 'active' | 'ended';
+    authorId: string;
+    author: { name: string; username: string; avatarUrl: string | null };
+    participantProfiles: Array<{
+      id: string;
+      name: string;
+      avatarUrl: string | null;
+    }>;
+    visibility: 'public' | 'private';
+    href: string;
   }>;
   activeClouds: Array<{
     id: string;
@@ -102,7 +114,18 @@ export type MeetResponse = {
   ok: true;
   popularRecent: Array<PublicUserProfilePayload & { hypes: number }>;
   popularAllTime: Array<PublicUserProfilePayload & { hypes: number }>;
-  nearby: Array<PublicUserProfilePayload & { mutualFollowersCount: number; mutualFollowers: Array<{ id: string; username: string; displayName: string; avatarUrl: string | null; profileUrl: string }> }>;
+  nearby: Array<
+    PublicUserProfilePayload & {
+      mutualFollowersCount: number;
+      mutualFollowers: Array<{
+        id: string;
+        username: string;
+        displayName: string;
+        avatarUrl: string | null;
+        profileUrl: string;
+      }>;
+    }
+  >;
   newUsers: PublicUserProfilePayload[];
 };
 
