@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("InviteCloudsButton", () => {
   const invitationText = "Ana está te convidando para o Clouds! Descubra conversas acontecendo agora...";
-  const inviteUrl = `${window.location.origin}/entrenoclouds?ref=ABC1234&preview=avatar`;
+  const inviteUrl = `${window.location.origin}/entrenoclouds?ref=ABC1234&preview=avatar&v=2`;
 
   it("opens native sharing with the branded invitation link and text", async () => {
     const share = vi.fn().mockResolvedValue(undefined);

@@ -48,6 +48,7 @@ enum NotificationType {
   cloud_comment
   cloud_mention
   cloud_hype
+  cloud_recloud
   cloud_member_joined
   cloud_member_left
   cloud_message_pinned
@@ -87,6 +88,7 @@ model User {
   authoredClouds            Cloud[]         @relation("CloudAuthor")
   cloudHypes                CloudHype[]
   cloudShares               CloudShare[]
+  reclouds                  Recloud[]
   following                 Follow[]        @relation("FollowFollower")
   followers                 Follow[]        @relation("FollowFollowing")
   followRequestsSent        FollowRequest[] @relation("FollowRequestRequester")
@@ -182,6 +184,7 @@ model Cloud {
   category     String          @db.VarChar(50)
   mode         CloudMode       @default(text)
   visibility   CloudVisibility @default(public)
+  acceptingMembers Boolean     @default(true)
   status       CloudStatus     @default(active)
   duration     String          @db.VarChar(20)
   editCount    Int             @default(0)
@@ -203,6 +206,7 @@ model Cloud {
   author       User            @relation("CloudAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   hypes        CloudHype[]
   shares       CloudShare[]
+  reclouds     Recloud[]
   messages     CloudMessage[]
   members      CloudMember[]
   invites      CloudInvite[]
@@ -242,6 +246,16 @@ model CloudShare {
 
   @@id([cloudId, userId])
   @@index([userId])
+}
+
+model Recloud {
+  cloudId String @db.Uuid
+  userId String @db.Uuid
+  createdAt DateTime @default(now())
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@id([cloudId, userId])
+  @@index([userId, createdAt])
 }
 
 model Follow {

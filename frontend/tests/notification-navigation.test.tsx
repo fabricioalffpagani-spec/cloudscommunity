@@ -1,13 +1,29 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
-import { NotificationsPanel } from "../app/components/NotificationsPanel";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NotificationsBell, NotificationsPanel } from "../app/components/NotificationsPanel";
 import { NotificationCloudRedirect } from "../app/components/NotificationCloudRedirect";
+import LegacyNotificationsPage from "../app/notifications/page";
 
-const replace = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }), useSearchParams: () => new URLSearchParams("message=msg-1") }));
+const { replace, redirect } = vi.hoisted(() => ({ replace: vi.fn(), redirect: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }), useSearchParams: () => new URLSearchParams("message=msg-1"), redirect }));
 vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ refresh: vi.fn() }) }));
 
 describe("notification navigation", () => {
+  afterEach(() => { window.history.replaceState(null, "", "/"); vi.unstubAllGlobals(); });
+  it("opens notifications on the profile when arriving from a push", async () => {
+    window.history.replaceState(null, "", "/profile?notifications=1&from=push");
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ notifications: [], unreadCount: 0 }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NotificationsBell openFromUrl />);
+    expect(await screen.findByText("Nenhuma notificação")).toBeInTheDocument();
+    expect(window.location.pathname + window.location.search).toBe("/profile?from=push");
+    expect(fetchMock).toHaveBeenCalledWith("/api/notifications/read", { method: "POST" });
+  });
+
+  it("redirects old notification links to the profile", () => {
+    LegacyNotificationsPage();
+    expect(redirect).toHaveBeenCalledWith("/profile?notifications=1");
+  });
   it("links cloud activity, profiles and private messages to their destinations", async () => {
     const actor = { id: "person", username: "ana", displayName: "Ana", avatarUrl: null, profileUrl: "/users/ana" };
     const base = { isRead: false, createdAt: new Date().toISOString(), metadata: null };

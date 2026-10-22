@@ -12,21 +12,17 @@ describe("invitation preview image", () => {
     const png = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(png.slice(0, 8))).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
   });
-  it("removes only the corner logo from the avatar-only preview", async () => {
+  it("includes the corner logo in previews shared from the arrow", async () => {
     const branded = await GET(new Request("https://clouds.test/entrenoclouds/preview?ref=ANA1234"));
     const avatarOnly = await GET(new Request("https://clouds.test/entrenoclouds/preview?ref=ANA1234&style=avatar"));
     const first = await sharp(Buffer.from(await branded.arrayBuffer())).ensureAlpha().raw().toBuffer();
     const second = await sharp(Buffer.from(await avatarOnly.arrayBuffer())).ensureAlpha().raw().toBuffer();
-    let cornerChanges = 0;
-    let otherChanges = 0;
-    for (let y = 0; y < 600; y++) for (let x = 0; x < 600; x++) {
+    expect(second.equals(first)).toBe(true);
+    let logoPixels = 0;
+    for (let y = 20; y < 88; y++) for (let x = 20; x < 100; x++) {
       const i = (y * 600 + x) * 4;
-      if (first[i] !== second[i] || first[i + 1] !== second[i + 1] || first[i + 2] !== second[i + 2] || first[i + 3] !== second[i + 3]) {
-        if (x >= 20 && x < 100 && y >= 20 && y < 88) cornerChanges++;
-        else otherChanges++;
-      }
+      if (second[i] !== 22 || second[i + 1] !== 5 || second[i + 2] !== 47) logoPixels++;
     }
-    expect(cornerChanges).toBeGreaterThan(0);
-    expect(otherChanges).toBe(0);
+    expect(logoPixels).toBeGreaterThan(0);
   });
 });

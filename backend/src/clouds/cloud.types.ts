@@ -76,6 +76,7 @@ export type CloudMessagePayload = {
 
 export type CloudPayload = {
   id: string;
+  acceptingMembers: boolean;
   title: string;
   description: string | null;
   duration: string;

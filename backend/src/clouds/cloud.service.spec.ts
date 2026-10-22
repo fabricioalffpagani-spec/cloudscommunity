@@ -15,6 +15,7 @@ function setup() {
   const cloud = {
     id: cloudId,
     authorId: 'author',
+    acceptingMembers: true,
     status: 'ended',
     visibility: 'public',
     title: 'Topic',
@@ -61,6 +62,24 @@ function setup() {
     cloudShare: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
+    recloud: {
+      findUnique: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue(null),
+      createMany: jest
+        .fn<Promise<{ count: number }>, unknown[]>()
+        .mockResolvedValue({ count: 1 }),
+      deleteMany: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue({ count: 1 }),
+    },
+    notification: {
+      create: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue({
+        id: 'notification',
+        title: 'Novo Recloud',
+        body: 'Alguém republicou sua cloud em seu perfil',
+      }),
+    },
     profile: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
@@ -80,7 +99,12 @@ function setup() {
     follow: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([]),
   };
+  prisma.$transaction.mockImplementation(
+    (callback: (tx: typeof prisma) => unknown) => callback(prisma),
+  );
   const auth = {
     resolveSession: jest
       .fn<Promise<unknown>, unknown[]>()
@@ -90,7 +114,9 @@ function setup() {
     service: new CloudService(
       prisma as unknown as PrismaService,
       auth as unknown as AuthService,
-      { send: jest.fn() } as unknown as PushNotificationsService,
+      {
+        send: jest.fn().mockResolvedValue(undefined),
+      } as unknown as PushNotificationsService,
       { classify: jest.fn() } as unknown as CloudTopicClassifierService,
     ),
     prisma,
@@ -98,6 +124,152 @@ function setup() {
     cloud,
   };
 }
+
+describe('Recloud', () => {
+  it('allows an active participant to recloud idempotently and remove it', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
+    await expect(service.recloud(null, cloudId)).resolves.toEqual({ ok: true });
+    expect(prisma.recloud.createMany).toHaveBeenCalledWith({
+      data: [{ cloudId, userId: 'viewer' }],
+      skipDuplicates: true,
+    });
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'author',
+        type: 'cloud_recloud',
+        entityId: cloudId,
+        body: 'Alguém republicou sua cloud em seu perfil',
+        metadata: { actorUserId: 'viewer' },
+      }) as unknown,
+    });
+    prisma.recloud.createMany.mockResolvedValue({ count: 0 });
+    await service.recloud(null, cloudId);
+    expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    await expect(service.removeRecloud(null, cloudId)).resolves.toEqual({
+      ok: true,
+    });
+    expect(prisma.recloud.deleteMany).toHaveBeenCalledWith({
+      where: { cloudId, userId: 'viewer' },
+    });
+  });
+
+  it('rejects the author and non-members', async () => {
+    const { service, prisma, auth } = setup();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    await expect(service.recloud(null, cloudId)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    auth.resolveSession.mockResolvedValue({ user: { id: 'viewer' } });
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.recloud(null, cloudId)).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
+    expect(prisma.recloud.createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('Cloud admission', () => {
+  it('blocks new or returning participants while preserving existing members', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
+    cloud.acceptingMembers = false;
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.joinCloud('token', cloudId)).rejects.toThrow(
+      'O/A host mudou as configurações da Cloud para não receber novos membros.',
+    );
+    expect(prisma.cloudMember.create).not.toHaveBeenCalled();
+    prisma.cloudMember.findFirst.mockResolvedValue({
+      id: 'member',
+      leftAt: new Date(),
+    });
+    await expect(service.joinCloud('token', cloudId)).rejects.toThrow(
+      'não receber novos membros',
+    );
+    expect(prisma.cloudMember.update).not.toHaveBeenCalled();
+    prisma.cloudMember.findFirst.mockResolvedValue({
+      id: 'member',
+      leftAt: null,
+    });
+    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'entry' });
+    await expect(service.joinCloud('token', cloudId)).resolves.toMatchObject({
+      ok: true,
+      entered: false,
+    });
+  });
+
+  it('filters closed clouds from both discovery feeds', async () => {
+    const { service, prisma } = setup();
+    await service.listFeed('token');
+    expect(prisma.cloud.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          AND: [{ OR: [{ acceptingMembers: true }, { authorId: 'viewer' }] }],
+        }) as unknown,
+      }),
+    );
+    prisma.follow.findMany.mockResolvedValue([{ followingId: 'author' }]);
+    await service.listFollowing('token');
+    expect(prisma.cloud.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ acceptingMembers: true }) as unknown,
+      }),
+    );
+  });
+
+  it('blocks direct and socket access for non-members of a closed cloud', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.acceptingMembers = false;
+    prisma.cloudMember.findFirst.mockResolvedValue(null);
+    await expect(service.requireCloudAccess(cloudId, 'viewer')).rejects.toThrow(
+      'não receber novos membros',
+    );
+    await expect(service.requireCloudAccess(cloudId)).rejects.toThrow(
+      'não receber novos membros',
+    );
+  });
+
+  it('only lets the host close the cloud and persists a system message', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
+    await expect(
+      service.setAcceptingMembers('token', cloudId, false),
+    ).rejects.toThrow(UnauthorizedException);
+    auth.resolveSession.mockResolvedValue({
+      user: { id: 'author', profile: { displayName: 'Ana' } },
+    });
+    prisma.cloud.update.mockResolvedValue({
+      ...cloud,
+      acceptingMembers: false,
+    });
+    prisma.cloudMessage.create.mockResolvedValue({
+      id: 'system',
+      cloudId,
+      userId: 'author',
+      type: 'system',
+      content: 'Ana fechou a cloud para novos participantes',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      user: { id: 'author', profile: { username: 'ana', displayName: 'Ana' } },
+      reactions: [],
+    });
+    const result = await service.setAcceptingMembers('token', cloudId, false);
+    expect(result.cloud.acceptingMembers).toBe(false);
+    expect(result.message?.content).toBe(
+      'Ana fechou a cloud para novos participantes',
+    );
+    expect(prisma.cloudMessage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'system',
+          content: 'Ana fechou a cloud para novos participantes',
+        }) as unknown,
+      }),
+    );
+  });
+});
 
 describe('Cloud message pinning', () => {
   it('persists pin and unpin for the author and rejects another user', async () => {

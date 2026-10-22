@@ -10,6 +10,7 @@ import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
 import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
 import { cloudRemainingSeconds } from "./lib/cloud-countdown";
 import { cloudInvitation, invitationCountdown } from "./lib/cloud-invitation";
+import { recordedAudioBlob } from "./lib/recorded-audio";
 
 const CloudChat = dynamic(() => import("./cloud/[id]/CloudChat"), {
   ssr: false,
@@ -952,10 +953,10 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
     setReminderLoading(true);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
-      if (!response.ok) throw new Error("Reminder request failed");
+      if (!response.ok) { const payload = await response.json().catch(() => null) as { message?: string } | null; throw new Error(payload?.message || "Não foi possível entrar na Cloud."); }
       setReminderSet(true);
-    } catch {
-      // The button remains available after a failed request.
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Não foi possível entrar na Cloud.");
     } finally {
       setReminderLoading(false);
     }
@@ -1546,6 +1547,7 @@ function RecordAudioModal({
   const [error, setError] = useState<string | null>(null);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sampleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1558,12 +1560,13 @@ function RecordAudioModal({
     setError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recordingStreamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
       peaksRef.current = [];
       recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const blob = recordedAudioBlob(chunksRef.current, recorder.mimeType);
         setAudioUrl(URL.createObjectURL(blob));
         setStatus("done");
         // build waveform from captured peaks
@@ -1590,6 +1593,7 @@ function RecordAudioModal({
         if (audioCtxRef.current) { try { void audioCtxRef.current.close(); } catch { /* ignore */ } audioCtxRef.current = null; }
         analyserRef.current = null;
         stream.getTracks().forEach(t => t.stop());
+        recordingStreamRef.current = null;
       };
       recorder.start();
       mediaRef.current = recorder;
@@ -1623,6 +1627,8 @@ function RecordAudioModal({
         peaksRef.current = [];
       }
     } catch {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
       setError("Permissão de microfone negada. Verifique as configurações do navegador.");
     }
   }, []);
@@ -1634,6 +1640,7 @@ function RecordAudioModal({
 
   // cleanup on unmount
   useEffect(() => () => {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     if (timerRef.current) clearInterval(timerRef.current);
     if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
     if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch { /* ignore */ } }
@@ -2719,6 +2726,9 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
           if (response.ok) {
             setRemindedIds(current => new Set(current).add(cloud.id));
             setQueueCloud(cloud);
+          } else {
+            const payload = await response.json().catch(() => null) as { message?: string } | null;
+            window.alert(payload?.message || "Não foi possível entrar na Cloud.");
           }
         };
         return (
@@ -3089,6 +3099,9 @@ function PageContent() {
       if (response.ok) {
         setScheduledReminderCloudId(cloudId);
         setScheduledQueueOpen(true);
+      } else {
+        const payload = await response.json().catch(() => null) as { message?: string } | null;
+        window.alert(payload?.message || "Não foi possível entrar na Cloud.");
       }
     } finally {
       setScheduledReminderLoading(false);

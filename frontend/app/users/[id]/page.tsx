@@ -1,6 +1,11 @@
 "use client";
 
+import { RecloudCard, type Recloud } from "../../components/RecloudCard";
+import { MutualFollowers } from "../../components/MutualFollowers";
+
 import Link from "next/link";
+import { createPortal } from "react-dom";
+import { CloudParticipantsSheet } from "../../components/CloudParticipantsSheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatarViewer } from "../../components/ProfileAvatarViewer";
 import { useParams, useRouter } from "next/navigation";
@@ -13,6 +18,7 @@ import { ProfileScheduleActions } from "../../components/ProfileScheduleActions"
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
+import { useDismissMenu } from "../../lib/use-dismiss-menu";
 
 type FollowListUser = {
   id: string;
@@ -24,6 +30,7 @@ type FollowListUser = {
 };
 
 type PublicUserProfile = {
+  reclouds?: Recloud[];
   id: string;
   username: string;
   name: string;
@@ -57,7 +64,7 @@ type PublicUserProfile = {
     createdAt: string;
     scheduledAt: string | null;
     authorId: string;
-    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
     visibility: "public" | "private";
     href: string;
   }>;
@@ -75,7 +82,7 @@ type PublicUserProfile = {
     createdAt: string;
     endedAt: string | null;
     authorId: string;
-    participantProfiles: Array<{ id: string; name: string; avatarUrl: string | null }>;
+    participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
     visibility: "public" | "private";
     href: string;
   }>;
@@ -212,6 +219,7 @@ function ActiveCloudCard({ cloud, now, hostAvatarUrl, hostInitial, viewerId }: {
 
   const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState("Spam ou publicidade");
@@ -235,7 +243,7 @@ function ActiveCloudCard({ cloud, now, hostAvatarUrl, hostInitial, viewerId }: {
     } catch (error) { setReportError(error instanceof Error ? error.message : "Não foi possível enviar a denúncia."); }
     finally { setReporting(false); }
   };
-  return <article className={`relative flex min-h-[180px] w-full flex-col rounded-2xl border p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${live ? "border-[#C084FC] bg-[#321066] ring-1 ring-[#A855F7]/50" : "border-[#8B5CF6]/35 bg-[#1a0e3d]/75"}`}><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><div className="flex -space-x-2" aria-label={`${participants.length} participantes`}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</div><div ref={menuRef} className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className={`text-center text-[12px] font-semibold ${live ? "text-[#e9d5ff]" : "text-white/60"}`}>{scheduled ? "Agendada" : live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada${ended && cloud.endedAt ? ` em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR")}` : ""}`}</p>{scheduled && scheduledAt && <ProfileScheduleActions cloudId={cloud.id} scheduledAt={scheduledAt} initiallyReminded={Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId))} />}{detailsOpen && <CloudDetailsDialog onClose={() => setDetailsOpen(false)}><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></CloudDetailsDialog>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
+  return <article className={`relative flex min-h-[180px] w-full flex-col rounded-2xl border p-4 shadow-[0_12px_32px_rgba(2,0,12,.22)] backdrop-blur-sm ${live ? "border-[#C084FC] bg-[#321066] ring-1 ring-[#A855F7]/50" : "border-[#8B5CF6]/35 bg-[#1a0e3d]/75"}`}><div className="flex items-center justify-between"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#7C3AED] text-[13px] font-bold">{hostAvatarUrl ? <img src={hostAvatarUrl} alt="" className="h-full w-full object-cover" /> : hostInitial}</span><div className="flex items-center gap-2"><button type="button" className="flex -space-x-2" aria-label="Ver participantes da Cloud" onClick={() => setParticipantsOpen(true)} disabled={!participants.length}>{participants.slice(0, 3).map((person) => <span key={person.id} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-[#110825] bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1)}</span>)}{participants.length > 3 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#110825] bg-[#28134e] text-[10px] font-bold">+{participants.length - 3}</span>}</button><div ref={menuRef} className="relative"><button type="button" aria-label="Opções da Cloud" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} className="text-xl text-white/70">⋮</button>{menuOpen && <div className="absolute right-0 top-8 z-20 w-48 rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl"><button type="button" onClick={() => { setDetailsOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] hover:bg-white/10">Informações da Cloud</button>{viewerId && !isHost && <button type="button" onClick={() => { setReportOpen(true); setMenuOpen(false); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-red-500/10">Denunciar</button>}</div>}</div></div></div><Link href={cloud.href} className="flex flex-1 items-center justify-center py-5 text-center"><h3 className={`break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[21px] leading-[1.2]" : "text-[27px] leading-tight"}`}>{cloud.title}</h3></Link><p className={`text-center text-[12px] font-semibold ${live ? "text-[#e9d5ff]" : "text-white/60"}`}>{scheduled ? "Agendada" : live ? `Ao vivo · Encerra em ${formatCountdown(remainingSeconds)}` : `Encerrada${ended && cloud.endedAt ? ` em ${new Date(cloud.endedAt).toLocaleDateString("pt-BR")}` : ""}`}</p>{scheduled && scheduledAt && <ProfileScheduleActions cloudId={cloud.id} scheduledAt={scheduledAt} initiallyReminded={Boolean(viewerId && cloud.participantProfiles?.some((participant) => participant.id === viewerId))} />}{participantsOpen && createPortal(<CloudParticipantsSheet title={cloud.title} participants={cloud.participantProfiles ?? []} onClose={() => setParticipantsOpen(false)} />, document.body)}{detailsOpen && <CloudDetailsDialog onClose={() => setDetailsOpen(false)}><p className="mt-3 min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm text-white/70">Duração: {cloud.duration}<br/>Participantes: {participants.length}<br/>{cloud.description || "Sem descrição."}</p></CloudDetailsDialog>}{reportOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4"><div className="w-full max-w-sm rounded-2xl bg-[#15161C] p-5"><h2 className="text-lg font-bold">Denunciar Cloud</h2><select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-4 w-full rounded-xl bg-white/10 p-3 text-sm">{["Spam ou publicidade", "Discurso de ódio", "Assédio ou bullying", "Conteúdo violento ou perturbador", "Informação falsa", "Outro"].map((reason) => <option key={reason}>{reason}</option>)}</select>{reportError && <p className="mt-3 text-sm text-red-300">{reportError}</p>}<div className="mt-5 flex justify-end gap-3"><button onClick={() => setReportOpen(false)}>Cancelar</button><button disabled={reporting} onClick={() => void submitReport()} className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold">{reporting ? "Enviando..." : "Enviar denúncia"}</button></div></div></div>}</article>;
 }
 
 export default function UserProfilePage() {
@@ -249,6 +257,8 @@ export default function UserProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useDismissMenu(profileMenuOpen, () => setProfileMenuOpen(false));
   const [forwardOpen, setForwardOpen] = useState(false);
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -263,7 +273,7 @@ export default function UserProfilePage() {
   const [loadingHypes, setLoadingHypes] = useState(false);
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [cloudTab, setCloudTab] = useState<"all" | "invites">("all");
+  const [cloudTab, setCloudTab] = useState<"all" | "reclouds" | "invites">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -437,6 +447,8 @@ export default function UserProfilePage() {
         isFollowRequested: current.isBlockedByMe ? current.isFollowRequested : false,
         activeClouds: current.isBlockedByMe ? current.activeClouds : [],
         endedClouds: current.isBlockedByMe ? current.endedClouds : [],
+        reclouds: current.isBlockedByMe ? current.reclouds : [],
+        participatingNow: current.isBlockedByMe ? current.participatingNow : null,
       } : current);
     } catch (blockError) {
       setError(blockError instanceof Error ? blockError.message : "Não foi possível atualizar o bloqueio.");
@@ -552,6 +564,12 @@ export default function UserProfilePage() {
           >
             <ShareIcon />
           </button>
+          {!isOwnProfile && <div ref={profileMenuRef} className="relative">
+            <button type="button" aria-label="Mais opções do perfil" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)} className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-xl text-white/70 transition hover:bg-white/10">⋮</button>
+            {profileMenuOpen && <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#1a0e3d] py-1 shadow-xl">
+              <button type="button" onClick={() => { setProfileMenuOpen(false); void toggleBlock(); }} disabled={mutating || profile.isBlockedByUser} className="w-full px-4 py-3 text-left text-[13px] text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50">{profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear usuário" : "Bloquear usuário"}</button>
+            </div>}
+          </div>}
         </div>
       </div>
 
@@ -608,6 +626,7 @@ export default function UserProfilePage() {
           <h1 className="mt-4 text-[26px] font-extrabold tracking-tight">{displayName}</h1>
           <p className="text-[13px] text-white/40">{handle}</p>
           {bio && <p className="mt-3 max-w-[380px] text-[14px] leading-relaxed text-white/60">{bio}</p>}
+          {sessionUser?.id && !isOwnProfile && !profile.isBlockedByMe && !profile.isBlockedByUser && <MutualFollowers key={profile.username} username={profile.username} displayName={displayName} centered />}
 
           <div className="mt-5 flex max-w-full items-center gap-3 sm:gap-6">
             <FieldStat value={followers} label="Followers" description="Pessoas que seguem este perfil." onClick={openFollowersModal} />
@@ -648,14 +667,6 @@ export default function UserProfilePage() {
                     Mensagem
                   </Link>
                 )}
-                <button
-                  type="button"
-                  onClick={toggleBlock}
-                  disabled={mutating || profile.isBlockedByUser}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 py-2.5 text-[14px] font-semibold text-white/70 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {profile.isBlockedByUser ? "Você foi bloqueado" : profile.isBlockedByMe ? "Desbloquear" : "Bloquear"}
-                </button>
               </>
           </div>}
 
@@ -681,12 +692,13 @@ export default function UserProfilePage() {
             </section>
           )}
 
-          <section className="mt-10 w-full text-left" aria-label="Clouds do perfil">
-            <div className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
-              <button type="button" role="tab" aria-selected={cloudTab === "all"} onClick={() => setCloudTab("all")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "all" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>{isOwnProfile ? "Minhas Clouds" : "Clouds"}</button>
+          <section className="mt-10 w-full border-t border-white/10 pt-6 text-left sm:border-t-0 sm:pt-0" aria-label="Clouds do perfil">
+            <div role="tablist" aria-label="Conteúdo do perfil" className="mb-6 flex gap-3 overflow-x-auto pb-2 scrollbar-none sm:justify-center">
+              <button type="button" role="tab" aria-selected={cloudTab === "all"} onClick={() => setCloudTab("all")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "all" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Minhas Clouds</button>
+              <button type="button" role="tab" aria-selected={cloudTab === "reclouds"} onClick={() => setCloudTab("reclouds")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "reclouds" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Reclouds</button>
               {canViewInvitations && <button type="button" role="tab" aria-selected={cloudTab === "invites"} onClick={() => setCloudTab("invites")} className={`shrink-0 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${cloudTab === "invites" ? "border-[#A855F7] bg-[#7C3AED] text-white" : "border-[#8B5CF6]/35 bg-transparent text-white/55 hover:text-white"}`}>Meus Convites</button>}
             </div>
-            {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : visibleClouds.length > 0 ? (
+            {cloudTab === "invites" && canViewInvitations ? <ProfileInvitation /> : cloudTab === "reclouds" ? ((profile?.reclouds ?? []).length ? <div className="grid gap-3">{profile?.reclouds?.map((cloud) => <RecloudCard key={cloud.id} cloud={cloud} onRemoved={isOwnProfile ? (id) => setProfile((current) => current ? { ...current, reclouds: current.reclouds?.filter((item) => item.id !== id) } : current) : undefined} />)}</div> : <p className="py-8 text-center text-white/60">Nenhum Recloud publicado.</p>) : visibleClouds.length > 0 ? (
               <div className="grid gap-3">
                 {visibleClouds.map((cloud) => <ActiveCloudCard key={cloud.id} cloud={cloud} now={now} hostAvatarUrl={profile?.avatarUrl ?? null} hostInitial={initials} viewerId={sessionUser?.id} />)}
               </div>

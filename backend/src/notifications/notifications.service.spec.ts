@@ -5,6 +5,51 @@ import { UsersService } from '../users/users.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 
 describe('activity notifications', () => {
+  it('resolves the actor of a recloud notification', async () => {
+    const findActors = jest.fn().mockResolvedValue([
+      {
+        id: 'actor',
+        profile: { username: 'ana', displayName: 'Ana', avatarUrl: 'avatar' },
+      },
+    ]);
+    const service = new NotificationsService(
+      {
+        notification: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'n',
+              type: 'cloud_recloud',
+              entityType: 'cloud',
+              entityId: 'cloud',
+              title: 'Novo Recloud',
+              body: 'Ana republicou sua cloud em seu perfil',
+              metadata: { actorUserId: 'actor' },
+              isRead: false,
+              createdAt: new Date(),
+            },
+          ]),
+          count: jest.fn().mockResolvedValue(1),
+        },
+        user: { findMany: findActors },
+      } as unknown as PrismaService,
+      {
+        resolveSession: jest
+          .fn()
+          .mockResolvedValue({ user: { id: 'recipient' } }),
+      } as unknown as AuthService,
+      {} as UsersService,
+      {} as PushNotificationsService,
+    );
+    const result = await service.list('token');
+    expect(findActors).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['actor'] } } }),
+    );
+    expect(result.notifications[0].actor).toMatchObject({
+      displayName: 'Ana',
+      avatarUrl: 'avatar',
+      profileUrl: '/users/ana',
+    });
+  });
   it('resolves the profile for a user notification', async () => {
     const service = new NotificationsService(
       {

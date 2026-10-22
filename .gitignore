@@ -116,6 +116,7 @@ frontend/matches.txt
 /frontend/node-compile-cache/
 /frontend/.vitest-tmp/
 /frontend/.test-tmp/
+/backend/.test-tmp/
 /frontend/*/client/
 /frontend/*/ssr/
 /query

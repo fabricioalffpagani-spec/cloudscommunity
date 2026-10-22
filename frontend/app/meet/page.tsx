@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
+import { MutualFollowers, type MutualFollower } from "../components/MutualFollowers";
 import { FlameIcon } from "../components/FlameIcon";
 import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { NotificationsBell } from "../components/NotificationsPanel";
@@ -34,11 +35,12 @@ type PublicUserProfile = {
   profileUrl: string;
 };
 
+
 type MeetPayload = {
   ok: boolean;
   popularRecent: Array<PublicUserProfile & { hypes: number }>;
   popularAllTime: Array<PublicUserProfile & { hypes: number }>;
-  nearby: Array<PublicUserProfile & { mutualFollowersCount: number }>;
+  nearby: Array<PublicUserProfile & { mutualFollowersCount: number; mutualFollowers: MutualFollower[] }>;
   newUsers: PublicUserProfile[];
 };
 
@@ -112,11 +114,15 @@ function ProfileRow({
   onToggleFollow,
   pending,
   detail,
+  mutualFollowers,
+  mutualFollowersCount,
 }: {
   user: PublicUserProfile;
   onToggleFollow: (user: PublicUserProfile) => void;
   pending: boolean;
   detail?: string;
+  mutualFollowers?: MutualFollower[];
+  mutualFollowersCount?: number;
 }) {
   const initials = user.displayName.trim().charAt(0).toUpperCase() || user.username.trim().charAt(0).toUpperCase() || "C";
   const avatarColor = user.avatarUrl ? undefined : "#9333EA";
@@ -147,6 +153,7 @@ function ProfileRow({
           )}
         </div>
         <p className="truncate text-[13px] text-[#9b98ed]">@{user.username}{detail ? ` · ${detail}` : ""}</p>
+        {mutualFollowers && <MutualFollowers username={user.username} displayName={user.displayName} preview={mutualFollowers} count={mutualFollowersCount} />}
       </div>
 
       {!user.isSelf && (
@@ -163,6 +170,7 @@ function ProfileRow({
           {pending ? "..." : followLabel}
         </button>
       )}
+
     </div>
   );
 }
@@ -276,7 +284,7 @@ function MeetPageContent() {
         ...current,
         popularRecent: current.popularRecent.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
         popularAllTime: current.popularAllTime.map((item) => item.id === payload.user!.id ? { ...payload.user!, hypes: item.hypes } : item),
-        nearby: current.nearby.map((item) => item.id === payload.user!.id ? { ...payload.user!, mutualFollowersCount: item.mutualFollowersCount } : item),
+        nearby: current.nearby.map((item) => item.id === payload.user!.id ? { ...payload.user!, mutualFollowersCount: item.mutualFollowersCount, mutualFollowers: item.mutualFollowers } : item),
         newUsers: current.newUsers.map((item) => item.id === payload.user!.id ? payload.user! : item),
       });
     } catch {
@@ -377,8 +385,8 @@ function MeetPageContent() {
               <div className="flex flex-col gap-4">
                 {(meetCategory === "popular" ? meetData?.popularAllTime : meetCategory === "nearby" ? meetData?.nearby : meetData?.newUsers)?.map((item) => {
                   const hypes = "hypes" in item ? item.hypes : 0;
-                  const mutualFollowersCount = "mutualFollowersCount" in item ? item.mutualFollowersCount : 0;
-                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : meetCategory === "nearby" ? `${mutualFollowersCount} seguidor${mutualFollowersCount === 1 ? "" : "es"} em comum` : "Novo no Clouds"} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
+                  const nearbyItem = meetCategory === "nearby" ? item as MeetPayload["nearby"][number] : undefined;
+                  return <ProfileRow key={item.id} user={item} detail={meetCategory === "popular" ? (item.showHypesCount ? `${hypes} hype${hypes === 1 ? "" : "s"}` : "Perfil em destaque") : meetCategory === "new" ? "Novo no Clouds" : undefined} mutualFollowers={nearbyItem?.mutualFollowers} mutualFollowersCount={nearbyItem?.mutualFollowersCount} onToggleFollow={toggleFollow} pending={mutating === item.id} />;
                 })}
                 {meetLoading && <p className="py-5 text-center text-[15px] text-white/30">Carregando sugestões...</p>}
                 {!meetLoading && meetCategory === "popular" && meetData?.popularAllTime.length === 0 && <p className="py-5 text-center text-[15px] text-white/30">Ainda não há hypes suficientes.</p>}

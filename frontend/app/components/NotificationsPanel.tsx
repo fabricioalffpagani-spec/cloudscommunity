@@ -53,6 +53,13 @@ async function enableNativeNotifications() {
   await subscribeToPushNotifications();
 }
 
+async function markNotificationsRead() {
+  try {
+    const response = await fetch("/api/notifications/read", { method: "POST" });
+    if (response.ok) window.dispatchEvent(new Event("clouds:notifications-read"));
+  } catch { /* The next refresh will retain unread notifications. */ }
+}
+
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -264,11 +271,24 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
 
 export function NotificationsBell({
   buttonClassName,
+  openFromUrl = false,
 }: {
   buttonClassName?: string;
+  openFromUrl?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!openFromUrl) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("notifications") !== "1") return;
+    url.searchParams.delete("notifications");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    setOpen(true);
+    setUnreadCount(0);
+    void markNotificationsRead();
+  }, [openFromUrl]);
 
   const loadUnread = useCallback(async () => {
     try {
@@ -310,7 +330,7 @@ export function NotificationsBell({
           setUnreadCount(0);
           void (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.();
           setOpen(true);
-          void fetch("/api/notifications/read", { method: "POST" });
+          void markNotificationsRead();
         }}
         className={`relative ${buttonClassName ?? "flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"}`}
       >
