@@ -4,6 +4,7 @@ import { ReadFeed, type ReadCloud } from "../app/components/ReadFeed";
 import { CloudPreview } from "../app/components/CloudPreview";
 import { ArchivedConversation } from "../app/components/ArchivedConversation";
 import { SessionUserProvider } from "../app/components/session-user";
+import { ReadOnlyCloudMessage } from "../app/components/ReadOnlyCloudMessage";
 
 const { pushMock, backMock } = vi.hoisted(() => ({ pushMock: vi.fn(), backMock: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, back: backMock }), useSearchParams: () => new URLSearchParams(window.location.search) }));
@@ -12,6 +13,10 @@ const cloud: ReadCloud = { id: "cloud-1", title: "Vamos conversar?", endedAt: "2
 const onDelete = vi.fn<(cloudId: string) => Promise<void>>().mockResolvedValue(undefined);
 
 describe("Read", () => {
+  it("mostra a indicação de edição no histórico", () => {
+    render(<ReadOnlyCloudMessage message={{ id: "m1", type: "text", content: "Texto atualizado", mediaUrl: null, createdAt: "2026-10-23T10:00:00Z", editedAt: "2026-10-23T10:01:00Z", sender: { id: "ana", displayName: "Ana" } }} />);
+    expect(screen.getByText("Editada")).toBeVisible();
+  });
   it.each([375, 1280])("offers Recloud from the Read card menu at %ipx", async (width) => {
     vi.stubGlobal("innerWidth", width);
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -242,30 +247,45 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
-  it("offers Recloud in the archived chat menu and forwarding dialog", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it.each([375, 1280])("offers a direct Recloud button next to sharing in the archived chat at %ipx", async (width) => {
+    vi.stubGlobal("innerWidth", width);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "viewer", username: "viewer", displayName: "Viewer" } }) };
       if (url.endsWith("/recloud")) return { ok: true, json: async () => init?.method ? { ok: true } : { canRecloud: true, reclouded: false } };
-      if (url.includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, authorId: "user-maria", visibility: "public" }, messages: [] }) };
+      if (url.includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, authorId: "user-maria", visibility: "public", participantProfiles: [{ id: "friend", name: "Amiga", username: "amiga", avatarUrl: null }] }, messages: [] }) };
       return { ok: true, json: async () => ({ users: [] }) };
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
     render(<SessionUserProvider><ArchivedConversation cloudId="cloud-1" /></SessionUserProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Mais opções da Cloud" }));
-    fireEvent.click(screen.getByRole("button", { name: "Republicar Cloud" }));
-    expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    const button = await screen.findByRole("button", { name: "Republicar Cloud" });
+    expect(screen.getByRole("button", { name: "Compartilhar Cloud" }).nextElementSibling).toBe(button);
+    expect(screen.queryByRole("button", { name: "Ver participantes da Cloud" })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("mobile-archive-status")).getByText(/Cloud encerrada há/)).toBeInTheDocument();
+    fireEvent.click(button);
+    const undo = await screen.findByRole("button", { name: "Desfazer Recloud" });
+    expect(undo).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Compartilhar Cloud" }));
-    expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    const shareModal = screen.getByRole("heading", { name: "Compartilhar Cloud" }).parentElement!.parentElement!;
+    expect(await within(shareModal).findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+    fireEvent.click(within(shareModal).getByRole("button", { name: "Fechar" }));
+    fireEvent.click(undo);
+    expect(await screen.findByRole("button", { name: "Republicar Cloud" })).toHaveAttribute("aria-pressed", "false");
+    expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "POST" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "DELETE" });
     vi.unstubAllGlobals();
   });
-  it("shows the end time and opens the archived participant list", async () => {
-    const participants = [{ id: "friend", name: "Amiga", username: "amiga", avatarUrl: null }];
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cloud: { ...cloud, participantProfiles: participants }, messages: [] }) }));
+  it("does not offer Recloud to someone who cannot republish", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "viewer", username: "viewer", displayName: "Viewer" } }) };
+      if (url.endsWith("/recloud")) return { ok: true, json: async () => ({ canRecloud: false, reclouded: false }) };
+      if (url.includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, visibility: "public" }, messages: [] }) };
+      return { ok: true, json: async () => ({}) };
+    }));
     render(<SessionUserProvider><ArchivedConversation cloudId="cloud-1" /></SessionUserProvider>);
-    const trigger = await screen.findByRole("button", { name: "Ver participantes da Cloud" });
-    expect(within(screen.getByTestId("mobile-archive-status")).getByText(/Cloud encerrada há/)).toBeInTheDocument();
-    fireEvent.click(trigger);
-    expect(within(screen.getByRole("dialog", { name: "Participantes" })).getByRole("link", { name: /Amiga/ })).toHaveAttribute("href", "/users/friend");
+    await screen.findByRole("button", { name: "Compartilhar Cloud" });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Republicar Cloud" })).not.toBeInTheDocument());
     vi.unstubAllGlobals();
   });
   it("allows the creator to edit a private Cloud description after it ends", async () => {

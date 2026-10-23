@@ -8,8 +8,8 @@ import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 import { useRecloud } from "./RecloudAction";
-import { useDismissMenu } from "../lib/use-dismiss-menu";
-import { CloudParticipantsSheet, type CloudParticipant } from "./CloudParticipantsSheet";
+import { RecloudIcon } from "./RecloudIcon";
+import type { CloudParticipant } from "./CloudParticipantsSheet";
 import { CloudDetailsDialog } from "./CloudDetailsDialog";
 import { CloudDescriptionEditor } from "./CloudDescriptionEditor";
 
@@ -57,10 +57,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const optionsRef = useDismissMenu(optionsOpen, () => setOptionsOpen(false));
   const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
-  const [participantsOpen, setParticipantsOpen] = useState(false);
   const [descriptionEditOpen, setDescriptionEditOpen] = useState(false);
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
@@ -172,8 +169,9 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
       {cloud?.visibility !== "private" && <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" /></svg>
       </button>}
-      {Boolean(cloud?.participantProfiles?.length) && <button type="button" onClick={() => setParticipantsOpen(true)} aria-label="Ver participantes da Cloud" className="flex shrink-0 -space-x-2 self-end rounded-full">{cloud!.participantProfiles!.slice(0, 4).map((person) => <span key={person.id} title={person.name} className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-black bg-[#7C3AED] text-[10px] font-bold">{person.avatarUrl ? <img src={person.avatarUrl} alt={person.name} className="h-full w-full object-cover" /> : person.name.slice(0, 1).toUpperCase()}</span>)}{cloud!.participantProfiles!.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-black bg-[#32106f] text-[10px] font-bold">+{cloud!.participantProfiles!.length - 4}</span>}</button>}
-      {recloud.canRecloud && <div ref={optionsRef} className="relative shrink-0"><button type="button" aria-label="Mais opções da Cloud" aria-expanded={optionsOpen} onClick={() => setOptionsOpen((open) => !open)} className="px-2 text-xl text-white/75">⋮</button>{optionsOpen && <div className="absolute right-0 top-8 z-30 w-48 rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-xl"><button type="button" disabled={recloud.busy} onClick={() => void recloud.toggle()} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">{recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>{recloud.error && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloud.error}</p>}</div>}</div>}
+      {recloud.canRecloud && <button type="button" disabled={recloud.busy} aria-label={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} title={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} aria-pressed={recloud.reclouded} onClick={() => void recloud.toggle()} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-white/10 disabled:opacity-50 ${recloud.reclouded ? "text-[#C084FC]" : "text-white/75 hover:text-white"}`}>
+        <RecloudIcon />
+      </button>}
       <div data-testid="mobile-archive-status" className="flex w-full items-center gap-2 pl-[2.375rem] text-[13px] text-white/60 sm:hidden">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/30" />
         <span>{endedLabel(cloud?.endedAt)}</span>
@@ -181,9 +179,9 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
         <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
       </div>
     </header>
-    {participantsOpen && cloud && <CloudParticipantsSheet title={cloud.title} participants={cloud.participantProfiles ?? []} onClose={() => setParticipantsOpen(false)} />}
     {descriptionEditOpen && cloud && <CloudDetailsDialog onClose={() => setDescriptionEditOpen(false)}><CloudDescriptionEditor cloudId={cloudId} description={cloud.description ?? null} onSaved={(description) => { setCloud((current) => current ? { ...current, description } : current); setDescriptionEditOpen(false); }} /></CloudDetailsDialog>}
 
+    {recloud.error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{recloud.error}</div>}
     {error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}
 
     <section ref={scrollRef} aria-label="Conversa completa" aria-busy={loading} className="scrollbar-purple flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-8 sm:py-6">

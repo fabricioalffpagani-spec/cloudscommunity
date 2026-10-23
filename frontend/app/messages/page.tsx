@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
-import { parseForwardedContent } from "../lib/forwarded-content";
+import { parseForwardedContent, readableMessageText } from "../lib/forwarded-content";
 import { sharedCloudLink } from "../lib/shared-cloud-link";
 
 import { SessionUserAvatar, UserAvatar, getSessionUserDisplayName, useSessionUser } from "../components/session-user";
@@ -20,7 +20,7 @@ import { useComposerPanLock } from "../lib/composer-pan-lock";
 import { isConversationForViewer } from "../lib/direct-conversation";
 import { recordStickerUse } from "../lib/sticker-usage";
 import { markDirectMessageFailed, mergeDirectMessage as mergeMessage, retryDirectMessage } from "../lib/merge-direct-message";
-import { getInboxConversationPreview } from "../lib/conversation-preview";
+import { formatLinkPreview as parseLinkPreview, getInboxConversationPreview } from "../lib/conversation-preview";
 import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../lib/message-time-swipe";
 
 type Status = "online" | "offline" | "busy";
@@ -320,20 +320,8 @@ function formatDuration(durationMs: number | null) {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function parseLinkPreview(rawLabel: string | null | undefined, fallbackUrl?: string | null): string {
-  if (!rawLabel) return fallbackUrl ? new URL(fallbackUrl).hostname.replace(/^www\./, "") : "Link compartilhado";
-  try {
-    const parsed = JSON.parse(rawLabel) as { type?: string; cloudTitle?: string; cloudVisibility?: string };
-    if (parsed.type === "cloud_invitation") {
-      const visibility = parsed.cloudVisibility === "private" ? "privada" : "pública";
-      return parsed.cloudTitle ? `☁️ Convite: ${parsed.cloudTitle}` : `☁️ Convite para Cloud ${visibility}`;
-    }
-  } catch { /* not JSON */ }
-  return rawLabel;
-}
-
 function replyPreview(message: Msg): string {
-  if (message.kind !== "link") return message.content || "Mídia";
+  if (message.kind !== "link") return readableMessageText(message.content || "") || "Mídia";
   try {
     const parsed = JSON.parse(message.linkLabel || "{}") as { type?: string; cloudTitle?: string; label?: string };
     if (parsed.type === "cloud_invitation") return parsed.cloudTitle || "Convite para Cloud";
@@ -1262,7 +1250,7 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
   const textContent = msg.kind === "text" ? msg.content : null;
   const forwardedInfo = textContent !== null ? parseForwardedContent(textContent) : null;
   const isForwardedMessage = Boolean(forwardedInfo?.forwarded);
-  const visibleTextContent = forwardedInfo?.text ?? textContent;
+  const visibleTextContent = textContent !== null ? readableMessageText(textContent) : null;
   const highlightedContent = searchQuery && visibleTextContent ? highlightText(visibleTextContent, searchQuery) : visibleTextContent;
   const cloudCommentReference = parseCloudCommentReference(textContent);
 
@@ -1391,7 +1379,10 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
           <div className={`w-full min-w-[220px] overflow-hidden rounded-3xl text-white ${isRight ? "bg-[#9333EA]" : "bg-[#5B21B6]"}`}>
             <div className="p-5">
             <p className="text-[22px] font-bold leading-tight text-white">{cloudCommentReference.cloudTitle}</p>
-            <p className="mt-3 border-t border-white/20 pt-3 text-[14px] leading-relaxed text-white/80">{cloudCommentReference.comment}</p>
+            <div className="mt-3 border-t border-white/20 pt-3">
+              {!isRight && <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">Você:</p>}
+              <p className={`${!isRight ? "mt-1.5 " : ""}whitespace-pre-wrap break-words text-[14px] leading-relaxed text-white/80`}>{cloudCommentReference.comment}</p>
+            </div>
             </div>
             {cloudCommentReference.response && <div className="border-t border-white/20 bg-black/10 px-5 py-4"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">Resposta</p><p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-white">{cloudCommentReference.response}</p></div>}
           </div>
@@ -1410,12 +1401,12 @@ function MessageBubble({ msg, onReply, onEdit, onDelete, onForward, onPin, onRea
             return groups;
           }, {})).map(([emoji, reactions]) => <button key={emoji} type="button" onClick={() => onReact?.(msg, emoji)} className="rounded-full border border-white/15 bg-white/[0.08] px-2 py-0.5 text-[13px] text-white transition hover:bg-white/15">{emoji}<span className="ml-1 text-[11px] text-white/70">{reactions.length}</span></button>)}
         </div>}
-        <div className={`${showFooter ? "flex px-1" : "absolute -bottom-1"} items-center gap-1 ${isRight ? "right-0 flex-row-reverse" : "left-0"}`}>
+        <div className={`${showFooter || msg.editedAt ? "flex px-1" : "absolute -bottom-1"} items-center gap-1 ${isRight ? "right-0 flex-row-reverse" : "left-0"}`}>
           {showFooter && <>
             <span className="text-[11px] text-white">{msg.time}</span>
-            {msg.editedAt && <span className="text-[10px] italic text-white/45">editada</span>}
             {isRight && <MessageReceipt msg={msg} />}
           </>}
+          {msg.editedAt && <span className="text-[10px] italic text-white/60">Editada</span>}
           <div ref={menuAnchorRef} className="relative">
               {menuOpen && (
                 <MessageMenuPortal anchorRef={menuAnchorRef} menuRef={menuPortalRef} alignRight={isRight}><DmMsgMenu
@@ -1479,7 +1470,7 @@ function MessagesPageContent() {
   const [mediaPickerTab, setMediaPickerTab] = useState<"emoji" | "sticker">("emoji");
   const [savedStickers, setSavedStickers] = useState<Array<{ id: string; mediaUrl: string }>>([]);
   const [emojiCategory, setEmojiCategory] = useState(0);
-  const [sharedLink, setSharedLink] = useState<{ url: string; label: string } | null>(null);
+  const [sharedLink, setSharedLink] = useState<{ url: string; label: string; isCloud?: boolean; automatic?: boolean } | null>(null);
   const autoSendRef = useRef(false);
   const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "disconnected">("connecting");
   const [editingMsg, setEditingMsg] = useState<Msg | null>(null);
@@ -1595,7 +1586,7 @@ function MessagesPageContent() {
       } catch {
         // plain string — keep as-is
       }
-      setSharedLink({ url, label });
+      setSharedLink({ url, label, isCloud: true, automatic: autosend });
       
       if (autosend) {
         autoSendRef.current = true;
@@ -1777,6 +1768,7 @@ function MessagesPageContent() {
       clientMessageId,
     };
 
+    setError(null);
     setLinkUploading(true);
     setMessagesByConversation((prev) => ({ ...prev, [conversationId]: mergeMessage(prev[conversationId] || [], optimistic) }));
 
@@ -1799,6 +1791,7 @@ function MessagesPageContent() {
       autoSendRef.current = false;
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Não foi possível compartilhar o link.");
+      setSharedLink((current) => current?.url === sharedLink.url && current.isCloud ? { ...current, automatic: false } : current);
       setMessagesByConversation((prev) => ({
         ...prev,
         [conversationId]: (prev[conversationId] || []).filter((message) => message.clientMessageId !== clientMessageId),
@@ -2836,7 +2829,7 @@ function MessagesPageContent() {
 
           {activeConversationId && (pinsByConversation[activeConversationId] ?? []).map((pinned) => (
             <div key={pinned.id} className="flex items-center gap-3 border-b border-white/[0.07] bg-[#1a0e3d] px-5 py-2">
-              <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#D8B4FE]">Mensagem fixada</p><p className="truncate text-[13px] text-white/80">{pinned.kind === "audio" ? "Áudio" : pinned.kind === "image" ? "Imagem" : parseForwardedContent(pinned.content).text}</p></div>
+              <div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-[#D8B4FE]">Mensagem fixada</p><p className="truncate text-[13px] text-white/80">{pinned.kind === "audio" ? "Áudio" : pinned.kind === "image" ? "Imagem" : replyPreview(pinned)}</p></div>
               <button type="button" aria-label="Desafixar mensagem" title="Desafixar mensagem" onClick={() => void togglePinnedMessage(pinned)} className="rounded-full px-2 py-1 text-white/70 hover:bg-white/10">×</button>
             </div>
           ))}
@@ -3035,11 +3028,18 @@ function MessagesPageContent() {
                 </div>
               ) : (
                 <>
-                  {sharedLink && (
+                  {sharedLink?.isCloud && !sharedLink.automatic && (
+                    <div className="flex flex-wrap items-center gap-3 px-3 py-2 text-[12px] text-white/70">
+                      <span className="min-w-0 flex-1 truncate">Cloud: {parseLinkPreview(sharedLink.label)}</span>
+                      <button type="button" onClick={() => setSharedLink(null)} className="text-white/60 hover:text-white">Remover</button>
+                      <button type="button" onClick={sendSharedLink} disabled={!activeConversationId || isAudioBusy || isConversationBlocked} className="font-semibold text-[#C084FC] disabled:opacity-50">{linkUploading ? "Enviando..." : "Enviar Cloud"}</button>
+                    </div>
+                  )}
+                  {sharedLink && !sharedLink.isCloud && (
                     <div className="flex items-center justify-between gap-3 rounded-[28px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-3">
                       <div className="min-w-0">
                         <p className="text-[11px] uppercase tracking-[0.22em] text-cyan-200/80">Link pronto para enviar</p>
-                        <p className="truncate text-[14px] font-semibold text-white">{sharedLink.label}</p>
+                        <p className="truncate text-[14px] font-semibold text-white">{parseLinkPreview(sharedLink.label)}</p>
                         <p className="truncate text-[12px] text-white/45">{sharedLink.url}</p>
                       </div>
                       <div className="flex items-center gap-2">
@@ -3156,7 +3156,7 @@ function MessagesPageContent() {
 
       {/* ── Forward modal ── */}
       {forwardMsg && (
-        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? forwardMsg.content : forwardMsg.kind === "link" ? replyPreview(forwardMsg) : "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? forwardMsg.content : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? message.content : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? message.content : message.kind === "link" ? replyPreview(message) : "Mensagem encaminhada", messageContent: message.kind === "text" ? message.content : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, cloudOrigin: parseForwardedContent(message.content).origin ?? undefined, forwardedOrigin: parseForwardedContent(message.content).origin ? "cloud" : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
+        <ForwardToContactModal title="Encaminhar mensagem" preview={forwardMsg.kind === "text" ? readableMessageText(forwardMsg.content) : forwardMsg.kind === "audio" ? "Mensagem de áudio" : forwardMsg.kind === "image" ? "Imagem" : "Link"} url={forwardMsg.linkUrl ?? (typeof window !== "undefined" ? window.location.href : "")} label={forwardMsg.kind === "text" ? readableMessageText(forwardMsg.content) : forwardMsg.kind === "link" ? (forwardMsg.linkLabel || replyPreview(forwardMsg)) : "Mensagem encaminhada"} messageContent={forwardMsg.kind === "text" ? readableMessageText(forwardMsg.content) : undefined} mediaKind={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.kind : undefined} mediaUrl={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaUrl : undefined} mediaDurationMs={forwardMsg.kind === "audio" ? forwardMsg.durationMs : undefined} mediaFileName={forwardMsg.kind === "audio" || forwardMsg.kind === "image" ? forwardMsg.mediaFileName : undefined} forwarded={forwardMsg.side !== "right"} items={forwardSelection.map((message) => ({ preview: message.kind === "text" ? readableMessageText(message.content) : undefined, url: message.linkUrl ?? (typeof window !== "undefined" ? window.location.href : ""), label: message.kind === "text" ? readableMessageText(message.content) : message.kind === "link" ? (message.linkLabel || replyPreview(message)) : "Mensagem encaminhada", messageContent: message.kind === "text" ? readableMessageText(message.content) : undefined, mediaKind: message.kind === "audio" || message.kind === "image" ? message.kind : undefined, mediaUrl: message.kind === "audio" || message.kind === "image" ? message.mediaUrl : undefined, mediaDurationMs: message.kind === "audio" ? message.durationMs : undefined, mediaFileName: message.kind === "audio" || message.kind === "image" ? message.mediaFileName : undefined, cloudOrigin: parseForwardedContent(message.content).origin ?? undefined, forwardedOrigin: parseForwardedContent(message.content).origin ? "cloud" : undefined, forwarded: message.side !== "right" }))} contacts={forwardContacts} loading={loadingConversations || loadingFollowed} onClose={() => { setForwardMsg(null); setForwardSelection([]); }} />
       )}
     </div>
   );

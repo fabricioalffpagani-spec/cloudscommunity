@@ -10,6 +10,7 @@ export type ReadOnlyMessage = {
   content: string | null;
   mediaUrl: string | null;
   createdAt: string;
+  editedAt?: string | null;
   replyTo?: {
     id: string;
     sender: string;
@@ -96,6 +97,7 @@ export function ReadOnlyCloudMessage({ message, own = false, onReply }: { messag
 
           <div className={`flex items-center gap-1 px-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
             <time dateTime={message.createdAt}>{timeLabel(message.createdAt)}</time>
+            {message.editedAt && <span className="italic text-white/60">Editada</span>}
             {!own && message.sender?.id && onReply && <button type="button" onClick={() => onReply(message)} className="ml-2 text-[#C084FC] transition hover:text-white sm:hidden">Responder</button>}
           </div>
         </div>

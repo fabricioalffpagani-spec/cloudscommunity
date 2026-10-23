@@ -15,6 +15,7 @@ vi.mock("../app/components/session-user", () => {
 vi.mock("socket.io-client", () => ({ io: () => ({ on: vi.fn(), emit: vi.fn(), removeAllListeners: vi.fn(), disconnect: vi.fn() }) }));
 
 beforeEach(() => {
+  Element.prototype.scrollTo = vi.fn();
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", { configurable: true, value: { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key), clear: () => values.clear() } });
   window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() });
@@ -48,6 +49,36 @@ it("continues to minimize on desktop before returning through browser history", 
   expect(JSON.parse(localStorage.getItem("clouds:minimized-cloud") ?? "null")).toMatchObject({ id: "cloud-1", ownerUserId: "viewer" });
   expect(await screen.findByRole("button", { name: "Expandir Cloud" })).toBeVisible();
   vi.restoreAllMocks();
+});
+
+it.each([true, false])("permite ao host remover comentário no Talk (mobile: %s)", async (mobile) => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const now = new Date().toISOString();
+  const message = { id: "m1", cloudId: "cloud-1", senderId: "other", type: "text", content: "Comentário da Ana", mentions: [], mediaUrl: null, isSticker: false, isPinned: false, clientMessageId: null, replyToMessageId: null, createdAt: now, updatedAt: now, deletedAt: null, sender: { id: "other", username: "ana", displayName: "Ana", avatarUrl: null }, replyTo: null, reactions: [] };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "DELETE") return { ok: true, json: async () => ({ ok: true, moderationNotice: "A mensagem de Ana foi removida pelo/a host da Cloud." }) };
+    if (String(input).includes("/messages?")) return { ok: true, json: async () => ({ messages: [message], pinnedMessage: null }) };
+    return original(input, init);
+  }));
+  render(<CloudChat cloudId="cloud-1" />);
+  fireEvent.contextMenu(await screen.findByText("Comentário da Ana"));
+  fireEvent.click(await screen.findByRole("button", { name: "Remover mensagem" }));
+  expect(await screen.findByText("A mensagem de Ana foi removida pelo/a host da Cloud.")).toBeVisible();
+  expect(screen.queryByText("Comentário da Ana")).not.toBeInTheDocument();
+});
+
+it("mostra Editada em uma mensagem de Cloud agrupada e não confunde fixação com edição", async () => {
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const now = new Date().toISOString();
+  const base = { cloudId: "cloud-1", senderId: "other", type: "text", mentions: [], mediaUrl: null, isSticker: false, isPinned: false, clientMessageId: null, replyToMessageId: null, createdAt: now, updatedAt: now, deletedAt: null, sender: { id: "other", username: "ana", displayName: "Ana", avatarUrl: null }, replyTo: null, reactions: [] };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => String(input).includes("/messages?")
+    ? { ok: true, json: async () => ({ messages: [{ ...base, id: "m1", content: "Texto editado", editedAt: now }, { ...base, id: "m2", content: "Texto seguinte", editedAt: null, isPinned: true, updatedAt: new Date(Date.now() + 1000).toISOString() }], pinnedMessage: null }) }
+    : original(input, init)));
+  render(<CloudChat cloudId="cloud-1" />);
+  await screen.findByText("Texto editado");
+  expect(screen.getAllByText("Editada")).toHaveLength(1);
+  expect(screen.getByText("Editada")).toBeVisible();
 });
 
 it("allows the host to close and reopen admission from member management", async () => {

@@ -111,6 +111,11 @@ export class CloudController {
     return this.cloudService.listFollowing(extractSessionToken(req));
   }
 
+  @Get('trending-topics')
+  async trendingTopics() {
+    return this.cloudService.listTrendingTopics();
+  }
+
   @Get('invite/:token')
   async resolveInvite(
     @Param('token') inviteToken: string,
@@ -470,12 +475,14 @@ export class CloudController {
     @Body() body: { content: string },
     @Req() req: Request,
   ) {
-    return this.cloudService.editMessage(
+    const result = await this.cloudService.editMessage(
       extractSessionToken(req),
       id,
       messageId,
       body.content,
     );
+    this.cloudMessagesGateway.broadcastMessageEdited(id, result.message);
+    return result;
   }
 
   @Delete(':id/messages/:messageId')
@@ -484,11 +491,17 @@ export class CloudController {
     @Param('messageId') messageId: string,
     @Req() req: Request,
   ) {
-    return this.cloudService.deleteMessage(
+    const result = await this.cloudService.deleteMessage(
       extractSessionToken(req),
       id,
       messageId,
     );
+    this.cloudMessagesGateway.broadcastMessageRemoved(
+      id,
+      messageId,
+      result.moderationNotice,
+    );
+    return result;
   }
 
   @Post(':id/messages')

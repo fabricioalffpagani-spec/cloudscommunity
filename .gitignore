@@ -115,6 +115,7 @@ Desktop.ini
 frontend/matches.txt
 /frontend/node-compile-cache/
 /frontend/.vitest-tmp/
+/frontend/.vitest-modal-visual*
 /frontend/.test-tmp/
 /backend/.test-tmp/
 /frontend/*/client/

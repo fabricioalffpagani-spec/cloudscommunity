@@ -775,6 +775,37 @@ describe('DirectMessagesService', () => {
     );
   });
 
+  it('formats shared profile link previews without exposing JSON', () => {
+    const service = new DirectMessagesService(
+      createPrismaMock() as unknown as PrismaService,
+      { send: jest.fn() } as never,
+    );
+    const url = new URL('https://clouds.community/users/123');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({
+          type: 'profile_share',
+          name: 'Rhuan Carlos',
+          avatarUrl: null,
+        }),
+        url,
+      ),
+    ).toBe('Perfil: Rhuan Carlos');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({ type: 'profile_share', name: 123 }),
+        url,
+      ),
+    ).toBe('Perfil compartilhado');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({ type: 'forwarded_link', label: 123 }),
+        url,
+      ),
+    ).toBe('Link compartilhado');
+    expect(service['buildLinkPreview']('Link normal', url)).toBe('Link normal');
+  });
+
   it('rejects access to a missing conversation', async () => {
     const prisma = createPrismaMock();
     const service = new DirectMessagesService(

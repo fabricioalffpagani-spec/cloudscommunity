@@ -106,6 +106,7 @@ type CloudMessagePayload = {
   replyToMessageId: string | null;
   createdAt: string;
   updatedAt: string;
+  editedAt: string | null;
   deletedAt: string | null;
   sender: {
     id: string;
@@ -179,6 +180,7 @@ type ChatMessage = {
   time: string;
   isoTime: string;
   updatedAt?: string;
+  editedAt?: string | null;
   pending?: boolean;
   clientMessageId?: string | null;
   audioDurationMs?: number | null;
@@ -459,6 +461,7 @@ function normalizeMessage(payload: CloudMessagePayload, currentUserId?: string |
     time: timeLabel(payload.createdAt),
     isoTime: payload.createdAt,
     updatedAt: payload.updatedAt,
+    editedAt: payload.editedAt,
     clientMessageId: payload.clientMessageId,
     audioDurationMs: (payload as { audioDurationMs?: number | null }).audioDurationMs ?? null,
     audioPeaks: (payload as { peaks?: number[] | null }).peaks ?? null,
@@ -1026,6 +1029,14 @@ function CloudMsgMenu({
       action: () => { onDelete(msg); onClose(); },
       danger: true,
       show: isOwn,
+      icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>,
+    },
+    {
+      key: "moderate",
+      label: "Remover mensagem",
+      action: () => { onDelete(msg); onClose(); },
+      danger: true,
+      show: !isOwn && isCloudAuthor && !msg.pending,
       icon: <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>,
     },
     {
@@ -1599,10 +1610,10 @@ function CloudMessageBubble({
 
           {/* Message actions row */}
           <div className={`flex items-center gap-1 px-1 ${own ? "flex-row-reverse" : ""}`}>
-            {showFooter && <div className={`flex items-center gap-1 text-[11px] text-white/30 ${own ? "flex-row-reverse" : ""}`}>
-              <span>{msg.time}</span>
-              {msg.updatedAt && msg.updatedAt !== msg.isoTime && <span className="italic">editada</span>}
-              {own && !msg.pending && <MessageReceipt />}
+            {(showFooter || msg.editedAt) && <div className={`flex items-center gap-1 text-[11px] text-white/60 ${own ? "flex-row-reverse" : ""}`}>
+              {showFooter && <span>{msg.time}</span>}
+              {msg.editedAt && <span className="italic">Editada</span>}
+              {showFooter && own && !msg.pending && <MessageReceipt />}
             </div>}
             <div ref={menuAnchorRef} className="relative">
               {msgMenuOpen && <MessageMenuPortal anchorRef={menuAnchorRef} menuRef={menuPortalRef} alignRight={own}><CloudMsgMenu msg={msg} isCloudAuthor={isCloudAuthor} isPinned={isPinned} onPin={onPin} onForward={onForward} onEdit={onEdit} onDelete={onDelete} onReport={onReport} onSaveSticker={onSaveSticker} onReact={onReact} onView={onView} onClose={closeMsgMenu} /></MessageMenuPortal>}
@@ -2144,6 +2155,21 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
 
     socket.on("cloud:message:new", (message: CloudMessagePayload) => {
       setMessages((prev) => mergeMessage(prev, normalizeMessage(message, user?.id)));
+    });
+
+    socket.on("cloud:message:edited", (payload: { cloudId: string; message: { id: string; content: string; editedAt: string } }) => {
+      if (payload.cloudId !== cloudId) return;
+      setMessages((prev) => prev.map((message) => message.id === payload.message.id ? { ...message, content: payload.message.content, editedAt: payload.message.editedAt, mentions: [] } : message.replyTo?.id === payload.message.id ? { ...message, replyTo: { ...message.replyTo, content: payload.message.content } } : message));
+      setPinnedMessage((current) => current?.id === payload.message.id ? { ...current, content: payload.message.content, editedAt: payload.message.editedAt } : current);
+    });
+
+    socket.on("cloud:message:removed", (payload: { cloudId: string; messageId: string; moderationNotice: string | null }) => {
+      if (payload.cloudId !== cloudId) return;
+      setMessages((prev) => prev.flatMap((message) => message.id === payload.messageId
+        ? payload.moderationNotice ? [{ ...message, kind: "system" as const, content: payload.moderationNotice, mediaUrl: null, replyTo: null, reactions: [], isPinned: false }] : []
+        : [{ ...message, replyTo: message.replyTo?.id === payload.messageId ? { ...message.replyTo, content: payload.moderationNotice ?? "Mensagem removida" } : message.replyTo }]));
+      setPinnedMessageId((current) => current === payload.messageId ? null : current);
+      setPinnedMessage((current) => current?.id === payload.messageId ? null : current);
     });
 
     socket.on("cloud:message:pin:changed", (payload: { cloudId: string }) => {
@@ -2765,6 +2791,9 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       if (!response.ok) {
         setMessages((prev) => prev.map((message) => (message.id === messageId ? { ...message, content: previous } : message)));
         setError("Não foi possível editar a mensagem.");
+      } else {
+        const payload = await readJson<{ ok: true; message: { content: string; editedAt: string } }>(response);
+        setMessages((prev) => prev.map((message) => message.id === messageId ? { ...message, content: payload.message.content, editedAt: payload.message.editedAt, mentions: [] } : message));
       }
     } catch {
       setMessages((prev) => prev.map((message) => (message.id === messageId ? { ...message, content: previous } : message)));
@@ -2773,21 +2802,22 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   }, [cloudId, editDraft, editingMsg, user]);
 
   const handleDeleteMsg = useCallback(async (msg: ChatMessage) => {
-    setMessages((prev) => prev.filter((message) => message.id !== msg.id));
-    if (pinnedMessageId === msg.id) {
-      setPinnedMessageId(null);
-      setPinnedMessage(null);
-    }
     if (msg.pending) {
+      setMessages((prev) => prev.filter((message) => message.id !== msg.id));
       return;
     }
 
     try {
-      await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msg.id)}`, {
+      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/messages/${encodeURIComponent(msg.id)}`, {
         method: "DELETE",
       });
+      const result = await readJson<{ ok: true; moderationNotice: string | null }>(response);
+      setMessages((prev) => prev.flatMap((message) => message.id === msg.id
+        ? result.moderationNotice ? [{ ...message, kind: "system" as const, content: result.moderationNotice, mediaUrl: null, replyTo: null, reactions: [], isPinned: false }] : []
+        : [{ ...message, replyTo: message.replyTo?.id === msg.id ? { ...message.replyTo, content: result.moderationNotice ?? "Mensagem removida" } : message.replyTo }]));
+      if (pinnedMessageId === msg.id) { setPinnedMessageId(null); setPinnedMessage(null); }
     } catch {
-      setError("Não foi possível cancelar o envio.");
+      setError("Não foi possível remover a mensagem.");
     }
   }, [cloudId, pinnedMessageId]);
 

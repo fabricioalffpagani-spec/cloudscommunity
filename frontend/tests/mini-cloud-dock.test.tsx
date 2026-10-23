@@ -27,6 +27,44 @@ beforeEach(() => {
 });
 
 describe("Mini Cloud leave", () => {
+  it("mostra edições recebidas em tempo real na MiniCloud", async () => {
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Antes", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" } };
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => input.endsWith("/messages?take=30") ? { ok: true, json: async () => ({ messages: [message] }) } : { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) }));
+    render(<MiniCloudDock />);
+    await screen.findByText("Antes");
+    act(() => socketHandlers.get("cloud:message:edited")?.({ cloudId: "cloud-1", message: { id: "m1", content: "Depois", editedAt: new Date().toISOString() } }));
+    expect(screen.getByText("Depois")).toBeVisible();
+    expect(screen.getByText(/Editada/)).toBeVisible();
+  });
+  it.each([true, false])("mostra a moderação ao host e o aviso em tempo real (mobile: %s)", async (mobile) => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1", title: "Teste", isAuthor: true, ownerUserId: "viewer" }));
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Comentário original", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" } };
+    const notice = "A mensagem de Ana foi removida pelo/a host da Cloud.";
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") return { ok: true, json: async () => ({ ok: true, moderationNotice: notice }) };
+      if (input.endsWith("/messages?take=30")) return { ok: true, json: async () => ({ messages: [message] }) };
+      return { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<MiniCloudDock />);
+    fireEvent.click(await screen.findByRole("button", { name: "Mostrar opções da mensagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da mensagem" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remover mensagem" }));
+    expect(await screen.findByText(notice)).toBeVisible();
+    expect(screen.queryByText("Comentário original")).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/messages/m1", { method: "DELETE" });
+  });
+
+  it("atualiza a mensagem ao receber remoção de outra sessão", async () => {
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Comentário original", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" } };
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => input.endsWith("/messages?take=30") ? { ok: true, json: async () => ({ messages: [message] }) } : { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) }));
+    render(<MiniCloudDock />);
+    await screen.findByText("Comentário original");
+    act(() => socketHandlers.get("cloud:message:removed")?.({ cloudId: "cloud-1", messageId: "m1", moderationNotice: "A mensagem de Ana foi removida pelo/a host da Cloud." }));
+    expect(screen.getByText("A mensagem de Ana foi removida pelo/a host da Cloud.")).toBeVisible();
+    expect(screen.queryByText("Comentário original")).not.toBeInTheDocument();
+  });
   it("reveals compact actions when a message is tapped on mobile", async () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() });
     const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Olá mobile", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" } };
@@ -69,6 +107,21 @@ describe("Mini Cloud leave", () => {
     expect(fetchMock.mock.calls.some(([url, options]) => url.endsWith("/messages") && options?.method === "POST" && JSON.parse(String(options.body)).replyToMessageId === "m1")).toBe(true);
   });
 
+  it("animates a long title when the desktop Mini Cloud is too narrow", async () => {
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(120);
+    const textWidth = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(400);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => ({ messages: [], cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) })));
+    try {
+      render(<MiniCloudDock />);
+      const title = await screen.findByRole("heading", { name: "Teste" });
+      expect(title).toHaveClass("cloud-title-marquee", "text-[13px]");
+      expect(title.querySelector('[aria-hidden="true"]')).toHaveTextContent("Teste");
+      width.mockReturnValue(500);
+      fireEvent.resize(window);
+      expect(title).not.toHaveClass("cloud-title-marquee");
+    } finally { width.mockRestore(); textWidth.mockRestore(); }
+  });
+
   it("keeps the normal desktop dock inside the app without opening a popup", async () => {
     localStorage.setItem("clouds:mini-cloud-popout", "another-cloud");
     const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -100,6 +153,38 @@ describe("Mini Cloud leave", () => {
       expect(localStorage.getItem("clouds:mini-cloud-popout")).toBe("cloud-1");
     } finally {
       open.mockRestore();
+    }
+  });
+
+  it("keeps message actions available in the narrow external desktop window", async () => {
+    const originalPath = window.location.pathname;
+    window.history.replaceState(null, "", "/mini-cloud");
+    localStorage.setItem("clouds:mini-cloud-popout", "cloud-1");
+    const message = { id: "m1", cloudId: "cloud-1", type: "text", content: "Mensagem externa", createdAt: new Date().toISOString(), sender: { id: "other", displayName: "Ana" }, reactions: [] };
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (init?.method === "POST" && input.endsWith("/messages/m1")) return { ok: true, json: async () => ({ ok: true, reaction: { id: "r1", userId: "viewer", emoji: "👍" }, removed: false }) };
+      if (input.endsWith("/messages?take=30")) return { ok: true, json: async () => ({ messages: [message] }) };
+      return { ok: true, json: async () => ({ cloud: { createdAt: new Date().toISOString(), duration: "30min" } }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      render(<MiniCloudDock />);
+      const reply = await screen.findByRole("button", { name: "Responder mensagem" });
+      expect(reply.parentElement).toHaveClass("opacity-100");
+      expect(reply.parentElement).not.toHaveClass("pointer-events-none");
+      expect(reply.parentElement).toHaveClass("flex-wrap", "max-w-full");
+      expect(reply.parentElement?.parentElement).toHaveClass("flex-col");
+      expect(screen.getByRole("button", { name: "Mostrar opções da mensagem" })).toHaveClass("max-w-full");
+      fireEvent.click(screen.getByRole("button", { name: "Reagir à mensagem" }));
+      expect(screen.getByRole("group", { name: "Escolher reação" }).firstElementChild).toHaveClass("flex-wrap");
+      fireEvent.click(screen.getByRole("button", { name: "Reagir com 👍" }));
+      await screen.findByText("👍 1");
+      fireEvent.click(reply);
+      expect(screen.getByText(/Respondendo a Ana/)).toBeVisible();
+      fireEvent.click(screen.getByRole("button", { name: "Mais opções da mensagem" }));
+      expect(screen.getByRole("group", { name: "Opções da mensagem" })).toBeVisible();
+    } finally {
+      window.history.replaceState(null, "", originalPath);
     }
   });
 

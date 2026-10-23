@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cloudForwardMarker, parseForwardedContent, type ForwardOrigin } from "../lib/forwarded-content";
+import { RecloudIcon } from "./RecloudIcon";
 
 export type ForwardContact = {
   id: string;
@@ -230,7 +231,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
           <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
         </div>
         {preview && <p className="mb-4 line-clamp-2 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5 text-[13px] text-white/70">{items && items.length > 1 ? `${items.length} mensagens selecionadas para encaminhar` : preview}</p>}
-        {recloud && <div className="mb-4"><button type="button" disabled={recloud.busy} onClick={recloud.onToggle} className="w-full rounded-full border border-[#A855F7]/50 bg-[#7C3AED]/15 px-4 py-2.5 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]/30 disabled:opacity-50">{recloud.reclouded ? "Desfazer Recloud" : "Republicar no perfil"}</button>{recloud.error && <p role="alert" className="mt-2 text-[12px] text-red-300">{recloud.error}</p>}</div>}
+        {recloud && <div className="mb-4"><button type="button" disabled={recloud.busy} aria-pressed={recloud.reclouded} onClick={recloud.onToggle} className={`flex w-full items-center justify-center gap-2 rounded-full border border-[#A855F7]/50 bg-[#7C3AED]/15 px-4 py-2.5 text-[13px] font-semibold transition hover:bg-[#7C3AED]/30 disabled:opacity-50 ${recloud.reclouded ? "text-[#C084FC]" : "text-white"}`}><RecloudIcon />{recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>{recloud.error && <p role="alert" className="mt-2 text-[12px] text-red-300">{recloud.error}</p>}</div>}
         {externalShareText && (
           <section className="mb-5 rounded-xl border border-[#A855F7]/25 bg-[#7C3AED]/10 p-3 md:hidden">
             <p className="text-[13px] font-semibold text-white">{externalSharePrompt}</p>
