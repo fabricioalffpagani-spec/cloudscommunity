@@ -337,14 +337,25 @@ export class CloudMessagesGateway
     });
   }
 
-  broadcastMessageRemoved(cloudId: string, messageId: string, moderationNotice: string | null) {
+  broadcastMessageRemoved(
+    cloudId: string,
+    messageId: string,
+    moderationNotice: string | null,
+  ) {
     this.server.to(this.cloudRoom(cloudId)).emit('cloud:message:removed', {
-      cloudId, messageId, moderationNotice,
+      cloudId,
+      messageId,
+      moderationNotice,
     });
   }
 
-  broadcastMessageEdited(cloudId: string, message: { id: string; content: string; editedAt: string }) {
-    this.server.to(this.cloudRoom(cloudId)).emit('cloud:message:edited', { cloudId, message });
+  broadcastMessageEdited(
+    cloudId: string,
+    message: { id: string; content: string; editedAt: string },
+  ) {
+    this.server
+      .to(this.cloudRoom(cloudId))
+      .emit('cloud:message:edited', { cloudId, message });
   }
 
   async broadcastMemberBanned(

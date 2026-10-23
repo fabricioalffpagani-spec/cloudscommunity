@@ -2273,7 +2273,10 @@ export class CloudService {
     cloudId: string,
     messageId: string,
     content: string,
-  ): Promise<{ ok: true; message: { id: string; content: string; editedAt: string } }> {
+  ): Promise<{
+    ok: true;
+    message: { id: string; content: string; editedAt: string };
+  }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
@@ -2307,7 +2310,11 @@ export class CloudService {
 
     return {
       ok: true,
-      message: { id: updated.id, content: updated.content ?? '', editedAt: updated.editedAt!.toISOString() },
+      message: {
+        id: updated.id,
+        content: updated.content ?? '',
+        editedAt: updated.editedAt!.toISOString(),
+      },
     };
   }
 
@@ -2345,15 +2352,26 @@ export class CloudService {
       });
 
     if (message.type === 'system') {
-      throw new BadRequestException({ message: 'Esta mensagem não pode ser removida.' });
+      throw new BadRequestException({
+        message: 'Esta mensagem não pode ser removida.',
+      });
     }
-    const moderationNotice = message.userId !== current.user.id
-      ? `A mensagem de ${message.user.profile?.displayName || message.user.profile?.username || 'Usuário'} foi removida pelo/a host da Cloud.`
-      : null;
+    const moderationNotice =
+      message.userId !== current.user.id
+        ? `A mensagem de ${message.user.profile?.displayName || message.user.profile?.username || 'Usuário'} foi removida pelo/a host da Cloud.`
+        : null;
     await this.prisma.cloudMessage.update({
       where: { id: messageId },
       data: moderationNotice
-        ? { type: 'system', content: moderationNotice, mentions: [], mediaUrl: null, isSticker: false, replyToMessageId: null, isPinned: false }
+        ? {
+            type: 'system',
+            content: moderationNotice,
+            mentions: [],
+            mediaUrl: null,
+            isSticker: false,
+            replyToMessageId: null,
+            isPinned: false,
+          }
         : { deletedAt: new Date(), isPinned: false },
     });
 

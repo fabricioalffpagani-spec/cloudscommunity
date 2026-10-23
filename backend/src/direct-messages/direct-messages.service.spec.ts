@@ -781,9 +781,28 @@ describe('DirectMessagesService', () => {
       { send: jest.fn() } as never,
     );
     const url = new URL('https://clouds.community/users/123');
-    expect(service['buildLinkPreview'](JSON.stringify({ type: 'profile_share', name: 'Rhuan Carlos', avatarUrl: null }), url)).toBe('Perfil: Rhuan Carlos');
-    expect(service['buildLinkPreview'](JSON.stringify({ type: 'profile_share', name: 123 }), url)).toBe('Perfil compartilhado');
-    expect(service['buildLinkPreview'](JSON.stringify({ type: 'forwarded_link', label: 123 }), url)).toBe('Link compartilhado');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({
+          type: 'profile_share',
+          name: 'Rhuan Carlos',
+          avatarUrl: null,
+        }),
+        url,
+      ),
+    ).toBe('Perfil: Rhuan Carlos');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({ type: 'profile_share', name: 123 }),
+        url,
+      ),
+    ).toBe('Perfil compartilhado');
+    expect(
+      service['buildLinkPreview'](
+        JSON.stringify({ type: 'forwarded_link', label: 123 }),
+        url,
+      ),
+    ).toBe('Link compartilhado');
     expect(service['buildLinkPreview']('Link normal', url)).toBe('Link normal');
   });
 

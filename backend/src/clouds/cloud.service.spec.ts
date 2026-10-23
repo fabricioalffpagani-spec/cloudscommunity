@@ -128,38 +128,102 @@ function setup() {
 describe('moderação de mensagens em Talk', () => {
   it('registra a data de edição da mensagem', async () => {
     const { service, prisma, cloud } = setup();
-    cloud.status = 'active'; cloud.createdAt = new Date();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
-    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'viewer', type: 'text' });
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'm1',
+      userId: 'viewer',
+      type: 'text',
+    });
     const editedAt = new Date('2026-10-23T12:00:00.000Z');
-    prisma.cloudMessage.update.mockResolvedValue({ id: 'm1', content: 'Novo texto', editedAt });
-    await expect(service.editMessage('token', cloudId, 'm1', 'Novo texto')).resolves.toEqual({ ok: true, message: { id: 'm1', content: 'Novo texto', editedAt: editedAt.toISOString() } });
-    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { content: 'Novo texto', mentions: [], editedAt: expect.any(Date) } });
+    prisma.cloudMessage.update.mockResolvedValue({
+      id: 'm1',
+      content: 'Novo texto',
+      editedAt,
+    });
+    await expect(
+      service.editMessage('token', cloudId, 'm1', 'Novo texto'),
+    ).resolves.toEqual({
+      ok: true,
+      message: {
+        id: 'm1',
+        content: 'Novo texto',
+        editedAt: editedAt.toISOString(),
+      },
+    });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: {
+        content: 'Novo texto',
+        mentions: [],
+        editedAt: expect.any(Date) as unknown,
+      },
+    });
   });
   it('permite ao host substituir mensagem de participante por aviso persistente', async () => {
     const { service, prisma, auth, cloud } = setup();
-    cloud.status = 'active'; cloud.createdAt = new Date();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
     auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
-    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'viewer', type: 'text', user: { profile: { displayName: 'Ana' } } });
-    await expect(service.deleteMessage('token', cloudId, 'm1')).resolves.toEqual({ ok: true, moderationNotice: 'A mensagem de Ana foi removida pelo/a host da Cloud.' });
-    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { type: 'system', content: 'A mensagem de Ana foi removida pelo/a host da Cloud.', mentions: [], mediaUrl: null, isSticker: false, replyToMessageId: null, isPinned: false } });
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'm1',
+      userId: 'viewer',
+      type: 'text',
+      user: { profile: { displayName: 'Ana' } },
+    });
+    await expect(
+      service.deleteMessage('token', cloudId, 'm1'),
+    ).resolves.toEqual({
+      ok: true,
+      moderationNotice: 'A mensagem de Ana foi removida pelo/a host da Cloud.',
+    });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: {
+        type: 'system',
+        content: 'A mensagem de Ana foi removida pelo/a host da Cloud.',
+        mentions: [],
+        mediaUrl: null,
+        isSticker: false,
+        replyToMessageId: null,
+        isPinned: false,
+      },
+    });
   });
   it('impede outro participante de remover mensagens alheias', async () => {
     const { service, prisma, cloud } = setup();
-    cloud.status = 'active'; cloud.createdAt = new Date();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
-    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'other', type: 'text' });
-    await expect(service.deleteMessage('token', cloudId, 'm1')).rejects.toThrow(UnauthorizedException);
+    prisma.cloudMessage.findFirst.mockResolvedValue({
+      id: 'm1',
+      userId: 'other',
+      type: 'text',
+    });
+    await expect(service.deleteMessage('token', cloudId, 'm1')).rejects.toThrow(
+      UnauthorizedException,
+    );
     expect(prisma.cloudMessage.update).not.toHaveBeenCalled();
   });
   it('mantém o cancelamento de envio da própria mensagem e protege avisos de sistema', async () => {
     const { service, prisma, cloud } = setup();
-    cloud.status = 'active'; cloud.createdAt = new Date();
+    cloud.status = 'active';
+    cloud.createdAt = new Date();
     prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
-    prisma.cloudMessage.findFirst.mockResolvedValueOnce({ id: 'm1', userId: 'viewer', type: 'text' }).mockResolvedValueOnce({ id: 'm2', userId: 'viewer', type: 'system' });
-    await expect(service.deleteMessage('token', cloudId, 'm1')).resolves.toEqual({ ok: true, moderationNotice: null });
-    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { deletedAt: expect.any(Date), isPinned: false } });
-    await expect(service.deleteMessage('token', cloudId, 'm2')).rejects.toThrow(BadRequestException);
+    prisma.cloudMessage.findFirst
+      .mockResolvedValueOnce({ id: 'm1', userId: 'viewer', type: 'text' })
+      .mockResolvedValueOnce({ id: 'm2', userId: 'viewer', type: 'system' });
+    await expect(
+      service.deleteMessage('token', cloudId, 'm1'),
+    ).resolves.toEqual({ ok: true, moderationNotice: null });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({
+      where: { id: 'm1' },
+      data: { deletedAt: expect.any(Date) as unknown, isPinned: false },
+    });
+    await expect(service.deleteMessage('token', cloudId, 'm2')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });
 
@@ -216,7 +280,10 @@ describe('temas em alta para a criação de Clouds', () => {
     });
     expect(prisma.cloud.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: 'active', visibility: 'public' }),
+        where: expect.objectContaining({
+          status: 'active',
+          visibility: 'public',
+        }) as unknown,
       }),
     );
   });

@@ -496,7 +496,11 @@ export class CloudController {
       id,
       messageId,
     );
-    this.cloudMessagesGateway.broadcastMessageRemoved(id, messageId, result.moderationNotice);
+    this.cloudMessagesGateway.broadcastMessageRemoved(
+      id,
+      messageId,
+      result.moderationNotice,
+    );
     return result;
   }
 

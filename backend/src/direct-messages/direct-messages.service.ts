@@ -1351,10 +1351,18 @@ export class DirectMessagesService {
           label?: unknown;
         };
         if (parsed.type === 'profile_share') {
-          return truncatePreview(typeof parsed.name === 'string' && parsed.name.trim() ? `Perfil: ${parsed.name}` : 'Perfil compartilhado');
+          return truncatePreview(
+            typeof parsed.name === 'string' && parsed.name.trim()
+              ? `Perfil: ${parsed.name}`
+              : 'Perfil compartilhado',
+          );
         }
         if (parsed.type === 'forwarded_link') {
-          return truncatePreview(typeof parsed.label === 'string' && parsed.label.trim() ? parsed.label : 'Link compartilhado');
+          return truncatePreview(
+            typeof parsed.label === 'string' && parsed.label.trim()
+              ? parsed.label
+              : 'Link compartilhado',
+          );
         }
         if (parsed.type === 'cloud_invitation') {
           const visibility =
