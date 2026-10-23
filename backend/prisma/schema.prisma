@@ -309,6 +309,7 @@ model CloudMessage {
   isPinned         Boolean      @default(false)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  editedAt         DateTime?
   deletedAt        DateTime?
 
   cloud            Cloud        @relation(fields: [cloudId], references: [id], onDelete: Cascade)

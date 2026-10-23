@@ -16,6 +16,8 @@ import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { PushNotificationsService } from '../infrastructure/push/push-notifications.service';
 import { CloudTopicClassifierService } from './topic-classification/cloud-topic-classifier.service';
+import { TOPIC_DEFINITIONS } from './topic-classification/topic-classification.config';
+import type { TopicId } from './topic-classification/topic-classification.types';
 import {
   CloudInvitePayload,
   CloudMessagePayload,
@@ -25,6 +27,7 @@ import {
   CreateCloudInput,
   CreateCloudMessageInput,
   ListCloudMessagesQuery,
+  TrendingTopicPayload,
   UpdateCloudInput,
 } from './cloud.types';
 
@@ -191,6 +194,75 @@ export class CloudService {
         ...this.mapCloud(cloud),
         hyped: currentUserHype !== null,
       },
+    };
+  }
+
+  /**
+   * Topics are based on activity in public Clouds that are open right now.
+   * Message volume has the greatest weight because this list is meant to
+   * suggest subjects people are actually discussing, with participation and
+   * hypes breaking ties between equally active conversations.
+   */
+  async listTrendingTopics(): Promise<{
+    ok: true;
+    topics: TrendingTopicPayload[];
+  }> {
+    const now = new Date();
+    const activitySince = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const clouds = await this.prisma.cloud.findMany({
+      where: {
+        deletedAt: null,
+        visibility: CloudVisibility.public,
+        status: CloudStatus.active,
+        primaryTopic: { not: null },
+        startedAt: { lte: now },
+        OR: [{ endedAt: null }, { endedAt: { gt: now } }],
+      },
+      select: {
+        primaryTopic: true,
+        createdAt: true,
+        _count: {
+          select: {
+            messages: {
+              where: {
+                deletedAt: null,
+                type: { not: 'system' },
+                createdAt: { gte: activitySince },
+              },
+            },
+            members: { where: { leftAt: null } },
+            hypes: true,
+          },
+        },
+      },
+    });
+
+    const scores = new Map<string, number>();
+    for (const cloud of clouds) {
+      const topic = cloud.primaryTopic;
+      const definition = topic
+        ? TOPIC_DEFINITIONS[topic as TopicId]
+        : undefined;
+      if (!topic || !definition) continue;
+
+      const createdRecently = cloud.createdAt >= activitySince ? 1 : 0;
+      const score =
+        cloud._count.messages * 5 +
+        cloud._count.members * 2 +
+        cloud._count.hypes * 3 +
+        createdRecently;
+      scores.set(topic, (scores.get(topic) ?? 0) + score);
+    }
+
+    return {
+      ok: true,
+      topics: [...scores.entries()]
+        .sort(([, leftScore], [, rightScore]) => rightScore - leftScore)
+        .slice(0, 5)
+        .map(([id]) => ({
+          id,
+          name: TOPIC_DEFINITIONS[id as TopicId].publicName,
+        })),
     };
   }
 
@@ -2201,7 +2273,7 @@ export class CloudService {
     cloudId: string,
     messageId: string,
     content: string,
-  ): Promise<{ ok: true; message: { id: string; content: string } }> {
+  ): Promise<{ ok: true; message: { id: string; content: string; editedAt: string } }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
@@ -2230,12 +2302,12 @@ export class CloudService {
 
     const updated = await this.prisma.cloudMessage.update({
       where: { id: messageId },
-      data: { content: trimmed, mentions: [] },
+      data: { content: trimmed, mentions: [], editedAt: new Date() },
     });
 
     return {
       ok: true,
-      message: { id: updated.id, content: updated.content ?? '' },
+      message: { id: updated.id, content: updated.content ?? '', editedAt: updated.editedAt!.toISOString() },
     };
   }
 
@@ -2243,7 +2315,7 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     messageId: string,
-  ): Promise<{ ok: true }> {
+  ): Promise<{ ok: true; moderationNotice: string | null }> {
     const current = await this.requireSession(token);
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
@@ -2257,6 +2329,7 @@ export class CloudService {
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: { id: messageId, cloudId, deletedAt: null },
+      include: { user: { include: { profile: true } } },
     });
 
     if (!message)
@@ -2271,12 +2344,20 @@ export class CloudService {
         message: 'Sem permissão para apagar esta mensagem.',
       });
 
+    if (message.type === 'system') {
+      throw new BadRequestException({ message: 'Esta mensagem não pode ser removida.' });
+    }
+    const moderationNotice = message.userId !== current.user.id
+      ? `A mensagem de ${message.user.profile?.displayName || message.user.profile?.username || 'Usuário'} foi removida pelo/a host da Cloud.`
+      : null;
     await this.prisma.cloudMessage.update({
       where: { id: messageId },
-      data: { deletedAt: new Date() },
+      data: moderationNotice
+        ? { type: 'system', content: moderationNotice, mentions: [], mediaUrl: null, isSticker: false, replyToMessageId: null, isPinned: false }
+        : { deletedAt: new Date(), isPinned: false },
     });
 
-    return { ok: true };
+    return { ok: true, moderationNotice };
   }
 
   async getMessages(
@@ -3065,6 +3146,7 @@ export class CloudService {
       replyToMessageId: message.replyToMessageId,
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt.toISOString(),
+      editedAt: message.editedAt?.toISOString() ?? null,
       deletedAt: message.deletedAt?.toISOString() ?? null,
       sender: {
         id: message.user.id,

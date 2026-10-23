@@ -1,0 +1,1 @@
+ALTER TABLE "CloudMessage" ADD COLUMN "editedAt" TIMESTAMP(3);

@@ -7,11 +7,12 @@ import { socketAuth } from "../lib/socket-auth";
 import { clampMiniCloudPosition } from "../lib/mini-cloud-position";
 import { cloudElapsedSeconds } from "../lib/cloud-start-time";
 import { CloudSystemMessage } from "./CloudSystemMessage";
+import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
 
 type Cloud = { id: string; title: string; isAuthor: boolean; ownerUserId: string; duration?: string; createdAt?: string; startedAt?: string | null };
 type Reaction = { id: string; emoji: string; userId: string };
-type Msg = { id: string; cloudId: string; type: string; content: string | null; createdAt: string; sender: { id: string; displayName: string; avatarUrl?: string | null }; reactions?: Reaction[]; replyTo?: { sender: string; content: string | null } | null };
+type Msg = { id: string; cloudId: string; type: string; content: string | null; createdAt: string; editedAt?: string | null; sender: { id: string; displayName: string; avatarUrl?: string | null }; reactions?: Reaction[]; replyTo?: { sender: string; content: string | null } | null };
 
 const read = (userId?: string | null): Cloud | null => { try { const value = localStorage.getItem("clouds:minimized-cloud"); const cloud = value ? JSON.parse(value) as Cloud : null; return userId && cloud?.ownerUserId === userId ? cloud : null; } catch { return null; } };
 const SIZE_KEY = "clouds:mini-cloud-size";
@@ -113,6 +114,15 @@ export function MiniCloudDock() {
     socketRef.current = socket;
     socket.on("session:ready", () => { socket.emit("cloud:join", { cloudId, announce: false }); void load(); });
     socket.on("cloud:message:new", (message: Msg) => { if (message.cloudId === cloudId) setMessages((current) => mergeMessages(current, message)); });
+    socket.on("cloud:message:edited", (payload: { cloudId: string; message: { id: string; content: string; editedAt: string } }) => {
+      if (payload.cloudId === cloudId) setMessages((current) => current.map((message) => message.id === payload.message.id ? { ...message, content: payload.message.content, editedAt: payload.message.editedAt } : message));
+    });
+    socket.on("cloud:message:removed", (payload: { cloudId: string; messageId: string; moderationNotice: string | null }) => {
+      if (payload.cloudId !== cloudId) return;
+      setMessages((current) => current.flatMap((message) => message.id === payload.messageId ? payload.moderationNotice ? [{ ...message, type: "system", content: payload.moderationNotice, reactions: [], replyTo: null }] : [] : [message]));
+      setPinnedId((current) => current === payload.messageId ? null : current);
+      setActiveMenu((current) => current?.id === payload.messageId ? null : current);
+    });
     socket.on("cloud:message:pin:changed", (payload: { cloudId: string; messageId: string | null }) => { if (payload.cloudId === cloudId) setPinnedId(payload.messageId); });
     socket.on("cloud:reaction:changed", (payload: { cloudId: string; messageId: string; reaction: Reaction; removed: boolean }) => {
       if (payload.cloudId === cloudId) setMessages((current) => current.map((message) => message.id !== payload.messageId ? message : { ...message, reactions: payload.removed ? (message.reactions ?? []).filter((item) => item.id !== payload.reaction.id) : [...(message.reactions ?? []).filter((item) => item.id !== payload.reaction.id), payload.reaction] }));
@@ -186,7 +196,7 @@ export function MiniCloudDock() {
       const response = await fetch(editing ? `/api/clouds/${encodeURIComponent(cloud.id)}/messages/${encodeURIComponent(editing.id)}` : `/api/clouds/${encodeURIComponent(cloud.id)}/messages`, { method: editing ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editing ? { content } : { type: "text", content, replyToMessageId: replyTo?.id ?? null }) });
       if (!response.ok) throw new Error("Não foi possível enviar a mensagem.");
       const payload = await response.json().catch(() => null) as { message?: Msg } | null;
-      if (editing) setMessages((current) => current.map((message) => message.id === editing.id ? { ...message, content } : message));
+      if (editing) setMessages((current) => current.map((message) => message.id === editing.id ? { ...message, content: payload?.message?.content ?? content, editedAt: payload?.message?.editedAt ?? null } : message));
       else if (payload?.message) setMessages((current) => mergeMessages(current, payload.message!));
       setDraft(""); setReplyTo(null); setEditing(null);
     } catch {
@@ -218,9 +228,10 @@ export function MiniCloudDock() {
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/messages/${encodeURIComponent(message.id)}`, { method: "DELETE" });
       if (!response.ok) throw new Error();
-      setMessages((current) => current.filter((item) => item.id !== message.id));
+      const payload = await response.json() as { moderationNotice: string | null };
+      setMessages((current) => current.flatMap((item) => item.id === message.id ? payload.moderationNotice ? [{ ...item, type: "system", content: payload.moderationNotice, reactions: [], replyTo: null }] : [] : [item]));
       if (pinnedId === message.id) setPinnedId(null);
-    } catch { setInteractionError("Não foi possível cancelar o envio."); }
+    } catch { setInteractionError("Não foi possível remover a mensagem."); }
   };
   const continueConversation = () => {
     localStorage.removeItem("clouds:minimized-cloud");
@@ -243,18 +254,18 @@ export function MiniCloudDock() {
     dispatchEvent(new Event("clouds:minimized-cloud-changed"));
   };
   const dock = <aside style={isPopoutWindow ? { width: "100%", height: "100dvh" } : { transform: `translate(${pos.x}px,${pos.y}px)`, width, height, maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100dvh - 16px)" }} className={`${isPopoutWindow ? "relative" : "fixed bottom-[calc(8px+env(safe-area-inset-bottom))] right-[calc(8px+env(safe-area-inset-right))] rounded-2xl border border-[#A855F7]/50 shadow-[0_20px_55px_rgba(0,0,0,.55)] sm:bottom-4 sm:right-4"} z-[90] flex flex-col overflow-hidden bg-black`}>
-    <div onPointerDown={(event) => { if (isPopoutWindow || (event.target as HTMLElement).closest("button")) return; drag.current = { x: event.clientX - pos.x, y: event.clientY - pos.y, pointerId: event.pointerId }; event.currentTarget.setPointerCapture?.(event.pointerId); }} onPointerMove={(event) => { if (drag.current?.pointerId === event.pointerId) setPos(clampMiniCloudPosition(event.clientX - drag.current.x, event.clientY - drag.current.y, width, height, window.innerWidth, window.innerHeight)); }} onPointerUp={(event) => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }} onPointerCancel={(event) => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }} role="group" aria-label="Arrastar MiniCloud" title={isPopoutWindow ? undefined : "Arraste para mover a MiniCloud"} className={`flex items-center border-b border-white/10 px-2 py-2 ${isPopoutWindow ? "" : "cursor-move touch-none select-none"}`}><span aria-hidden="true" className="mr-1 text-[19px] leading-none text-white/60">⠿</span><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" /><p className="ml-1 min-w-0 flex-1 truncate text-[13px] font-bold text-white">{cloud.title}</p><div className="ml-2 flex shrink-0 items-center gap-0.5"><span className="mr-0.5 text-[14px] font-bold tabular-nums text-[#D8B4FE]">{clock}</span>{!isMobile && !isPopoutWindow && <button type="button" onClick={openInSeparateWindow} aria-label="Abrir Mini Cloud fora da aba" title="Manter Mini Cloud aberta fora do site" className="flex h-8 w-8 items-center justify-center text-[18px] leading-none text-white hover:text-[#D8B4FE]">▣</button>}<button type="button" onClick={expand} aria-label="Expandir Cloud" className="flex h-8 w-8 items-center justify-center text-[25px] leading-none text-white hover:text-[#D8B4FE]">↗</button><button type="button" onClick={() => { setLeaveError(""); setLeaveConfirmOpen(true); }} aria-label="Sair da Cloud" className="flex h-8 w-8 items-center justify-center text-[27px] leading-none text-white hover:text-[#D8B4FE]">×</button></div></div>
+    <div onPointerDown={(event) => { if (isPopoutWindow || (event.target as HTMLElement).closest("button")) return; drag.current = { x: event.clientX - pos.x, y: event.clientY - pos.y, pointerId: event.pointerId }; event.currentTarget.setPointerCapture?.(event.pointerId); }} onPointerMove={(event) => { if (drag.current?.pointerId === event.pointerId) setPos(clampMiniCloudPosition(event.clientX - drag.current.x, event.clientY - drag.current.y, width, height, window.innerWidth, window.innerHeight)); }} onPointerUp={(event) => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }} onPointerCancel={(event) => { if (drag.current?.pointerId === event.pointerId) drag.current = null; }} role="group" aria-label="Arrastar MiniCloud" title={isPopoutWindow ? undefined : "Arraste para mover a MiniCloud"} className={`flex items-center border-b border-white/10 px-2 py-2 ${isPopoutWindow ? "" : "cursor-move touch-none select-none"}`}><span aria-hidden="true" className="mr-1 text-[19px] leading-none text-white/60">⠿</span><span className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400" /><div className="ml-1 min-w-0 flex-1"><CloudTitleMarquee title={cloud.title} className="text-[13px]" /></div><div className="ml-2 flex shrink-0 items-center gap-0.5"><span className="mr-0.5 text-[14px] font-bold tabular-nums text-[#D8B4FE]">{clock}</span>{!isMobile && !isPopoutWindow && <button type="button" onClick={openInSeparateWindow} aria-label="Abrir Mini Cloud fora da aba" title="Manter Mini Cloud aberta fora do site" className="flex h-8 w-8 items-center justify-center text-[18px] leading-none text-white hover:text-[#D8B4FE]">▣</button>}<button type="button" onClick={expand} aria-label="Expandir Cloud" className="flex h-8 w-8 items-center justify-center text-[25px] leading-none text-white hover:text-[#D8B4FE]">↗</button><button type="button" onClick={() => { setLeaveError(""); setLeaveConfirmOpen(true); }} aria-label="Sair da Cloud" className="flex h-8 w-8 items-center justify-center text-[27px] leading-none text-white hover:text-[#D8B4FE]">×</button></div></div>
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">{messages.map((message) => {
       if (message.type === "system") return <CloudSystemMessage key={message.id} message={{ content: message.content, senderId: message.sender?.id ?? "", senderName: message.sender?.displayName ?? "Alguém", senderAvatarUrl: message.sender?.avatarUrl }} />;
       const own = Boolean(user?.id && message.sender?.id === user.id);
       const counts = (message.reactions ?? []).reduce<Record<string, number>>((result, reaction) => { result[reaction.emoji] = (result[reaction.emoji] ?? 0) + 1; return result; }, {});
       return <div key={message.id} className={`group flex flex-col ${own ? "items-end" : "items-start"}`}>
-        <p className="text-[10px] text-white/50">{own ? "Você" : message.sender?.displayName} · {new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}{pinnedId === message.id ? " · fixada" : ""}</p>
-        <div className={`flex max-w-full items-center gap-1 ${own ? "flex-row-reverse" : ""}`}>
-          <button type="button" aria-label="Mostrar opções da mensagem" aria-expanded={selectedMessageId === message.id} onClick={() => { setSelectedMessageId((current) => current === message.id ? null : message.id); setActiveMenu(null); }} className={`mt-0.5 min-w-0 break-words rounded-xl px-3 py-2 text-left text-[13px] text-white [overflow-wrap:anywhere] ${own ? "bg-[#A855F7]" : "bg-white/[.10]"}`}>
+        <p className="text-[10px] text-white/50">{own ? "Você" : message.sender?.displayName} · {new Date(message.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}{message.editedAt ? " · Editada" : ""}{pinnedId === message.id ? " · fixada" : ""}</p>
+        <div className={`flex w-full min-w-0 flex-col gap-1 ${own ? "items-end" : "items-start"}`}>
+          <button type="button" aria-label="Mostrar opções da mensagem" aria-expanded={selectedMessageId === message.id} onClick={() => { setSelectedMessageId((current) => current === message.id ? null : message.id); setActiveMenu(null); }} className={`mt-0.5 max-w-full min-w-0 break-words rounded-xl px-3 py-2 text-left text-[13px] text-white [overflow-wrap:anywhere] ${own ? "bg-[#A855F7]" : "bg-white/[.10]"}`}>
             {message.replyTo && <div className="mb-1 border-l-2 border-white/50 pl-2 text-[11px] text-white/70"><strong>{message.replyTo.sender}</strong><p className="line-clamp-2">{message.replyTo.content}</p></div>}{message.content}
           </button>
-          {!hasEnded && <div className={`flex shrink-0 items-center gap-0.5 transition-opacity ${selectedMessageId === message.id || activeMenu?.id === message.id ? "opacity-100" : "pointer-events-none opacity-0 md:pointer-events-auto md:group-hover:opacity-100 md:group-focus-within:opacity-100"}`}>
+          {!hasEnded && <div className={`flex max-w-full flex-wrap items-center gap-0.5 transition-opacity ${isPopoutWindow || selectedMessageId === message.id || activeMenu?.id === message.id ? "opacity-100" : "pointer-events-none opacity-0 md:pointer-events-auto md:group-hover:opacity-100 md:group-focus-within:opacity-100"}`}>
             {cloud.isAuthor && <button type="button" aria-label={pinnedId === message.id ? "Desafixar mensagem" : "Fixar mensagem"} title={pinnedId === message.id ? "Desafixar" : "Fixar"} onClick={() => void pin(message)} className="h-7 w-7 rounded-full text-[14px] hover:bg-white/15">📌</button>}
             <button type="button" aria-label="Responder mensagem" title="Responder" onClick={() => { setEditing(null); setReplyTo(message); setActiveMenu(null); inputRef.current?.focus(); }} className="h-7 w-7 rounded-full text-[17px] hover:bg-white/15">↶</button>
             <button type="button" aria-label="Reagir à mensagem" title="Reagir" onClick={() => setActiveMenu(activeMenu?.id === message.id && activeMenu.type === "emoji" ? null : { id: message.id, type: "emoji" })} className="h-7 w-7 rounded-full text-[16px] hover:bg-white/15">☺</button>
@@ -264,11 +275,12 @@ export function MiniCloudDock() {
         {Object.keys(counts).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{Object.entries(counts).map(([emoji, count]) => <button key={emoji} type="button" onClick={() => void react(message, emoji)} className="rounded-full bg-white/10 px-2 py-0.5 text-[11px]">{emoji} {count}</button>)}</div>}
       </div>;
     })}</div>
-    {activeMenu && (() => { const message = messages.find((item) => item.id === activeMenu.id); if (!message) return null; const own = message.sender?.id === user?.id; return <div role="group" aria-label={activeMenu.type === "emoji" ? "Escolher reação" : "Opções da mensagem"} className="absolute bottom-14 right-3 z-20 max-w-[calc(100%-1.5rem)] rounded-xl border border-white/15 bg-[#15161C] p-2 shadow-xl">
-      {activeMenu.type === "emoji" ? <div className="flex gap-1">{["❤️", "😂", "😮", "😢", "👍", "🔥"].map((emoji) => <button key={emoji} type="button" aria-label={`Reagir com ${emoji}`} onClick={() => void react(message, emoji)} className="h-8 w-8 rounded-lg hover:bg-white/10">{emoji}</button>)}</div> : <div className="flex flex-col text-left text-[12px]">
+    {activeMenu && (() => { const message = messages.find((item) => item.id === activeMenu.id); if (!message) return null; const own = message.sender?.id === user?.id; return <div role="group" aria-label={activeMenu.type === "emoji" ? "Escolher reação" : "Opções da mensagem"} className="absolute bottom-14 right-3 z-20 max-h-[calc(100%-5rem)] max-w-[calc(100%-1.5rem)] overflow-y-auto rounded-xl border border-white/15 bg-[#15161C] p-2 shadow-xl">
+      {activeMenu.type === "emoji" ? <div className="flex flex-wrap gap-1">{["❤️", "😂", "😮", "😢", "👍", "🔥"].map((emoji) => <button key={emoji} type="button" aria-label={`Reagir com ${emoji}`} onClick={() => void react(message, emoji)} className="h-8 w-8 rounded-lg hover:bg-white/10">{emoji}</button>)}</div> : <div className="flex flex-col text-left text-[12px]">
         {message.content && <button type="button" onClick={() => { void navigator.clipboard.writeText(message.content ?? "").then(() => setActiveMenu(null)).catch(() => setInteractionError("Não foi possível copiar a mensagem.")); }} className="rounded-lg px-3 py-2 text-left hover:bg-white/10">Copiar</button>}
         {own && message.type === "text" && <button type="button" onClick={() => { setReplyTo(null); setEditing(message); setDraft(message.content ?? ""); setActiveMenu(null); inputRef.current?.focus(); }} className="rounded-lg px-3 py-2 text-left hover:bg-white/10">Editar</button>}
         {own && <button type="button" onClick={() => void removeMessage(message)} className="rounded-lg px-3 py-2 text-left text-red-300 hover:bg-white/10">Cancelar envio</button>}
+        {!own && cloud.isAuthor && <button type="button" onClick={() => void removeMessage(message)} className="rounded-lg px-3 py-2 text-left text-red-300 hover:bg-white/10">Remover mensagem</button>}
         <button type="button" onClick={() => { setActiveMenu(null); expand(); }} className="rounded-lg px-3 py-2 text-left hover:bg-white/10">Mais opções na Cloud</button>
       </div>}
       <button type="button" aria-label="Fechar opções" onClick={() => setActiveMenu(null)} className="absolute -right-1 -top-2 rounded-full bg-[#333] px-1 text-xs">×</button>

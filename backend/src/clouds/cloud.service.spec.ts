@@ -125,6 +125,103 @@ function setup() {
   };
 }
 
+describe('moderação de mensagens em Talk', () => {
+  it('registra a data de edição da mensagem', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active'; cloud.createdAt = new Date();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
+    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'viewer', type: 'text' });
+    const editedAt = new Date('2026-10-23T12:00:00.000Z');
+    prisma.cloudMessage.update.mockResolvedValue({ id: 'm1', content: 'Novo texto', editedAt });
+    await expect(service.editMessage('token', cloudId, 'm1', 'Novo texto')).resolves.toEqual({ ok: true, message: { id: 'm1', content: 'Novo texto', editedAt: editedAt.toISOString() } });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { content: 'Novo texto', mentions: [], editedAt: expect.any(Date) } });
+  });
+  it('permite ao host substituir mensagem de participante por aviso persistente', async () => {
+    const { service, prisma, auth, cloud } = setup();
+    cloud.status = 'active'; cloud.createdAt = new Date();
+    auth.resolveSession.mockResolvedValue({ user: { id: 'author' } });
+    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'viewer', type: 'text', user: { profile: { displayName: 'Ana' } } });
+    await expect(service.deleteMessage('token', cloudId, 'm1')).resolves.toEqual({ ok: true, moderationNotice: 'A mensagem de Ana foi removida pelo/a host da Cloud.' });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { type: 'system', content: 'A mensagem de Ana foi removida pelo/a host da Cloud.', mentions: [], mediaUrl: null, isSticker: false, replyToMessageId: null, isPinned: false } });
+  });
+  it('impede outro participante de remover mensagens alheias', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active'; cloud.createdAt = new Date();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
+    prisma.cloudMessage.findFirst.mockResolvedValue({ id: 'm1', userId: 'other', type: 'text' });
+    await expect(service.deleteMessage('token', cloudId, 'm1')).rejects.toThrow(UnauthorizedException);
+    expect(prisma.cloudMessage.update).not.toHaveBeenCalled();
+  });
+  it('mantém o cancelamento de envio da própria mensagem e protege avisos de sistema', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active'; cloud.createdAt = new Date();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'member' });
+    prisma.cloudMessage.findFirst.mockResolvedValueOnce({ id: 'm1', userId: 'viewer', type: 'text' }).mockResolvedValueOnce({ id: 'm2', userId: 'viewer', type: 'system' });
+    await expect(service.deleteMessage('token', cloudId, 'm1')).resolves.toEqual({ ok: true, moderationNotice: null });
+    expect(prisma.cloudMessage.update).toHaveBeenCalledWith({ where: { id: 'm1' }, data: { deletedAt: expect.any(Date), isPinned: false } });
+    await expect(service.deleteMessage('token', cloudId, 'm2')).rejects.toThrow(BadRequestException);
+  });
+});
+
+describe('temas em alta para a criação de Clouds', () => {
+  it('prioriza os cinco temas de Clouds públicas com mais discussão atual', async () => {
+    const { service, prisma } = setup();
+    prisma.cloud.findMany.mockResolvedValue([
+      {
+        primaryTopic: 'tecnologia',
+        createdAt: new Date(),
+        _count: { messages: 8, members: 3, hypes: 1 },
+      },
+      {
+        primaryTopic: 'esportes',
+        createdAt: new Date(),
+        _count: { messages: 4, members: 4, hypes: 5 },
+      },
+      {
+        primaryTopic: 'musica',
+        createdAt: new Date(),
+        _count: { messages: 2, members: 2, hypes: 0 },
+      },
+      {
+        primaryTopic: 'games',
+        createdAt: new Date(),
+        _count: { messages: 1, members: 1, hypes: 0 },
+      },
+      {
+        primaryTopic: 'filmes_series',
+        createdAt: new Date(),
+        _count: { messages: 1, members: 0, hypes: 0 },
+      },
+      {
+        primaryTopic: 'relacionamentos',
+        createdAt: new Date(),
+        _count: { messages: 0, members: 0, hypes: 0 },
+      },
+      {
+        primaryTopic: 'tema_desconhecido',
+        createdAt: new Date(),
+        _count: { messages: 99, members: 99, hypes: 99 },
+      },
+    ]);
+
+    await expect(service.listTrendingTopics()).resolves.toEqual({
+      ok: true,
+      topics: [
+        { id: 'tecnologia', name: 'Tecnologia' },
+        { id: 'esportes', name: 'Esportes' },
+        { id: 'musica', name: 'Música' },
+        { id: 'games', name: 'Games' },
+        { id: 'filmes_series', name: 'Filmes & Séries' },
+      ],
+    });
+    expect(prisma.cloud.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'active', visibility: 'public' }),
+      }),
+    );
+  });
+});
+
 describe('Recloud', () => {
   it('allows former participants of an ended Cloud while requiring current membership in Talk', async () => {
     const { service, prisma, cloud } = setup();

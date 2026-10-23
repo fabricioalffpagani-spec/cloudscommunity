@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useSessionUser } from "./session-user";
-import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInstallPrompt, type InstallPromptEvent } from "../lib/pwa-install";
+import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInstallPrompt, recordInstall, hasRecordedInstall, isAppleMobileDevice, isMobileDevice, type InstallPromptEvent } from "../lib/pwa-install";
 
 const reminderKey = (userId: string) => `clouds:pwa-install-reminder:${userId}`;
 const manualInstallCompleteKey = (userId: string) => `clouds:pwa-install-manual-complete:${userId}`;
@@ -45,24 +45,20 @@ function confirmManualInstall(userId: string) {
 }
 
 function isInstalled() {
-  return window.matchMedia("(display-mode: standalone)").matches
+  return hasRecordedInstall() || window.matchMedia("(display-mode: standalone)").matches
     || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
-function isIos() {
-  return /iPad|iPhone|iPod/.test(window.navigator.userAgent);
-}
+function isIos() { return isAppleMobileDevice(window.navigator); }
 
-function isMobile() {
-  return /Android|iPad|iPhone|iPod/i.test(window.navigator.userAgent)
-    || window.matchMedia("(max-width: 767px)").matches;
-}
+function isMobile() { return isMobileDevice(window.navigator); }
 
 export function PwaInstallPrompt() {
   const { user, status } = useSessionUser();
-  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
   const [iosInstallHelpOpen, setIosInstallHelpOpen] = useState(false);
+  const [installError, setInstallError] = useState("");
   const fallbackReminder = useRef<{ userId: string; timestamp: number } | null>(null);
   const fallbackStart = useRef<{ userId: string; timestamp: number } | null>(null);
   const signupUsername = useRef<string | null>(null);
@@ -149,22 +145,26 @@ export function PwaInstallPrompt() {
   };
 
   const install = async () => {
-    if (!installPrompt) {
+    const prompt = getRememberedInstallPrompt();
+    if (!prompt) {
       if (isIos()) {
         setIosInstallHelpOpen(true);
         return;
       }
-      window.location.assign("/settings");
+      window.location.assign("/settings?section=aplicativo&installHelp=1");
       return;
     }
 
+    setInstallError("");
     try {
-      await installPrompt.prompt();
-      await installPrompt.userChoice;
+      await prompt.prompt();
+      await prompt.userChoice;
+      setOpen(false);
+    } catch {
+      setInstallError("Não foi possível abrir a instalação. Use o menu do navegador para adicionar o Clouds à tela inicial.");
     } finally {
       setInstallPrompt(null);
       clearRememberedInstallPrompt();
-      setOpen(false);
     }
   };
 
@@ -175,14 +175,15 @@ export function PwaInstallPrompt() {
       <div className="fixed inset-0 z-[250] flex items-end bg-black/65 backdrop-blur-sm sm:items-center sm:justify-center sm:p-5" role="dialog" aria-modal="true" aria-labelledby="ios-install-title">
         <section className="w-full rounded-t-3xl border border-white/10 bg-[#171325] p-6 pb-[max(2rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-sm sm:rounded-3xl">
           <h2 id="ios-install-title" className="text-[20px] font-bold text-white">Adicione o Clouds à Tela de Início</h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-white/60">No navegador do iPhone ou iPad, adicione o Clouds à tela de início:</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-white/60">No iPhone ou iPad, use o menu do navegador para adicionar o Clouds:</p>
           <ol className="mt-5 space-y-3 text-[14px] leading-relaxed text-white/85">
             <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">1</span>Toque em <strong>Compartilhar</strong> no navegador.</li>
-            <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">2</span>Escolha <strong>Adicionar à Tela de Início</strong> e confirme.</li>
+            <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">2</span>Escolha <strong>Adicionar à Tela de Início</strong>. Se não aparecer, procure <strong>Editar Ações</strong>.</li>
+            <li><span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#9333EA] text-[12px] font-bold">3</span>Ative <strong>Abrir como App Web</strong>, se aparecer, e toque em <strong>Adicionar</strong>.</li>
           </ol>
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => setIosInstallHelpOpen(false)} className="rounded-full px-4 py-2.5 text-[14px] font-semibold text-white/65 transition hover:text-white">Voltar</button>
-            <button type="button" onClick={() => { if (user) confirmManualInstall(user.id); if (signupUsername.current) { try { window.localStorage.setItem(signupCompleteKey(signupUsername.current), "true"); } catch { /* Storage may be unavailable. */ } } setIosInstallHelpOpen(false); setOpen(false); }} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Já adicionei o atalho</button>
+            <button type="button" onClick={() => { recordInstall(); if (user) confirmManualInstall(user.id); if (signupUsername.current) { try { window.localStorage.setItem(signupCompleteKey(signupUsername.current), "true"); } catch { /* Storage may be unavailable. */ } } setIosInstallHelpOpen(false); setOpen(false); }} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Já adicionei o atalho</button>
           </div>
         </section>
       </div>
@@ -195,6 +196,7 @@ export function PwaInstallPrompt() {
         <Image src="/logo_clouds.png" alt="Clouds" width={48} height={48} className="h-12 w-12 object-contain" priority />
         <h2 id="pwa-install-title" className="mt-4 text-[20px] font-bold text-white">Adicione um atalho para o Clouds na tela inicial para economizar tempo!</h2>
         <p className="mt-2 text-[14px] leading-relaxed text-white/60">Abra o Clouds mais rápido, como um aplicativo.</p>
+        {installError && <p role="alert" className="mt-3 text-[13px] text-red-300">{installError}</p>}
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={decline} className="rounded-full px-4 py-2.5 text-[14px] font-semibold text-white/65 transition hover:text-white">Não</button>
           <button type="button" onClick={() => void install()} className="rounded-full bg-[#9333EA] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#7C3AED]">Instalar agora</button>

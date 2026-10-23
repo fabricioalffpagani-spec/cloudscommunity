@@ -1,6 +1,29 @@
 import { CloudController } from './cloud.controller';
 
 describe('CloudController', () => {
+  it('broadcasts a Cloud edit only after persistence succeeds', async () => {
+    const message = { id: 'm1', content: 'Novo texto', editedAt: '2026-10-23T12:00:00.000Z' };
+    const cloudService = { editMessage: jest.fn().mockResolvedValue({ ok: true, message }) };
+    const gateway = { broadcastMessageEdited: jest.fn() };
+    const controller = new CloudController(cloudService as never, {} as never, gateway as never);
+    const req = { headers: { cookie: '' } } as never;
+    await controller.editMessage('cloud-id', 'm1', { content: 'Novo texto' }, req);
+    expect(gateway.broadcastMessageEdited).toHaveBeenCalledWith('cloud-id', message);
+    cloudService.editMessage.mockRejectedValueOnce(new Error('denied'));
+    await expect(controller.editMessage('cloud-id', 'm1', { content: 'Novo texto' }, req)).rejects.toThrow('denied');
+    expect(gateway.broadcastMessageEdited).toHaveBeenCalledTimes(1);
+  });
+  it('broadcasts message removal only after successful persistence', async () => {
+    const cloudService = { deleteMessage: jest.fn().mockResolvedValue({ ok: true, moderationNotice: 'Removida pelo host' }) };
+    const gateway = { broadcastMessageRemoved: jest.fn() };
+    const controller = new CloudController(cloudService as never, {} as never, gateway as never);
+    const req = { headers: { cookie: '' } } as never;
+    await controller.deleteMessage('cloud-id', 'message-id', req);
+    expect(gateway.broadcastMessageRemoved).toHaveBeenCalledWith('cloud-id', 'message-id', 'Removida pelo host');
+    cloudService.deleteMessage.mockRejectedValueOnce(new Error('denied'));
+    await expect(controller.deleteMessage('cloud-id', 'message-id', req)).rejects.toThrow('denied');
+    expect(gateway.broadcastMessageRemoved).toHaveBeenCalledTimes(1);
+  });
   it('broadcasts a Cloud pin only after persistence succeeds', async () => {
     const cloudService = {
       pinMessage: jest.fn().mockResolvedValue({ ok: true }),
@@ -93,5 +116,25 @@ describe('CloudController', () => {
       }),
       ['member-a', 'member-b'],
     );
+  });
+
+  it('returns the current topic suggestions without requiring a session', async () => {
+    const cloudService = {
+      listTrendingTopics: jest.fn().mockResolvedValue({
+        ok: true,
+        topics: [{ id: 'tecnologia', name: 'Tecnologia' }],
+      }),
+    };
+    const controller = new CloudController(
+      cloudService as never,
+      {} as never,
+      {} as never,
+    );
+
+    await expect(controller.trendingTopics()).resolves.toEqual({
+      ok: true,
+      topics: [{ id: 'tecnologia', name: 'Tecnologia' }],
+    });
+    expect(cloudService.listTrendingTopics).toHaveBeenCalledWith();
   });
 });

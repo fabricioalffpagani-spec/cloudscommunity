@@ -9,10 +9,14 @@ describe("republicar pelo encaminhamento", () => {
     const toggle = vi.fn();
     const props = { title: "Encaminhar Cloud", url: "/cloud/1", label: "Cloud", contacts: [], onClose: vi.fn() };
     const { rerender } = render(<ForwardToContactModal {...props} recloud={{ reclouded: false, busy: false, error: "", onToggle: toggle }} />);
-    fireEvent.click(screen.getByRole("button", { name: "Republicar no perfil" }));
+    const republicar = screen.getByRole("button", { name: "Republicar Cloud" });
+    expect(republicar).toHaveAttribute("aria-pressed", "false");
+    expect(republicar.querySelector("svg")).toBeInTheDocument();
+    fireEvent.click(republicar);
     expect(toggle).toHaveBeenCalledOnce();
     rerender(<ForwardToContactModal {...props} recloud={{ reclouded: true, busy: true, error: "Falha ao republicar", onToggle: toggle }} />);
     expect(screen.getByRole("button", { name: "Desfazer Recloud" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Desfazer Recloud" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("alert")).toHaveTextContent("Falha ao republicar");
     rerender(<ForwardToContactModal {...props} />);
     expect(screen.queryByRole("button", { name: /Republicar|Recloud/ })).not.toBeInTheDocument();

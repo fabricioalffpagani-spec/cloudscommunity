@@ -24,6 +24,9 @@ function SwipeProbe() {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (Linux; Android 14)" });
+  window.localStorage.removeItem("clouds:pwa-install-recorded");
+  window.__cloudsInstallPrompt = null;
   window.localStorage.removeItem("clouds:pwa-install-reminder:u");
   window.localStorage.removeItem("clouds:pwa-install-manual-complete:u");
   window.localStorage.removeItem("clouds:pwa-install-signup-reminder:tester");
@@ -91,11 +94,33 @@ describe("mobile regressions", () => {
   });
 
   it("does not show the mobile install reminder on desktop", () => {
+    Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" });
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-14T00:10:00.000Z"));
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     render(<PwaInstallPrompt />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("does not mistake a narrow desktop window for a phone", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:10:00.000Z"));
+    Object.defineProperty(window.navigator, "userAgent", { configurable: true, value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" });
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
+    render(<PwaInstallPrompt />);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows an actionable error if the native installation prompt fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T00:00:10.000Z"));
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    const event = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt: vi.fn().mockRejectedValue(new Error("failed")), userChoice: Promise.resolve({ outcome: "dismissed" }) });
+    render(<PwaInstallPrompt />);
+    act(() => { window.dispatchEvent(event); window.dispatchEvent(new Event("clouds:signup-complete")); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Instalar agora" })); });
+    expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível abrir a instalação");
+    expect(screen.getByRole("dialog")).toBeVisible();
   });
 
   it("does not remind an iPhone user again after they confirm adding the shortcut", () => {

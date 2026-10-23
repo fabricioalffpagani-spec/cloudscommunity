@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useFeedPosition } from "../lib/feed-position";
 import { ConnectedParticipants, useConnectionIds } from "./ConnectedParticipants";
-import { RecloudMenuItem } from "./RecloudAction";
+import { RecloudMenuItem, useRecloud } from "./RecloudAction";
 import { CloudParticipantsSheet } from "./CloudParticipantsSheet";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 import { CloudReportModal } from "./CloudReportModal";
@@ -33,6 +33,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const [deleteError, setDeleteError] = useState("");
   const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
   const [shareCloud, setShareCloud] = useState<ReadCloud | null>(null);
+  const recloud = useRecloud(shareCloud?.id ?? "", Boolean(currentUserId && shareCloud));
   const [reportCloud, setReportCloud] = useState<ReadCloud | null>(null);
   const [editingCloud, setEditingCloud] = useState<ReadCloud | null>(null);
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
@@ -167,7 +168,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       {reportCloud && <CloudReportModal cloudId={reportCloud.id} cloudTitle={reportCloud.title} reportedId={reportCloud.author.id} onClose={() => setReportCloud(null)} />}
       {shareCloud && (() => {
         const url = `${window.location.origin}/cloud/${encodeURIComponent(shareCloud.id)}/conversation?from=read`;
-        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
+        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
       })()}
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">

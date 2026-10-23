@@ -68,6 +68,7 @@ export type CloudMessagePayload = {
   replyToMessageId: string | null;
   createdAt: string;
   updatedAt: string;
+  editedAt: string | null;
   deletedAt: string | null;
   sender: CloudMessageAuthorPayload;
   replyTo: CloudMessageReplyPayload | null;
@@ -124,6 +125,11 @@ export type CreateCloudInput = {
   visibility?: CloudVisibilityValue;
   originCloudId?: string;
   scheduledAt?: string;
+};
+
+export type TrendingTopicPayload = {
+  id: string;
+  name: string;
 };
 
 export type UpdateCloudInput = {

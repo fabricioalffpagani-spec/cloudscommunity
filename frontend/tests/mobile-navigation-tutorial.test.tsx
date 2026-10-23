@@ -31,7 +31,7 @@ describe("mobile welcome tutorial", () => {
     fireEvent.click(screen.getByRole("button", { name: "Entendi" }));
     state.pathname = "/read";
     view.rerender(<MobileNavigationTutorial />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Leia conversas que já aconteceram");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir uma conversa, toque duas vezes rapidamente no título.");
     fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
     view.unmount();
     render(<MobileNavigationTutorial />);
@@ -56,7 +56,7 @@ describe("mobile welcome tutorial", () => {
     fireEvent.click(screen.getByRole("button", { name: "Entendi" }));
     state.pathname = "/read";
     view.rerender(<MobileNavigationTutorial />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Leia conversas que já aconteceram");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir uma conversa, clique duas vezes no título.");
     fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
     view.unmount();
     render(<MobileNavigationTutorial />);
