@@ -11,8 +11,21 @@ describe('feed connections', () => {
       { followerId: 'friend', followingId: 'viewer' },
       { followerId: 'follower', followingId: 'viewer' },
     ]);
-    const service = new UsersService({ follow: { findMany } } as unknown as PrismaService, { resolveSession: jest.fn().mockResolvedValue({ user: { id: 'viewer' } }) } as unknown as AuthService, {} as PushNotificationsService, {} as DirectMessagesGateway);
-    await expect(service.getConnectionIds('token')).resolves.toEqual({ ok: true, userIds: ['friend', 'follower'] });
-    expect(findMany).toHaveBeenCalledWith({ where: { OR: [{ followerId: 'viewer' }, { followingId: 'viewer' }] }, select: { followerId: true, followingId: true } });
+    const service = new UsersService(
+      { follow: { findMany } } as unknown as PrismaService,
+      {
+        resolveSession: jest.fn().mockResolvedValue({ user: { id: 'viewer' } }),
+      } as unknown as AuthService,
+      {} as PushNotificationsService,
+      {} as DirectMessagesGateway,
+    );
+    await expect(service.getConnectionIds('token')).resolves.toEqual({
+      ok: true,
+      userIds: ['friend', 'follower'],
+    });
+    expect(findMany).toHaveBeenCalledWith({
+      where: { OR: [{ followerId: 'viewer' }, { followingId: 'viewer' }] },
+      select: { followerId: true, followingId: true },
+    });
   });
 });
