@@ -642,6 +642,28 @@ export class UsersService {
     };
   }
 
+  async getConnectionIds(token: string | null) {
+    const current = await this.requireSession(token);
+    const follows = await this.prisma.follow.findMany({
+      where: {
+        OR: [{ followerId: current.user.id }, { followingId: current.user.id }],
+      },
+      select: { followerId: true, followingId: true },
+    });
+    return {
+      ok: true,
+      userIds: [
+        ...new Set(
+          follows.map((follow) =>
+            follow.followerId === current.user.id
+              ? follow.followingId
+              : follow.followerId,
+          ),
+        ),
+      ],
+    };
+  }
+
   async following(
     token: string | null,
     sort?: string,

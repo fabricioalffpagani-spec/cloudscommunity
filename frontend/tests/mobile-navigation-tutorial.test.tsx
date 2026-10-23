@@ -52,7 +52,7 @@ describe("mobile welcome tutorial", () => {
   it("shows the desktop instructions and Read explanation only once each", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false }));
     const view = render(<MobileNavigationTutorial />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat, clique em Entrar na Cloud.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat, clique duas vezes no título da conversa.");
     fireEvent.click(screen.getByRole("button", { name: "Entendi" }));
     state.pathname = "/read";
     view.rerender(<MobileNavigationTutorial />);

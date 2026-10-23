@@ -88,6 +88,11 @@ export class UsersController {
     return this.usersService.following(extractSessionToken(req), sort, limit);
   }
 
+  @Get('connections')
+  async connections(@Req() req: Request) {
+    return this.usersService.getConnectionIds(extractSessionToken(req));
+  }
+
   @Get('nearby')
   async nearby(@Req() req: Request) {
     return this.usersService.getNearbyUsers(extractSessionToken(req));
