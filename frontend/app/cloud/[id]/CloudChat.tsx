@@ -10,10 +10,12 @@ import { socketAuth } from "../../lib/socket-auth";
 import { FlameIcon } from "../../components/FlameIcon";
 import { CloudTitleMarquee } from "../../components/CloudTitleMarquee";
 import { UserAvatar, getSessionUserDisplayName, useSessionUser } from "../../components/session-user";
-import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PlayIcon, PlusIcon, SendIcon, StickerIcon, TrashIcon } from "../../components/ui-icons";
+import { ArrowLeftIcon, CheckIcon, MicIcon, PauseIcon, PencilIcon, PlayIcon, PlusIcon, SendIcon, StickerIcon, TrashIcon } from "../../components/ui-icons";
 import { AudioWaveformPlayer } from "../../components/AudioWaveformPlayer";
 import { CloudSystemMessage } from "../../components/CloudSystemMessage";
 import { ForwardToContactModal } from "../../components/ForwardToContactModal";
+import { useRecloud } from "../../components/RecloudAction";
+import { RecloudIcon } from "../../components/RecloudIcon";
 import { MessageMenuPortal } from "../../components/MessageMenuPortal";
 import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { useComposerPanLock } from "../../lib/composer-pan-lock";
@@ -21,6 +23,7 @@ import { buildMentionCandidates } from "../../lib/mention-candidates";
 import { recordStickerUse } from "../../lib/sticker-usage";
 import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
 import { cloudElapsedSeconds } from "../../lib/cloud-start-time";
+import { leaveCloud } from "../../lib/leave-cloud";
 
 type CloudPayload = {
   id: string;
@@ -1745,9 +1748,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [admissionError, setAdmissionError] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
-  const [recloudState, setRecloudState] = useState({ canRecloud: false, reclouded: false });
-  const [recloudError, setRecloudError] = useState("");
-  const [recloudBusy, setRecloudBusy] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
+  const recloud = useRecloud(cloudId, Boolean(user?.id && cloud), actionMenuOpen || shareOpen);
+  const recloudState = recloud;
+  const recloudError = recloud.error;
+  const recloudBusy = recloud.busy;
   const [titleLongPressTimer, setTitleLongPressTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isTitleLongPress, setIsTitleLongPress] = useState(false);
   const [isUpdatingHype, setIsUpdatingHype] = useState(false);
@@ -2870,26 +2877,27 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     finally { setAdmissionBusy(false); }
   };
 
-  useEffect(() => {
-    if (!user?.id || !cloud) return;
-    let cancelled = false;
-    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/recloud`, { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : null)
-      .then((data: { canRecloud?: boolean; reclouded?: boolean } | null) => {
-        if (!cancelled && data) setRecloudState({ canRecloud: !!data.canRecloud, reclouded: !!data.reclouded });
-      }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [cloudId, user?.id, cloud?.members, actionMenuOpen, shareOpen]);
+  const toggleRecloud = recloud.toggle;
 
-  const toggleRecloud = async () => {
-    setRecloudBusy(true);
-    setRecloudError("");
+  const confirmLeave = async () => {
+    if (isLeaving) return;
+    setIsLeaving(true);
+    setLeaveError("");
     try {
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/recloud`, { method: recloudState.reclouded ? "DELETE" : "POST" });
-      if (!response.ok) throw new Error();
-      setRecloudState((previous) => ({ ...previous, reclouded: !previous.reclouded }));
-    } catch { setRecloudError("Não foi possível atualizar o Recloud. Tente novamente."); }
-    finally { setRecloudBusy(false); }
+      await leaveCloud(cloudId, isCloudAuthor);
+      const minimized = localStorage.getItem("clouds:minimized-cloud");
+      let minimizedCloudId: string | undefined;
+      try { minimizedCloudId = minimized ? (JSON.parse(minimized) as { id?: string }).id : undefined; } catch { localStorage.removeItem("clouds:minimized-cloud"); }
+      if (minimizedCloudId === cloudId) {
+        localStorage.removeItem("clouds:minimized-cloud");
+        window.dispatchEvent(new Event("clouds:minimized-cloud-changed"));
+      }
+      router.push("/");
+    } catch (error) {
+      setLeaveError(error instanceof Error ? error.message : "Não foi possível sair da Cloud. Tente novamente.");
+    } finally {
+      setIsLeaving(false);
+    }
   };
 
   const handleBanMember = useCallback(async (userId: string) => {
@@ -3099,7 +3107,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     }}
                     className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white"
                   >
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/70">✎</span>
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/70"><PencilIcon s={16} /></span>
                     Editar Cloud
                     <span className="ml-auto text-[11px] text-white/40">título e duração: {Math.max(0, 3 - (cloud?.editCount ?? 0))} restante(s)</span>
                   </button>
@@ -3127,7 +3135,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     }}
                     className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 transition hover:bg-red-500/10 hover:text-red-200 md:hidden"
                   >
-                    <span className="flex h-6 w-6 items-center justify-center"><AnimatedTrashIcon s={16} /></span>
+                    <span className="flex h-6 w-6 items-center justify-center"><TrashIcon s={16} /></span>
                     Excluir Cloud
                   </button>
                 )}
@@ -3142,7 +3150,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-white/60">D</span>
                   Ver descrição
                 </button>}
-                {recloudState.canRecloud && <button type="button" disabled={recloudBusy} onClick={() => void toggleRecloud()} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 disabled:opacity-50"><span className="flex h-6 w-6 items-center justify-center">↻</span>{recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>}
+                {recloudState.canRecloud && <button type="button" disabled={recloudBusy} onClick={() => void toggleRecloud()} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 hover:bg-white/5 disabled:opacity-50"><span className="flex h-6 w-6 items-center justify-center"><RecloudIcon /></span>{recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>}
                 {recloudError && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloudError}</p>}
                 {canReportCloud && (
                   <button
@@ -3157,6 +3165,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     Denunciar Cloud
                   </button>
                 )}
+                {user?.id && <button type="button" onClick={() => { setActionMenuOpen(false); setLeaveError(""); setLeaveConfirmOpen(true); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 hover:bg-red-500/10">Sair da Cloud</button>}
               </div>
             )}
           </div>
@@ -3816,6 +3825,8 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
           onClose={() => setReportingMsg(null)}
         />
       )}
+
+      {leaveConfirmOpen && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Sair da Cloud?"><div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171821] p-5"><h2 className="text-lg font-bold">Sair da Cloud?</h2><p className="mt-2 text-sm text-white/70">Você sairá desta conversa. As pessoas na Cloud verão a mensagem de que você saiu.</p>{leaveError && <p role="alert" className="mt-3 text-sm text-red-300">{leaveError}</p>}<div className="mt-5 flex justify-end gap-2"><button type="button" disabled={isLeaving} onClick={() => setLeaveConfirmOpen(false)} className="rounded-full px-4 py-2 text-sm text-white/75">Cancelar</button><button type="button" disabled={isLeaving} onClick={() => void confirmLeave()} className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{isLeaving ? "Saindo..." : "Sair"}</button></div></div></div>}
 
       {incomingReport && (
         <ReportNotificationModal

@@ -9,9 +9,8 @@ import { useSessionUser } from "./session-user";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 import { useRecloud } from "./RecloudAction";
 import { RecloudIcon } from "./RecloudIcon";
+import { SendIcon } from "./ui-icons";
 import type { CloudParticipant } from "./CloudParticipantsSheet";
-import { CloudDetailsDialog } from "./CloudDetailsDialog";
-import { CloudDescriptionEditor } from "./CloudDescriptionEditor";
 
 type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
 type ArchivePayload = { cloud: { title: string; visibility?: "public" | "private"; authorId?: string; description?: string | null; endedAt?: string | null; participantProfiles?: CloudParticipant[] }; messages: ArchivedMessage[] };
@@ -58,7 +57,6 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [replyError, setReplyError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
-  const [descriptionEditOpen, setDescriptionEditOpen] = useState(false);
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -165,9 +163,8 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
           <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
         </div>
       </div>
-      {cloud && user?.id === cloud.authorId && <button type="button" onClick={() => setDescriptionEditOpen(true)} className="shrink-0 rounded-full px-2 py-2 text-xs text-white/75 hover:bg-white/10">Editar descrição</button>}
       {cloud?.visibility !== "private" && <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4Z" /></svg>
+        <SendIcon s={22} />
       </button>}
       {recloud.canRecloud && <button type="button" disabled={recloud.busy} aria-label={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} title={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} aria-pressed={recloud.reclouded} onClick={() => void recloud.toggle()} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-white/10 disabled:opacity-50 ${recloud.reclouded ? "text-[#C084FC]" : "text-white/75 hover:text-white"}`}>
         <RecloudIcon />
@@ -179,7 +176,6 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
         <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
       </div>
     </header>
-    {descriptionEditOpen && cloud && <CloudDetailsDialog onClose={() => setDescriptionEditOpen(false)}><CloudDescriptionEditor cloudId={cloudId} description={cloud.description ?? null} onSaved={(description) => { setCloud((current) => current ? { ...current, description } : current); setDescriptionEditOpen(false); }} /></CloudDetailsDialog>}
 
     {recloud.error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{recloud.error}</div>}
     {error && <div role="alert" className="border-b border-white/[0.07] bg-[#2A1018] px-5 py-2 text-[12px] text-[#FCA5A5]">{error}</div>}

@@ -40,6 +40,24 @@ it("opens the MiniCloud when the mobile back arrow returns to the feed", async (
   await waitFor(() => expect(screen.getByRole("button", { name: "Expandir Cloud" })).toBeVisible());
 });
 
+it("leaves from CloudChat, clears the Mini Cloud and returns to the feed", async () => {
+  localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1" }));
+  const changed = vi.fn();
+  window.addEventListener("clouds:membership-changed", changed);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => String(input).endsWith("/exit") ? { ok: true } : original(input, init));
+  vi.stubGlobal("fetch", fetchMock);
+  render(<CloudChat cloudId="cloud-1" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Mais opções" }));
+  fireEvent.click(screen.getByRole("button", { name: "Sair da Cloud" }));
+  fireEvent.click(screen.getByRole("dialog", { name: "Sair da Cloud?" }).querySelector("button:last-child")!);
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
+  expect(localStorage.getItem("clouds:minimized-cloud")).toBeNull();
+  expect(changed).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/exit", expect.objectContaining({ method: "POST" }));
+  window.removeEventListener("clouds:membership-changed", changed);
+});
+
 it("continues to minimize on desktop before returning through browser history", async () => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   vi.spyOn(window.history, "length", "get").mockReturnValue(2);
@@ -62,6 +80,7 @@ it.each([true, false])("permite ao host remover comentário no Talk (mobile: %s)
     return original(input, init);
   }));
   render(<CloudChat cloudId="cloud-1" />);
+  await screen.findByRole("button", { name: "Gerenciar membros" });
   fireEvent.contextMenu(await screen.findByText("Comentário da Ana"));
   fireEvent.click(await screen.findByRole("button", { name: "Remover mensagem" }));
   expect(await screen.findByText("A mensagem de Ana foi removida pelo/a host da Cloud.")).toBeVisible();

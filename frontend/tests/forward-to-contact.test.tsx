@@ -24,6 +24,20 @@ describe("republicar pelo encaminhamento", () => {
 });
 
 describe("forwarded message origin", () => {
+  it("filters contacts by name and @username while preserving forwarding", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => ({ ok: true, json: async () => String(input).endsWith("/conversations") ? { conversation: { id: "conversation-1" } } : { ok: true } }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ForwardToContactModal title="Compartilhar Cloud" url="/cloud/1" label="Cloud" contacts={[{ id: "a", displayName: "Ana Maria", username: "aninha", avatarUrl: null }, { id: "b", displayName: "Bruno", username: "bruninho", avatarUrl: null }]} onClose={vi.fn()} />);
+    const search = screen.getByRole("searchbox", { name: "Pesquisar contatos" });
+    fireEvent.change(search, { target: { value: "@ANIN" } });
+    expect(screen.getByText("Ana Maria")).toBeInTheDocument();
+    expect(screen.queryByText("Bruno")).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "ninguém" } });
+    expect(screen.getByText("Nenhum resultado encontrado.")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "maria" } });
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enviado" })).toBeInTheDocument());
+  });
   it.each([
     ["cloud", "↗ Encaminhada de uma cloud\nConteúdo original"],
     [undefined, "↗ Encaminhada\nConteúdo original"],

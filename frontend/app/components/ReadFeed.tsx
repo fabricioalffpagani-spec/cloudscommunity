@@ -11,6 +11,7 @@ import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactMo
 import { CloudReportModal } from "./CloudReportModal";
 import { useDismissMenu } from "../lib/use-dismiss-menu";
 import { CloudEditDialog, type EditableCloud } from "./CloudEditDialog";
+import { PencilIcon, SendIcon, TrashIcon } from "./ui-icons";
 
 export type ReadCloud = {
   id: string;
@@ -119,9 +120,9 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
               </button><div ref={optionsCloudId === cloud.id ? optionsRef : undefined} className="relative">
                 <button type="button" aria-label="Mais opções da Cloud" aria-expanded={optionsCloudId === cloud.id} onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>
                 {optionsCloudId === cloud.id && <div className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
-                  {currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setDeleteError(""); setCloudToDelete(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir a Cloud</button>}
-                  {currentUserId && currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setEditingCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Editar Cloud</button>}
-                  <button type="button" onClick={() => { setOptionsCloudId(null); setShareCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Enviar para</button>
+                  {currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setDeleteError(""); setCloudToDelete(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir a Cloud</button>}
+                  {currentUserId && currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setEditingCloud(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}
+                  <button type="button" onClick={() => { setOptionsCloudId(null); setShareCloud(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><SendIcon s={16} />Enviar para</button>
                   {currentUserId && <RecloudMenuItem cloudId={cloud.id} />}
                   {currentUserId && currentUserId !== cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setReportCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar</button>}
                 </div>}

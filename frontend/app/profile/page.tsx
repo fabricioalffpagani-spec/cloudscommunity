@@ -14,6 +14,7 @@ import { CloudDetailsDialog } from "../components/CloudDetailsDialog";
 import { CloudDescriptionEditor } from "../components/CloudDescriptionEditor";
 import { ProfileScheduleActions } from "../components/ProfileScheduleActions";
 import { useDismissMenu } from "../lib/use-dismiss-menu";
+import { filterPeople } from "../lib/filter-people";
 import { LongPressHint } from "../components/LongPressHint";
 import {
   SessionUserAvatar,
@@ -164,6 +165,8 @@ function FollowListModal({
   showHypes?: boolean;
   hint?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const visibleUsers = filterPeople(users, query);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -181,14 +184,17 @@ function FollowListModal({
           </button>
         </div>
         {hint && <p className="mb-4 text-[12px] leading-relaxed text-white/55">{hint}</p>}
+        {!showHypes && <input type="search" aria-label={`Pesquisar ${title.toLowerCase()}`} placeholder="Buscar por nome ou @username" value={query} onChange={(event) => setQuery(event.target.value)} className="mb-3 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-[#A855F7]" />}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
           {loading ? (
             <p className="py-4 text-center text-white/50">Carregando...</p>
           ) : users.length === 0 ? (
             <p className="py-4 text-center text-white/50">{emptyMessage}</p>
+          ) : visibleUsers.length === 0 ? (
+            <p className="py-4 text-center text-white/50">Nenhum resultado encontrado.</p>
           ) : (
             <div className="space-y-3">
-              {users.map((listedUser) => (
+              {visibleUsers.map((listedUser) => (
                 <div
                   key={listedUser.id}
                   className="flex items-center gap-3 rounded-xl p-3 transition hover:bg-white/5"
@@ -420,8 +426,11 @@ export default function ProfilePage() {
     };
 
     void loadClouds();
+    const refreshMembership = () => void loadClouds(false);
+    window.addEventListener("clouds:membership-changed", refreshMembership);
     return () => {
       cancelled = true;
+      window.removeEventListener("clouds:membership-changed", refreshMembership);
     };
   }, [user?.id]);
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cloudForwardMarker, parseForwardedContent, type ForwardOrigin } from "../lib/forwarded-content";
 import { RecloudIcon } from "./RecloudIcon";
+import { filterPeople } from "../lib/filter-people";
 
 export type ForwardContact = {
   id: string;
@@ -53,6 +54,8 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
+  const [contactQuery, setContactQuery] = useState("");
+  const visibleContacts = filterPeople(contacts, contactQuery);
   const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded, forwardedOrigin, cloudOrigin }];
 
   const forward = async (contact: ForwardContact) => {
@@ -224,8 +227,8 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15161C] p-5" onClick={(event) => event.stopPropagation()}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-3 py-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#15161C] p-4 md:p-5" onClick={(event) => event.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-[16px] font-bold text-white">{title}</h3>
           <button type="button" onClick={onClose} aria-label="Fechar" className="text-white/45 transition hover:text-white">×</button>
@@ -257,13 +260,14 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
           </section>
         )}
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Contatos do Messages</p>
-        <div className="max-h-56 space-y-2 overflow-y-auto">
-          {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : contacts.map((contact) => {
+        <input type="search" aria-label="Pesquisar contatos" placeholder="Buscar por nome ou @username" value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} className="mb-2 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-[13px] text-white outline-none placeholder:text-white/40 focus:border-[#A855F7]" />
+        <div className="max-h-56 space-y-0.5 overflow-y-auto">
+          {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : visibleContacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum resultado encontrado.</p> : visibleContacts.map((contact) => {
             const sent = sentTo.includes(contact.id);
-            return <div key={contact.id} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-white/[0.05]">
+            return <div key={contact.id} className="flex min-h-12 items-center gap-2 rounded-xl px-2 py-1 hover:bg-white/[0.05] md:gap-3 md:py-2">
               {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-[13px] font-bold">{contact.displayName.slice(0, 1).toUpperCase()}</span>}
               <div className="min-w-0 flex-1"><p className="truncate text-[14px] font-semibold text-white">{contact.displayName}</p><p className="truncate text-[12px] text-white/45">@{contact.username}</p></div>
-              <button type="button" disabled={Boolean(sendingTo) || sent} onClick={() => void forward(contact)} className="rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50">{sent ? "Enviado" : sendingTo === contact.id ? "Enviando..." : "Encaminhar"}</button>
+              <button type="button" disabled={Boolean(sendingTo) || sent} onClick={() => void forward(contact)} className="min-h-9 shrink-0 rounded-full bg-[#9333EA] px-3 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-50">{sent ? "Enviado" : sendingTo === contact.id ? "Enviando..." : "Encaminhar"}</button>
             </div>;
           })}
         </div>
