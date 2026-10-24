@@ -880,6 +880,38 @@ describe('Talk / Read regression', () => {
       data: { leftAt: expect.any(Date) as unknown },
     });
   });
+  it('inactivates membership when leaving and permits an idempotent retry', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudMember.findFirst
+      .mockResolvedValueOnce({ id: 'current-member' })
+      .mockResolvedValueOnce(null);
+    await expect(service.leaveCloud('token', cloudId)).resolves.toEqual({
+      ok: true,
+      userId: 'viewer',
+      left: true,
+    });
+    expect(prisma.cloudMember.update).toHaveBeenCalledWith({
+      where: { id: 'current-member' },
+      data: { leftAt: expect.any(Date) as unknown },
+    });
+    await expect(service.leaveCloud('token', cloudId)).resolves.toEqual({
+      ok: true,
+      userId: 'viewer',
+      left: false,
+    });
+    expect(prisma.cloudMember.update).toHaveBeenCalledTimes(1);
+  });
+  it('uses the same membership transition when the author exits', async () => {
+    const { service, prisma } = setup();
+    prisma.cloudMember.findFirst.mockResolvedValue({ id: 'author-member' });
+    await expect(
+      service.exitCloudConversation('token', cloudId),
+    ).resolves.toEqual({ ok: true, userId: 'viewer', left: true });
+    expect(prisma.cloudMember.update).toHaveBeenCalledWith({
+      where: { id: 'author-member' },
+      data: { leftAt: expect.any(Date) as unknown },
+    });
+  });
   it('hides a private cloud from an authenticated user who was not invited', async () => {
     const { service, prisma, cloud } = setup();
     cloud.status = 'active';

@@ -288,20 +288,17 @@ describe("Archived cloud conversation", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Republicar Cloud" })).not.toBeInTheDocument());
     vi.unstubAllGlobals();
   });
-  it("allows the creator to edit a private Cloud description after it ends", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it("does not offer description editing after the Cloud ends", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "user-maria", displayName: "Maria", username: "maria", avatarUrl: null } }) };
       if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud: { ...cloud, authorId: "user-maria", visibility: "private", description: "Antes" }, messages: [] }) };
-      if (init?.method === "PATCH") return { ok: true, json: async () => ({ cloud: { description: "Depois" } }) };
       return { ok: false, json: async () => ({}) };
     });
     vi.stubGlobal("fetch", fetchMock);
     render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Editar descrição" }));
-    fireEvent.change(screen.getByRole("textbox", { name: /Descrição/ }), { target: { value: "Depois" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar descrição" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ description: "Depois" }) })));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Informações da Cloud" })).not.toBeInTheDocument());
+    await screen.findByText("Nenhuma mensagem");
+    expect(screen.queryByRole("button", { name: "Editar descrição" })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/clouds/cloud-1", expect.objectContaining({ method: "PATCH" }));
     vi.unstubAllGlobals();
   });
   it("shares the archived Cloud from the conversation header", async () => {

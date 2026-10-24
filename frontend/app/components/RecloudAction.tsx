@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { RecloudIcon } from "./RecloudIcon";
 
 type State = { canRecloud: boolean; reclouded: boolean };
-export function useRecloud(cloudId: string, enabled = true) {
+export function useRecloud(cloudId: string, enabled = true, refreshKey?: unknown) {
   const [state, setState] = useState<State>({ canRecloud: false, reclouded: false });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -16,7 +17,7 @@ export function useRecloud(cloudId: string, enabled = true) {
       .then((data: State | null) => { if (active && data) setState({ canRecloud: !!data.canRecloud, reclouded: !!data.reclouded }); })
       .catch(() => {});
     return () => { active = false; };
-  }, [cloudId, enabled]);
+  }, [cloudId, enabled, refreshKey]);
   useEffect(() => {
     const changed = (event: Event) => {
       const detail = (event as CustomEvent<{ cloudId: string; reclouded: boolean }>).detail;
@@ -43,5 +44,5 @@ export function useRecloud(cloudId: string, enabled = true) {
 export function RecloudMenuItem({ cloudId }: { cloudId: string }) {
   const recloud = useRecloud(cloudId);
   if (!recloud.canRecloud) return null;
-  return <><button type="button" disabled={recloud.busy} onClick={() => void recloud.toggle()} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5 disabled:opacity-50">{recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>{recloud.error && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloud.error}</p>}</>;
+  return <><button type="button" disabled={recloud.busy} onClick={() => void recloud.toggle()} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5 disabled:opacity-50"><RecloudIcon />{recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}</button>{recloud.error && <p role="alert" className="px-4 py-2 text-xs text-red-300">{recloud.error}</p>}</>;
 }

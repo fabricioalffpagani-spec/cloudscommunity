@@ -1,6 +1,41 @@
 import { CloudController } from './cloud.controller';
 
 describe('CloudController', () => {
+  it.each(['leaveCloud', 'exitCloudConversation'] as const)(
+    'broadcasts membership and message after %s',
+    async (method) => {
+      const message = { id: 'leave-message' };
+      const cloudService = {
+        leaveCloud: jest
+          .fn()
+          .mockResolvedValue({ ok: true, userId: 'viewer', left: true }),
+        exitCloudConversation: jest
+          .fn()
+          .mockResolvedValue({ ok: true, userId: 'viewer', left: true }),
+        createLeaveNotification: jest.fn().mockResolvedValue(message),
+      };
+      const gateway = {
+        broadcastMessageCreated: jest.fn(),
+        broadcastMembersUpdated: jest.fn().mockResolvedValue(2),
+      };
+      const controller = new CloudController(
+        cloudService as never,
+        {} as never,
+        gateway as never,
+      );
+      const result = await controller[method]('cloud-id', {
+        headers: { cookie: '' },
+      } as never);
+      expect(result).toEqual({ ok: true, membersCount: 2 });
+      expect(gateway.broadcastMessageCreated).toHaveBeenCalledWith(
+        null,
+        'cloud-id',
+        message,
+      );
+      expect(gateway.broadcastMembersUpdated).toHaveBeenCalledWith('cloud-id');
+    },
+  );
+
   it('broadcasts a Cloud edit only after persistence succeeds', async () => {
     const message = {
       id: 'm1',

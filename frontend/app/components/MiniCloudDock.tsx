@@ -6,6 +6,7 @@ import { io, type Socket } from "socket.io-client";
 import { socketAuth } from "../lib/socket-auth";
 import { clampMiniCloudPosition } from "../lib/mini-cloud-position";
 import { cloudElapsedSeconds } from "../lib/cloud-start-time";
+import { leaveCloud } from "../lib/leave-cloud";
 import { CloudSystemMessage } from "./CloudSystemMessage";
 import { CloudTitleMarquee } from "./CloudTitleMarquee";
 import { useSessionUser } from "./session-user";
@@ -165,11 +166,8 @@ export function MiniCloudDock() {
     setIsLeaving(true);
     setLeaveError("");
     const leavingCloud = cloud;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 12_000);
     try {
-      const response = await fetch(`/api/clouds/${leavingCloud.id}/${leavingCloud.isAuthor ? "exit" : "leave"}`, { method: "POST", credentials: "include", signal: controller.signal });
-      if (!response.ok) throw new Error("Não foi possível sair da Cloud. Tente novamente.");
+      await leaveCloud(leavingCloud.id, leavingCloud.isAuthor);
       localStorage.removeItem("clouds:minimized-cloud");
       dispatchEvent(new Event("clouds:minimized-cloud-changed"));
       setCloud(null);
@@ -180,9 +178,8 @@ export function MiniCloudDock() {
       }
       setLeaveConfirmOpen(false);
     } catch (error) {
-      setLeaveError(error instanceof Error && error.name !== "AbortError" ? error.message : "A saída demorou demais. Tente novamente.");
+      setLeaveError(error instanceof Error ? error.message : "Não foi possível sair da Cloud. Tente novamente.");
     } finally {
-      window.clearTimeout(timeout);
       setIsLeaving(false);
     }
   };

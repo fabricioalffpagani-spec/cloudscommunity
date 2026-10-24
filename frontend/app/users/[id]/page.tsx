@@ -19,6 +19,7 @@ import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
 import { useDismissMenu } from "../../lib/use-dismiss-menu";
+import { filterPeople } from "../../lib/filter-people";
 
 type FollowListUser = {
   id: string;
@@ -266,6 +267,8 @@ export default function UserProfilePage() {
   const [followingModalOpen, setFollowingModalOpen] = useState(false);
   const [followersList, setFollowersList] = useState<FollowListUser[]>([]);
   const [followingList, setFollowingList] = useState<FollowListUser[]>([]);
+  const [followersQuery, setFollowersQuery] = useState("");
+  const [followingQuery, setFollowingQuery] = useState("");
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [loadingFollowing, setLoadingFollowing] = useState(false);
   const [hypesModalOpen, setHypesModalOpen] = useState(false);
@@ -717,14 +720,17 @@ export default function UserProfilePage() {
               <h3 className="text-[18px] font-bold">Seguidores</h3>
               <button onClick={() => setFollowersModalOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
+            <input type="search" aria-label="Pesquisar seguidores" placeholder="Buscar por nome ou @username" value={followersQuery} onChange={(event) => setFollowersQuery(event.target.value)} className="mb-3 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-[#A855F7]" />
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
               {loadingFollowers ? (
                 <p className="text-center text-white/50 py-4">Carregando...</p>
               ) : followersList.length === 0 ? (
                 <p className="text-center text-white/50 py-4">Nenhum seguidor ainda</p>
+              ) : filterPeople(followersList, followersQuery).length === 0 ? (
+                <p className="text-center text-white/50 py-4">Nenhum resultado encontrado.</p>
               ) : (
                 <div className="space-y-3">
-                  {followersList.map((user) => <ProfileListRow key={user.id} user={user} showHypes={false} actionLabel={isOwnProfile ? "Remover seguidor" : undefined} onAction={isOwnProfile ? () => removeFollower(user) : undefined} actioning={actioningUserId === user.id} />)}
+                  {filterPeople(followersList, followersQuery).map((user) => <ProfileListRow key={user.id} user={user} showHypes={false} actionLabel={isOwnProfile ? "Remover seguidor" : undefined} onAction={isOwnProfile ? () => removeFollower(user) : undefined} actioning={actioningUserId === user.id} />)}
                 </div>
               )}
             </div>
@@ -740,14 +746,17 @@ export default function UserProfilePage() {
               <h3 className="text-[18px] font-bold">Seguindo</h3>
               <button onClick={() => setFollowingModalOpen(false)} className="text-white/50 hover:text-white">×</button>
             </div>
+            <input type="search" aria-label="Pesquisar seguindo" placeholder="Buscar por nome ou @username" value={followingQuery} onChange={(event) => setFollowingQuery(event.target.value)} className="mb-3 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-[#A855F7]" />
             <div className="min-h-0 flex-1 overflow-y-auto scrollbar-purple pr-1">
               {loadingFollowing ? (
                 <p className="text-center text-white/50 py-4">Carregando...</p>
               ) : followingList.length === 0 ? (
                 <p className="text-center text-white/50 py-4">Não seguindo ninguém ainda</p>
+              ) : filterPeople(followingList, followingQuery).length === 0 ? (
+                <p className="text-center text-white/50 py-4">Nenhum resultado encontrado.</p>
               ) : (
                 <div className="space-y-3">
-                  {followingList.map((user) => <ProfileListRow key={user.id} user={user} actionLabel={isOwnProfile ? "Deixar de seguir" : undefined} onAction={isOwnProfile ? () => unfollowListedUser(user) : undefined} actioning={actioningUserId === user.id} />)}
+                  {filterPeople(followingList, followingQuery).map((user) => <ProfileListRow key={user.id} user={user} actionLabel={isOwnProfile ? "Deixar de seguir" : undefined} onAction={isOwnProfile ? () => unfollowListedUser(user) : undefined} actioning={actioningUserId === user.id} />)}
                 </div>
               )}
             </div>

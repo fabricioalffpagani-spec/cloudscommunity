@@ -9,8 +9,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
 import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
 import { cloudRemainingSeconds } from "./lib/cloud-countdown";
-import { cloudInvitation, invitationCountdown } from "./lib/cloud-invitation";
-import { CloudShareOptions } from "./components/CloudShareOptions";
 import { TrendingTopicSuggestions } from "./components/TrendingTopicSuggestions";
 import { recordedAudioBlob } from "./lib/recorded-audio";
 
@@ -31,6 +29,8 @@ import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrom
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import { ConnectedParticipants, useConnectionIds } from "./components/ConnectedParticipants";
 import { RecloudMenuItem } from "./components/RecloudAction";
+import { ShareModal } from "./components/ShareModal";
+import { PencilIcon, SendIcon as PaperPlaneIcon, TrashIcon } from "./components/ui-icons";
 import { CloudParticipantsSheet } from "./components/CloudParticipantsSheet";
 import { SearchModal } from "./components/SearchModal";
 import { CloudReportModal } from "./components/CloudReportModal";
@@ -283,19 +283,6 @@ function formatParticipantCount(value: number) {
   return `${value}`;
 }
 
-function hashString(value: string) {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
-function avatarColor(source: string) {
-  const palette = ["#9333EA", "#3B82F6", "#22C55E", "#F97316", "#EC4899", "#06B6D4"];
-  return palette[hashString(source) % palette.length];
-}
-
 function getCloudRemainingSeconds(cloud: Cloud) {
   return cloudRemainingSeconds(cloud);
 }
@@ -526,15 +513,6 @@ function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
   );
 }
 
-function PaperPlaneIcon({ s = 24, className }: { s?: number; className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <path d="M22 2L11 13" />
-      <path d="M22 2l-7 20-4-9-9-4 20-7Z" />
-    </svg>
-  );
-}
-
 function ChatBubbleIcon({ s = 32, className }: { s?: number; className?: string }) {
   return (
     <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
@@ -574,176 +552,6 @@ function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
 // ─── Contacts (shared with share modal) ──────────────────────────────────────
 
 const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
-
-type ShareContact = {
-  id: string;
-  username: string;
-  displayName: string;
-  avatarUrl: string | null;
-};
-
-// ─── Share Modal ──────────────────────────────────────────────────────────────
-
-function ShareModal({ cloudId, cloudTitle, cloudUrl, onClose }: { cloudId: string; cloudTitle: string; cloudUrl: string; onClose: () => void }) {
-  const [view, setView] = useState<"main" | "contacts">("main");
-  const [sent, setSent] = useState<Record<string, boolean>>({});
-  const [copied, setCopied] = useState(false);
-  const [contacts, setContacts] = useState<ShareContact[]>([]);
-  const [contactsError, setContactsError] = useState<string | null>(null);
-  const [loadingContacts, setLoadingContacts] = useState(false);
-  const [shareCloud, setShareCloud] = useState<CloudApiPayload | null>(null);
-
-  useEffect(() => {
-    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}/share`, { method: "POST" });
-    let active = true;
-    void fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (active && data?.cloud) setShareCloud(data.cloud); }).catch(() => {});
-    return () => { active = false; };
-  }, [cloudId]);
-
-  const invitationText = cloudInvitation({ title: shareCloud?.title || cloudTitle, url: cloudUrl, remaining: shareCloud ? invitationCountdown(shareCloud.createdAt, shareCloud.duration) : undefined, participants: shareCloud?.membersCount });
-
-  useEffect(() => {
-    if (view !== "contacts" || contacts.length > 0 || loadingContacts) return;
-
-    setLoadingContacts(true);
-    setContactsError(null);
-    fetch("/api/users/following", { cache: "no-store" })
-      .then(async response => {
-        if (!response.ok) throw new Error("Não foi possível carregar os contatos.");
-        return response.json() as Promise<{ users?: ShareContact[] }>;
-      })
-      .then(payload => setContacts(Array.isArray(payload.users) ? payload.users : []))
-      .catch(error => setContactsError(error instanceof Error ? error.message : "Não foi possível carregar os contatos."))
-      .finally(() => setLoadingContacts(false));
-  }, [contacts.length, loadingContacts, view]);
-
-  const handleSendToContact = (contactId: string) => {
-    setSent(prev => ({ ...prev, [contactId]: true }));
-    const params = new URLSearchParams({ id: contactId, share: "cloud", url: cloudUrl, title: cloudTitle, autosend: "true" });
-    window.location.assign(`/messages?${params.toString()}`);
-  };
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(cloudUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  const handleNativeShare = async () => {
-    const shareData = { text: invitationText };
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-        onClose();
-      } catch (error) {
-        // Closing the native sheet is a normal cancellation, not an error.
-        if (!(error instanceof DOMException && error.name === "AbortError")) return;
-      }
-      return;
-    }
-    handleCopy();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-[#111116] shadow-2xl overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
-          {view !== "main" && (
-            <button type="button" onClick={() => setView("main")} className="mr-3 text-white/40 hover:text-white transition">
-              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </button>
-          )}
-          <span className="text-[16px] font-bold text-white flex-1">
-            {view === "main" ? "Compartilhar Cloud" : "Enviar para contato"}
-          </span>
-          <button type="button" onClick={onClose} className="text-white/40 hover:text-white transition">
-            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M6 6l12 12" /><path d="M18 6 6 18" />
-            </svg>
-          </button>
-        </div>
-
-        {/* ── Cloud title preview ── */}
-        {view === "main" && (
-          <div className="mx-5 mt-4 rounded-xl border border-white/[0.07] bg-[#1C1F2E] px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-1">Cloud</p>
-            <p className="text-[14px] font-semibold text-white truncate">{cloudTitle}</p>
-          </div>
-        )}
-
-        {view === "main" && <CloudShareOptions onShare={() => void handleNativeShare()} onContacts={() => setView("contacts")} onCopy={handleCopy} copied={copied} />}
-
-        {/* ── Contacts view ── */}
-        {view === "contacts" && (
-          <div className="p-4">
-            <p className="mb-3 px-1 text-[12px] text-white/40">Selecione quem deve receber o link desta Cloud:</p>
-            {loadingContacts ? (
-              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
-                Carregando contatos...
-              </div>
-            ) : contactsError ? (
-              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
-                {contactsError}
-              </div>
-            ) : contacts.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-[13px] text-white/50">
-                Você ainda não segue ninguém
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {contacts.map(contact => (
-                  <div key={contact.id} className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-white/[0.04]">
-                    <div className="relative shrink-0">
-                      {contact.avatarUrl ? (
-                        <img 
-                          src={contact.avatarUrl} 
-                          alt={contact.displayName}
-                          className="h-10 w-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                          style={{ backgroundColor: avatarColor(contact.username) }}>
-                          {contact.displayName.slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-semibold text-white truncate">{contact.displayName}</p>
-                      <p className="text-[11px] text-white/40">@{contact.username}</p>
-                    </div>
-                    {sent[contact.id] ? (
-                      <span className="text-[12px] font-semibold text-[#22C55E] flex items-center gap-1">
-                        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
-                        Enviado
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleSendToContact(contact.id)}
-                        className="shrink-0 rounded-full bg-[#9333EA] px-4 py-1.5 text-[12px] font-semibold text-white transition hover:bg-[#7C3AED]"
-                      >
-                        Enviar
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
-}
 
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
@@ -2517,7 +2325,7 @@ function DesktopCloudFeed({ clouds, initialCloudId, scope, order, navigationTarg
     const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
     const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
     return <article key={cloud.id} data-cloud-page className="relative mx-auto flex h-full min-h-full w-full max-w-[1100px] snap-start flex-col">
-      <div className="talk-card-header flex items-center justify-between gap-6 px-12 pb-7 pt-10"><div className="flex min-w-0 items-center gap-5"><span className="relative shrink-0">{profile.avatar ? <img src={profile.avatar} alt="" className="talk-card-avatar h-20 w-20 rounded-full object-cover ring-2 ring-white/10" referrerPolicy="no-referrer" /> : <span className="talk-card-avatar flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-2xl font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}<span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" /></span><div className="min-w-0"><p className="truncate text-[21px] font-semibold text-white">{profile.name}</p><p className="text-[16px] text-white/45">@{profile.handle}</p></div></div><div className="flex shrink-0 items-center gap-6"><button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex -space-x-4 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]" aria-label={`${participants.length} participantes da Cloud`}>{participants.slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold">{participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">+{participants.length - 7}</span>}</button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((current) => current === cloud.id ? null : cloud.id); }} className="p-2 text-[26px] leading-none text-white/80 hover:text-white">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUserId) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUserId && <RecloudMenuItem cloudId={cloud.id} />}{currentUserId && cloud.authorId !== currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUserId && cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Editar Cloud</button>}{cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div></div></div>
+      <div className="talk-card-header flex items-center justify-between gap-6 px-12 pb-7 pt-10"><div className="flex min-w-0 items-center gap-5"><span className="relative shrink-0">{profile.avatar ? <img src={profile.avatar} alt="" className="talk-card-avatar h-20 w-20 rounded-full object-cover ring-2 ring-white/10" referrerPolicy="no-referrer" /> : <span className="talk-card-avatar flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-2xl font-bold">{profile.name.slice(0, 1).toUpperCase()}</span>}<span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" /></span><div className="min-w-0"><p className="truncate text-[21px] font-semibold text-white">{profile.name}</p><p className="text-[16px] text-white/45">@{profile.handle}</p></div></div><div className="flex shrink-0 items-center gap-6"><button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex -space-x-4 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]" aria-label={`${participants.length} participantes da Cloud`}>{participants.slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold">{participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">+{participants.length - 7}</span>}</button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((current) => current === cloud.id ? null : cloud.id); }} className="p-2 text-[26px] leading-none text-white/80 hover:text-white">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUserId) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUserId && <RecloudMenuItem cloudId={cloud.id} />}{currentUserId && cloud.authorId !== currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUserId && cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}{cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir Cloud</button>}</div>}</div></div></div>
       {participantsCloudId === cloud.id && <CloudParticipantsSheet title={cloud.title} participants={cloud.participantProfiles ?? []} onClose={() => setParticipantsCloudId(null)} />}
       {shareTarget?.id === cloud.id && <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={siteOrigin + (cloud.href ?? ("/cloud/" + cloud.id))} onClose={() => setShareTarget(null)} />}
       <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="absolute left-12 top-10 z-20 h-20 w-[340px] rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-[#C084FC]" />
@@ -2607,7 +2415,7 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
                 {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).slice(0, 4).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold">{participant.name.slice(0, 1)}</span>)}
                 {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">+{(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length - 4}</span>}
                 </div>
-              </button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUser?.id) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUser?.id && <RecloudMenuItem cloudId={cloud.id} />}{currentUser?.id && cloud.authorId !== currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUser?.id && cloud.authorId === currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Editar Cloud</button>}{cloud.authorId === currentUser?.id && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Excluir Cloud</button>}</div>}</div>
+              </button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUser?.id) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUser?.id && <RecloudMenuItem cloudId={cloud.id} />}{currentUser?.id && cloud.authorId !== currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUser?.id && cloud.authorId === currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}{cloud.authorId === currentUser?.id && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir Cloud</button>}</div>}</div>
             </div>
             <button
               type="button"
@@ -2879,8 +2687,10 @@ function PageContent() {
       }, 100);
     };
     const unsubscribe = subscribeToCloudFeedUpdates(refreshFeed);
+    window.addEventListener("clouds:membership-changed", refreshFeed);
     return () => {
       unsubscribe();
+      window.removeEventListener("clouds:membership-changed", refreshFeed);
       if (refreshTimer !== null) window.clearTimeout(refreshTimer);
     };
   }, [cloudScope, user?.id]);
