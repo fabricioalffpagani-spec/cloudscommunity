@@ -57,6 +57,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [replyError, setReplyError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
   const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
+  const showRecloudAction = Boolean(user?.id && cloud?.visibility !== "private");
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -163,12 +164,14 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
           <span className="flex items-center gap-1 text-[#A855F7]"><LockIcon /> Somente leitura</span>
         </div>
       </div>
-      {cloud?.visibility !== "private" && <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
-        <SendIcon s={22} />
-      </button>}
-      {recloud.canRecloud && <button type="button" disabled={recloud.busy} aria-label={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} title={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} aria-pressed={recloud.reclouded} onClick={() => void recloud.toggle()} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-white/10 disabled:opacity-50 ${recloud.reclouded ? "text-[#C084FC]" : "text-white/75 hover:text-white"}`}>
-        <RecloudIcon />
-      </button>}
+      <div className="flex shrink-0 items-center">
+        {cloud?.visibility !== "private" && <button type="button" disabled={!cloud} onClick={() => setShareOpen(true)} aria-label="Compartilhar Cloud" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-white disabled:opacity-40">
+          <SendIcon s={22} />
+        </button>}
+        {showRecloudAction && <button type="button" disabled={!recloud.canRecloud || recloud.busy} aria-label={recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud"} title={recloud.canRecloud ? (recloud.reclouded ? "Desfazer Recloud" : "Republicar Cloud") : "Republicação indisponível para esta Cloud"} aria-pressed={recloud.reclouded} onClick={() => void recloud.toggle()} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 ${recloud.reclouded ? "text-[#C084FC]" : "text-white/75 hover:text-white"}`}>
+          <RecloudIcon />
+        </button>}
+      </div>
       <div data-testid="mobile-archive-status" className="flex w-full items-center gap-2 pl-[2.375rem] text-[13px] text-white/60 sm:hidden">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/30" />
         <span>{endedLabel(cloud?.endedAt)}</span>

@@ -576,6 +576,16 @@ function HeaderForwardIcon() {
   );
 }
 
+function HeaderLeaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      <path d="m10 17 5-5-5-5" />
+      <path d="M15 12H3" />
+    </svg>
+  );
+}
+
 function HeaderMembersIcon() {
   return (
     <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="overflow-visible">
@@ -1751,7 +1761,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [leaveError, setLeaveError] = useState("");
-  const recloud = useRecloud(cloudId, Boolean(user?.id && cloud), actionMenuOpen || shareOpen);
+  const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
   const recloudState = recloud;
   const recloudError = recloud.error;
   const recloudBusy = recloud.busy;
@@ -3041,13 +3051,16 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   </button>
                 )}
               </div>
-              {!isPrivateCloud && <button
+              {!isPrivateCloud && user?.id && <button
                 type="button"
-                aria-label="Encaminhar"
-                onClick={() => setShareOpen(true)}
-                className="cloud-share-pulse group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
+                aria-label={recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}
+                aria-pressed={recloudState.reclouded}
+                title={recloudState.canRecloud ? (recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud") : "Republicação indisponível para esta Cloud"}
+                disabled={!recloudState.canRecloud || recloudBusy}
+                onClick={() => void toggleRecloud()}
+                className={`group flex h-9 w-9 items-center justify-center transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-10 sm:w-10 ${recloudState.reclouded ? "text-[#C084FC]" : "text-white"}`}
               >
-                <HeaderForwardIcon />
+                <RecloudIcon />
               </button>}
             </>
           )}
@@ -3178,7 +3191,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     Denunciar Cloud
                   </button>
                 )}
-                {user?.id && <button type="button" onClick={() => { setActionMenuOpen(false); setLeaveError(""); setLeaveConfirmOpen(true); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 hover:bg-red-500/10">Sair da Cloud</button>}
+                {user?.id && <button type="button" onClick={() => { setActionMenuOpen(false); setLeaveError(""); setLeaveConfirmOpen(true); }} className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-red-300 hover:bg-red-500/10"><span className="flex h-6 w-6 items-center justify-center"><HeaderLeaveIcon /></span>Sair da Cloud</button>}
               </div>
             )}
           </div>

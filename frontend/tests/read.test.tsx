@@ -89,17 +89,11 @@ describe("Read", () => {
     expect(await screen.findByText("Denúncia enviada")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
-  it("opens the editor from the creator's Read menu and applies the saved values", async () => {
-    const saved = { id: cloud.id, title: "Atualizada", duration: "30min", description: "Nova", editCount: 3 };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cloud: saved }) }));
-    const onEdited = vi.fn();
-    render(<ReadFeed clouds={[{ ...cloud, duration: "10min", description: "Antes", editCount: 2 }]} currentUserId="user-maria" onDelete={onDelete} onEdited={onEdited} />);
+  it.each([375, 1280])("does not offer editing ended Clouds to their creator at %ipx", (width) => {
+    vi.stubGlobal("innerWidth", width);
+    render(<ReadFeed clouds={[cloud]} currentUserId="user-maria" onDelete={onDelete} />);
     fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
-    fireEvent.click(screen.getByRole("button", { name: "Editar Cloud" }));
-    fireEvent.change(screen.getByRole("textbox", { name: /Título/ }), { target: { value: "Atualizada" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar edição" }));
-    await waitFor(() => expect(onEdited).toHaveBeenCalledWith(saved));
-    expect(screen.queryByRole("dialog", { name: "Editar Cloud" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar Cloud" })).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
   it("offers the creator deletion, but not reporting, and confirms before deleting", async () => {
@@ -270,6 +264,7 @@ describe("Archived cloud conversation", () => {
     expect(screen.getByRole("button", { name: "Compartilhar Cloud" }).nextElementSibling).toBe(button);
     expect(screen.queryByRole("button", { name: "Ver participantes da Cloud" })).not.toBeInTheDocument();
     expect(within(screen.getByTestId("mobile-archive-status")).getByText(/Cloud encerrada há/)).toBeInTheDocument();
+    await waitFor(() => expect(button).toBeEnabled());
     fireEvent.click(button);
     const undo = await screen.findByRole("button", { name: "Desfazer Recloud" });
     expect(undo).toHaveAttribute("aria-pressed", "true");
@@ -283,7 +278,7 @@ describe("Archived cloud conversation", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "DELETE" });
     vi.unstubAllGlobals();
   });
-  it("does not offer Recloud to someone who cannot republish", async () => {
+  it("keeps the Recloud icon visible but disabled when the reader cannot republish", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/auth/me") return { ok: true, json: async () => ({ user: { id: "viewer", username: "viewer", displayName: "Viewer" } }) };
@@ -293,7 +288,7 @@ describe("Archived cloud conversation", () => {
     }));
     render(<SessionUserProvider><ArchivedConversation cloudId="cloud-1" /></SessionUserProvider>);
     await screen.findByRole("button", { name: "Compartilhar Cloud" });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Republicar Cloud" })).not.toBeInTheDocument());
+    expect(await screen.findByRole("button", { name: "Republicar Cloud" })).toBeDisabled();
     vi.unstubAllGlobals();
   });
   it("does not offer description editing after the Cloud ends", async () => {

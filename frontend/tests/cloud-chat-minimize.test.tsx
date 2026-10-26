@@ -69,7 +69,7 @@ it("continues to minimize on desktop before returning through browser history", 
   vi.restoreAllMocks();
 });
 
-it.each([true, false])("offers Recloud only inside the Talk three-dot menu (mobile: %s)", async (mobile) => {
+it.each([true, false])("replaces the Talk header forwarding action with Recloud and keeps forwarding in the menu (mobile: %s)", async (mobile) => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -82,14 +82,15 @@ it.each([true, false])("offers Recloud only inside the Talk three-dot menu (mobi
   vi.stubGlobal("fetch", fetchMock);
   render(<CloudChat cloudId="cloud-1" />);
   await screen.findByRole("heading", { name: "Conversa" });
-  expect(await screen.findByRole("button", { name: "Encaminhar" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Republicar Cloud" })).not.toBeInTheDocument();
+  const recloud = await screen.findByRole("button", { name: "Republicar Cloud" });
+  await waitFor(() => expect(recloud).toBeEnabled());
+  expect(screen.queryByRole("button", { name: "Encaminhar" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
-  expect(screen.getAllByRole("button", { name: "Encaminhar" })).toHaveLength(2);
+  expect(screen.getByRole("button", { name: "Encaminhar" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Ver descrição/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Denunciar Cloud/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeInTheDocument();
-  fireEvent.click(await screen.findByRole("button", { name: "Republicar Cloud" }));
+  expect(screen.getByRole("button", { name: "Sair da Cloud" }).querySelector("svg")).toBeInTheDocument();
+  fireEvent.click(recloud);
   expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "POST" });
 });
