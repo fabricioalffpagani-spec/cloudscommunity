@@ -29,7 +29,7 @@ import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrom
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
 import { ConnectedParticipants, useConnectionIds } from "./components/ConnectedParticipants";
 import { RecloudMenuItem } from "./components/RecloudAction";
-import { ShareModal } from "./components/ShareModal";
+import { ShareModal } from "./components/UnifiedShareModal";
 import { PencilIcon, SendIcon as PaperPlaneIcon, TrashIcon } from "./components/ui-icons";
 import { CloudParticipantsSheet } from "./components/CloudParticipantsSheet";
 import { SearchModal } from "./components/SearchModal";

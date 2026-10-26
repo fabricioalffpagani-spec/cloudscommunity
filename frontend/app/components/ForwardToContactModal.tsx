@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { cloudForwardMarker, parseForwardedContent, type ForwardOrigin } from "../lib/forwarded-content";
 import { RecloudIcon } from "./RecloudIcon";
 import { filterPeople } from "../lib/filter-people";
@@ -41,6 +41,7 @@ type Props = {
   cloudOrigin?: ForwardOrigin;
   contacts: ForwardContact[];
   loading?: boolean;
+  contactsError?: string | null;
   externalShareText?: string;
   externalSharePrompt?: string;
   items?: ForwardItem[];
@@ -48,17 +49,20 @@ type Props = {
   onClose: () => void;
 };
 
-export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, externalShareText, externalSharePrompt = "Esse papo tem a cara de alguém? Convide amigos para participar!", items, recloud, onClose }: Props) {
+export function ForwardToContactModal({ title, preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded = true, forwardedOrigin, cloudOrigin, contacts, loading = false, contactsError, externalShareText, externalSharePrompt = "Esse papo tem a cara de alguém? Convide amigos para participar!", items, recloud, onClose }: Props) {
   const [note, setNote] = useState("");
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [externalShareNotice, setExternalShareNotice] = useState<string | null>(null);
   const [contactQuery, setContactQuery] = useState("");
+  const forwardingRef = useRef(new Set<string>());
   const visibleContacts = filterPeople(contacts, contactQuery);
   const forwardItems = items?.length ? items : [{ preview, url, label, messageContent, mediaKind, mediaUrl, mediaDurationMs, mediaFileName, forwarded, forwardedOrigin, cloudOrigin }];
 
   const forward = async (contact: ForwardContact) => {
+    if (forwardingRef.current.has(contact.id) || sentTo.includes(contact.id)) return;
+    forwardingRef.current.add(contact.id);
     setSendingTo(contact.id);
     setError(null);
     try {
@@ -129,6 +133,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
       const forwardedPayload = await forwardedResponse.json().catch(() => null);
       if (!forwardedResponse.ok || forwardedPayload?.ok === false) throw new Error(forwardedPayload?.message || "Não foi possível encaminhar.");
       }
+      setSentTo((previous) => previous.includes(contact.id) ? previous : [...previous, contact.id]);
       const text = note.trim();
       if (text) {
         const noteResponse = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/messages`, {
@@ -139,11 +144,11 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         const notePayload = await noteResponse.json().catch(() => null);
         if (!noteResponse.ok || notePayload?.ok === false) throw new Error(notePayload?.message || "O item foi encaminhado, mas não foi possível enviar o recado.");
       }
-      setSentTo((previous) => [...previous, contact.id]);
       setNote("");
     } catch (forwardError) {
       setError(forwardError instanceof Error ? forwardError.message : "Não foi possível encaminhar.");
     } finally {
+      forwardingRef.current.delete(contact.id);
       setSendingTo(null);
     }
   };
@@ -262,7 +267,7 @@ export function ForwardToContactModal({ title, preview, url, label, messageConte
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">Contatos do Messages</p>
         <input type="search" aria-label="Pesquisar contatos" placeholder="Buscar por nome ou @username" value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} className="mb-2 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-[13px] text-white outline-none placeholder:text-white/40 focus:border-[#A855F7]" />
         <div className="max-h-56 space-y-0.5 overflow-y-auto">
-          {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : visibleContacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum resultado encontrado.</p> : visibleContacts.map((contact) => {
+          {loading ? <p className="py-5 text-center text-[13px] text-white/40">Carregando contatos...</p> : contactsError ? <p role="alert" className="py-5 text-center text-[13px] text-red-300">{contactsError}</p> : contacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum contato disponível.</p> : visibleContacts.length === 0 ? <p className="py-5 text-center text-[13px] text-white/40">Nenhum resultado encontrado.</p> : visibleContacts.map((contact) => {
             const sent = sentTo.includes(contact.id);
             return <div key={contact.id} className="flex min-h-12 items-center gap-2 rounded-xl px-2 py-1 hover:bg-white/[0.05] md:gap-3 md:py-2">
               {contact.avatarUrl ? <img src={contact.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" /> : <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7C3AED] text-[13px] font-bold">{contact.displayName.slice(0, 1).toUpperCase()}</span>}

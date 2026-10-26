@@ -1905,7 +1905,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const loadContacts = useCallback(async () => {
     setLoadingContacts(true);
     try {
-      const response = await fetch("/api/users/following", { cache: "no-store" });
+      const response = await fetch("/api/users/following?compact=1", { cache: "no-store" });
       const payload = await readJson<{ ok: true; users: PublicUserProfile[] }>(response);
       setContacts(payload.users.filter((contact) => contact.id !== user?.id));
     } catch {
@@ -3098,6 +3098,19 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                 onClick={(event) => event.stopPropagation()}
                 className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#11141F] shadow-xl"
               >
+                {!isPrivateCloud && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false);
+                      setShareOpen(true);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] text-white/80 transition hover:bg-white/5 hover:text-white"
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center text-white/70"><HeaderForwardIcon /></span>
+                    Encaminhar
+                  </button>
+                )}
                 {isCloudAuthor && (
                   <button
                     type="button"
