@@ -69,7 +69,7 @@ it("continues to minimize on desktop before returning through browser history", 
   vi.restoreAllMocks();
 });
 
-it.each([true, false])("offers Recloud only inside the Talk three-dot menu (mobile: %s)", async (mobile) => {
+it.each([true, false])("keeps Recloud in the Talk menu and forwarding in the header (mobile: %s)", async (mobile) => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -88,7 +88,7 @@ it.each([true, false])("offers Recloud only inside the Talk three-dot menu (mobi
   expect(screen.getAllByRole("button", { name: "Encaminhar" })).toHaveLength(2);
   expect(screen.getByRole("button", { name: /Ver descrição/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Denunciar Cloud/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sair da Cloud" }).querySelector("svg")).toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "Republicar Cloud" }));
   expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
   expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "POST" });

@@ -319,15 +319,12 @@ export class CloudMessagesGateway
       await this.cloudService.requireCloudAccess(cloudId, userId);
     }
 
-    const broadcaster = this.server.to(this.cloudRoom(cloudId));
-    if (userId) {
-      broadcaster
-        .except(this.userRoom(userId))
-        .emit('cloud:message:new', message);
-      return;
-    }
-
-    broadcaster.emit('cloud:message:new', message);
+    // A user room contains every connected device for that account. Excluding
+    // it here made messages sent from desktop invisible in that user's mobile
+    // session (and vice-versa). The client merges echoes by clientMessageId,
+    // so broadcasting to the whole Cloud room is safe and keeps all sessions
+    // synchronized in real time.
+    this.server.to(this.cloudRoom(cloudId)).emit('cloud:message:new', message);
   }
 
   broadcastMessagePinned(cloudId: string, messageId: string | null) {
@@ -413,22 +410,15 @@ export class CloudMessagesGateway
       await this.cloudService.requireCloudAccess(cloudId, userId);
     }
 
-    const broadcaster = this.server.to(this.cloudRoom(cloudId));
     const payload = {
       cloudId,
       messageId,
       reaction,
       removed,
     };
-
-    if (userId) {
-      broadcaster
-        .except(this.userRoom(userId))
-        .emit('cloud:reaction:changed', payload);
-      return;
-    }
-
-    broadcaster.emit('cloud:reaction:changed', payload);
+    this.server
+      .to(this.cloudRoom(cloudId))
+      .emit('cloud:reaction:changed', payload);
   }
 
   private registerTypingTimer(socket: Socket, cloudId: string) {
