@@ -38,7 +38,9 @@ describe('CloudMessagesGateway message delivery', () => {
       'sender',
       'cloud-1',
       'message-1',
-      reaction as Parameters<CloudMessagesGateway['broadcastReactionChange']>[3],
+      reaction as Parameters<
+        CloudMessagesGateway['broadcastReactionChange']
+      >[3],
     );
 
     expect(requireCloudAccess).toHaveBeenCalledWith('cloud-1', 'sender');

@@ -3051,16 +3051,13 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                   </button>
                 )}
               </div>
-              {!isPrivateCloud && user?.id && <button
+              {!isPrivateCloud && <button
                 type="button"
-                aria-label={recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud"}
-                aria-pressed={recloudState.reclouded}
-                title={recloudState.canRecloud ? (recloudState.reclouded ? "Desfazer Recloud" : "Republicar Cloud") : "Republicação indisponível para esta Cloud"}
-                disabled={!recloudState.canRecloud || recloudBusy}
-                onClick={() => void toggleRecloud()}
-                className={`group flex h-9 w-9 items-center justify-center transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-10 sm:w-10 ${recloudState.reclouded ? "text-[#C084FC]" : "text-white"}`}
+                aria-label="Encaminhar"
+                onClick={() => setShareOpen(true)}
+                className="cloud-share-pulse group flex h-9 w-9 items-center justify-center text-white transition hover:text-white sm:h-10 sm:w-10"
               >
-                <RecloudIcon />
+                <HeaderForwardIcon />
               </button>}
             </>
           )}

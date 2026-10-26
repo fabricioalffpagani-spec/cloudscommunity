@@ -89,11 +89,17 @@ describe("Read", () => {
     expect(await screen.findByText("Denúncia enviada")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
-  it.each([375, 1280])("does not offer editing ended Clouds to their creator at %ipx", (width) => {
-    vi.stubGlobal("innerWidth", width);
-    render(<ReadFeed clouds={[cloud]} currentUserId="user-maria" onDelete={onDelete} />);
+  it("keeps editing in the creator's Read card menu and applies the saved values", async () => {
+    const saved = { id: cloud.id, title: "Atualizada", duration: "30min", description: "Nova", editCount: 3 };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cloud: saved }) }));
+    const onEdited = vi.fn();
+    render(<ReadFeed clouds={[{ ...cloud, duration: "10min", description: "Antes", editCount: 2 }]} currentUserId="user-maria" onDelete={onDelete} onEdited={onEdited} />);
     fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
-    expect(screen.queryByRole("button", { name: "Editar Cloud" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Editar Cloud" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /Título/ }), { target: { value: "Atualizada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar edição" }));
+    await waitFor(() => expect(onEdited).toHaveBeenCalledWith(saved));
+    expect(screen.queryByRole("dialog", { name: "Editar Cloud" })).not.toBeInTheDocument();
     vi.unstubAllGlobals();
   });
   it("offers the creator deletion, but not reporting, and confirms before deleting", async () => {

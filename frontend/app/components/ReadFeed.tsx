@@ -10,7 +10,8 @@ import { CloudParticipantsSheet } from "./CloudParticipantsSheet";
 import { ForwardToContactModal, type ForwardContact } from "./ForwardToContactModal";
 import { CloudReportModal } from "./CloudReportModal";
 import { useDismissMenu } from "../lib/use-dismiss-menu";
-import { SendIcon, TrashIcon } from "./ui-icons";
+import { CloudEditDialog, type EditableCloud } from "./CloudEditDialog";
+import { PencilIcon, SendIcon, TrashIcon } from "./ui-icons";
 
 export type ReadCloud = {
   id: string;
@@ -25,7 +26,7 @@ export type ReadCloud = {
   participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
 };
 
-export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void> }) {
+export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete, onEdited }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void>; onEdited?: (cloud: EditableCloud) => void }) {
   const router = useRouter();
   const connectionIds = useConnectionIds(currentUserId);
   const [cloudToDelete, setCloudToDelete] = useState<ReadCloud | null>(null);
@@ -35,6 +36,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const [shareCloud, setShareCloud] = useState<ReadCloud | null>(null);
   const recloud = useRecloud(shareCloud?.id ?? "", Boolean(currentUserId && shareCloud));
   const [reportCloud, setReportCloud] = useState<ReadCloud | null>(null);
+  const [editingCloud, setEditingCloud] = useState<ReadCloud | null>(null);
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const optionsRef = useDismissMenu(optionsCloudId !== null, () => setOptionsCloudId(null));
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
@@ -126,6 +128,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
                 <button type="button" aria-label="Mais opções da Cloud" aria-expanded={optionsCloudId === cloud.id} onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>
                 {optionsCloudId === cloud.id && <div className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
                   {currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setDeleteError(""); setCloudToDelete(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir a Cloud</button>}
+                  {currentUserId && currentUserId === cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setEditingCloud(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}
                   <button type="button" onClick={() => { setOptionsCloudId(null); setShareCloud(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><SendIcon s={16} />Enviar para</button>
                   {currentUserId && <RecloudMenuItem cloudId={cloud.id} />}
                   {currentUserId && currentUserId !== cloud.author.id && <button type="button" onClick={() => { setOptionsCloudId(null); setReportCloud(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar</button>}
@@ -169,6 +172,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       </div>
       {clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}
       {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles} onClose={() => setParticipantsCloudId(null)} />}
+      {editingCloud && <CloudEditDialog cloud={{ id: editingCloud.id, title: editingCloud.title, duration: editingCloud.duration ?? "10min", description: editingCloud.description, editCount: editingCloud.editCount ?? 0 }} onClose={() => setEditingCloud(null)} onSaved={(updated) => { onEdited?.(updated); setEditingCloud(null); }} />}
       {reportCloud && <CloudReportModal cloudId={reportCloud.id} cloudTitle={reportCloud.title} reportedId={reportCloud.author.id} onClose={() => setReportCloud(null)} />}
       {shareCloud && (() => {
         const url = `${window.location.origin}/cloud/${encodeURIComponent(shareCloud.id)}/conversation?from=read`;
