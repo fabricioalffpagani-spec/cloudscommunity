@@ -90,3 +90,80 @@ describe("forwarded message origin", () => {
     },
   );
 });
+
+describe("Cloud contact sharing state", () => {
+  const contact = { id: "contact-1", displayName: "Contato", username: "contato", avatarUrl: null };
+
+  it("resets loading after an error and permits retry", async () => {
+    let sendAttempts = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/conversations")) return { ok: true, json: async () => ({ conversation: { id: "conversation-1" } }) };
+      sendAttempts += 1;
+      return sendAttempts === 1
+        ? { ok: false, json: async () => ({ message: "Falha simulada" }) }
+        : { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ForwardToContactModal title="Compartilhar Cloud" url="/cloud/1" label="Cloud" contacts={[contact]} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+    expect(await screen.findByText("Falha simulada")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Encaminhar" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enviado" })).toBeInTheDocument());
+  });
+
+  it("sends the Cloud and optional note to the selected conversation", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => String(input).endsWith("/conversations") ? { conversation: { id: "conversation-correct" } } : { ok: true },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ForwardToContactModal title="Compartilhar Cloud" url="/cloud/1" label="Cloud" forwarded={false} contacts={[contact]} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Recado opcional"), { target: { value: "Veja esta Cloud" } });
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enviado" })).toBeInTheDocument());
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1][0])).toBe("/api/direct-messages/conversations/conversation-correct/link");
+    expect(String(fetchMock.mock.calls[2][0])).toBe("/api/direct-messages/conversations/conversation-correct/messages");
+    const [, noteRequest] = fetchMock.mock.calls[2] as unknown as [RequestInfo | URL, RequestInit];
+    expect(JSON.parse(String(noteRequest.body)).content).toBe("Veja esta Cloud");
+  });
+
+  it("ignores a repeated click while the same contact is sending", async () => {
+    let releaseSend!: () => void;
+    const pendingSend = new Promise<void>((resolve) => { releaseSend = resolve; });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/conversations")) return { ok: true, json: async () => ({ conversation: { id: "conversation-1" } }) };
+      await pendingSend;
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ForwardToContactModal title="Compartilhar Cloud" url="/cloud/1" label="Cloud" contacts={[contact]} onClose={vi.fn()} />);
+    const button = screen.getByRole("button", { name: "Encaminhar" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    releaseSend();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Enviado" })).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the Cloud marked as sent when only the optional note fails", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const target = String(input);
+      if (target.endsWith("/conversations")) return { ok: true, json: async () => ({ conversation: { id: "conversation-1" } }) };
+      if (target.endsWith("/messages")) return { ok: false, json: async () => ({ message: "Recado indisponível" }) };
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ForwardToContactModal title="Compartilhar Cloud" url="/cloud/1" label="Cloud" contacts={[contact]} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Recado opcional"), { target: { value: "Meu recado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Encaminhar" }));
+
+    expect(await screen.findByText("Recado indisponível")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enviado" })).toBeDisabled();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});

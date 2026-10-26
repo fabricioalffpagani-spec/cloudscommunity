@@ -67,7 +67,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
     if (!shareOpen) return;
     let active = true;
     setLoadingContacts(true);
-    void fetch("/api/users/following", { cache: "no-store" })
+    void fetch("/api/users/following?compact=1", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data: { users?: ForwardContact[] }) => { if (active) setContacts((data.users ?? []).filter((contact) => contact.id !== user?.id)); })
       .catch(() => { if (active) setContacts([]); })

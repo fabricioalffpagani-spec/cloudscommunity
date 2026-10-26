@@ -707,6 +707,38 @@ export class UsersService {
     };
   }
 
+  async followingContacts(token: string | null) {
+    const current = await this.requireSession(token);
+    const following = await this.prisma.follow.findMany({
+      where: {
+        followerId: current.user.id,
+        following: {
+          status: UserStatus.active,
+          deletedAt: null,
+          profile: { isNot: null },
+        },
+      },
+      select: {
+        following: {
+          select: {
+            id: true,
+            profile: {
+              select: { username: true, displayName: true, avatarUrl: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return {
+      ok: true,
+      users: following.flatMap(({ following: user }) =>
+        user.profile ? [{ id: user.id, ...user.profile }] : [],
+      ),
+    };
+  }
+
   async meet(token: string | null): Promise<MeetResponse> {
     const current = await this.requireSession(token);
     const now = new Date();

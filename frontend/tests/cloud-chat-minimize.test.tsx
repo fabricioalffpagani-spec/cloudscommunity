@@ -24,7 +24,7 @@ beforeEach(() => {
     const url = String(input);
     if (url.includes("/messages?")) return { ok: true, json: async () => ({ messages: [], pinnedMessage: null }) };
     if (url.endsWith("/reports")) return { ok: true, json: async () => ({ reports: [] }) };
-    if (url === "/api/users/following") return { ok: true, json: async () => ({ users: [] }) };
+    if (url === "/api/users/following?compact=1") return { ok: true, json: async () => ({ users: [] }) };
     return { ok: true, json: async () => ({ cloud: { id: "cloud-1", title: "Conversa", duration: "30min", createdAt: new Date().toISOString(), status: "active", authorId: "viewer", author: { id: "viewer", name: "Pessoa", username: "viewer", avatarUrl: null }, membersCount: 1, members: [], visibility: "public" } }) };
   }));
 });
@@ -69,6 +69,31 @@ it("continues to minimize on desktop before returning through browser history", 
   vi.restoreAllMocks();
 });
 
+it.each([true, false])("offers Recloud only inside the Talk three-dot menu (mobile: %s)", async (mobile) => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/recloud")) return { ok: true, json: async () => init?.method ? { ok: true } : { canRecloud: true, reclouded: false } };
+    if (url.includes("/messages?")) return { ok: true, json: async () => ({ messages: [], pinnedMessage: null }) };
+    if (url.endsWith("/reports")) return { ok: true, json: async () => ({ reports: [] }) };
+    if (url === "/api/users/following?compact=1") return { ok: true, json: async () => ({ users: [] }) };
+    return { ok: true, json: async () => ({ cloud: { id: "cloud-1", title: "Conversa", description: "Descrição", duration: "30min", createdAt: new Date().toISOString(), status: "active", authorId: "author", author: { id: "author", name: "Autora", username: "autora", avatarUrl: null }, membersCount: 2, members: [{ id: "member-1", userId: "viewer", role: "member", user: { id: "viewer", profile: { displayName: "Pessoa", username: "viewer", avatarUrl: null } } }], visibility: "public" } }) };
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(<CloudChat cloudId="cloud-1" />);
+  await screen.findByRole("heading", { name: "Conversa" });
+  expect(await screen.findByRole("button", { name: "Encaminhar" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Republicar Cloud" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Mais opções" }));
+  expect(screen.getAllByRole("button", { name: "Encaminhar" })).toHaveLength(2);
+  expect(screen.getByRole("button", { name: /Ver descrição/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Denunciar Cloud/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Sair da Cloud" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Republicar Cloud" }));
+  expect(await screen.findByRole("button", { name: "Desfazer Recloud" })).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledWith("/api/clouds/cloud-1/recloud", { method: "POST" });
+});
+
 it.each([true, false])("permite ao host remover comentário no Talk (mobile: %s)", async (mobile) => {
   window.matchMedia = vi.fn().mockReturnValue({ matches: mobile, addEventListener: vi.fn(), removeEventListener: vi.fn() });
   const original = vi.mocked(fetch).getMockImplementation()!;
@@ -110,7 +135,7 @@ it("allows the host to close and reopen admission from member management", async
     const url = String(input);
     if (url.includes('/messages?')) return Promise.resolve({ ok: true, json: async () => ({ messages: [], pinnedMessage: null }) } as Response);
     if (url.endsWith('/reports')) return Promise.resolve({ ok: true, json: async () => ({ reports: [] }) } as Response);
-    if (url === '/api/users/following') return Promise.resolve({ ok: true, json: async () => ({ users: [] }) } as Response);
+    if (url === '/api/users/following?compact=1') return Promise.resolve({ ok: true, json: async () => ({ users: [] }) } as Response);
     return Promise.resolve({ ok: true, json: async () => ({ cloud: { id: 'cloud-1', title: 'Conversa', duration: '30min', createdAt: new Date().toISOString(), status: 'active', authorId: 'viewer', author: { id: 'viewer', name: 'Pessoa', username: 'viewer', avatarUrl: null }, membersCount: 1, members: [], visibility: 'public', acceptingMembers: true } }) } as Response);
   }
   render(<CloudChat cloudId="cloud-1" />);

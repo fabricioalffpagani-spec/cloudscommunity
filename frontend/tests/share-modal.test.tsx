@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ShareModal } from "../app/components/ShareModal";
+import { ShareModal } from "../app/components/UnifiedShareModal";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -9,7 +9,7 @@ describe("Cloud sharing contacts", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => ({
       ok: true,
       json: async () =>
-        String(input) === "/api/users/following"
+        String(input) === "/api/users/following?compact=1"
           ? { users: [] }
           : { cloud: null },
     }));
@@ -22,14 +22,11 @@ describe("Cloud sharing contacts", () => {
         onClose={vi.fn()}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: /Enviar no mensageiro/ }),
-    );
-    await screen.findByText("Você ainda não segue ninguém");
+    await screen.findByText("Nenhum contato disponível.");
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.filter(
-          ([input]) => String(input) === "/api/users/following",
+          ([input]) => String(input) === "/api/users/following?compact=1",
         ),
       ).toHaveLength(1),
     );
@@ -49,7 +46,7 @@ describe("Cloud sharing contacts", () => {
         vi.fn(async (input: RequestInfo | URL) => ({
           ok: true,
           json: async () =>
-            String(input) === "/api/users/following"
+            String(input) === "/api/users/following?compact=1"
               ? { users }
               : { cloud: null },
         })),
@@ -62,11 +59,8 @@ describe("Cloud sharing contacts", () => {
           onClose={vi.fn()}
         />,
       );
-      fireEvent.click(
-        screen.getByRole("button", { name: /Enviar no mensageiro/ }),
-      );
       expect(await screen.findByText("Pessoa 59")).toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: "Enviar" })).toHaveLength(
+      expect(screen.getAllByRole("button", { name: "Encaminhar" })).toHaveLength(
         60,
       );
       const search = screen.getByRole("searchbox", {
@@ -75,7 +69,7 @@ describe("Cloud sharing contacts", () => {
       fireEvent.change(search, { target: { value: "@USUARIO59" } });
       expect(screen.getByText("Pessoa 59")).toBeInTheDocument();
       expect(screen.queryByText("Pessoa 0")).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: "Enviar" })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: "Encaminhar" })).toHaveLength(1);
       fireEvent.change(search, { target: { value: "inexistente" } });
       expect(
         screen.getByText("Nenhum resultado encontrado."),

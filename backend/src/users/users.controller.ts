@@ -84,7 +84,11 @@ export class UsersController {
     @Req() req: Request,
     @Query('sort') sort?: string,
     @Query('limit') limit?: string,
+    @Query('compact') compact?: string,
   ) {
+    if (compact === '1') {
+      return this.usersService.followingContacts(extractSessionToken(req));
+    }
     return this.usersService.following(extractSessionToken(req), sort, limit);
   }
 

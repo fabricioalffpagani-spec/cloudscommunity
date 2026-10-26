@@ -41,6 +41,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const optionsRef = useDismissMenu(optionsCloudId !== null, () => setOptionsCloudId(null));
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [contactsError, setContactsError] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
@@ -52,10 +53,16 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
     if (!shareCloud) return;
     let active = true;
     setLoadingContacts(true);
-    fetch("/api/users/following", { cache: "no-store" })
+    setContactsError(null);
+    fetch("/api/users/following?compact=1", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((data: { users?: ForwardContact[] }) => { if (active) setContacts((data.users ?? []).filter((contact) => contact.id !== currentUserId)); })
-      .catch(() => { if (active) setContacts([]); })
+      .catch(() => {
+        if (active) {
+          setContacts([]);
+          setContactsError("Não foi possível carregar os contatos.");
+        }
+      })
       .finally(() => { if (active) setLoadingContacts(false); });
     return () => { active = false; };
   }, [shareCloud, currentUserId]);
@@ -169,7 +176,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       {reportCloud && <CloudReportModal cloudId={reportCloud.id} cloudTitle={reportCloud.title} reportedId={reportCloud.author.id} onClose={() => setReportCloud(null)} />}
       {shareCloud && (() => {
         const url = `${window.location.origin}/cloud/${encodeURIComponent(shareCloud.id)}/conversation?from=read`;
-        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
+        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} contactsError={contactsError} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
       })()}
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">

@@ -120,11 +120,19 @@ describe("Read", () => {
     expect(await screen.findByText("Compartilhar Cloud")).toBeInTheDocument();
     vi.unstubAllGlobals();
   });
+  it("shows the same contact loading error used by Talk", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<ReadFeed clouds={[cloud]} currentUserId="viewer" onDelete={onDelete} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mais opções da Cloud" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar para" }));
+    expect(await screen.findByText("Não foi possível carregar os contatos.")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
   it("shares the archived conversation through native sharing and contacts", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, share });
     const fetchMock = vi.fn(async (url: string) => {
-      if (url === "/api/users/following") return { ok: true, json: async () => ({ users: [{ id: "friend", username: "amigo", displayName: "Amigo", avatarUrl: null }] }) };
+      if (url === "/api/users/following?compact=1") return { ok: true, json: async () => ({ users: [{ id: "friend", username: "amigo", displayName: "Amigo", avatarUrl: null }] }) };
       if (url === "/api/direct-messages/conversations") return { ok: true, json: async () => ({ conversation: { id: "dm-1" } }) };
       return { ok: true, json: async () => ({ ok: true }) };
     });
@@ -306,7 +314,7 @@ describe("Archived cloud conversation", () => {
     vi.stubGlobal("navigator", { ...navigator, share });
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).includes("/archive/messages")) return { ok: true, json: async () => ({ cloud, messages: [] }) };
-      if (String(input) === "/api/users/following") return { ok: true, json: async () => ({ users: [] }) };
+      if (String(input) === "/api/users/following?compact=1") return { ok: true, json: async () => ({ users: [] }) };
       return { ok: true, json: async () => ({ user: null }) };
     }));
     render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
