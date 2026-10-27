@@ -63,6 +63,11 @@ describe("Read", () => {
     expect(screen.getByText(/Nenhuma cloud encerrada/)).toBeVisible();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+  it("loads the next Read page when the visitor reaches the end of the current page", async () => {
+    const onReachEnd = vi.fn();
+    render(<ReadFeed clouds={[cloud]} hasMore onReachEnd={onReachEnd} onDelete={onDelete} />);
+    await waitFor(() => expect(onReachEnd).toHaveBeenCalledOnce());
+  });
   it("keeps the footer free of the ended status across screen sizes", () => {
     const { container } = render(<ReadFeed clouds={[cloud, { ...cloud, id: "cloud-2", title: "Título extenso ".repeat(14) }]} onDelete={onDelete} />);
     for (const card of container.querySelectorAll("[data-cloud-page]")) {

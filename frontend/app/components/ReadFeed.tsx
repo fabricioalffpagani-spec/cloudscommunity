@@ -26,7 +26,7 @@ export type ReadCloud = {
   participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
 };
 
-export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete, onEdited }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void>; onEdited?: (cloud: EditableCloud) => void }) {
+export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelete, onEdited, hasMore = false, onReachEnd, isLoadingMore = false }: { clouds: ReadCloud[]; initialCloudId?: string | null; scope?: string; currentUserId?: string; onDelete: (cloudId: string) => Promise<void>; onEdited?: (cloud: EditableCloud) => void; hasMore?: boolean; onReachEnd?: () => void; isLoadingMore?: boolean }) {
   const router = useRouter();
   const connectionIds = useConnectionIds(currentUserId);
   const [cloudToDelete, setCloudToDelete] = useState<ReadCloud | null>(null);
@@ -48,6 +48,10 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const feedRef = useRef<HTMLDivElement | null>(null);
   const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, onActiveIndex: setActiveIndex });
   const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
+
+  useEffect(() => {
+    if (hasMore && activeIndex >= clouds.length - 2) onReachEnd?.();
+  }, [activeIndex, clouds.length, hasMore, onReachEnd]);
 
   useEffect(() => {
     if (!shareCloud) return;
@@ -169,6 +173,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
             <div className="read-card-footer mb-4 min-h-7 md:mb-10 md:px-10"><ConnectedParticipants participants={cloud.participantProfiles} ids={connectionIds} archived /></div>
           </article>;
         })}
+        {isLoadingMore && <div className="flex min-h-20 items-center justify-center text-[13px] text-white/45">Carregando mais Clouds...</div>}
       </div>
       {clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}
       {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles} onClose={() => setParticipantsCloudId(null)} />}

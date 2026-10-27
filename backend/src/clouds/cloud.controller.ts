@@ -57,10 +57,16 @@ export class CloudController {
   }
 
   @Get('read')
-  async read(@Req() req: Request, @Query('scope') scope?: string) {
+  async read(
+    @Req() req: Request,
+    @Query('scope') scope?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedOffset = Number.parseInt(offset ?? '0', 10);
     return this.cloudService.listRead(
       extractSessionToken(req),
       scope === 'following' ? 'following' : 'for-you',
+      Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0,
     );
   }
 
