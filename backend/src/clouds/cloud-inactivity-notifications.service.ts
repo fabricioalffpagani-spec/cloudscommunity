@@ -17,7 +17,9 @@ const SECOND_REMINDER_AFTER_MS = 3 * DAY_MS;
 export class CloudInactivityNotificationsService
   implements OnModuleInit, OnModuleDestroy
 {
-  private readonly logger = new Logger(CloudInactivityNotificationsService.name);
+  private readonly logger = new Logger(
+    CloudInactivityNotificationsService.name,
+  );
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
 
@@ -45,10 +47,20 @@ export class CloudInactivityNotificationsService
       const lastClouds = await this.prisma.cloud.findMany({
         where: {
           author: { status: 'active', deletedAt: null },
+          deletedAt: null,
+          status: { not: 'deleted' },
+          OR: [
+            { startedAt: { lte: now } },
+            { startedAt: null, createdAt: { lte: now } },
+          ],
         },
-        select: { id: true, authorId: true, createdAt: true },
+        select: { id: true, authorId: true, createdAt: true, startedAt: true },
         distinct: ['authorId'],
-        orderBy: [{ authorId: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [
+          { authorId: 'asc' },
+          { startedAt: 'desc' },
+          { createdAt: 'desc' },
+        ],
       });
 
       for (const cloud of lastClouds) {
@@ -65,7 +77,12 @@ export class CloudInactivityNotificationsService
   }
 
   private async sendDueReminder(
-    cloud: { id: string; authorId: string; createdAt: Date },
+    cloud: {
+      id: string;
+      authorId: string;
+      createdAt: Date;
+      startedAt?: Date | null;
+    },
     now: Date,
   ) {
     const deliveries = await this.prisma.cloudInactivityDelivery.findMany({
@@ -76,7 +93,8 @@ export class CloudInactivityNotificationsService
     const secondReminder = deliveries.find((delivery) => delivery.stage === 2);
     if (secondReminder) return;
 
-    const elapsedMs = now.getTime() - cloud.createdAt.getTime();
+    const elapsedMs =
+      now.getTime() - (cloud.startedAt ?? cloud.createdAt).getTime();
     if (elapsedMs < FIRST_REMINDER_AFTER_MS) return;
     const stage = !firstReminder
       ? 1

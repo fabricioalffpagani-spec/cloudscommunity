@@ -57,6 +57,7 @@ function ReadPageContent() {
   const [nextOffset, setNextOffset] = useState<number | null>(() => getCachedReadPage(cacheKey)?.nextOffset ?? 0);
   const [loading, setLoading] = useState(() => getCachedReadPage(cacheKey) === null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -69,15 +70,15 @@ function ReadPageContent() {
     });
     const payload = await response.json().catch(() => null) as { message?: string } | null;
     if (!response.ok) throw new Error(payload?.message ?? "Não foi possível excluir a cloud.");
-    setClouds((current) => {
-      const next = current.filter((cloud) => cloud.id !== cloudId);
-      cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset });
-      return next;
-    });
+    const next = clouds.filter((cloud) => cloud.id !== cloudId);
+    const adjustedOffset = nextOffset === null || next.length === clouds.length ? nextOffset : Math.max(0, nextOffset - 1);
+    setClouds(next);
+    setNextOffset(adjustedOffset);
+    cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset: adjustedOffset });
   };
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || nextOffset === null) return;
+    if (loadingMore || loadMoreError || nextOffset === null) return;
     const currentCacheKey = user?.id ? `read:${user.id}:${cloudScope}` : "";
     setLoadingMore(true);
     try {
@@ -93,10 +94,12 @@ function ReadPageContent() {
         return next;
       });
       setNextOffset(payload.nextOffset);
+    } catch {
+      setLoadMoreError(true);
     } finally {
       setLoadingMore(false);
     }
-  }, [cloudScope, loadingMore, nextOffset, user?.id]);
+  }, [cloudScope, loadingMore, loadMoreError, nextOffset, user?.id]);
 
 
   useEffect(() => {
@@ -113,6 +116,7 @@ function ReadPageContent() {
       }
       setLoading(true);
       setError("");
+      setLoadMoreError(false);
 
       try {
         const endpoint = cloudScope === "following" ? "/api/clouds/read?scope=following" : "/api/clouds/read";
@@ -192,7 +196,8 @@ function ReadPageContent() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center md:block">
-            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} hasMore={nextOffset !== null} onReachEnd={() => void loadMore()} isLoadingMore={loadingMore} onEdited={(updated) => { const next = clouds.map((cloud) => cloud.id === updated.id ? { ...cloud, title: updated.title, duration: updated.duration, description: updated.description, editCount: updated.editCount } : cloud); setClouds(next); cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset }); }} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} hasMore={nextOffset !== null && !loadMoreError} onReachEnd={loadMore} isLoadingMore={loadingMore} onEdited={(updated) => { const next = clouds.map((cloud) => cloud.id === updated.id ? { ...cloud, title: updated.title, duration: updated.duration, description: updated.description, editCount: updated.editCount } : cloud); setClouds(next); cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset }); }} />
+            {loadMoreError && <button type="button" onClick={() => setLoadMoreError(false)} className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#2B174F] px-4 py-2 text-sm text-white" role="alert">Falha ao carregar mais Clouds. Tentar novamente</button>}
           </div>
         )}
       </main>

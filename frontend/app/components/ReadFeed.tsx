@@ -46,12 +46,15 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const titleTap = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
+  const onReachEndRef = useRef(onReachEnd);
   const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, onActiveIndex: setActiveIndex });
   const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
 
+  useEffect(() => { onReachEndRef.current = onReachEnd; }, [onReachEnd]);
+
   useEffect(() => {
-    if (hasMore && activeIndex >= clouds.length - 2) onReachEnd?.();
-  }, [activeIndex, clouds.length, hasMore, onReachEnd]);
+    if (hasMore && activeIndex >= clouds.length - 2) onReachEndRef.current?.();
+  }, [activeIndex, clouds.length, hasMore]);
 
   useEffect(() => {
     if (!shareCloud) return;
