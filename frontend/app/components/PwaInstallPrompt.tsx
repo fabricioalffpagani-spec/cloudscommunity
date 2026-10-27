@@ -8,6 +8,7 @@ import { clearRememberedInstallPrompt, getRememberedInstallPrompt, rememberInsta
 const reminderKey = (userId: string) => `clouds:pwa-install-reminder:${userId}`;
 const manualInstallCompleteKey = (userId: string) => `clouds:pwa-install-manual-complete:${userId}`;
 const signupReminderKey = (username: string) => `clouds:pwa-install-signup-reminder:${username.toLowerCase()}`;
+const signupStartKey = (username: string) => `clouds:pwa-install-signup-start:${username.toLowerCase()}`;
 const signupCompleteKey = (username: string) => `clouds:pwa-install-signup-complete:${username.toLowerCase()}`;
 const FIRST_REMINDER_DELAY_MS = 150_000;
 const REMINDER_INTERVAL_MS = 24 * 60 * 60_000;
@@ -23,6 +24,22 @@ function readReminder(userId: string) {
 function saveReminder(userId: string, timestamp: number) {
   try {
     window.localStorage?.setItem?.(reminderKey(userId), String(timestamp));
+  } catch {
+    // Private browsing or embedded contexts can deny storage access.
+  }
+}
+
+function readSignupTimestamp(username: string, key: (username: string) => string) {
+  try {
+    return Number(window.localStorage?.getItem?.(key(username)) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function saveSignupTimestamp(username: string, key: (username: string) => string, timestamp: number) {
+  try {
+    window.localStorage?.setItem?.(key(username), String(timestamp));
   } catch {
     // Private browsing or embedded contexts can deny storage access.
   }
@@ -62,6 +79,7 @@ export function PwaInstallPrompt() {
   const fallbackReminder = useRef<{ userId: string; timestamp: number } | null>(null);
   const fallbackStart = useRef<{ userId: string; timestamp: number } | null>(null);
   const signupUsername = useRef<string | null>(null);
+  const [signupCompletion, setSignupCompletion] = useState<{ username: string; timestamp: number } | null>(null);
 
   useEffect(() => {
     const onBeforeInstallPrompt = (event: Event) => {
@@ -78,17 +96,11 @@ export function PwaInstallPrompt() {
     const onSignupComplete = (event: Event) => {
       if (!isMobile() || isInstalled() || (user && hasConfirmedManualInstall(user.id))) return;
       const username = (event as CustomEvent<{ username?: string }>).detail?.username;
-      signupUsername.current = username || null;
-      if (username) {
-        try { window.localStorage.setItem(signupReminderKey(username), String(Date.now())); } catch { /* Storage may be unavailable. */ }
-      }
-      if (user) {
-        const now = Date.now();
-        fallbackReminder.current = { userId: user.id, timestamp: now };
-        saveReminder(user.id, now);
-      }
-      setInstallPrompt((current) => current ?? getRememberedInstallPrompt());
-      setOpen(true);
+      if (!username) return;
+      const timestamp = Date.now();
+      signupUsername.current = username;
+      saveSignupTimestamp(username, signupStartKey, timestamp);
+      setSignupCompletion({ username, timestamp });
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -111,25 +123,38 @@ export function PwaInstallPrompt() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (status !== "authenticated" || !user || open || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id)) return;
+    if (open || !isMobile() || isInstalled() || (user && hasConfirmedManualInstall(user.id))) return;
+    const signupUsernameForReminder = signupCompletion?.username ?? user?.username ?? null;
+    if (!user && !signupUsernameForReminder) return;
     let signupReminder = 0;
+    let signupStart = signupCompletion?.timestamp ?? 0;
     try {
-      if (user.username && window.localStorage.getItem(signupCompleteKey(user.username)) === "true") return;
-      signupReminder = user.username ? Number(window.localStorage.getItem(signupReminderKey(user.username)) || 0) : 0;
+      if (user?.username && window.localStorage.getItem(signupCompleteKey(user.username)) === "true") return;
+      if (signupUsernameForReminder) {
+        signupReminder = readSignupTimestamp(signupUsernameForReminder, signupReminderKey);
+        signupStart = Math.max(signupStart, readSignupTimestamp(signupUsernameForReminder, signupStartKey));
+      }
     } catch { /* Storage may be unavailable. */ }
-    let createdAt = new Date(user.createdAt).getTime();
+    let createdAt = user ? new Date(user.createdAt).getTime() : 0;
     if (!Number.isFinite(createdAt)) {
-      if (fallbackStart.current?.userId !== user.id) fallbackStart.current = { userId: user.id, timestamp: Date.now() };
-      createdAt = fallbackStart.current.timestamp;
+      if (user) {
+        if (fallbackStart.current?.userId !== user.id) fallbackStart.current = { userId: user.id, timestamp: Date.now() };
+        createdAt = fallbackStart.current.timestamp;
+      } else {
+        createdAt = signupStart || Date.now();
+      }
     }
-    const storedReminder = readReminder(user.id);
-    const lastReminder = Math.max(Number.isFinite(storedReminder) ? storedReminder : 0, Number.isFinite(signupReminder) ? signupReminder : 0, fallbackReminder.current?.userId === user.id ? fallbackReminder.current.timestamp : 0);
-    const dueAt = lastReminder > 0 ? lastReminder + REMINDER_INTERVAL_MS : createdAt + FIRST_REMINDER_DELAY_MS;
+    const storedReminder = user ? readReminder(user.id) : 0;
+    const lastReminder = Math.max(Number.isFinite(storedReminder) ? storedReminder : 0, Number.isFinite(signupReminder) ? signupReminder : 0, user && fallbackReminder.current?.userId === user.id ? fallbackReminder.current.timestamp : 0);
+    const dueAt = lastReminder > 0 ? lastReminder + REMINDER_INTERVAL_MS : Math.max(createdAt, signupStart) + FIRST_REMINDER_DELAY_MS;
     const showWhenDue = () => {
-      if (document.visibilityState === "hidden" || !isMobile() || isInstalled() || hasConfirmedManualInstall(user.id) || Date.now() < dueAt) return;
+      if (document.visibilityState === "hidden" || !isMobile() || isInstalled() || (user && hasConfirmedManualInstall(user.id)) || Date.now() < dueAt) return;
       const now = Date.now();
-      fallbackReminder.current = { userId: user.id, timestamp: now };
-      saveReminder(user.id, now);
+      if (user) {
+        fallbackReminder.current = { userId: user.id, timestamp: now };
+        saveReminder(user.id, now);
+      }
+      if (signupUsernameForReminder) saveSignupTimestamp(signupUsernameForReminder, signupReminderKey, now);
       setInstallPrompt((current) => current ?? getRememberedInstallPrompt());
       setOpen(true);
     };
@@ -138,7 +163,7 @@ export function PwaInstallPrompt() {
     const onVisibilityChange = () => { if (document.visibilityState === "visible") showWhenDue(); };
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => { window.clearTimeout(timer); document.removeEventListener("visibilitychange", onVisibilityChange); };
-  }, [open, status, user?.id, user?.username, user?.createdAt]);
+  }, [open, signupCompletion, status, user?.id, user?.username, user?.createdAt]);
 
   const decline = () => {
     setOpen(false);

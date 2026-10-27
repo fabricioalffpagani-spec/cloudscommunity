@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { HeaderBrand } from "../components/HeaderBrand";
 import { FlameIcon } from "../components/FlameIcon";
@@ -13,6 +13,17 @@ import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
 import { cacheFeed, getCachedFeed } from "../lib/feed-cache";
+
+type ReadFeedPage = { clouds: ReadCloud[]; nextOffset: number | null };
+
+function getCachedReadPage(key: string): ReadFeedPage | null {
+  const cached = getCachedFeed<unknown>(key);
+  if (!cached || typeof cached !== "object" || Array.isArray(cached)) return null;
+  const page = cached as Partial<ReadFeedPage>;
+  return Array.isArray(page.clouds) && (typeof page.nextOffset === "number" || page.nextOffset === null)
+    ? { clouds: page.clouds, nextOffset: page.nextOffset }
+    : null;
+}
 
 function SearchIcon({ s = 23 }: { s?: number }) {
   return (
@@ -42,8 +53,11 @@ function ReadPageContent() {
   const { user } = useSessionUser();
   const initialScope = searchParams.get("scope") === "following" ? "following" : "for-you";
   const cacheKey = user?.id ? `read:${user.id}:${initialScope}` : "";
-  const [clouds, setClouds] = useState<ReadCloud[]>(() => getCachedFeed<ReadCloud[]>(cacheKey) ?? []);
-  const [loading, setLoading] = useState(() => getCachedFeed<ReadCloud[]>(cacheKey) === null);
+  const [clouds, setClouds] = useState<ReadCloud[]>(() => getCachedReadPage(cacheKey)?.clouds ?? []);
+  const [nextOffset, setNextOffset] = useState<number | null>(() => getCachedReadPage(cacheKey)?.nextOffset ?? 0);
+  const [loading, setLoading] = useState(() => getCachedReadPage(cacheKey) === null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -56,8 +70,36 @@ function ReadPageContent() {
     });
     const payload = await response.json().catch(() => null) as { message?: string } | null;
     if (!response.ok) throw new Error(payload?.message ?? "Não foi possível excluir a cloud.");
-    setClouds((current) => current.filter((cloud) => cloud.id !== cloudId));
+    const next = clouds.filter((cloud) => cloud.id !== cloudId);
+    const adjustedOffset = nextOffset === null || next.length === clouds.length ? nextOffset : Math.max(0, nextOffset - 1);
+    setClouds(next);
+    setNextOffset(adjustedOffset);
+    cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset: adjustedOffset });
   };
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || loadMoreError || nextOffset === null) return;
+    const currentCacheKey = user?.id ? `read:${user.id}:${cloudScope}` : "";
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ offset: String(nextOffset) });
+      if (cloudScope === "following") params.set("scope", "following");
+      const response = await fetch(`/api/clouds/read?${params.toString()}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as ReadFeedPage | null;
+      if (!response.ok || !Array.isArray(payload?.clouds) || (typeof payload.nextOffset !== "number" && payload.nextOffset !== null)) throw new Error("Não foi possível carregar mais clouds encerradas.");
+      setClouds((current) => {
+        const existing = new Set(current.map((cloud) => cloud.id));
+        const next = [...current, ...payload.clouds.filter((cloud) => !existing.has(cloud.id))];
+        cacheFeed(currentCacheKey, { clouds: next, nextOffset: payload.nextOffset });
+        return next;
+      });
+      setNextOffset(payload.nextOffset);
+    } catch {
+      setLoadMoreError(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [cloudScope, loadingMore, loadMoreError, nextOffset, user?.id]);
 
 
   useEffect(() => {
@@ -65,24 +107,27 @@ function ReadPageContent() {
 
     const loadRead = async () => {
       const currentCacheKey = user?.id ? `read:${user.id}:${cloudScope}` : "";
-      const cached = getCachedFeed<ReadCloud[]>(currentCacheKey);
+      const cached = getCachedReadPage(currentCacheKey);
       if (cached && attempt === 0) {
-        setClouds(cached);
+        setClouds(cached.clouds);
+        setNextOffset(cached.nextOffset);
         setLoading(false);
         return;
       }
       setLoading(true);
       setError("");
+      setLoadMoreError(false);
 
       try {
         const endpoint = cloudScope === "following" ? "/api/clouds/read?scope=following" : "/api/clouds/read";
         const response = await fetch(endpoint, { cache: "no-store" });
-        const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: ReadCloud[] } | null;
-        if (!response.ok || !Array.isArray(payload?.clouds)) throw new Error("Não foi possível carregar as clouds encerradas.");
+        const payload = (await response.json().catch(() => null)) as ReadFeedPage | null;
+        if (!response.ok || !Array.isArray(payload?.clouds) || (typeof payload.nextOffset !== "number" && payload.nextOffset !== null)) throw new Error("Não foi possível carregar as clouds encerradas.");
 
         if (!cancelled) {
-          cacheFeed(currentCacheKey, payload.clouds);
+          cacheFeed(currentCacheKey, payload);
           setClouds(payload.clouds);
+          setNextOffset(payload.nextOffset);
         }
       } catch {
         if (!cancelled) {
@@ -151,7 +196,8 @@ function ReadPageContent() {
           </div>
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center md:block">
-            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} onEdited={(updated) => { const next = clouds.map((cloud) => cloud.id === updated.id ? { ...cloud, title: updated.title, duration: updated.duration, description: updated.description, editCount: updated.editCount } : cloud); setClouds(next); cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", next); }} />
+            <ReadFeed key={cloudScope} clouds={clouds} initialCloudId={searchParams.get("cloud")} scope={cloudScope} currentUserId={user?.id} onDelete={deleteCloud} hasMore={nextOffset !== null && !loadMoreError} onReachEnd={loadMore} isLoadingMore={loadingMore} onEdited={(updated) => { const next = clouds.map((cloud) => cloud.id === updated.id ? { ...cloud, title: updated.title, duration: updated.duration, description: updated.description, editCount: updated.editCount } : cloud); setClouds(next); cacheFeed(user?.id ? `read:${user.id}:${cloudScope}` : "", { clouds: next, nextOffset }); }} />
+            {loadMoreError && <button type="button" onClick={() => setLoadMoreError(false)} className="absolute bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#2B174F] px-4 py-2 text-sm text-white" role="alert">Falha ao carregar mais Clouds. Tentar novamente</button>}
           </div>
         )}
       </main>

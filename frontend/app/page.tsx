@@ -1021,7 +1021,7 @@ function CreateCloudModal({
                   if (!isPrivateVisibility) handlePublish();
                 }
               }}
-              placeholder="Sobre o que vamos debater?"
+              placeholder="Fale sobre qualquer coisa..."
               maxLength={40}
               className="w-full resize-none overflow-hidden rounded-2xl border border-white/[0.16] bg-[#20263a]/80 px-4 py-3 text-[15px] leading-6 text-white placeholder:text-white/35 outline-none transition focus:border-[#A855F7] focus:ring-1 focus:ring-[#A855F7]/45 sm:px-6 sm:py-5 sm:text-[23px]"
             />

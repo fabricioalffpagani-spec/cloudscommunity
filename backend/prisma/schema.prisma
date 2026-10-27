@@ -59,6 +59,7 @@ enum NotificationType {
   follow_request
   system
   cloud_continuation
+  cloud_inactivity
 }
 
 enum NotificationEntityType {
@@ -113,6 +114,7 @@ model User {
   cloudReports              CloudReport[]          @relation("CloudReportReported")
   cloudReportsGiven         CloudReport[]          @relation("CloudReportReporter")
   sharePopup                SharePopup?
+  cloudInactivityDeliveries CloudInactivityDelivery[]
   blockedUsers              UserBlock[]     @relation("UserBlockBlocker")
   blockedByUsers            UserBlock[]     @relation("UserBlockBlocked")
   savedStickers             SavedSticker[]
@@ -214,6 +216,7 @@ model Cloud {
   reports      CloudReport[]
   originCloud  Cloud?          @relation("CloudContinuations", fields: [originCloudId], references: [id], onDelete: SetNull)
   continuations Cloud[]        @relation("CloudContinuations")
+  inactivityDeliveries CloudInactivityDelivery[]
 
   @@index([authorId, createdAt])
   @@index([category])
@@ -589,6 +592,20 @@ model CloudTrendingDelivery {
 
   @@unique([userId, cloudId])
   @@index([userId, createdAt])
+}
+
+model CloudInactivityDelivery {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  lastCloudId String   @db.Uuid
+  stage       Int
+  sentAt      DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastCloud   Cloud    @relation(fields: [lastCloudId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lastCloudId, stage])
+  @@index([userId, lastCloudId, sentAt])
 }
 
 model MediaAsset {

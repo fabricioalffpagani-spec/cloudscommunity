@@ -691,6 +691,26 @@ describe('Talk / Read regression', () => {
     });
     expect(result.clouds).toHaveLength(1);
   });
+  it('loads the Read archive in pages of ten clouds', async () => {
+    const { service, prisma, cloud } = setup();
+    const pageAndLookahead = Array.from({ length: 11 }, (_, index) => ({
+      ...cloud,
+      id: `cloud-${index}`,
+    }));
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(pageAndLookahead);
+
+    const result = await service.listRead('token', 'for-you', 20);
+
+    expect(result.clouds).toHaveLength(10);
+    expect(result.nextOffset).toBe(30);
+    expect(prisma.cloud.findMany.mock.calls[1][0]).toMatchObject({
+      skip: 20,
+      take: 11,
+      orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+    });
+  });
   it('limits the preview to the earliest 10 non-deleted conversation messages', async () => {
     const { service, prisma } = setup();
     prisma.cloudMessage.findMany.mockResolvedValue([

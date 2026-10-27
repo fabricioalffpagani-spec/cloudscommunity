@@ -448,6 +448,7 @@ export class CloudService {
   async listRead(
     token: string | null,
     scope: 'for-you' | 'following' = 'for-you',
+    offset = 0,
   ) {
     const current = await this.requireSession(token);
     // Neither operation depends on the other. Running them together keeps the
@@ -464,7 +465,8 @@ export class CloudService {
         select: { followingId: true },
       });
       const followingIds = following.map((entry) => entry.followingId);
-      if (followingIds.length === 0) return { ok: true, clouds: [] };
+      if (followingIds.length === 0)
+        return { ok: true, clouds: [], nextOffset: null };
       where = { AND: [archiveWhere, { authorId: { in: followingIds } }] };
     }
 
@@ -511,10 +513,13 @@ export class CloudService {
         },
       },
       orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+      skip: offset,
+      take: 11,
     });
+    const hasMore = clouds.length > 10;
     return {
       ok: true,
-      clouds: clouds.map((cloud) => ({
+      clouds: clouds.slice(0, 10).map((cloud) => ({
         id: cloud.id,
         title: cloud.title,
         duration: cloud.duration,
@@ -543,6 +548,7 @@ export class CloudService {
             : [];
         }),
       })),
+      nextOffset: hasMore ? offset + 10 : null,
     };
   }
 
