@@ -30,6 +30,7 @@ beforeEach(() => {
   window.localStorage.removeItem("clouds:pwa-install-reminder:u");
   window.localStorage.removeItem("clouds:pwa-install-manual-complete:u");
   window.localStorage.removeItem("clouds:pwa-install-signup-reminder:tester");
+  window.localStorage.removeItem("clouds:pwa-install-signup-start:tester");
   window.localStorage.removeItem("clouds:pwa-install-signup-complete:tester");
 });
 
@@ -117,7 +118,8 @@ describe("mobile regressions", () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
     const event = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt: vi.fn().mockRejectedValue(new Error("failed")), userChoice: Promise.resolve({ outcome: "dismissed" }) });
     render(<PwaInstallPrompt />);
-    act(() => { window.dispatchEvent(event); window.dispatchEvent(new Event("clouds:signup-complete")); });
+    act(() => { window.dispatchEvent(event); window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })); });
+    act(() => vi.advanceTimersByTime(150_000));
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Instalar agora" })); });
     expect(screen.getByRole("alert")).toHaveTextContent("Não foi possível abrir a instalação");
     expect(screen.getByRole("dialog")).toBeVisible();
@@ -145,14 +147,15 @@ describe("mobile regressions", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("opens the installation popup after signup and invokes the native prompt", async () => {
+  it("opens the installation popup two minutes and thirty seconds after signup and invokes the native prompt", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-14T00:00:10.000Z"));
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query.includes("max-width") })));
     const prompt = vi.fn().mockResolvedValue(undefined);
     const event = Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt, userChoice: Promise.resolve({ outcome: "accepted" }) });
     render(<PwaInstallPrompt />);
-    act(() => { window.dispatchEvent(event); window.dispatchEvent(new Event("clouds:signup-complete")); });
+    act(() => { window.dispatchEvent(event); window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })); });
+    act(() => vi.advanceTimersByTime(150_000));
     expect(screen.getByRole("dialog")).toBeVisible();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Instalar agora" })); });
     expect(prompt).toHaveBeenCalledOnce();
@@ -167,6 +170,7 @@ describe("mobile regressions", () => {
     session.authenticated = false;
     const view = render(<PwaInstallPrompt />);
     act(() => window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })));
+    act(() => vi.advanceTimersByTime(150_000));
     fireEvent.click(screen.getByRole("button", { name: "Instalar agora" }));
     fireEvent.click(screen.getByRole("button", { name: "Já adicionei o atalho" }));
     session.authenticated = true;
@@ -182,6 +186,8 @@ describe("mobile regressions", () => {
     session.authenticated = false;
     const view = render(<PwaInstallPrompt />);
     act(() => window.dispatchEvent(new CustomEvent("clouds:signup-complete", { detail: { username: "tester" } })));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    act(() => vi.advanceTimersByTime(150_000));
     fireEvent.click(screen.getByRole("button", { name: "Não" }));
     session.authenticated = true;
     view.rerender(<PwaInstallPrompt />);
