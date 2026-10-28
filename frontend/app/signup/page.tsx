@@ -125,7 +125,9 @@ function getAge(birthDate: string) {
 }
 
 export default function SignupPage() {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [fromInteraction, setFromInteraction] = useState(false);
+  const [startingGuest, setStartingGuest] = useState(false);
   const [form, setForm] = useState({
     email: "",
     name: "",
@@ -154,6 +156,7 @@ export default function SignupPage() {
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
     if (ref) { setForm((current) => ({ ...current, invitationCode: ref.toUpperCase() })); setInvitationLocked(true); }
+    setFromInteraction(new URLSearchParams(window.location.search).get("from") === "interaction");
   }, []);
 
   const normalizedEmail = useMemo(() => form.email.trim().toLowerCase(), [form.email]);
@@ -258,7 +261,7 @@ export default function SignupPage() {
   }, [normalizedUsername]);
 
   useEffect(() => {
-    if (step !== 2 || resendCountdown <= 0) {
+    if (step !== 3 || resendCountdown <= 0) {
       return;
     }
 
@@ -359,18 +362,6 @@ export default function SignupPage() {
         nextErrors.email = "Não foi possível validar este e-mail agora.";
       }
 
-      if (!form.name.trim()) {
-        nextErrors.name = "Informe seu nome.";
-      }
-
-      if (!form.birthDate.trim()) {
-        nextErrors.birthDate = "Informe sua data de nascimento.";
-      } else if (getAge(form.birthDate) < 16) {
-        nextErrors.birthDate = "Você precisa ter pelo menos 16 anos completos para participar do Clouds.";
-      } else if (getAge(form.birthDate) > 100) {
-        nextErrors.birthDate = "A idade máxima permitida é de 100 anos.";
-      }
-
       if (!normalizedUsername) {
         nextErrors.username = "Informe um nome de usuário.";
       } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
@@ -383,24 +374,26 @@ export default function SignupPage() {
         nextErrors.username = "Não foi possível validar este nome de usuário agora.";
       }
 
-      const passwordError = getPasswordError(form.password);
-      if (passwordError) {
-        nextErrors.password = passwordError;
-      }
-
-      if (form.password !== form.confirmPassword) {
-        nextErrors.confirmPassword = "As senhas nao coincidem.";
-      }
-
-      if (!form.acceptedTerms || !form.acceptedCommunityRules) {
-        nextErrors.terms = "Aceite os Termos de Uso e as Regras da Comunidade para continuar.";
-      }
-
       setErrors(nextErrors);
 
       if (Object.keys(nextErrors).length > 0) {
         return;
       }
+
+      setStep(3);
+      return;
+    }
+
+    if (step === 2) {
+      const nextErrors: SignupErrors = {};
+      if (!form.name.trim()) nextErrors.name = "Informe seu nome.";
+      if (!form.birthDate.trim() || getAge(form.birthDate) < 16 || getAge(form.birthDate) > 100) nextErrors.birthDate = "Informe uma data de nascimento válida.";
+      const passwordError = getPasswordError(form.password);
+      if (passwordError) nextErrors.password = passwordError;
+      if (form.password !== form.confirmPassword) nextErrors.confirmPassword = "As senhas não coincidem.";
+      if (!form.acceptedTerms || !form.acceptedCommunityRules) nextErrors.terms = "Aceite os Termos de Uso e as Regras da Comunidade para continuar.";
+      setErrors(nextErrors);
+      if (Object.keys(nextErrors).length > 0) return;
 
       const draft = {
         email: normalizedEmail,
@@ -437,6 +430,10 @@ export default function SignupPage() {
       return;
     }
   };
+  const startGuest = async () => {
+    setStartingGuest(true);
+    try { const response = await fetch("/api/auth/guest", { method: "POST" }); if (!response.ok) throw new Error(); window.location.assign("/"); } catch { setErrors({ form: "Não foi possível iniciar a visita agora." }); setStartingGuest(false); }
+  };
 
   return (
     <div className="min-h-screen text-white"
@@ -444,22 +441,22 @@ export default function SignupPage() {
       <main className="mx-auto flex min-h-screen max-w-[1180px] items-center px-5 py-12 lg:px-8">
         <section className="grid w-full gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="relative">
-            <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">{step === 1 ? "Cadastro" : "Verificação"}</p>
+            <p className="text-[12px] font-bold uppercase tracking-[0.34em] text-[#FF5C3C]">{step === 1 ? "Cadastro · etapa 1 de 2" : step === 2 ? "Cadastro · etapa 2 de 2" : "Verificação"}</p>
             <h1 className="mt-4 max-w-[20ch] text-[40px] font-semibold leading-[0.95] tracking-[-0.04em] text-white sm:text-[52px]">
               {step === 1 ? (
                 <>
-                  Crie sua conta e descubra conversas e pessoas no Clouds.
+                  Escolha seu e-mail e nickname no Clouds.
                 </>
-              ) : (
+              ) : step === 2 ? (
                 <>
-                  Quase lá! ☁️
+                  Quase lá! Complete seu cadastro. ☁️
                 </>
-              )}
+              ) : <>Confira seu e-mail. ☁️</>}
             </h1>
           </div>
 
           <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.03] p-6 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur">
-            {step === 1 ? (
+            {step === 1 || step === 2 ? (
               <>
                 <form onSubmit={handleSubmit} className="grid gap-4">
                   <div className="flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-[12px] uppercase tracking-[0.22em] text-white/45">
@@ -467,7 +464,7 @@ export default function SignupPage() {
                     <span>2 Verificação</span>
                   </div>
 
-                  <div>
+                  <div className={step === 2 ? "hidden" : ""}>
                     <label htmlFor="email" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Email
                     </label>
@@ -485,7 +482,7 @@ export default function SignupPage() {
                     {errors.email ? <p className="mt-2 text-[12px] text-red-300">{errors.email}</p> : <EmailStatus state={emailState} />}
                   </div>
 
-                  <div>
+                  <div className={step === 2 ? "hidden" : ""}>
                     <label htmlFor="name" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Nome
                     </label>
@@ -502,15 +499,15 @@ export default function SignupPage() {
                     {errors.name && <p className="mt-2 text-[12px] text-red-300">{errors.name}</p>}
                   </div>
 
-                  <div>
-                    <label htmlFor="birthDate" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
-                      Aniversário
+                  <div className={step === 1 ? "hidden" : ""}>
+                    <label htmlFor="birthDate" className="mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 text-[#D8B4FE]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4M8.5 5.5l1 1M15.5 5.5l-1 1"/><path d="M7 9h10v3H7zM5 12h14v7H5z"/></svg>Aniversário
                     </label>
                     <BirthDateInput id="birthDate" value={form.birthDate} onChange={(value) => updateField("birthDate", value)} invalid={Boolean(birthDateMessage)} />
                     {birthDateMessage && <p className="mt-2 text-[12px] text-red-300">{birthDateMessage}</p>}
                   </div>
 
-                  <div>
+                  <div className={step === 1 ? "hidden" : ""}>
                     <label htmlFor="invitationCode" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">Código de convite <span className="normal-case tracking-normal text-white/45">(opcional)</span></label>
                     <input id="invitationCode" value={form.invitationCode} readOnly={invitationLocked} maxLength={7} onChange={(event) => updateField("invitationCode", event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))} placeholder="Código de quem convidou você" className="w-full rounded-2xl border border-white/[0.08] bg-[#17171C] px-4 py-3 text-[15px] text-white outline-none focus:border-[#A855F7]" />
                     {errors.invitationCode && <p className="mt-2 text-[12px] text-red-300">{errors.invitationCode}</p>}
@@ -542,7 +539,7 @@ export default function SignupPage() {
                     <p aria-live="polite" className="mt-2 text-[12px] text-white/45">{locationMessage || "Toque no campo para usar a localização do dispositivo ou informe manualmente."}</p>
                   </div>
 
-                  <div>
+                  <div className={step === 1 ? "hidden" : ""}>
                     <label htmlFor="username" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Nome de usuário
                     </label>
@@ -564,7 +561,7 @@ export default function SignupPage() {
                     {errors.username ? <p className="mt-2 text-[12px] text-red-300">{errors.username}</p> : <FieldStatus state={usernameState} />}
                   </div>
 
-                  <div>
+                  <div className={step === 1 ? "hidden" : ""}>
                     <label htmlFor="password" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Senha
                     </label>
@@ -592,7 +589,7 @@ export default function SignupPage() {
                     {passwordMessage ? <p className="mt-2 text-[12px] text-red-300">{passwordMessage}</p> : <p className="mt-2 text-[12px] text-white/45">Mínimo de 8 caracteres, com letras, números e caractere especial.</p>}
                   </div>
 
-                  <div>
+                  <div className={step === 1 ? "hidden" : ""}>
                     <label htmlFor="confirmPassword" className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.2em] text-white">
                       Confirmar senha
                     </label>
@@ -620,7 +617,7 @@ export default function SignupPage() {
                     {confirmPasswordMessage && <p className="mt-2 text-[12px] text-red-300">{confirmPasswordMessage}</p>}
                   </div>
 
-                  <div className={`rounded-2xl border p-4 text-[12px] leading-relaxed ${errors.terms ? "border-red-500/70 bg-red-500/5" : "border-white/[0.08] bg-white/[0.03]"}`}>
+                  <div className={`${step === 1 ? "hidden " : ""}rounded-2xl border p-4 text-[12px] leading-relaxed ${errors.terms ? "border-red-500/70 bg-red-500/5" : "border-white/[0.08] bg-white/[0.03]"}`}>
                     <label className="flex cursor-pointer items-start gap-3 text-white/70"><input type="checkbox" checked={form.acceptedTerms && form.acceptedCommunityRules} onChange={(event) => { const accepted = event.target.checked; setForm((current) => ({ ...current, acceptedTerms: accepted, acceptedCommunityRules: accepted })); setErrors((current) => ({ ...current, terms: undefined, form: undefined })); }} className="mt-0.5 h-4 w-4 accent-[#A855F7]" /><span>Li e aceito o <a href="/legal/documentos-da-plataforma.pdf" target="_blank" rel="noreferrer" className="font-semibold text-[#C084FC] hover:underline">Documento completo da plataforma (PDF)</a>, que reúne os Termos de Uso, as Regras da Comunidade e todas as políticas.</span></label>
                     {errors.terms && <p className="mt-3 text-red-300">{errors.terms}</p>}
                   </div>
@@ -633,10 +630,10 @@ export default function SignupPage() {
 
                   <button
                     type="submit"
-                    disabled={!canSubmit}
+                    disabled={step === 1 ? !(emailState === "available" && usernameState === "available") : !canSubmit}
                     className="mt-2 inline-flex items-center justify-center rounded-full bg-[#9333EA] px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-[#6D28D9] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {submitting ? "Criando conta..." : "Cadastrar"}
+                    {submitting ? "Criando conta..." : step === 1 ? "Continuar" : "Cadastrar"}
                   </button>
                 </form>
 
@@ -681,6 +678,8 @@ export default function SignupPage() {
           </div>
         </section>
       </main>
+      {step === 1 && !fromInteraction && <div className="fixed inset-x-0 bottom-12 z-10 text-center"><button type="button" onClick={() => void startGuest()} disabled={startingGuest} className="text-sm font-semibold text-[#D8B4FE] underline underline-offset-4 disabled:opacity-50">{startingGuest ? "Preparando visita..." : "Dar apenas uma espiada..."}</button></div>}
+      <div className="fixed inset-x-0 bottom-0 z-10 h-2 bg-white/10" role="progressbar" aria-label="Progresso do cadastro" aria-valuemin={1} aria-valuemax={2} aria-valuenow={step}><div className="h-full bg-[#A855F7] transition-all" style={{ width: `${step * 50}%` }} /></div>
     </div>
   );
 }

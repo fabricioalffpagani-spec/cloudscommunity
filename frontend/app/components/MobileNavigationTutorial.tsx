@@ -37,7 +37,7 @@ export function MobileNavigationTutorial() {
       <button type="button" onClick={close} aria-label="Fechar aviso" className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/[.08] text-3xl font-light text-white/85">×</button>
       <div className="mx-auto mt-4 flex h-20 w-20 items-center justify-center rounded-[26px] bg-[#2D126C]/70 text-4xl text-[#D8B4FE]" aria-hidden="true">{open === "talk" ? "☝" : "▤"}</div>
       {open === "talk" && <p className="mt-5 text-[15px] font-semibold text-[#D8B4FE]">Boas-vindas ao Clouds! ☁️</p>}
-      <h1 id="mobile-welcome-title" className="mt-5 text-[26px] font-extrabold text-white">{open === "talk" ? "Entre na conversa" : "Conheça o Read"}</h1>
+      <h1 id="mobile-welcome-title" className="mt-5 text-[26px] font-extrabold text-white">{open === "talk" ? "Entre na conversa" : "Conheça a aba Leia"}</h1>
       <p className="mt-4 text-[17px] leading-relaxed text-[#B7B5DC]">{open === "talk" ? (mobile ? "Para abrir o chat, toque duas vezes rapidamente no título da conversa." : "Para abrir o chat, clique duas vezes no título da conversa.") : (mobile ? "Leia conversas que já aconteceram e descubra o que as pessoas compartilharam. Para abrir uma conversa, toque duas vezes rapidamente no título." : "Leia conversas que já aconteceram e descubra o que as pessoas compartilharam. Para abrir uma conversa, clique duas vezes no título.")}</p>
       <button type="button" onClick={close} className="mt-7 rounded-full bg-gradient-to-r from-[#6935FF] to-[#9B36FF] px-8 py-3 text-[16px] font-bold text-white">Entendi</button>
     </section>

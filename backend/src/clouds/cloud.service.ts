@@ -181,6 +181,18 @@ export class CloudService {
     }
     await this.requireAdmissionForAccess(cloud, session?.user.id);
 
+    // A visitor's allowance covers both active Clouds and archived conversations.
+    // Persisting the observation as membership also makes a live visitor visible
+    // in the active participant count before they attempt any interaction.
+    if (session?.user.isGuest) {
+      const existingVisit = await this.prisma.cloudMember.findUnique({ where: { cloudId_userId: { cloudId, userId: session.user.id } }, select: { id: true } });
+      if (!existingVisit) {
+        const visits = await this.prisma.cloudMember.count({ where: { userId: session.user.id } });
+        if (visits >= 5) throw new UnauthorizedException({ message: 'O modo visitante permite acompanhar até cinco Clouds. Crie sua conta para continuar.' });
+        await this.prisma.cloudMember.create({ data: { cloudId, userId: session.user.id, role: 'member' } });
+      }
+    }
+
     const currentUserHype = session
       ? await this.prisma.cloudHype.findUnique({
           where: { cloudId_userId: { cloudId, userId: session.user.id } },
@@ -2085,6 +2097,7 @@ export class CloudService {
     body: CreateCloudMessageInput,
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
+    if (current.user.isGuest) throw new UnauthorizedException({ message: 'Crie sua conta para interagir com os demais usuários.' });
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
@@ -2123,6 +2136,7 @@ export class CloudService {
     },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
+    if (current.user.isGuest) throw new UnauthorizedException({ message: 'Crie sua conta para interagir com os demais usuários.' });
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
@@ -2170,6 +2184,7 @@ export class CloudService {
     },
   ): Promise<{ ok: true; message: CloudMessagePayload }> {
     const current = await this.requireSession(token);
+    if (current.user.isGuest) throw new UnauthorizedException({ message: 'Crie sua conta para interagir com os demais usuários.' });
     const activeCloud = await this.requireCloudAccess(cloudId, current.user.id);
     this.requireActiveCloud(activeCloud);
     await this.requireCloudMembership(cloudId, current.user.id);
@@ -3505,6 +3520,14 @@ export class CloudService {
     leftCloudIds: string[];
   }> {
     const current = await this.requireSession(token);
+
+    if (current.user.isGuest) {
+      const alreadyVisited = await this.prisma.cloudMember.findFirst({ where: { cloudId, userId: current.user.id }, select: { id: true } });
+      if (!alreadyVisited) {
+        const visits = await this.prisma.cloudMember.count({ where: { userId: current.user.id } });
+        if (visits >= 5) throw new UnauthorizedException({ message: 'O modo visitante permite acompanhar até cinco Clouds. Crie sua conta para continuar.' });
+      }
+    }
 
     const { cloud, waiting, membershipChanged } =
       await this.prisma.$transaction(async (tx) => {

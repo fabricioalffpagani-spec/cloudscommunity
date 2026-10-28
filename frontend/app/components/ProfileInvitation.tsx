@@ -44,7 +44,7 @@ export function ProfileInvitation() {
     </div>
     <ul className="mx-auto mt-5 max-w-sm list-disc space-y-2 pl-5 text-left text-sm leading-relaxed text-white/70 marker:text-[#C084FC]">
       <li>Ganhe 10 hypes por novo usuário que se cadastrar com seu código.</li>
-      <li>Melhore sua posição e alcance mais pessoas no Meet.</li>
+      <li>Melhore sua posição e alcance mais pessoas no Conheça.</li>
       <li>Seu código já vem preenchido no cadastro pelo convite.</li>
     </ul>
     {notice && <p role="status" className="mt-2 text-sm text-white/70">{notice}</p>}

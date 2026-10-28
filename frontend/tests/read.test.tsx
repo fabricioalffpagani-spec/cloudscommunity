@@ -231,7 +231,7 @@ describe("Cloud preview", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("/api/clouds/cloud-1/preview");
     expect(screen.getAllByRole("link", { name: "Ver perfil de Maria" })[0]).toHaveAttribute("href", "/users/user-maria");
-    expect(screen.getByRole("link", { name: /Voltar para Read/ })).toHaveAttribute("href", "/read");
+    expect(screen.getByRole("link", { name: /Voltar para Leia/ })).toHaveAttribute("href", "/read");
     expect(screen.getByRole("link", { name: "Ver conversa completa" })).toHaveAttribute("href", "/cloud/cloud-1/conversation");
   });
   it("closes the desktop modal when its backdrop is clicked", async () => {
@@ -356,7 +356,7 @@ describe("Archived cloud conversation", () => {
       return { ok: true, json: async () => ({ user: null }) };
     }));
     render(<SessionUserProvider><ArchivedConversation cloudId={cloud.id} /></SessionUserProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Voltar para Read" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Voltar para Leia" }));
     expect(backMock).toHaveBeenCalledOnce();
   });
 

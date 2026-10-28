@@ -10,6 +10,7 @@ import { SessionUserAvatar, useSessionUser } from "../components/session-user";
 import { NotificationsBell } from "../components/NotificationsPanel";
 import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
+import { GuestCloudSignupModal } from "../components/GuestCloudSignupModal";
 
 type PublicUserProfile = {
   id: string;
@@ -185,6 +186,7 @@ function MeetPageContent() {
   const mobileFeedTabSwipe = useMobileFeedTabSwipe();
   const meetSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const [results, setResults] = useState<PublicUserProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState<string | null>(null);
@@ -263,6 +265,7 @@ function MeetPageContent() {
     if (target.isSelf) {
       return;
     }
+    if (user?.isGuest) { setGuestSignupOpen(true); return; }
 
     setMutating(target.id);
 
@@ -301,9 +304,9 @@ function MeetPageContent() {
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2"><HeaderBrand /></Link>
           <nav aria-label="Navegação" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
-            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Read</Link>
-            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">Meet<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
+            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Converse</Link>
+            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Leia</Link>
+            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white">Conheça<span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" /></Link>
           </nav>
           <div className="flex items-center justify-self-end gap-4 pb-2">
             <NotificationsBell buttonClassName="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
@@ -334,7 +337,7 @@ function MeetPageContent() {
         onTouchCancel={() => { meetSwipeStart.current = null; }}
       >
         <div className="mb-6">
-          <h1 className="text-[32px] font-bold tracking-tight text-white md:text-[42px]">Meet</h1>
+          <h1 className="text-[32px] font-bold tracking-tight text-white md:text-[42px]">Conheça</h1>
           <p className="mt-1 text-[16px] text-[#9b98ed]">Encontre pessoas para conhecer e acompanhar.</p>
         </div>
 
@@ -407,6 +410,7 @@ function MeetPageContent() {
         </div>
       </nav>
       <MobileAppNav />
+      {guestSignupOpen && <GuestCloudSignupModal cloudTitle="o Clouds" returnTo="/meet" onClose={() => setGuestSignupOpen(false)} />}
 
     </div>
   );

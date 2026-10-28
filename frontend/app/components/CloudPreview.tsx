@@ -55,7 +55,7 @@ function PreviewContent({ cloudId }: { cloudId: string }) {
     className="mx-auto flex h-[100dvh] w-full max-w-3xl flex-col overflow-hidden bg-[#080415] md:h-[min(82dvh,780px)] md:rounded-[28px] md:border md:border-white/10 md:shadow-2xl md:shadow-black/70"
   >
     <header className="sticky top-0 z-10 border-b border-white/10 bg-[#100828]/95 px-5 py-5 backdrop-blur-md">
-      <Link href="/read" className="text-sm text-[#C084FC]">← Voltar para Read</Link>
+      <Link href="/read" className="text-sm text-[#C084FC]">← Voltar para Leia</Link>
       <h1 className="mt-3 break-words text-xl font-bold">{data?.cloud.title ?? "Prévia da Cloud"}</h1>
       <p className="mt-2 text-sm text-white/60">Cloud encerrada · Somente leitura · 10 primeiras mensagens</p>
     </header>

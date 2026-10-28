@@ -237,9 +237,9 @@ export default function TrendingWordPage({ params }: { params: Promise<{ word: s
             <HeaderBrand />
           </Link>
           <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Talk</Link>
-            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Read</Link>
-            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">Meet</Link>
+            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Converse</Link>
+            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Leia</Link>
+            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Conheça</Link>
           </nav>
           <div className="flex items-center justify-self-end gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">

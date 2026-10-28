@@ -553,6 +553,15 @@ export class AuthService {
     };
   }
 
+  async createGuest(meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
+    void meta;
+    const suffix = randomBytes(5).toString('hex').slice(0, 9);
+    const username = `user${suffix}`;
+    const user = await this.prisma.user.create({ data: { email: `${username}@guest.invalid`, passwordHash: createPasswordHash(randomBytes(24).toString('hex')), status: 'active', isGuest: true, profile: { create: { username, displayName: username, birthDate: new Date('2000-01-01'), interestsOnboardingRequired: false } }, }, include: { profile: true } });
+    const session = await this.createSession(user.id, meta);
+    return { ok: true, user: this.mapUser(user), session: this.mapSession(session.session), token: session.token };
+  }
+
   async updateProfile(
     token: string | null,
     input: {
@@ -1116,6 +1125,7 @@ export class AuthService {
       interestsCompletedAt: profile.interestsCompletedAt?.toISOString() ?? null,
       interestsOnboardingRequired: profile.interestsOnboardingRequired,
       status: user.status,
+      isGuest: user.isGuest,
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       followersCount: stats?.followersCount,

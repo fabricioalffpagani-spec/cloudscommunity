@@ -726,7 +726,7 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
           <div className="box-border max-h-[calc(100dvh-3rem)] max-w-sm overflow-y-auto rounded-3xl border border-white/10 bg-[#15161C] p-5 shadow-2xl sm:p-6" style={{ width: "calc(100vw - 48px)" }}>
             <h2 id="delete-cloud-title" className="text-[18px] font-bold text-white">Excluir Cloud?</h2>
-            <p className="mt-2 text-[14px] leading-relaxed text-white/60">“{cloudToDelete.title}” será removida da plataforma, não ficará mais disponível em Read e também será removida permanentemente do seu perfil.</p>
+            <p className="mt-2 text-[14px] leading-relaxed text-white/60">“{cloudToDelete.title}” será removida da plataforma, não ficará mais disponível em Leia e também será removida permanentemente do seu perfil.</p>
             {deleteCloudError && <p role="alert" className="mt-3 text-[13px] text-red-300">{deleteCloudError}</p>}
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" disabled={deletingCloud} onClick={() => setCloudToDelete(null)} className="rounded-full px-4 py-2 text-[13px] font-semibold text-white/65 transition hover:text-white">Cancelar</button>

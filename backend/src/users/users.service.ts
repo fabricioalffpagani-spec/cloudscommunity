@@ -161,6 +161,9 @@ export class UsersService {
     identifierInput: string,
   ): Promise<UserProfileResponse> {
     const current = await this.requireSession(token);
+    if (current.user.isGuest) {
+      throw new UnauthorizedException({ message: 'Crie sua conta para interagir com os demais usuários.' });
+    }
     const target = await this.requireTargetUser(identifierInput);
 
     if (target.id === current.user.id) {
