@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionUser } from "../components/session-user";
 
@@ -42,8 +42,12 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetState, setResetState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [resetMessage, setResetMessage] = useState("");
-  const requestedReturnTo = typeof window === "undefined" ? "/" : new URLSearchParams(window.location.search).get("returnTo") || "/";
-  const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//") ? requestedReturnTo : "/";
+  const [returnTo, setReturnTo] = useState("/");
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("returnTo") || "/";
+    setReturnTo(requested.startsWith("/") && !requested.startsWith("//") ? requested : "/");
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
