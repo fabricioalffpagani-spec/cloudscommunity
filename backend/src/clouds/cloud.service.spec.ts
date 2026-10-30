@@ -112,6 +112,7 @@ function setup() {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
     $transaction: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(1),
     $queryRaw: jest.fn().mockResolvedValue([]),
   };
   prisma.$transaction.mockImplementation(

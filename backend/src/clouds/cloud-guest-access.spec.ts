@@ -30,7 +30,7 @@ function makeService(
 describe('anonymous Cloud access', () => {
   it('shares a five-Cloud quota between Talk and Read visits', async () => {
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       guestCloudVisit: {
         findUnique: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(5),
@@ -54,7 +54,7 @@ describe('anonymous Cloud access', () => {
 
   it('counts a new public Cloud atomically before allowing it', async () => {
     const tx = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       guestCloudVisit: {
         findUnique: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(4),
@@ -71,7 +71,7 @@ describe('anonymous Cloud access', () => {
     };
 
     await service.recordAnonymousVisit('203.0.113.1', 'cloud-5');
-    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
     expect(tx.guestCloudVisit.create).toHaveBeenCalledWith({
       data: {
         cloudId: 'cloud-5',
