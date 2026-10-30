@@ -97,9 +97,7 @@ export class AuthService {
   }
 
   async deleteAccount(token: string | null): Promise<void> {
-    const current = await this.resolveSession(token);
-    if (!current)
-      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    const current = await this.requireRegisteredSession(token);
     await this.prisma.user.delete({ where: { id: current.user.id } });
   }
 
@@ -553,13 +551,64 @@ export class AuthService {
     };
   }
 
-  async createGuest(meta: { ipAddress: string | null; userAgent: string | null }): Promise<AuthResult> {
-    void meta;
+  async createGuest(meta: {
+    ipAddress: string | null;
+    userAgent: string | null;
+  }): Promise<AuthResult> {
+    const guestIpAddress = meta.ipAddress?.trim();
+    if (!guestIpAddress) {
+      throw new BadRequestException({
+        message: 'Não foi possível identificar este dispositivo.',
+      });
+    }
     const suffix = randomBytes(5).toString('hex').slice(0, 9);
     const username = `user${suffix}`;
-    const user = await this.prisma.user.create({ data: { email: `${username}@guest.invalid`, passwordHash: createPasswordHash(randomBytes(24).toString('hex')), status: 'active', isGuest: true, profile: { create: { username, displayName: username, birthDate: new Date('2000-01-01'), interestsOnboardingRequired: false } }, }, include: { profile: true } });
+    const user = await this.prisma.user.upsert({
+      where: { guestIpAddress },
+      update: {},
+      create: {
+        email: `${username}@guest.invalid`,
+        passwordHash: createPasswordHash(randomBytes(24).toString('hex')),
+        status: 'active',
+        isGuest: true,
+        guestIpAddress,
+        profile: {
+          create: {
+            username,
+            displayName: username,
+            birthDate: new Date('2000-01-01'),
+            interestsOnboardingRequired: false,
+          },
+        },
+      },
+      include: { profile: true },
+    });
+    await this.prisma.session.deleteMany({
+      where: {
+        userId: user.id,
+        OR: [{ expiresAt: { lte: new Date() } }, { revokedAt: { not: null } }],
+      },
+    });
     const session = await this.createSession(user.id, meta);
-    return { ok: true, user: this.mapUser(user), session: this.mapSession(session.session), token: session.token };
+    return {
+      ok: true,
+      user: this.mapUser(user),
+      session: this.mapSession(session.session),
+      token: session.token,
+    };
+  }
+
+  async requireRegisteredSession(token: string | null) {
+    const current = await this.resolveSession(token);
+    if (!current) {
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    }
+    if (current.user.isGuest) {
+      throw new UnauthorizedException({
+        message: 'Crie sua conta para realizar esta ação.',
+      });
+    }
+    return current;
   }
 
   async updateProfile(
@@ -576,9 +625,7 @@ export class AuthService {
       interests?: string[];
     },
   ): Promise<AuthResponse> {
-    const current = await this.resolveSession(token);
-    if (!current)
-      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    const current = await this.requireRegisteredSession(token);
 
     const displayName =
       input.displayName === undefined
@@ -679,9 +726,7 @@ export class AuthService {
     token: string | null,
     input: { currentPassword?: string; newPassword?: string },
   ): Promise<{ ok: true }> {
-    const current = await this.resolveSession(token);
-    if (!current)
-      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    const current = await this.requireRegisteredSession(token);
 
     const currentPassword = input.currentPassword ?? '';
     const newPassword = input.newPassword ?? '';
@@ -715,9 +760,7 @@ export class AuthService {
     token: string | null,
     messageInput: string,
   ): Promise<{ ok: true }> {
-    const current = await this.resolveSession(token);
-    if (!current)
-      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    const current = await this.requireRegisteredSession(token);
 
     const message = messageInput.trim();
     if (message.length < 10) {

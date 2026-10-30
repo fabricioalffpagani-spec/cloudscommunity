@@ -114,7 +114,7 @@ export class DirectMessagesGateway
       : extractTokenFromHandshake(socket);
     const session = await this.authService.resolveSession(token);
 
-    if (!session) {
+    if (!session || session.user.isGuest) {
       socket.disconnect(true);
       return;
     }

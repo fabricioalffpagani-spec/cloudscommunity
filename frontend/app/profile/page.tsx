@@ -371,6 +371,12 @@ export default function ProfilePage() {
   const [actioningUserId, setActioningUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (status === "authenticated" && user?.isGuest) {
+      window.location.replace("/signup?from=interaction&returnTo=%2Fprofile");
+    }
+  }, [status, user?.isGuest]);
+
+  useEffect(() => {
     if (!user || editing) {
       return;
     }
@@ -610,7 +616,7 @@ export default function ProfilePage() {
   const memberSince = formatMemberSince(user?.createdAt);
   const region = user?.location || "Sem região informada";
   const bio = user?.bio?.trim() || "Nenhuma bio cadastrada ainda.";
-  const loading = status === "loading" || !user;
+  const loading = status === "loading" || !user || user.isGuest;
 
   if (loading) {
     return (

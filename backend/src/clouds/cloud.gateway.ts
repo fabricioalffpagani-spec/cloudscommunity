@@ -111,7 +111,7 @@ export class CloudMessagesGateway
       ...(socket.data as CloudSocketData),
       userId: session?.user.id,
       sessionId: session?.session.id,
-      guest: !session,
+      guest: !session || session.user.isGuest,
       joinedCloudIds: new Set<string>(),
     };
 
@@ -155,19 +155,11 @@ export class CloudMessagesGateway
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
-    const cloud = await this.cloudService.requireCloudAccess(
-      cloudId,
-      userId ?? undefined,
-    );
-    if (
-      !userId &&
-      (cloud.visibility !== 'public' || cloud.status !== 'active')
-    ) {
-      return {
-        ok: false as const,
-        message: 'Cloud indisponível para visitantes.',
-      };
+    if (!userId) {
+      return { ok: false as const, message: 'Sessão não encontrada.' };
     }
+
+    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
     const joinedCloudIds =
       (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
     await socket.join(this.cloudRoom(cloudId));
@@ -244,6 +236,12 @@ export class CloudMessagesGateway
     @MessageBody() body: { cloudId?: string; isTyping?: boolean },
     @ConnectedSocket() socket: Socket,
   ) {
+    if ((socket.data as CloudSocketData).guest) {
+      return {
+        ok: false as const,
+        message: 'Crie sua conta para realizar esta ação.',
+      };
+    }
     const userId = await this.resolveOrHydrateUserId(socket);
 
     if (!userId) {
@@ -520,6 +518,7 @@ export class CloudMessagesGateway
       ...(socket.data as CloudSocketData),
       userId: session.user.id,
       sessionId: session.session.id,
+      guest: session.user.isGuest,
       joinedCloudIds:
         (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>(),
     };

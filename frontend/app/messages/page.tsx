@@ -1448,6 +1448,12 @@ function MessagesPageContent() {
   const presenceByUserIdRef = useRef<Record<string, Status>>({});
   const followingIdsRef = useRef<string[]>([]);
   const [presenceByUserId, setPresenceByUserId] = useState<Record<string, Status>>({});
+
+  useEffect(() => {
+    if (status === "authenticated" && user?.isGuest) {
+      window.location.replace("/signup?from=interaction&returnTo=%2Fmessages");
+    }
+  }, [status, user?.isGuest]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const openedPeerRef = useRef<string | null>(null);
   const sidebarSearchRef = useRef<HTMLInputElement | null>(null);

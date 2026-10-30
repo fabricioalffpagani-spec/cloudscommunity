@@ -82,7 +82,10 @@ export class AuthController {
 
   @Post('guest')
   async guest(@Res({ passthrough: true }) res: Response, @Req() req: Request) {
-    const result = await this.authService.createGuest({ ipAddress: req.ip ?? null, userAgent: req.headers['user-agent'] ?? null });
+    const result = await this.authService.createGuest({
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
     const { token, ...payload } = result;
     setSessionCookie(res, token, new Date(payload.session.expiresAt));
     return payload;

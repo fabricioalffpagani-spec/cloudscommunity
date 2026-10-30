@@ -752,8 +752,14 @@ function Header({ onSearchOpen }: { onSearchOpen: () => void }) {
 }
 
 export default function SettingsPage() {
+  const { user, status } = useSessionUser();
   const [active, setActive] = useState<Section>("conta");
   const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    if (status === "authenticated" && user?.isGuest) {
+      window.location.replace("/signup?from=interaction&returnTo=%2Fsettings");
+    }
+  }, [status, user?.isGuest]);
   useEffect(() => {
     const requestedSection = new URLSearchParams(window.location.search).get("section");
     if (NAV_ITEMS.some((item) => item.key === requestedSection)) setActive(requestedSection as Section);
@@ -763,6 +769,7 @@ export default function SettingsPage() {
     notificacoes:<PanelNotificacoes/>, aplicativo:<PanelAplicativo/>, acessibilidade:<PanelAcessibilidade/>,
     seguranca:<PanelSeguranca/>, dados:<PanelDados/>, sobre:<PanelSobre/>
   };
+  if (user?.isGuest) return null;
   return (
     <div className="flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
