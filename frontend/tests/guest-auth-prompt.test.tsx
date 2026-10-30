@@ -2,9 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { GuestCloudSignupModal } from "../app/components/GuestCloudSignupModal";
 import { MessagesNavLink } from "../app/components/MessagesNavLink";
+import LoginPage from "../app/login/page";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+}));
 
 vi.mock("../app/components/session-user", () => ({
-  useSessionUser: () => ({ user: null, status: "anonymous" }),
+  useSessionUser: () => ({ user: null, status: "anonymous", refresh: vi.fn() }),
 }));
 
 describe("visitor authentication prompts", () => {
@@ -30,5 +35,14 @@ describe("visitor authentication prompts", () => {
     );
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the protected destination when login links to signup", async () => {
+    window.history.replaceState({}, "", "/login?returnTo=%2Fmessages%3Fid%3Duser-1");
+    render(<LoginPage />);
+    expect(await screen.findByRole("link", { name: "Criar conta" })).toHaveAttribute(
+      "href",
+      "/signup?returnTo=%2Fmessages%3Fid%3Duser-1",
+    );
   });
 });
