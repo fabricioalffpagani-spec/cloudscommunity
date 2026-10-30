@@ -2887,7 +2887,9 @@ export class CloudService {
       .update(ipAddress.trim().toLowerCase() || 'unknown')
       .digest('hex');
     await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${ipHash}))`;
+      // The PostgreSQL function returns `void`; executeRaw avoids asking Prisma
+      // to deserialize that unsupported result type while retaining the lock.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ipHash}))`;
       const existing = await tx.guestCloudVisit.findUnique({
         where: { ipHash_cloudId: { ipHash, cloudId } },
         select: { id: true },
