@@ -47,7 +47,7 @@ export class DirectMessagesController {
 
   @Get('conversations')
   async listConversations(@Req() req: Request) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -83,7 +83,7 @@ export class DirectMessagesController {
     @Query('take') take?: string,
     @Query('before') before?: string,
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -113,7 +113,7 @@ export class DirectMessagesController {
     @Req() req: Request,
     @Param('conversationId') conversationId: string,
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -135,7 +135,7 @@ export class DirectMessagesController {
     @Param('messageId') messageId: string,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
     if (!session) {
@@ -161,7 +161,7 @@ export class DirectMessagesController {
     @Req() req: Request,
     @Body() body: Record<string, unknown>,
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -199,7 +199,7 @@ export class DirectMessagesController {
     @Param('conversationId') conversationId: string,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -242,7 +242,7 @@ export class DirectMessagesController {
     @Param('messageId') messageId: string,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
     if (!session)
@@ -279,7 +279,7 @@ export class DirectMessagesController {
     @UploadedFile() file?: MulterFile,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -340,7 +340,7 @@ export class DirectMessagesController {
     @UploadedFile() file?: MulterFile,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -387,7 +387,7 @@ export class DirectMessagesController {
     @Param('conversationId') conversationId: string,
     @Body() body: Record<string, unknown> = {},
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
 
@@ -431,7 +431,7 @@ export class DirectMessagesController {
     @Param('messageId') messageId: string,
     @Body() body: Record<string, unknown>,
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
     if (!session)
@@ -456,7 +456,7 @@ export class DirectMessagesController {
     @Param('conversationId') conversationId: string,
     @Param('messageId') messageId: string,
   ) {
-    const session = await this.authService.resolveSession(
+    const session = await this.authService.requireRegisteredSession(
       extractSessionToken(req),
     );
     if (!session)

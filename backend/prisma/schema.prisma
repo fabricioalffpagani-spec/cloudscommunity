@@ -84,6 +84,8 @@ model User {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   deletedAt       DateTime?
+  isGuest         Boolean     @default(false)
+  guestIpAddress  String?     @unique @db.VarChar(64)
 
   profile                  Profile?
   authoredClouds            Cloud[]         @relation("CloudAuthor")

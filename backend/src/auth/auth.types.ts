@@ -18,6 +18,7 @@ export type AuthUserPayload = {
   interestsCompletedAt: string | null;
   interestsOnboardingRequired: boolean;
   status: string;
+  isGuest: boolean;
   createdAt: string;
   updatedAt: string;
   followersCount?: number;

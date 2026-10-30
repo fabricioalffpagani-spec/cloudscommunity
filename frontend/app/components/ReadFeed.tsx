@@ -184,12 +184,12 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
       {reportCloud && <CloudReportModal cloudId={reportCloud.id} cloudTitle={reportCloud.title} reportedId={reportCloud.author.id} onClose={() => setReportCloud(null)} />}
       {shareCloud && (() => {
         const url = `${window.location.origin}/cloud/${encodeURIComponent(shareCloud.id)}/conversation?from=read`;
-        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} contactsError={contactsError} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa no Read!" onClose={() => setShareCloud(null)} />;
+        return <ForwardToContactModal title="Compartilhar Cloud" preview={shareCloud.title} url={url} label={shareCloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} contactsError={contactsError} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${shareCloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa na aba Leia!" onClose={() => setShareCloud(null)} />;
       })()}
       {cloudToDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="delete-cloud-title">
         <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-6 shadow-2xl">
           <h2 id="delete-cloud-title" className="text-[18px] font-bold text-white">Excluir Cloud?</h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-white/60">“{cloudToDelete.title}” será removida da plataforma e não ficará mais disponível em Read.</p>
+          <p className="mt-2 text-[14px] leading-relaxed text-white/60">“{cloudToDelete.title}” será removida da plataforma e não ficará mais disponível em Leia.</p>
           {deleteError && <p role="alert" className="mt-3 text-[13px] text-red-300">{deleteError}</p>}
           <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={deleting} onClick={() => setCloudToDelete(null)} className="rounded-full px-4 py-2 text-[13px] font-semibold text-white/65 transition hover:text-white">Cancelar</button><button type="button" disabled={deleting} onClick={() => void confirmDelete()} className="rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-red-500 disabled:opacity-50">{deleting ? "Excluindo..." : "Excluir"}</button></div>
         </div>

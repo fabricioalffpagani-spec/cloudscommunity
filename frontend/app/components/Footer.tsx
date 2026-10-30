@@ -31,7 +31,7 @@ export default function Footer() {
                 href="/meet"
                 className="rounded-full border border-white/10 bg-white/5 px-4 py-1 text-[12px] font-semibold text-white/80 transition hover:bg-white/10"
               >
-                Meet
+                Conheça
               </Link>
             </div>
             <p className="text-[10px] text-white/35">

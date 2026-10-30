@@ -80,6 +80,17 @@ export class AuthController {
     return result;
   }
 
+  @Post('guest')
+  async guest(@Res({ passthrough: true }) res: Response, @Req() req: Request) {
+    const result = await this.authService.createGuest({
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+    const { token, ...payload } = result;
+    setSessionCookie(res, token, new Date(payload.session.expiresAt));
+    return payload;
+  }
+
   @Post('email-verification/resend')
   async resendEmailVerification(@Body() body: Record<string, unknown>) {
     return this.authService.resendEmailVerification(

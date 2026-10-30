@@ -2866,15 +2866,15 @@ function PageContent() {
 
           {/* Nav */}
           <nav aria-label="Navegação" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">
-              Talk
+            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white">
+              Converse
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
-              Read
+            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+              Leia
             </Link>
-            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
-              Meet
+            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+              Conheça
             </Link>
           </nav>
 
@@ -2905,9 +2905,9 @@ function PageContent() {
           <img src="/logo_clouds.png" alt="Clouds Community" className="h-[42px] w-[42px] object-contain" />
         </Link>
         <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap">
-          <span className="relative text-[18px] font-bold text-[#B44DFF]">Talk<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
-          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[18px] font-semibold text-white/60">Read</Link>
-          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[18px] font-semibold text-white/60">Meet</Link>
+          <span className="relative text-[11px] font-bold text-[#B44DFF]">Converse<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
+          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[11px] font-semibold text-white/60">Leia</Link>
+          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[11px] font-semibold text-white/60">Conheça</Link>
         </nav>
         <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
       </header>

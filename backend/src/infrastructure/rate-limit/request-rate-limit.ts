@@ -12,6 +12,7 @@ function ruleFor(request: Request): RateLimitRule {
   if (
     request.path.startsWith('/auth/login') ||
     request.path.startsWith('/auth/signup') ||
+    request.path.startsWith('/auth/guest') ||
     request.path.includes('password-reset')
   ) {
     return AUTH_RULE;

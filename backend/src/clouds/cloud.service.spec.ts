@@ -96,6 +96,11 @@ function setup() {
         .mockResolvedValue(null),
       upsert: jest.fn<Promise<unknown>, unknown[]>(),
     },
+    user: {
+      findUnique: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue({ isGuest: false }),
+    },
     follow: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },

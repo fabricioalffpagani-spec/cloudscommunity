@@ -3296,7 +3296,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       )}
       <div ref={composerFooterRef} className="shrink-0 overscroll-none border-t border-white/[0.07] bg-[#000000] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5">
         <div className="relative flex min-h-[66px] flex-col gap-2 rounded-full border border-[#6D28D9]/45 bg-[#1a0e3d] px-4 py-3 sm:min-h-0 sm:px-5">
-          {status !== "authenticated" && (
+          {(status !== "authenticated" || user?.isGuest) && (
             <button type="button" aria-label="Cadastrar para participar da cloud" onClick={() => setGuestSignupOpen(true)} className="absolute inset-0 z-20 cursor-text rounded-full" />
           )}
           {audioRecorder.state === "recording" || audioRecorder.state === "paused" ? (

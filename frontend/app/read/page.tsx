@@ -158,15 +158,15 @@ function ReadPageContent() {
           </Link>
 
           <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Talk: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
-              Talk
+            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+              Converse
             </Link>
-            <Link href="/read" title="Read: conversas encerradas disponíveis para leitura." className="relative inline-flex h-14 items-center text-[22px] font-semibold text-white">
-              Read
+            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white">
+              Leia
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/meet" title="Meet: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[22px] font-semibold text-white/50 transition hover:text-white">
-              Meet
+            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+              Conheça
             </Link>
           </nav>
 

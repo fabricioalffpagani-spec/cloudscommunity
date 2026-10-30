@@ -970,7 +970,7 @@ function LinkMessageBubble({ msg }: { msg: Msg }) {
       <a href={msg.linkUrl} className="block w-[min(360px,100%)] overflow-hidden rounded-3xl text-left text-white transition-opacity hover:opacity-90" style={{ background: "linear-gradient(135deg, #7C3AED 0%, #9333EA 60%, #A855F7 100%)" }}>
         <div className="px-5 pt-5 pb-4">
           {isExternal && <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/70">Conteúdo encaminhado</p>}
-          <p className="mb-3 text-[12px] font-semibold text-white/80">Cloud compartilhada · {sharedCloud === "read" ? "Read" : "Talk"}</p>
+          <p className="mb-3 text-[12px] font-semibold text-white/80">Cloud compartilhada · {sharedCloud === "read" ? "Leia" : "Converse"}</p>
           <p className="break-words text-[22px] font-extrabold leading-tight sm:text-2xl">{title}</p>
         </div>
         <div className="px-4 pb-4"><span className="flex min-h-11 items-center justify-center rounded-2xl bg-white/20 px-4 py-3 text-[15px] font-bold text-white">{sharedCloud === "read" ? "Ler" : "Entrar na Cloud"}</span></div>
@@ -1448,6 +1448,12 @@ function MessagesPageContent() {
   const presenceByUserIdRef = useRef<Record<string, Status>>({});
   const followingIdsRef = useRef<string[]>([]);
   const [presenceByUserId, setPresenceByUserId] = useState<Record<string, Status>>({});
+
+  useEffect(() => {
+    if (status === "authenticated" && user?.isGuest) {
+      window.location.replace("/signup?from=interaction&returnTo=%2Fmessages");
+    }
+  }, [status, user?.isGuest]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const openedPeerRef = useRef<string | null>(null);
   const sidebarSearchRef = useRef<HTMLInputElement | null>(null);

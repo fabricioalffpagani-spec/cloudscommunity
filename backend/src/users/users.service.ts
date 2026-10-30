@@ -19,13 +19,6 @@ import {
   UsersSearchResponse,
 } from './users.types';
 
-type SessionUser =
-  Awaited<ReturnType<AuthService['resolveSession']>> extends infer T
-    ? T extends { user: infer U }
-      ? U
-      : never
-    : never;
-
 type UserWithProfile = Prisma.UserGetPayload<{
   include: {
     profile: true;
@@ -99,6 +92,7 @@ export class UsersService {
       where: {
         status: UserStatus.active,
         deletedAt: null,
+        isGuest: false,
       },
       include: {
         profile: true,
@@ -160,7 +154,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<UserProfileResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     if (target.id === current.user.id) {
@@ -207,7 +201,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<UserProfileResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     if (target.id === current.user.id) {
@@ -245,7 +239,7 @@ export class UsersService {
   }
 
   async getSearchHistory(token: string | null) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const searches = await this.prisma.searchHistory.findMany({
       where: { userId: current.user.id },
       orderBy: { updatedAt: 'desc' },
@@ -271,7 +265,7 @@ export class UsersService {
       avatarUrl?: string | null;
     },
   ) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const query = (input.query ?? '').trim().replace(/\s+/g, ' ').slice(0, 120);
     if (!query)
       throw new BadRequestException({ message: 'Informe uma busca.' });
@@ -313,7 +307,7 @@ export class UsersService {
   }
 
   async clearSearchHistory(token: string | null) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     await this.prisma.searchHistory.deleteMany({
       where: { userId: current.user.id },
     });
@@ -325,7 +319,7 @@ export class UsersService {
     kind: string,
     targetId: string,
   ) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     await this.prisma.searchHistory.deleteMany({
       where: { userId: current.user.id, kind, targetId },
     });
@@ -336,7 +330,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<{ ok: true }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const target = await this.requireTargetUser(identifierInput);
     if (target.id === current.user.id)
       throw new BadRequestException({
@@ -380,7 +374,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<{ ok: true }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const target = await this.requireTargetUser(identifierInput);
     await this.prisma.userBlock.deleteMany({
       where: { blockerId: current.user.id, blockedId: target.id },
@@ -393,7 +387,7 @@ export class UsersService {
     identifierInput: string,
     followerId: string,
   ): Promise<{ ok: true }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     if (target.id !== current.user.id) {
@@ -427,7 +421,7 @@ export class UsersService {
     token: string | null,
     requesterIdentifier: string,
   ): Promise<{ ok: true }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const requester = await this.requireTargetUser(requesterIdentifier);
 
     if (requester.id === current.user.id) {
@@ -482,7 +476,7 @@ export class UsersService {
     token: string | null,
     requesterIdentifier: string,
   ): Promise<{ ok: true }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const requester = await this.requireTargetUser(requesterIdentifier);
 
     if (requester.id === current.user.id) {
@@ -643,7 +637,7 @@ export class UsersService {
   }
 
   async getConnectionIds(token: string | null) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const follows = await this.prisma.follow.findMany({
       where: {
         OR: [{ followerId: current.user.id }, { followingId: current.user.id }],
@@ -671,7 +665,7 @@ export class UsersService {
   ): Promise<UsersSearchResponse> {
     void sort;
     void limit; // Compatibility parameters; the existing query has fixed ordering.
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
 
     const following = await this.prisma.follow.findMany({
       where: { followerId: current.user.id },
@@ -708,7 +702,7 @@ export class UsersService {
   }
 
   async followingContacts(token: string | null) {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const following = await this.prisma.follow.findMany({
       where: {
         followerId: current.user.id,
@@ -858,6 +852,7 @@ export class UsersService {
           id: { in: rankedIds },
           status: UserStatus.active,
           deletedAt: null,
+          isGuest: false,
         },
         include: { profile: true },
       });
@@ -891,6 +886,7 @@ export class UsersService {
             id: { not: current.user.id },
             status: UserStatus.active,
             deletedAt: null,
+            isGuest: false,
           },
           include: { profile: true },
           orderBy: { createdAt: 'desc' },
@@ -1065,7 +1061,17 @@ export class UsersService {
       });
     }
 
-    return current as { user: SessionUser };
+    return current;
+  }
+
+  private async requireRegisteredSession(token: string | null) {
+    const current = await this.requireSession(token);
+    if (current.user.isGuest) {
+      throw new UnauthorizedException({
+        message: 'Crie sua conta para realizar esta ação.',
+      });
+    }
+    return current;
   }
 
   private async requireTargetUser(identifierInput: string) {
@@ -1097,13 +1103,14 @@ export class UsersService {
         include: { profile: true },
       });
 
-      if (byId?.profile) {
+      if (byId?.profile && !byId.isGuest) {
         return byId;
       }
     }
 
     const byUsername = await this.prisma.user.findFirst({
       where: {
+        isGuest: false,
         profile: {
           username: normalizedUsername,
         },
@@ -1120,6 +1127,7 @@ export class UsersService {
       where: {
         status: UserStatus.active,
         deletedAt: null,
+        isGuest: false,
       },
       include: { profile: true },
       take: 100,
@@ -1645,7 +1653,7 @@ export class UsersService {
       type: 'email' | 'phone';
     }>;
   }> {
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     const contacts: Array<{
       identifier: string;
       displayName: string;
@@ -1691,7 +1699,7 @@ export class UsersService {
     identifier: string,
   ): Promise<{ ok: true; inviteUrl: string; code: string }> {
     void identifier;
-    const current = await this.requireSession(token);
+    const current = await this.requireRegisteredSession(token);
     let invitation = await this.prisma.invitationCode.findUnique({
       where: { userId: current.user.id },
     });

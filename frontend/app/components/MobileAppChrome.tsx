@@ -121,9 +121,9 @@ function MobileFeedHeaderContent({ active, onSearch }: { active?: FeedTab; onSea
   const searchParams = useSearchParams();
   const previewSuffix = searchParams.get("mobilePreview") === "1" ? "?mobilePreview=1" : "";
   const tabs: Array<{ id: FeedTab; label: string; href: string; hint: string }> = [
-    { id: "for-you", label: "Talk", href: "/", hint: "Talk: Clouds ao vivo para conversar agora." },
-    { id: "following", label: "Read", href: "/read", hint: "Read: conversas encerradas disponíveis para leitura." },
-    { id: "meet", label: "Meet", href: "/meet", hint: "Meet: descubra pessoas para seguir e conhecer." },
+    { id: "for-you", label: "Converse", href: "/", hint: "Converse: Clouds ao vivo para conversar agora." },
+    { id: "following", label: "Leia", href: "/read", hint: "Leia: conversas encerradas disponíveis para leitura." },
+    { id: "meet", label: "Conheça", href: "/meet", hint: "Conheça: descubra pessoas para seguir e conhecer." },
   ];
 
   return (
@@ -133,7 +133,7 @@ function MobileFeedHeaderContent({ active, onSearch }: { active?: FeedTab; onSea
         <img src="/logo_clouds.png" alt="Clouds Community" className="h-[42px] w-[42px] object-contain" />
       </Link>
       <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap">
-        {tabs.map((tab) => <LongPressHint key={tab.id} hint={tab.hint}><Link href={`${tab.href}${previewSuffix}`} className={`relative text-[18px] font-semibold ${active === tab.id ? "text-[#B44DFF]" : "text-white/60"}`}>{tab.label}{active === tab.id && <span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" />}</Link></LongPressHint>)}
+        {tabs.map((tab) => <LongPressHint key={tab.id} hint={tab.hint}><Link href={`${tab.href}${previewSuffix}`} className={`relative text-[11px] font-semibold ${active === tab.id ? "text-[#B44DFF]" : "text-white/60"}`}>{tab.label}{active === tab.id && <span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" />}</Link></LongPressHint>)}
       </nav>
       {onSearch ? <button type="button" aria-label="Buscar" onClick={onSearch} className="justify-self-center text-white"><SearchIcon /></button> : <span />}
     </header>

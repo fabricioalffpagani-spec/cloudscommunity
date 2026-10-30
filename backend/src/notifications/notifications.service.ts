@@ -231,19 +231,17 @@ export class NotificationsService {
 
   private async requireSession(token: string | null) {
     if (!token) {
-      throw new UnauthorizedException({
-        message: 'Sessão não encontrada.',
-      });
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
     }
-
     const session = await this.authService.resolveSession(token);
-
     if (!session) {
+      throw new UnauthorizedException({ message: 'Sessão não encontrada.' });
+    }
+    if (session.user.isGuest) {
       throw new UnauthorizedException({
-        message: 'Sessão não encontrada.',
+        message: 'Crie sua conta para realizar esta ação.',
       });
     }
-
     return session;
   }
 }
