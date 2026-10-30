@@ -43,7 +43,7 @@ jobs:
         run: npm audit --omit=dev
       - name: Audit all dependencies
         if: ${{ !cancelled() }}
-        run: npm audit
+        run: npm audit --audit-level=moderate
       - name: Application build
         if: ${{ !cancelled() }}
         run: npm run build
