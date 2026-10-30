@@ -1961,7 +1961,11 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
     });
 
   const handleToggleHype = useCallback(async () => {
-    if (!user || !cloud) {
+    if (!cloud) {
+      return;
+    }
+    if (!user || user.isGuest) {
+      setGuestSignupOpen(true);
       return;
     }
 

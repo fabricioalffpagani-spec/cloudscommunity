@@ -278,8 +278,11 @@ export function NotificationsBell({
 }) {
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const router = useRouter();
+  const { user, status } = useSessionUser();
 
   useEffect(() => {
+    if (status !== "authenticated" || !user || user.isGuest) return;
     if (!openFromUrl) return;
     const url = new URL(window.location.href);
     if (url.searchParams.get("notifications") !== "1") return;
@@ -288,7 +291,7 @@ export function NotificationsBell({
     setOpen(true);
     setUnreadCount(0);
     void markNotificationsRead();
-  }, [openFromUrl]);
+  }, [openFromUrl, status, user]);
 
   const loadUnread = useCallback(async () => {
     try {
@@ -307,6 +310,7 @@ export function NotificationsBell({
   }, []);
 
   useEffect(() => {
+    if (status !== "authenticated" || !user || user.isGuest) return;
     void loadUnread();
     const timer = window.setInterval(() => void loadUnread(), 5000);
     const handleFocus = () => void loadUnread();
@@ -316,7 +320,7 @@ export function NotificationsBell({
       window.clearInterval(timer);
       window.removeEventListener("focus", handleFocus);
     };
-  }, [loadUnread]);
+  }, [loadUnread, status, user]);
 
   return (
     <>
@@ -324,6 +328,10 @@ export function NotificationsBell({
         type="button"
         aria-label="Notificações"
         onClick={() => {
+          if (status !== "authenticated" || !user || user.isGuest) {
+            router.push(`/login?returnTo=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`);
+            return;
+          }
           if ("Notification" in window && Notification.permission !== "denied") {
             void enableNativeNotifications();
           }

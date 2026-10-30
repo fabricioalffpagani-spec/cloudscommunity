@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveBackendOrigin } from "./app/api/_lib/nest-proxy";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/verify-email"];
+const AUTH_PATHS = ["/login", "/signup", "/verify-email"];
 const PROTECTED_PATH_PREFIXES = [
-  "/",
   "/profile",
   "/messages",
-  "/meet",
   "/settings",
-  "/cloud",
   "/mini-cloud",
   "/following",
-  "/read",
   "/onboarding",
+  "/notifications",
 ];
 
 function isStaticAsset(pathname: string) {
@@ -26,8 +23,13 @@ function isStaticAsset(pathname: string) {
 }
 
 function isProtectedPath(pathname: string) {
-  if (pathname === "/") return true;
-  return PROTECTED_PATH_PREFIXES.some((prefix) => prefix !== "/" && pathname.startsWith(prefix));
+  return PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+function loginUrl(request: NextRequest) {
+  const url = new URL("/login", request.url);
+  url.searchParams.set("returnTo", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return url;
 }
 
 async function hasValidSession(request: NextRequest) {
@@ -67,15 +69,9 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionExists = request.cookies.has("cc_session");
-  const sessionIsValid = sessionExists ? await hasValidSession(request) : false;
 
-  // Uma Cloud pública pode ser observada por visitantes. O CloudChat apresenta
-  // o cadastro somente quando a pessoa tenta escrever ou enviar uma mensagem.
-  if (pathname.startsWith("/cloud/")) {
-    return NextResponse.next();
-  }
-
-  if (PUBLIC_PATHS.includes(pathname)) {
+  if (AUTH_PATHS.includes(pathname)) {
+    const sessionIsValid = sessionExists ? await hasValidSession(request) : false;
     if (sessionIsValid) {
       return NextResponse.redirect(new URL("/", request.url));
     }
@@ -91,11 +87,12 @@ export async function proxy(request: NextRequest) {
 
   if (isProtectedPath(pathname)) {
     if (!sessionExists) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(loginUrl(request));
     }
 
+    const sessionIsValid = await hasValidSession(request);
     if (sessionIsValid === false) {
-      const response = NextResponse.redirect(new URL("/login", request.url));
+      const response = NextResponse.redirect(loginUrl(request));
       clearSessionCookie(response);
       return response;
     }

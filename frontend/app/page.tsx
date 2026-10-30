@@ -36,6 +36,7 @@ import { SearchModal } from "./components/SearchModal";
 import { CloudReportModal } from "./components/CloudReportModal";
 import { InviteCloudsButton } from "./components/InviteCloudsButton";
 import { DesktopScheduledCloudActions } from "./components/DesktopScheduledCloudActions";
+import { GuestCloudSignupModal } from "./components/GuestCloudSignupModal";
 import { CloudEditDialog, type EditableCloud } from "./components/CloudEditDialog";
 import { subscribeToCloudFeedUpdates } from "./lib/cloud-presence";
 import {
@@ -565,6 +566,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
   const [showPremiere, setShowPremiere] = useState(false);
   const [reminderLoading, setReminderLoading] = useState(false);
   const [reminderSet, setReminderSet] = useState(() => Boolean(currentUser?.id && cloud.participantProfiles?.some((participant) => participant.id === currentUser.id)));
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const siteOrigin = useSiteOrigin();
 
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
@@ -585,6 +587,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
   const handleHypar = async () => {
     if (hypeLoading) return;
+    if (!currentUser || currentUser.isGuest) { setAuthPromptOpen(true); return; }
     setHypeLoading(true);
     const wasHyped = hyped;
     setHyped(!wasHyped);
@@ -612,6 +615,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
   const activateReminder = async () => {
     if (reminderLoading || reminderSet) return;
+    if (!currentUser || currentUser.isGuest) { setAuthPromptOpen(true); return; }
     setReminderLoading(true);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
@@ -715,6 +719,7 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
           Entrar na conversa
         </Link>}
       </div>
+      {authPromptOpen && <GuestCloudSignupModal returnTo={shareUrl} onClose={() => setAuthPromptOpen(false)} />}
     </article>
   );
 }
@@ -1935,12 +1940,15 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
 }
 
 function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount: number, wasHyped: boolean) => void }) {
+  const { user } = useSessionUser();
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
   const [loading, setLoading] = useState(false);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
 
   const handleHype = async () => {
     if (loading) return;
+    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
     setLoading(true);
     const wasHyped = hyped;
     setHyped(!wasHyped);
@@ -1967,6 +1975,7 @@ function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount
   };
 
   return (
+    <>
     <button
       type="button"
       disabled={loading}
@@ -1976,6 +1985,8 @@ function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount
       <FireIcon s={24} className={hyped ? "text-orange-400" : "text-[#FF632D]"} />
       <span>{hypes}</span>
     </button>
+    {authPromptOpen && <GuestCloudSignupModal returnTo={`/cloud/${encodeURIComponent(cloud.id)}`} onClose={() => setAuthPromptOpen(false)} />}
+    </>
   );
 }
 
@@ -2350,6 +2361,7 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
   const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
   const siteOrigin = useSiteOrigin();
   const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
+  const [authPromptCloudId, setAuthPromptCloudId] = useState<string | null>(null);
   // Keep the dialog tied to the live feed object, rather than a snapshot taken
   // when it was opened. Membership changes are therefore visible immediately.
   const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
@@ -2393,6 +2405,7 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
         const premiereLabel = scheduledDate ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "";
         const activateReminder = async () => {
           if (remindedIds.has(cloud.id)) return;
+          if (!currentUser || currentUser.isGuest) { setAuthPromptCloudId(cloud.id); return; }
           const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
           if (response.ok) {
             setRemindedIds(current => new Set(current).add(cloud.id));
@@ -2448,6 +2461,7 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
       })}
       {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles ?? []} onClose={() => setParticipantsCloudId(null)} />}
       {queueCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={19} /></div><h2 className="text-lg font-bold text-white">Você entrou na fila</h2><p className="mt-1 text-sm leading-relaxed text-white/65">Você será notificado quando “{queueCloud.title}” estrear.</p></div><button type="button" onClick={() => setQueueCloud(null)} aria-label="Fechar" className="text-xl text-white/50">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{[...(queueCloud.participantProfiles ?? []), ...(currentUser?.id && !queueCloud.participantProfiles?.some((participant) => participant.id === currentUser.id) ? [{ id: currentUser.id, name: currentUser.displayName, username: currentUser.username, avatarUrl: currentUser.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setQueueCloud(null)} className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white">Entendi</button></div></div>}
+      {authPromptCloudId && <GuestCloudSignupModal returnTo={`/cloud/${encodeURIComponent(authPromptCloudId)}`} onClose={() => setAuthPromptCloudId(null)} />}
     </div>
   );
 }
@@ -2470,6 +2484,7 @@ function PageContent() {
   const [hydrated, setHydrated] = useState(() => getCachedFeed<Cloud[]>(initialCacheKey) !== null);
   const [tick, setTick] = useState(0);
   const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [originCloudId, setOriginCloudId] = useState<string | null>(null);
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
@@ -2520,10 +2535,23 @@ function PageContent() {
 
   useEffect(() => {
     if (searchParams.get("create") !== "1") return;
+    if (!user || user.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setOriginCloudId(searchParams.get("originCloudId"));
     setModal("create");
     router.replace("/");
-  }, [router, searchParams]);
+  }, [router, searchParams, user]);
+
+  const requestCreate = () => {
+    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
+    setModal("create");
+  };
+  const changeCloudScope = (scope: CloudScope) => {
+    if (scope === "following" && (!user || user.isGuest)) { setAuthPromptOpen(true); return; }
+    setCloudScope(scope);
+  };
 
   // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
   // A ordem é aplicada antes de alimentar o carrossel, garantindo que as setas
@@ -2574,7 +2602,7 @@ function PageContent() {
       duration: cloud.duration,
       createdAt: cloud.createdAt.toISOString(),
       participants: String(cloud.liveParticipants ?? 1),
-      join: "1",
+      join: user && !user.isGuest ? "1" : "0",
     });
     router.push(`/cloud/${cloud.id}?${params.toString()}`);
   };
@@ -2767,6 +2795,7 @@ function PageContent() {
 
   const joinScheduledQueue = async (cloudId: string) => {
     if (scheduledReminderLoading) return;
+    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
     setScheduledReminderLoading(true);
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, { method: "POST" });
@@ -2913,7 +2942,7 @@ function PageContent() {
       </header>
 
       <div className="relative">
-        <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+        <CloudScopeTabs value={cloudScope} onChange={changeCloudScope} />
         <div className="absolute right-7 top-1/2 -translate-y-1/2 md:hidden">
           <InviteCloudsButton compact />
         </div>
@@ -2941,7 +2970,7 @@ function PageContent() {
           scope={cloudScope}
           order={feedOrder}
           onEnter={enterConversation}
-          onCreate={() => setModal("create")}
+          onCreate={requestCreate}
           onDescription={(cloud) => {
             const index = activeClouds.findIndex((item) => item.id === cloud.id);
             if (index >= 0) setCurrentCloudIndex(index);
@@ -3127,7 +3156,7 @@ function PageContent() {
               </p>
               <button
                 type="button"
-                onClick={() => setModal("create")}
+                onClick={requestCreate}
                 className="rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
               >
                 Criar uma Cloud
@@ -3181,7 +3210,7 @@ function PageContent() {
         <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
           <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#C084FC]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
           <MessagesNavLink />
-          <button type="button" aria-label="Publicar nova Cloud" onClick={() => setModal("create")} className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
+          <button type="button" aria-label="Publicar nova Cloud" onClick={requestCreate} className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
             <span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span>
             <span className="text-[13px] font-semibold">Publicar</span>
           </button>
@@ -3190,6 +3219,8 @@ function PageContent() {
       </nav>
 
       <MobileAppNav active="home" force={mobilePreview} />
+
+      {authPromptOpen && <GuestCloudSignupModal returnTo="/" onClose={() => setAuthPromptOpen(false)} />}
 
     </div>
   );

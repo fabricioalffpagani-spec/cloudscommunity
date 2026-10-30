@@ -90,6 +90,13 @@ function setup() {
       update: jest.fn<Promise<unknown>, unknown[]>(),
       updateMany: jest.fn<Promise<unknown>, unknown[]>(),
     },
+    guestCloudVisit: {
+      findUnique: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue(null),
+      count: jest.fn<Promise<number>, unknown[]>().mockResolvedValue(0),
+      create: jest.fn<Promise<unknown>, unknown[]>(),
+    },
     cloudBan: {
       findUnique: jest
         .fn<Promise<unknown>, unknown[]>()
@@ -419,16 +426,17 @@ describe('Cloud admission', () => {
     );
   });
 
-  it('blocks direct and socket access for non-members of a closed cloud', async () => {
+  it('blocks participation but still allows read-only public socket access', async () => {
     const { service, prisma, cloud } = setup();
     cloud.acceptingMembers = false;
     prisma.cloudMember.findFirst.mockResolvedValue(null);
     await expect(service.requireCloudAccess(cloudId, 'viewer')).rejects.toThrow(
       'não receber novos membros',
     );
-    await expect(service.requireCloudAccess(cloudId)).rejects.toThrow(
-      'não receber novos membros',
-    );
+    await expect(service.requireCloudAccess(cloudId)).resolves.toMatchObject({
+      id: cloudId,
+      visibility: 'public',
+    });
   });
 
   it('only lets the host close the cloud and persists a system message', async () => {
@@ -797,14 +805,18 @@ describe('Talk / Read regression', () => {
     );
     expect(prisma.cloudMessage.findMany).not.toHaveBeenCalled();
   });
-  it('requires authentication for Read and previews', async () => {
+  it('allows public Read and previews without authentication', async () => {
     const { service, prisma, auth } = setup();
     auth.resolveSession.mockResolvedValue(null);
-    await expect(service.listRead(null)).rejects.toThrow(UnauthorizedException);
-    await expect(service.getPreview(null, cloudId)).rejects.toThrow(
-      UnauthorizedException,
+    await expect(service.listRead(null)).resolves.toMatchObject({ ok: true });
+    await expect(
+      service.getPreview(null, cloudId, '203.0.113.10'),
+    ).resolves.toMatchObject({ ok: true });
+    expect(prisma.guestCloudVisit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ cloudId }) as unknown,
+      }),
     );
-    expect(prisma.cloud.findMany).not.toHaveBeenCalled();
   });
   it('rejects malformed preview identifiers', async () => {
     const { service } = setup();

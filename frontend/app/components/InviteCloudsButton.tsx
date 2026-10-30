@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { generalInvitationText } from "../lib/cloud-invitation";
 import { useSessionUser } from "./session-user";
+import { GuestCloudSignupModal } from "./GuestCloudSignupModal";
 
 function InviteArrowIcon({ size }: { size: number }) {
   return (
@@ -17,6 +18,7 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
   const [notice, setNotice] = useState("");
   const { user } = useSessionUser();
   const [invitation, setInvitation] = useState<{ ownerId: string; url: string } | null>(null);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const url = invitation && user && invitation.ownerId === user.id ? (() => { const link = new URL(invitation.url); link.searchParams.set("preview", "avatar"); link.searchParams.set("v", "2"); return link.toString(); })() : "";
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
   }, [user?.id]);
 
   const invite = async () => {
-    if (!user) { setNotice("Entre na sua conta para convidar amigos."); return; }
+    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
     if (!url) { setNotice("Seu convite ainda está sendo preparado."); return; }
     const text = generalInvitationText(user.displayName || user.name || user.username);
     const invitation = `${text}\n${url}`;
@@ -75,6 +77,7 @@ export function InviteCloudsButton({ compact = false }: { compact?: boolean }) {
         <InviteArrowIcon size={compact ? 19 : 25} />
       </button>
       {notice && <span role="status" className="absolute right-0 top-full z-30 mt-2 w-48 rounded-lg bg-[#1a0e3d] px-3 py-2 text-center text-[11px] text-white shadow-xl">{notice}</span>}
+      {authPromptOpen && <GuestCloudSignupModal returnTo={typeof window === "undefined" ? "/" : `${window.location.pathname}${window.location.search}`} onClose={() => setAuthPromptOpen(false)} />}
     </div>
   );
 }

@@ -42,6 +42,8 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetState, setResetState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [resetMessage, setResetMessage] = useState("");
+  const requestedReturnTo = typeof window === "undefined" ? "/" : new URLSearchParams(window.location.search).get("returnTo") || "/";
+  const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//") ? requestedReturnTo : "/";
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -72,7 +74,7 @@ export default function LoginPage() {
       }
 
       await refresh();
-      router.replace("/");
+      router.replace(returnTo);
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -202,7 +204,7 @@ export default function LoginPage() {
 
             <p className="mt-5 text-center text-[13px] text-white/55">
               Nao tem uma conta?{" "}
-              <Link href="/signup" className="font-semibold text-[#A855F7] hover:underline">
+              <Link href={`/signup?returnTo=${encodeURIComponent(returnTo)}`} className="font-semibold text-[#A855F7] hover:underline">
                 Criar conta
               </Link>
             </p>

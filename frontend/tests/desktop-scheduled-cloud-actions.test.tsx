@@ -2,6 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DesktopScheduledCloudActions } from "../app/components/DesktopScheduledCloudActions";
 
+vi.mock("../app/components/session-user", () => ({
+  useSessionUser: () => ({ user: { id: "viewer", isGuest: false }, status: "authenticated" }),
+}));
+
 describe("controles de Clouds agendadas no desktop", () => {
   afterEach(() => vi.unstubAllGlobals());
 

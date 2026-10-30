@@ -49,6 +49,7 @@ services:
     stop_grace_period: 30s
     environment:
       NODE_ENV: production
+      TRUST_PROXY: "true"
       NODE_OPTIONS: --max-old-space-size=192
       APP_HTTP_PORT: "3001"
       APP_WEB_ORIGIN: ${APP_WEB_ORIGIN:?Set explicit HTTPS frontend origins}

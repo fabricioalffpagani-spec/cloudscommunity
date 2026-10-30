@@ -17,6 +17,7 @@ import { CloudDetailsDialog } from "../../components/CloudDetailsDialog";
 import { ProfileScheduleActions } from "../../components/ProfileScheduleActions";
 import { LongPressHint } from "../../components/LongPressHint";
 import { NotificationsBell } from "../../components/NotificationsPanel";
+import { GuestCloudSignupModal } from "../../components/GuestCloudSignupModal";
 import { ForwardToContactModal, type ForwardContact } from "../../components/ForwardToContactModal";
 import { useDismissMenu } from "../../lib/use-dismiss-menu";
 import { filterPeople } from "../../lib/filter-people";
@@ -257,6 +258,7 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mutating, setMutating] = useState(false);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useDismissMenu(profileMenuOpen, () => setProfileMenuOpen(false));
@@ -364,6 +366,10 @@ export default function UserProfilePage() {
 
   const toggleFollow = async () => {
     if (!profile || profile.isSelf || profile.isBlockedByMe || profile.isBlockedByUser || mutating) {
+      return;
+    }
+    if (!sessionUser || sessionUser.isGuest) {
+      setAuthPromptOpen(true);
       return;
     }
 
@@ -772,6 +778,7 @@ export default function UserProfilePage() {
           </div>
         </div>
       )}
+      {authPromptOpen && <GuestCloudSignupModal returnTo={`/users/${encodeURIComponent(profile?.username ?? identifier)}`} onClose={() => setAuthPromptOpen(false)} />}
     </div>
   );
 }
