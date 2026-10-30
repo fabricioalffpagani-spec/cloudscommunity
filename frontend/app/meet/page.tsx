@@ -265,7 +265,7 @@ function MeetPageContent() {
     if (target.isSelf) {
       return;
     }
-    if (user?.isGuest) { setGuestSignupOpen(true); return; }
+    if (!user || user.isGuest) { setGuestSignupOpen(true); return; }
 
     setMutating(target.id);
 

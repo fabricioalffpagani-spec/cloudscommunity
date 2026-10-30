@@ -4,7 +4,7 @@ import { MobileAppNav } from "../app/components/MobileAppChrome";
 import { NotificationsBell } from "../app/components/NotificationsPanel";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/profile", useSearchParams: () => new URLSearchParams(), useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }) }));
-vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user: { id: "u" }, refresh: vi.fn() }), SessionUserAvatar: () => <span>Foto</span> }));
+vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user: { id: "u", isGuest: false }, status: "authenticated", refresh: vi.fn() }), SessionUserAvatar: () => <span>Foto</span> }));
 vi.mock("../app/components/MessagesNavLink", () => ({ MessagesNavLink: () => null }));
 
 afterEach(() => vi.unstubAllGlobals());

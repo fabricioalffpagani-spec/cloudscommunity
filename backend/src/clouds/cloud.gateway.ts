@@ -155,11 +155,10 @@ export class CloudMessagesGateway
       return { ok: false as const, message: 'Informe a cloud.' };
     }
 
-    if (!userId) {
-      return { ok: false as const, message: 'Sessão não encontrada.' };
-    }
-
-    const cloud = await this.cloudService.requireCloudAccess(cloudId, userId);
+    const cloud = await this.cloudService.requireCloudAccess(
+      cloudId,
+      userId ?? undefined,
+    );
     const joinedCloudIds =
       (socket.data as CloudSocketData).joinedCloudIds ?? new Set<string>();
     await socket.join(this.cloudRoom(cloudId));

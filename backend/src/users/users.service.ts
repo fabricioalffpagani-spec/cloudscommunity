@@ -509,7 +509,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<UsersSearchResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.resolveCurrentSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     const followers = await this.prisma.follow.findMany({
@@ -537,7 +537,7 @@ export class UsersService {
         continue;
       }
 
-      users.push(await this.mapPublicProfile(user, current.user.id));
+      users.push(await this.mapPublicProfile(user, current?.user.id ?? null));
     }
 
     return {
@@ -550,7 +550,7 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<UsersSearchResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.resolveCurrentSession(token);
     const target = await this.requireTargetUser(identifierInput);
 
     const following = await this.prisma.follow.findMany({
@@ -578,7 +578,7 @@ export class UsersService {
         continue;
       }
 
-      users.push(await this.mapPublicProfile(user, current.user.id));
+      users.push(await this.mapPublicProfile(user, current?.user.id ?? null));
     }
 
     return {
@@ -591,9 +591,9 @@ export class UsersService {
     token: string | null,
     identifierInput: string,
   ): Promise<ReceivedHypesResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.resolveCurrentSession(token);
     const target = await this.requireTargetUser(identifierInput);
-    if (!target.profile?.showHypesCount && target.id !== current.user.id) {
+    if (!target.profile?.showHypesCount && target.id !== current?.user.id) {
       throw new ForbiddenException({
         message: 'Este perfil ocultou os hypes recebidos.',
       });
@@ -734,7 +734,8 @@ export class UsersService {
   }
 
   async meet(token: string | null): Promise<MeetResponse> {
-    const current = await this.requireSession(token);
+    const current = await this.resolveCurrentSession(token);
+    const currentUserId = current?.user.id ?? null;
     const now = new Date();
     const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -747,10 +748,12 @@ export class UsersService {
         where: { createdAt: { gte: last24Hours }, cloud: { deletedAt: null } },
         select: { cloud: { select: { authorId: true } } },
       }),
-      this.prisma.follow.findMany({
-        where: { followingId: current.user.id },
-        select: { followerId: true },
-      }),
+      currentUserId
+        ? this.prisma.follow.findMany({
+            where: { followingId: currentUserId },
+            select: { followerId: true },
+          })
+        : Promise.resolve([]),
       this.prisma.invitationReferral.groupBy({
         by: ['inviterUserId'],
         where: { creditedAt: { not: null } },
@@ -761,7 +764,7 @@ export class UsersService {
     const countAuthors = (entries: Array<{ cloud: { authorId: string } }>) => {
       const counts = new Map<string, number>();
       for (const entry of entries) {
-        if (entry.cloud.authorId !== current.user.id) {
+        if (entry.cloud.authorId !== currentUserId) {
           counts.set(
             entry.cloud.authorId,
             (counts.get(entry.cloud.authorId) ?? 0) + 1,
@@ -774,14 +777,16 @@ export class UsersService {
     const popularRecentCounts = countAuthors(recentHypes);
     const popularAllTimeCounts = countAuthors(allHypes);
     for (const referral of referrals) {
-      if (referral.inviterUserId !== current.user.id)
+      if (referral.inviterUserId !== currentUserId)
         popularAllTimeCounts.set(
           referral.inviterUserId,
           (popularAllTimeCounts.get(referral.inviterUserId) ?? 0) +
             referral._count._all * 10,
         );
     }
-    const followerIds = followers.map((follower) => follower.followerId);
+    const followerIds = (followers as Array<{ followerId: string }>).map(
+      (follower) => follower.followerId,
+    );
     const nearbyCounts = new Map<string, number>();
     const nearbyFollowers = new Map<
       string,
@@ -798,13 +803,17 @@ export class UsersService {
       const followedByFollowers = await this.prisma.follow.findMany({
         where: {
           followerId: { in: followerIds },
-          followingId: { not: current.user.id },
+          ...(currentUserId ? { followingId: { not: currentUserId } } : {}),
           follower: {
             status: UserStatus.active,
             deletedAt: null,
             profile: { isNot: null },
-            blockedUsers: { none: { blockedId: current.user.id } },
-            blockedByUsers: { none: { blockerId: current.user.id } },
+            ...(currentUserId
+              ? {
+                  blockedUsers: { none: { blockedId: currentUserId } },
+                  blockedByUsers: { none: { blockerId: currentUserId } },
+                }
+              : {}),
           },
         },
         select: {
@@ -868,7 +877,7 @@ export class UsersService {
           if (!candidate) return [];
           return [
             {
-              ...(await this.mapPublicProfile(candidate, current.user.id)),
+              ...(await this.mapPublicProfile(candidate, currentUserId)),
               score: counts.get(id) ?? 0,
             },
           ];
@@ -883,7 +892,7 @@ export class UsersService {
         rankProfiles(nearbyCounts),
         this.prisma.user.findMany({
           where: {
-            id: { not: current.user.id },
+            ...(currentUserId ? { id: { not: currentUserId } } : {}),
             status: UserStatus.active,
             deletedAt: null,
             isGuest: false,
@@ -916,9 +925,7 @@ export class UsersService {
       newUsers: await Promise.all(
         newestUsers
           .filter((candidate) => candidate.profile)
-          .map((candidate) =>
-            this.mapPublicProfile(candidate, current.user.id),
-          ),
+          .map((candidate) => this.mapPublicProfile(candidate, currentUserId)),
       ),
     };
   }

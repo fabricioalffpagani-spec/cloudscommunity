@@ -219,6 +219,7 @@ model Cloud {
   originCloud  Cloud?          @relation("CloudContinuations", fields: [originCloudId], references: [id], onDelete: SetNull)
   continuations Cloud[]        @relation("CloudContinuations")
   inactivityDeliveries CloudInactivityDelivery[]
+  guestVisits  GuestCloudVisit[]
 
   @@index([authorId, createdAt])
   @@index([category])
@@ -429,6 +430,18 @@ model CloudMember {
   @@index([userId])
   @@index([cloudId, role])
   @@index([leftAt])
+}
+
+model GuestCloudVisit {
+  id        String   @id @default(uuid()) @db.Uuid
+  ipHash    String   @db.VarChar(64)
+  cloudId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+
+  @@unique([ipHash, cloudId])
+  @@index([ipHash, createdAt])
 }
 
 model CloudMessageReaction {

@@ -13,6 +13,7 @@ import { MessagesNavLink } from "../components/MessagesNavLink";
 import { MobileAppNav, MobileFeedHeader, useMobileFeedTabSwipe } from "../components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "../components/CloudScopeTabs";
 import { cacheFeed, getCachedFeed } from "../lib/feed-cache";
+import { GuestCloudSignupModal } from "../components/GuestCloudSignupModal";
 
 type ReadFeedPage = { clouds: ReadCloud[]; nextOffset: number | null };
 
@@ -62,6 +63,11 @@ function ReadPageContent() {
   const [attempt, setAttempt] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>(initialScope);
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
+  const changeScope = (scope: CloudScope) => {
+    if (scope === "following" && (!user || user.isGuest)) { setAuthPromptOpen(true); return; }
+    setCloudScope(scope);
+  };
 
   const deleteCloud = async (cloudId: string) => {
     const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
@@ -187,7 +193,7 @@ function ReadPageContent() {
 
       <MobileFeedHeader active="following" onSearch={() => setSearchOpen(true)} />
 
-      <CloudScopeTabs value={cloudScope} onChange={setCloudScope} />
+      <CloudScopeTabs value={cloudScope} onChange={changeScope} />
 
       <main className="cloud-feed-main relative flex items-center justify-center px-0 pt-0 md:items-start md:gap-4 md:px-4">
         {error ? <div role="alert" className="p-6 text-center"><p>{error}</p><button onClick={() => setAttempt((value) => value + 1)} className="mt-4 text-[#C084FC]">Tentar novamente</button></div> : loading ? (
@@ -223,6 +229,7 @@ function ReadPageContent() {
         </div>
       </nav>
       <MobileAppNav active="home" />
+      {authPromptOpen && <GuestCloudSignupModal returnTo="/read?scope=following" onClose={() => setAuthPromptOpen(false)} />}
     </div>
   );
 }

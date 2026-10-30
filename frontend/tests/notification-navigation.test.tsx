@@ -6,7 +6,9 @@ import LegacyNotificationsPage from "../app/notifications/page";
 
 const { replace, redirect } = vi.hoisted(() => ({ replace: vi.fn(), redirect: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }), useSearchParams: () => new URLSearchParams("message=msg-1"), redirect }));
-vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ refresh: vi.fn() }) }));
+vi.mock("../app/components/session-user", () => ({
+  useSessionUser: () => ({ refresh: vi.fn(), status: "authenticated", user: { id: "viewer", isGuest: false } }),
+}));
 
 describe("notification navigation", () => {
   afterEach(() => { window.history.replaceState(null, "", "/"); vi.unstubAllGlobals(); });

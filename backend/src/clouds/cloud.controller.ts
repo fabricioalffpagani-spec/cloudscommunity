@@ -38,6 +38,10 @@ function extractSessionToken(req: Request): string | null {
   return null;
 }
 
+function extractVisitorIp(req: Request): string {
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
 @Controller('clouds')
 export class CloudController {
   constructor(
@@ -92,7 +96,11 @@ export class CloudController {
 
   @Get(':id/preview')
   async preview(@Param('id') id: string, @Req() req: Request) {
-    return this.cloudService.getPreview(extractSessionToken(req), id);
+    return this.cloudService.getPreview(
+      extractSessionToken(req),
+      id,
+      extractVisitorIp(req),
+    );
   }
 
   @Get(':id/archive/messages')
@@ -104,12 +112,17 @@ export class CloudController {
     @Query('after') after?: string,
     @Query('fromStart') fromStart?: string,
   ) {
-    return this.cloudService.getArchivedMessages(extractSessionToken(req), id, {
-      take: take ? Number(take) : undefined,
-      before: before || undefined,
-      after: after || undefined,
-      fromStart: fromStart === 'true',
-    });
+    return this.cloudService.getArchivedMessages(
+      extractSessionToken(req),
+      id,
+      {
+        take: take ? Number(take) : undefined,
+        before: before || undefined,
+        after: after || undefined,
+        fromStart: fromStart === 'true',
+      },
+      extractVisitorIp(req),
+    );
   }
 
   @Get('following')
@@ -135,7 +148,11 @@ export class CloudController {
 
   @Get(':id')
   async findById(@Param('id') id: string, @Req() req: Request) {
-    return this.cloudService.findById(extractSessionToken(req), id);
+    return this.cloudService.findById(
+      extractSessionToken(req),
+      id,
+      extractVisitorIp(req),
+    );
   }
 
   @Post()
@@ -534,10 +551,15 @@ export class CloudController {
     @Query('take') take?: string,
     @Query('before') before?: string,
   ) {
-    return this.cloudService.getMessages(extractSessionToken(req), id, {
-      take: take ? Number(take) : undefined,
-      before: before || undefined,
-    });
+    return this.cloudService.getMessages(
+      extractSessionToken(req),
+      id,
+      {
+        take: take ? Number(take) : undefined,
+        before: before || undefined,
+      },
+      extractVisitorIp(req),
+    );
   }
 
   @Post(':id/messages/views')

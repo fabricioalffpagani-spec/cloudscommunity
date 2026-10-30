@@ -41,12 +41,23 @@ describe("authentication proxy", () => {
     expect(new Headers(backendFetch.mock.calls[1][1].headers).get("cookie")).toBe(cookie);
   });
 
+  it("allows public pages without consulting the session endpoint", async () => {
+    const backendFetch = vi.fn();
+    vi.stubGlobal("fetch", backendFetch);
+
+    for (const path of ["/", "/read", "/meet", "/cloud/example", "/users/example", "/trending"]) {
+      const response = await proxy(new NextRequest(`https://cloudscommunity.com.br${path}`));
+      expect(response.status).toBe(200);
+    }
+    expect(backendFetch).not.toHaveBeenCalled();
+  });
+
   it("validates a protected page against Nest without clearing a valid cookie", async () => {
     process.env.CLOUDS_BRIDGE_URL = bridge;
     const backendFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
     vi.stubGlobal("fetch", backendFetch);
 
-    const response = await proxy(new NextRequest("https://cloudscommunity.com.br/", { headers: { cookie } }));
+    const response = await proxy(new NextRequest("https://cloudscommunity.com.br/messages", { headers: { cookie } }));
     expect(backendFetch.mock.calls[0][0].toString()).toBe(`${bridge}/auth/session`);
     expect(backendFetch.mock.calls[0][1].headers.cookie).toBe(cookie);
     expect(response.status).toBe(200);
@@ -59,14 +70,20 @@ describe("authentication proxy", () => {
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
     vi.stubGlobal("fetch", backendFetch);
 
-    const request = new NextRequest("https://cloudscommunity.com.br/", { headers: { cookie } });
+    const request = new NextRequest("https://cloudscommunity.com.br/messages?contact=abc", { headers: { cookie } });
     const unavailable = await proxy(request);
     expect(unavailable.status).toBe(200);
     expect(unavailable.headers.get("set-cookie")).toBeNull();
 
     const unauthorized = await proxy(request);
     expect(unauthorized.status).toBe(307);
-    expect(unauthorized.headers.get("location")).toBe("https://cloudscommunity.com.br/login");
+    expect(unauthorized.headers.get("location")).toBe("https://cloudscommunity.com.br/login?returnTo=%2Fmessages%3Fcontact%3Dabc");
     expect(unauthorized.headers.get("set-cookie")).toContain("cc_session=");
+  });
+
+  it("redirects an anonymous protected route and preserves its full context", async () => {
+    const response = await proxy(new NextRequest("https://cloudscommunity.com.br/settings?section=privacy"));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://cloudscommunity.com.br/login?returnTo=%2Fsettings%3Fsection%3Dprivacy");
   });
 });

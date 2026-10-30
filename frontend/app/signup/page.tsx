@@ -127,7 +127,7 @@ function getAge(birthDate: string) {
 export default function SignupPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [fromInteraction, setFromInteraction] = useState(false);
-  const [startingGuest, setStartingGuest] = useState(false);
+  const [returnTo, setReturnTo] = useState("/");
   const [form, setForm] = useState({
     email: "",
     name: "",
@@ -156,7 +156,10 @@ export default function SignupPage() {
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
     if (ref) { setForm((current) => ({ ...current, invitationCode: ref.toUpperCase() })); setInvitationLocked(true); }
-    setFromInteraction(new URLSearchParams(window.location.search).get("from") === "interaction");
+    const params = new URLSearchParams(window.location.search);
+    setFromInteraction(params.get("from") === "interaction");
+    const requested = params.get("returnTo") || "/";
+    setReturnTo(requested.startsWith("/") && !requested.startsWith("//") ? requested : "/");
   }, []);
 
   const normalizedEmail = useMemo(() => form.email.trim().toLowerCase(), [form.email]);
@@ -413,7 +416,7 @@ export default function SignupPage() {
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify({ ...draft, returnTo }),
       });
       const payload = await response.json().catch(() => null) as ApiResponse | null;
       if (!response.ok) {
@@ -430,11 +433,6 @@ export default function SignupPage() {
       return;
     }
   };
-  const startGuest = async () => {
-    setStartingGuest(true);
-    try { const response = await fetch("/api/auth/guest", { method: "POST" }); if (!response.ok) throw new Error(); window.location.assign("/"); } catch { setErrors({ form: "Não foi possível iniciar a visita agora." }); setStartingGuest(false); }
-  };
-
   return (
     <div className="min-h-screen text-white"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }}>
@@ -639,7 +637,7 @@ export default function SignupPage() {
 
                 <p className="mt-5 text-center text-[13px] text-white/55">
                   Ja tem uma conta?{" "}
-                  <Link href="/login" className="font-semibold text-[#A855F7] hover:underline">
+                  <Link href={`/login?returnTo=${encodeURIComponent(returnTo)}`} className="font-semibold text-[#A855F7] hover:underline">
                     Entrar
                   </Link>
                 </p>
@@ -678,7 +676,7 @@ export default function SignupPage() {
           </div>
         </section>
       </main>
-      {step === 1 && !fromInteraction && <div className="fixed inset-x-0 bottom-12 z-10 text-center"><button type="button" onClick={() => void startGuest()} disabled={startingGuest} className="text-sm font-semibold text-[#D8B4FE] underline underline-offset-4 disabled:opacity-50">{startingGuest ? "Preparando visita..." : "Dar apenas uma espiada..."}</button></div>}
+      {step === 1 && !fromInteraction && <div className="fixed inset-x-0 bottom-12 z-10 text-center"><Link href="/" className="text-sm font-semibold text-[#D8B4FE] underline underline-offset-4">Continuar sem conta</Link></div>}
       <div className="fixed inset-x-0 bottom-0 z-10 h-2 bg-white/10" role="progressbar" aria-label="Progresso do cadastro" aria-valuemin={1} aria-valuemax={2} aria-valuenow={step}><div className="h-full bg-[#A855F7] transition-all" style={{ width: `${step * 50}%` }} /></div>
     </div>
   );

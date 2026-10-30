@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useSessionUser } from "./session-user";
+import { GuestCloudSignupModal } from "./GuestCloudSignupModal";
 
 export function ProfileScheduleActions({ cloudId, scheduledAt, initiallyReminded = false, onReminderActivated }: { cloudId: string; scheduledAt: string; initiallyReminded?: boolean; onReminderActivated?: () => void }) {
+  const { user } = useSessionUser();
   const [showDate, setShowDate] = useState(false);
   const [reminded, setReminded] = useState(initiallyReminded);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const remind = async () => {
     if (loading || reminded) return;
+    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
     setLoading(true); setError("");
     try {
       const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, { method: "POST" });
@@ -23,5 +28,6 @@ export function ProfileScheduleActions({ cloudId, scheduledAt, initiallyReminded
     </div>
     {showDate && <p className="text-xs text-white/75">Estreia em {new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</p>}
     {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
+    {authPromptOpen && <GuestCloudSignupModal returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setAuthPromptOpen(false)} />}
   </div>;
 }

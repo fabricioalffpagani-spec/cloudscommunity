@@ -136,8 +136,9 @@ export class CloudService {
   async findById(
     token: string | null,
     cloudId: string,
+    visitorIp = 'unknown',
   ): Promise<{ ok: true; cloud: CloudPayload }> {
-    const session = await this.requireSession(token);
+    const session = await this.authService.resolveSession(token);
     await this.expireDueClouds();
 
     const UUID_RE =
@@ -174,15 +175,16 @@ export class CloudService {
       });
     }
 
-    await this.requireCloudVisibility(cloud, session.user.id);
-    await this.requireAdmissionForAccess(cloud, session.user.id);
+    if (session) {
+      await this.requireCloudVisibility(cloud, session.user.id);
+      await this.requireAdmissionForAccess(cloud, session.user.id);
+    } else if (cloud.visibility !== CloudVisibility.public) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
+    }
 
     // A visitor's allowance covers both active Clouds and archived conversations.
-    // Persisting the observation as membership also makes a live visitor visible
-    // in the active participant count before they attempt any interaction.
-    if (session.user.isGuest) {
-      await this.recordGuestVisit(session.user.id, cloudId);
-    }
+    // The IP hash is kept separately so read-only visitors never become members.
+    if (!session) await this.recordAnonymousVisit(visitorIp, cloudId);
 
     const currentUserHype = session
       ? await this.prisma.cloudHype.findUnique({
@@ -272,8 +274,29 @@ export class CloudService {
   async listFeed(
     token: string | null,
   ): Promise<{ ok: true; clouds: CloudPayload[] }> {
-    const current = await this.requireSession(token);
+    const current = await this.authService.resolveSession(token);
     await this.expireDueClouds();
+
+    if (!current) {
+      const publicClouds = await this.prisma.cloud.findMany({
+        where: {
+          deletedAt: null,
+          status: CloudStatus.active,
+          visibility: CloudVisibility.public,
+          author: { isGuest: false },
+        },
+        include: this.cloudInclude(),
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      return {
+        ok: true,
+        clouds: publicClouds.map((cloud) => ({
+          ...this.mapCloud(cloud),
+          hyped: false,
+        })),
+      };
+    }
 
     const clouds = await this.prisma.cloud.findMany({
       where: {
@@ -405,17 +428,17 @@ export class CloudService {
   }
 
   private async readableArchiveWhere(
-    userId: string,
+    userId: string | null,
     includePrivateMembership = false,
     isGuest = false,
   ): Promise<Prisma.CloudWhereInput> {
-    if (isGuest) {
+    if (!userId || isGuest) {
       return {
         deletedAt: null,
         status: CloudStatus.ended,
         visibility: CloudVisibility.public,
         author: { isGuest: false },
-        bans: { none: { userId } },
+        ...(userId ? { bans: { none: { userId } } } : {}),
       };
     }
     const blocks = await this.prisma.userBlock.findMany({
@@ -465,16 +488,21 @@ export class CloudService {
     scope: 'for-you' | 'following' = 'for-you',
     offset = 0,
   ) {
-    const current = await this.requireSession(token);
+    const current = await this.authService.resolveSession(token);
     // Neither operation depends on the other. Running them together keeps the
     // archive feed responsive while still ensuring expired Clouds are included.
     const [, archiveWhere] = await Promise.all([
       this.expireDueClouds(),
-      this.readableArchiveWhere(current.user.id, false, current.user.isGuest),
+      this.readableArchiveWhere(
+        current?.user.id ?? null,
+        false,
+        current?.user.isGuest ?? false,
+      ),
     ]);
     let where = archiveWhere;
 
     if (scope === 'following') {
+      if (!current) return { ok: true, clouds: [], nextOffset: null };
       const following = await this.prisma.follow.findMany({
         where: { followerId: current.user.id },
         select: { followingId: true },
@@ -567,8 +595,12 @@ export class CloudService {
     };
   }
 
-  async getPreview(token: string | null, cloudId: string) {
-    const current = await this.requireSession(token);
+  async getPreview(
+    token: string | null,
+    cloudId: string,
+    visitorIp = 'unknown',
+  ) {
+    const current = await this.authService.resolveSession(token);
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         cloudId,
@@ -580,9 +612,9 @@ export class CloudService {
     const cloud = await this.prisma.cloud.findFirst({
       where: {
         ...(await this.readableArchiveWhere(
-          current.user.id,
+          current?.user.id ?? null,
           false,
-          current.user.isGuest,
+          current?.user.isGuest ?? false,
         )),
         id: cloudId,
       },
@@ -592,9 +624,7 @@ export class CloudService {
       throw new NotFoundException({
         message: 'Cloud encerrada não encontrada.',
       });
-    if (current.user.isGuest) {
-      await this.recordGuestVisit(current.user.id, cloudId);
-    }
+    if (!current) await this.recordAnonymousVisit(visitorIp, cloudId);
     const messages = await this.prisma.cloudMessage.findMany({
       where: { cloudId, deletedAt: null, type: { not: 'system' } },
       select: {
@@ -629,12 +659,13 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     query: ListCloudMessagesQuery = {},
+    visitorIp = 'unknown',
   ): Promise<{
     ok: true;
     cloud: CloudPayload;
     messages: CloudMessagePayload[];
   }> {
-    const current = await this.requireSession(token);
+    const current = await this.authService.resolveSession(token);
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
         cloudId,
@@ -646,9 +677,9 @@ export class CloudService {
     const cloud = await this.prisma.cloud.findFirst({
       where: {
         ...(await this.readableArchiveWhere(
-          current.user.id,
-          true,
-          current.user.isGuest,
+          current?.user.id ?? null,
+          Boolean(current),
+          current?.user.isGuest ?? false,
         )),
         id: cloudId,
       },
@@ -658,9 +689,7 @@ export class CloudService {
       throw new NotFoundException({
         message: 'Cloud encerrada não encontrada.',
       });
-    if (current.user.isGuest) {
-      await this.recordGuestVisit(current.user.id, cloudId);
-    }
+    if (!current) await this.recordAnonymousVisit(visitorIp, cloudId);
 
     const before = query.before ? new Date(query.before) : null;
     const after = query.after ? new Date(query.after) : null;
@@ -1378,8 +1407,8 @@ export class CloudService {
       avatarUrl: string | null;
     }>;
   }> {
-    const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
+    const current = await this.authService.resolveSession(token);
+    await this.requireCloudAccess(cloudId, current?.user.id);
 
     const hypes = await this.prisma.cloudHype.findMany({
       where: { cloudId },
@@ -2417,14 +2446,15 @@ export class CloudService {
     token: string | null,
     cloudId: string,
     query: ListCloudMessagesQuery = {},
+    visitorIp = 'unknown',
   ): Promise<{
     ok: true;
     messages: CloudMessagePayload[];
     pinnedMessage: CloudMessagePayload | null;
   }> {
-    const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
-    await this.requireCloudMembership(cloudId, current.user.id);
+    const current = await this.authService.resolveSession(token);
+    await this.requireCloudAccess(cloudId, current?.user.id);
+    if (!current) await this.recordAnonymousVisit(visitorIp, cloudId);
 
     const take = this.normalizeTake(query.take);
     const before = query.before ? new Date(query.before) : null;
@@ -2629,9 +2659,8 @@ export class CloudService {
     cloudId: string,
     messageId: string,
   ): Promise<{ ok: true; reactions: CloudMessageReactionPayload[] }> {
-    const current = await this.requireSession(token);
-    await this.requireCloudAccess(cloudId, current.user.id);
-    await this.requireCloudMembership(cloudId, current.user.id);
+    const current = await this.authService.resolveSession(token);
+    await this.requireCloudAccess(cloudId, current?.user.id);
 
     const message = await this.prisma.cloudMessage.findFirst({
       where: {
@@ -2697,9 +2726,11 @@ export class CloudService {
 
     if (viewerId) {
       await this.requireCloudVisibility(cloud, viewerId);
+    } else if (cloud.visibility !== CloudVisibility.public) {
+      throw new NotFoundException({ message: 'Cloud não encontrada.' });
     }
 
-    await this.requireAdmissionForAccess(cloud, viewerId);
+    if (viewerId) await this.requireAdmissionForAccess(cloud, viewerId);
 
     return cloud;
   }
@@ -2847,6 +2878,29 @@ export class CloudService {
       await tx.cloudMember.create({
         data: { cloudId, userId, role: 'member' },
       });
+    });
+  }
+
+  private async recordAnonymousVisit(ipAddress: string, cloudId: string) {
+    const ipHash = crypto
+      .createHash('sha256')
+      .update(ipAddress.trim().toLowerCase() || 'unknown')
+      .digest('hex');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${ipHash}))`;
+      const existing = await tx.guestCloudVisit.findUnique({
+        where: { ipHash_cloudId: { ipHash, cloudId } },
+        select: { id: true },
+      });
+      if (existing) return;
+      const visits = await tx.guestCloudVisit.count({ where: { ipHash } });
+      if (visits >= 5) {
+        throw new UnauthorizedException({
+          message:
+            'O modo visitante permite acompanhar até cinco Clouds. Entre ou crie sua conta para continuar.',
+        });
+      }
+      await tx.guestCloudVisit.create({ data: { ipHash, cloudId } });
     });
   }
 
