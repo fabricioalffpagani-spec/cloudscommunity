@@ -176,39 +176,35 @@ export function UserAvatar({
 }) {
   const initial = getSessionUserInitial(user);
   const backgroundColor = getSessionUserColor(user);
-  const [imageError, setImageError] = useState(false);
-  const hasAvatar = Boolean(user?.avatarUrl) && !imageError;
+  const avatarUrl = user?.avatarUrl?.trim() || null;
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const imageLoaded = Boolean(avatarUrl && loadedUrl === avatarUrl && failedUrl !== avatarUrl);
+  const showDefaultIcon = !user || Boolean(avatarUrl);
 
-  useEffect(() => {
-    setImageError(false);
-  }, [user?.avatarUrl]);
-
-  if (hasAvatar) {
-    return (
-      <div
-        className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}
-        style={{ width: size, height: size }}
-      >
+  return (
+    <div
+      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ${className}`}
+      style={{ width: size, height: size, backgroundColor, fontSize: Math.max(14, size * 0.4) }}
+    >
+      {showDefaultIcon ? (
+        <svg data-testid="default-avatar-icon" viewBox="0 0 24 24" width={Math.round(size * 0.58)} height={Math.round(size * 0.58)} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+        </svg>
+      ) : initial}
+      {avatarUrl && failedUrl !== avatarUrl && (
         <img
-          src={user?.avatarUrl || ""}
+          src={avatarUrl}
           alt={getSessionUserDisplayName(user)}
           referrerPolicy="no-referrer"
           width={size}
           height={size}
           decoding="async"
-          className="block h-full w-full object-cover"
-          onError={() => setImageError(true)}
+          className={`absolute inset-0 block h-full w-full object-cover transition-opacity duration-150 ${imageLoaded ? "opacity-100" : "opacity-0"}`}
+          onLoad={() => { setFailedUrl(null); setLoadedUrl(avatarUrl); }}
+          onError={() => { setLoadedUrl(null); setFailedUrl(avatarUrl); }}
         />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
-      style={{ width: size, height: size, backgroundColor, fontSize: Math.max(14, size * 0.4) }}
-    >
-      {initial}
+      )}
     </div>
   );
 }

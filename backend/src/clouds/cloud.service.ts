@@ -2898,6 +2898,7 @@ export class CloudService {
       const visits = await tx.guestCloudVisit.count({ where: { ipHash } });
       if (visits >= 5) {
         throw new UnauthorizedException({
+          code: 'GUEST_CLOUD_LIMIT_REACHED',
           message:
             'O modo visitante permite acompanhar até cinco Clouds. Entre ou crie sua conta para continuar.',
         });

@@ -24,6 +24,7 @@ import { recordStickerUse } from "../../lib/sticker-usage";
 import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
 import { cloudElapsedSeconds } from "../../lib/cloud-start-time";
 import { leaveCloud } from "../../lib/leave-cloud";
+import { isGuestCloudLimitError, readJsonResponse } from "../../lib/api-error";
 
 type CloudPayload = {
   id: string;
@@ -382,12 +383,7 @@ function resolveSocketUrl() {
 }
 
 async function readJson<T>(response: Response) {
-  const payload = (await response.json().catch(() => null)) as T | null;
-  if (!response.ok || !payload) {
-    throw new Error("Falha ao carregar dados.");
-  }
-
-  return payload;
+  return readJsonResponse<T>(response);
 }
 
 function mergeMessage(list: ChatMessage[], next: ChatMessage) {
@@ -1744,6 +1740,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [shareOpen, setShareOpen] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
+  const [guestLimitOpen, setGuestLimitOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -1885,7 +1882,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setHyped(Boolean(payload.cloud.hyped));
       setHypesCount(payload.cloud.hypesCount ?? 0);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar a cloud.");
+      if (isGuestCloudLimitError(loadError)) {
+        setError(null);
+        setGuestLimitOpen(true);
+      } else {
+        setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar a cloud.");
+      }
     } finally {
       setLoadingCloud(false);
     }
@@ -3464,6 +3466,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       )}
 
       {guestSignupOpen && <GuestCloudSignupModal cloudTitle={cloud?.title || "esta cloud"} returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestSignupOpen(false)} />}
+      {guestLimitOpen && <GuestCloudSignupModal title="Limite de visualização atingido" description="Você já visualizou cinco Clouds no modo visitante. Entre ou crie uma conta para continuar navegando sem esse limite." returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestLimitOpen(false)} />}
 
       {imageFormatOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#05020d]/80 p-4 backdrop-blur-md">

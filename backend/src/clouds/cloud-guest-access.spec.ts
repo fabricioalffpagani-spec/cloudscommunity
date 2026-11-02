@@ -46,9 +46,13 @@ describe('anonymous Cloud access', () => {
       recordAnonymousVisit(ipAddress: string, cloudId: string): Promise<void>;
     };
 
-    await expect(
-      service.recordAnonymousVisit('203.0.113.1', 'cloud-6'),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    const attempt = service.recordAnonymousVisit('203.0.113.1', 'cloud-6');
+    await expect(attempt).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(attempt).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'GUEST_CLOUD_LIMIT_REACHED',
+      }) as unknown,
+    });
     expect(tx.guestCloudVisit.create).not.toHaveBeenCalled();
   });
 

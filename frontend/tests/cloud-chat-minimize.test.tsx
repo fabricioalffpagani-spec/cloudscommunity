@@ -40,6 +40,21 @@ it("opens the MiniCloud when the mobile back arrow returns to the feed", async (
   await waitFor(() => expect(screen.getByRole("button", { name: "Expandir Cloud" })).toBeVisible());
 });
 
+it("shows the shared login modal instead of a red error at the sixth visitor Cloud", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/api/clouds/cloud-6") return new Response(JSON.stringify({ code: "GUEST_CLOUD_LIMIT_REACHED", message: "O modo visitante permite acompanhar até cinco Clouds." }), { status: 401, headers: { "Content-Type": "application/json" } });
+    if (url.includes("/messages?")) return new Response(JSON.stringify({ messages: [], pinnedMessage: null }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ users: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }));
+  render(<CloudChat cloudId="cloud-6" />);
+  expect(await screen.findByRole("heading", { name: "Limite de visualização atingido" })).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute("href", "/login?returnTo=%2Fcloud%2Fcloud-6");
+  fireEvent.click(screen.getByRole("button", { name: "Agora não" }));
+  expect(screen.queryByRole("heading", { name: "Limite de visualização atingido" })).not.toBeInTheDocument();
+});
+
 it("leaves from CloudChat, clears the Mini Cloud and returns to the feed", async () => {
   localStorage.setItem("clouds:minimized-cloud", JSON.stringify({ id: "cloud-1" }));
   const changed = vi.fn();

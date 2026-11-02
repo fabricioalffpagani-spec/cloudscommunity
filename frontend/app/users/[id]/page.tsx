@@ -9,7 +9,7 @@ import { CloudParticipantsSheet } from "../../components/CloudParticipantsSheet"
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProfileAvatarViewer } from "../../components/ProfileAvatarViewer";
 import { useParams, useRouter } from "next/navigation";
-import { useSessionUser } from "../../components/session-user";
+import { UserAvatar, useSessionUser } from "../../components/session-user";
 import { FlameIcon } from "../../components/FlameIcon";
 import { HypeCount } from "../../components/HypeCount";
 import { ProfileInvitation } from "../../components/ProfileInvitation";
@@ -621,14 +621,7 @@ export default function UserProfilePage() {
       <div className="mx-auto max-w-[680px] px-6 pb-32 sm:px-5">
         <div className="mt-10 flex flex-col items-center text-center">
           <div className="relative">
-            <ProfileAvatarViewer avatarUrl={profile.avatarUrl} name={displayName}><div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#7C3AED] text-[28px] font-bold text-white ring-4 ring-white/10 sm:h-24 sm:w-24 sm:text-[32px]">
-              {profile.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatarUrl} alt={displayName} className="h-full w-full rounded-full object-cover" />
-              ) : (
-                initials
-              )}
-            </div></ProfileAvatarViewer>
+            <ProfileAvatarViewer avatarUrl={profile.avatarUrl} name={displayName}><UserAvatar user={{ id: profile.id, username: profile.username, displayName, avatarUrl: profile.avatarUrl }} size={96} className="!h-20 !w-20 ring-4 ring-white/10 sm:!h-24 sm:!w-24" /></ProfileAvatarViewer>
             {isOwnProfile && <Link href="/settings?section=perfil" aria-label="Editar perfil" className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-[#9333EA] text-white transition hover:bg-[#6D28D9] focus-visible:ring-2 focus-visible:ring-white"><EditIcon /></Link>}
           </div>
 

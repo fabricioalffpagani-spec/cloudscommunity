@@ -12,6 +12,7 @@ import { CloudReportModal } from "./CloudReportModal";
 import { useDismissMenu } from "../lib/use-dismiss-menu";
 import { CloudEditDialog, type EditableCloud } from "./CloudEditDialog";
 import { PencilIcon, SendIcon, TrashIcon } from "./ui-icons";
+import { UserAvatar } from "./session-user";
 
 export type ReadCloud = {
   id: string;
@@ -113,11 +114,7 @@ export function ReadFeed({ clouds, initialCloudId, scope, currentUserId, onDelet
           >
             <div className="read-card-header flex items-center justify-between gap-3 md:px-10 md:pb-5 md:pt-8">
               <Link href={`/users/${encodeURIComponent(cloud.author.username)}`} aria-label={`Ver perfil de ${cloud.author.name}`} className="flex min-w-0 items-center gap-3 md:gap-4">
-                {cloud.author.avatarUrl ? (
-                  <img src={cloud.author.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover md:h-16 md:w-16 md:ring-2 md:ring-white/10" referrerPolicy="no-referrer" />
-                ) : (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7C3AED] text-base font-bold text-white md:h-16 md:w-16 md:text-xl md:ring-2 md:ring-white/10">{cloud.author.name.slice(0, 1).toUpperCase()}</span>
-                )}
+                <UserAvatar user={{ id: cloud.author.id, username: cloud.author.username, displayName: cloud.author.name, avatarUrl: cloud.author.avatarUrl }} size={64} className="!h-10 !w-10 md:!h-16 md:!w-16 md:ring-2 md:ring-white/10" />
                 <div className="min-w-0">
                   <p className="truncate text-[18px] font-bold leading-[1.25] text-white md:font-semibold md:leading-normal">{cloud.author.name}</p>
                   <p className="mt-0.5 truncate text-[13px] leading-[1.25] text-white/65 md:mt-0 md:text-[14px] md:leading-normal md:text-white/45">@{cloud.author.username}</p>
