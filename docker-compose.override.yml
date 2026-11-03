@@ -28,6 +28,7 @@ services:
         - action: sync
           path: ./frontend
           target: /app
+          # Keep the local container synchronized before the first watch event.
           initial_sync: true
           ignore:
             - node_modules/

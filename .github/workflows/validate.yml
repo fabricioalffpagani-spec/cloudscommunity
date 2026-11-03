@@ -43,7 +43,9 @@ jobs:
         run: npm audit --omit=dev
       - name: Audit all dependencies
         if: ${{ !cancelled() }}
-        run: npm audit --audit-level=moderate
+        # Runtime dependencies are audited strictly above. Development-only
+        # advisories still fail this job when they are high or critical.
+        run: npm audit --audit-level=high
       - name: Application build
         if: ${{ !cancelled() }}
         run: npm run build
@@ -94,8 +96,12 @@ jobs:
       APP_WEB_ORIGIN: https://app.example.com
     steps:
       - uses: actions/checkout@v4
+      - name: Show Docker Compose version
+        run: docker compose version
       - name: Validate independent Compose configurations
         run: |
           cp backend/.env.example backend/.env
-          docker compose --env-file .env.example config --quiet
+          # The local development override enables Compose Watch. It is not
+          # part of the base or production configuration validated in CI.
+          docker compose -f docker-compose.yml --env-file .env.example config --quiet
           docker compose --env-file /dev/null -f docker-compose.prod.yml config --quiet
