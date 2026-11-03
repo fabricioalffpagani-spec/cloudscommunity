@@ -10,11 +10,15 @@ export function resolveBackendOrigin() {
   }
 
   if (process.env.NODE_ENV !== "production") {
-    console.warn("CLOUDS_BRIDGE_URL is not set. Falling back to http://localhost:3001 for local development.");
+    console.warn(
+      "CLOUDS_BRIDGE_URL is not set. Falling back to http://localhost:3001 for local development.",
+    );
     return "http://localhost:3001";
   }
 
-  throw new Error(`Missing backend origin. Set one of: ${BACKEND_ORIGIN_ENV_NAMES.join(", ")}`);
+  throw new Error(
+    `Missing backend origin. Set one of: ${BACKEND_ORIGIN_ENV_NAMES.join(", ")}`,
+  );
 }
 
 function buildBackendUrl(pathname: string) {
@@ -28,7 +32,11 @@ function copyRequestHeaders(source: Headers) {
   source.forEach((value, key) => {
     const lowerKey = key.toLowerCase();
 
-    if (lowerKey === "host" || lowerKey === "connection" || lowerKey === "content-length") {
+    if (
+      lowerKey === "host" ||
+      lowerKey === "connection" ||
+      lowerKey === "content-length"
+    ) {
       return;
     }
 
@@ -39,11 +47,15 @@ function copyRequestHeaders(source: Headers) {
 }
 
 function forwardSetCookies(source: Headers, destination: NextResponse) {
-  const headersWithCookies = source as Headers & { getSetCookie?: () => string[] };
+  const headersWithCookies = source as Headers & {
+    getSetCookie?: () => string[];
+  };
   const cookies = headersWithCookies.getSetCookie?.() ?? [];
 
   if (cookies.length > 0) {
-    cookies.forEach((cookie) => destination.headers.append("set-cookie", cookie));
+    cookies.forEach((cookie) =>
+      destination.headers.append("set-cookie", cookie),
+    );
     return;
   }
 
@@ -56,6 +68,16 @@ function forwardSetCookies(source: Headers, destination: NextResponse) {
 async function responseToNextResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
   const status = response.status;
+
+  if (status >= 300 && status < 400) {
+    const location = response.headers.get("location");
+    const redirectResponse = new NextResponse(null, {
+      status,
+      headers: location ? { location } : undefined,
+    });
+    forwardSetCookies(response.headers, redirectResponse);
+    return redirectResponse;
+  }
 
   if (status === 204) {
     const emptyResponse = new NextResponse(null, { status });
@@ -84,8 +106,12 @@ export async function proxyRequest(req: Request, pathname: string) {
   const backendResponse = await fetch(buildBackendUrl(pathname), {
     method,
     headers: copyRequestHeaders(req.headers),
-    body: method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer(),
+    body:
+      method === "GET" || method === "HEAD"
+        ? undefined
+        : await req.arrayBuffer(),
     cache: "no-store",
+    redirect: "manual",
   });
 
   return responseToNextResponse(backendResponse);

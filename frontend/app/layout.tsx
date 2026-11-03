@@ -39,6 +39,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className="h-full scroll-smooth antialiased"
+      data-scroll-behavior="smooth"
     >
       <head>
         <meta charSet="utf-8" />

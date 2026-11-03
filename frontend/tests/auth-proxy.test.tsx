@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { proxy } from "../proxy";
 import { GET as me } from "../app/api/auth/me/route";
 import { POST as login } from "../app/api/auth/login/route";
+import { GET as googleStart } from "../app/api/auth/google/start/route";
 
 const bridge = "http://backend:3001";
 const cookie = "cc_session=synthetic-session";
@@ -16,37 +17,87 @@ describe("authentication proxy", () => {
   it("passes the browser cookie to Nest and preserves its login Set-Cookie", async () => {
     process.env.CLOUDS_BRIDGE_URL = bridge;
     const setCookie = `${cookie}; Path=/; HttpOnly; Secure; SameSite=Lax`;
-    const backendFetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
-      status: 201,
-      headers: { "content-type": "application/json", "set-cookie": setCookie },
-    })).mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, user: { id: "u1" } }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
+    const backendFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 201,
+          headers: {
+            "content-type": "application/json",
+            "set-cookie": setCookie,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true, user: { id: "u1" } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     vi.stubGlobal("fetch", backendFetch);
 
-    const loginResponse = await login(new Request("https://cloudscommunity.com.br/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ identifier: "example", password: "synthetic" }),
-    }));
+    const loginResponse = await login(
+      new Request("https://cloudscommunity.com.br/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ identifier: "example", password: "synthetic" }),
+      }),
+    );
     expect(loginResponse.status).toBe(201);
     expect(loginResponse.headers.get("set-cookie")).toBe(setCookie);
 
-    const meResponse = await me(new Request("https://cloudscommunity.com.br/api/auth/me", {
-      headers: { cookie },
-    }));
+    const meResponse = await me(
+      new Request("https://cloudscommunity.com.br/api/auth/me", {
+        headers: { cookie },
+      }),
+    );
     expect(meResponse.status).toBe(200);
     expect(backendFetch.mock.calls[1][0]).toBe(`${bridge}/auth/me`);
-    expect(new Headers(backendFetch.mock.calls[1][1].headers).get("cookie")).toBe(cookie);
+    expect(
+      new Headers(backendFetch.mock.calls[1][1].headers).get("cookie"),
+    ).toBe(cookie);
+  });
+
+  it("forwards Google OAuth redirects and state cookies without following them on the server", async () => {
+    process.env.CLOUDS_BRIDGE_URL = bridge;
+    const stateCookie =
+      "cc_google_oauth_state=state; Path=/api/auth/google/callback; HttpOnly; SameSite=Lax";
+    const backendFetch = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: {
+          location: "https://accounts.google.com/o/oauth2/v2/auth?state=state",
+          "set-cookie": stateCookie,
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", backendFetch);
+    const response = await googleStart(
+      new Request(
+        "https://cloudscommunity.com.br/api/auth/google/start?returnTo=%2Fread",
+      ),
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("accounts.google.com");
+    expect(response.headers.get("set-cookie")).toBe(stateCookie);
+    expect(backendFetch.mock.calls[0][1].redirect).toBe("manual");
   });
 
   it("allows public pages without consulting the session endpoint", async () => {
     const backendFetch = vi.fn();
     vi.stubGlobal("fetch", backendFetch);
 
-    for (const path of ["/", "/read", "/meet", "/cloud/example", "/users/example", "/trending"]) {
-      const response = await proxy(new NextRequest(`https://cloudscommunity.com.br${path}`));
+    for (const path of [
+      "/",
+      "/read",
+      "/meet",
+      "/cloud/example",
+      "/users/example",
+      "/trending",
+    ]) {
+      const response = await proxy(
+        new NextRequest(`https://cloudscommunity.com.br${path}`),
+      );
       expect(response.status).toBe(200);
     }
     expect(backendFetch).not.toHaveBeenCalled();
@@ -54,11 +105,21 @@ describe("authentication proxy", () => {
 
   it("validates a protected page against Nest without clearing a valid cookie", async () => {
     process.env.CLOUDS_BRIDGE_URL = bridge;
-    const backendFetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    const backendFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
     vi.stubGlobal("fetch", backendFetch);
 
-    const response = await proxy(new NextRequest("https://cloudscommunity.com.br/messages", { headers: { cookie } }));
-    expect(backendFetch.mock.calls[0][0].toString()).toBe(`${bridge}/auth/session`);
+    const response = await proxy(
+      new NextRequest("https://cloudscommunity.com.br/messages", {
+        headers: { cookie },
+      }),
+    );
+    expect(backendFetch.mock.calls[0][0].toString()).toBe(
+      `${bridge}/auth/session`,
+    );
     expect(backendFetch.mock.calls[0][1].headers.cookie).toBe(cookie);
     expect(response.status).toBe(200);
     expect(response.headers.get("set-cookie")).toBeNull();
@@ -66,24 +127,37 @@ describe("authentication proxy", () => {
 
   it("only clears a session after Nest confirms it is unauthorized", async () => {
     process.env.CLOUDS_BRIDGE_URL = bridge;
-    const backendFetch = vi.fn().mockResolvedValueOnce(new Response(null, { status: 503 }))
+    const backendFetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(new Response(null, { status: 401 }));
     vi.stubGlobal("fetch", backendFetch);
 
-    const request = new NextRequest("https://cloudscommunity.com.br/messages?contact=abc", { headers: { cookie } });
+    const request = new NextRequest(
+      "https://cloudscommunity.com.br/messages?contact=abc",
+      { headers: { cookie } },
+    );
     const unavailable = await proxy(request);
     expect(unavailable.status).toBe(200);
     expect(unavailable.headers.get("set-cookie")).toBeNull();
 
     const unauthorized = await proxy(request);
     expect(unauthorized.status).toBe(307);
-    expect(unauthorized.headers.get("location")).toBe("https://cloudscommunity.com.br/login?returnTo=%2Fmessages%3Fcontact%3Dabc");
+    expect(unauthorized.headers.get("location")).toBe(
+      "https://cloudscommunity.com.br/login?returnTo=%2Fmessages%3Fcontact%3Dabc",
+    );
     expect(unauthorized.headers.get("set-cookie")).toContain("cc_session=");
   });
 
   it("redirects an anonymous protected route and preserves its full context", async () => {
-    const response = await proxy(new NextRequest("https://cloudscommunity.com.br/settings?section=privacy"));
+    const response = await proxy(
+      new NextRequest(
+        "https://cloudscommunity.com.br/settings?section=privacy",
+      ),
+    );
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("https://cloudscommunity.com.br/login?returnTo=%2Fsettings%3Fsection%3Dprivacy");
+    expect(response.headers.get("location")).toBe(
+      "https://cloudscommunity.com.br/login?returnTo=%2Fsettings%3Fsection%3Dprivacy",
+    );
   });
 });

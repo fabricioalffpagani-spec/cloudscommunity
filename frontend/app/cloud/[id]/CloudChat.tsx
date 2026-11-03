@@ -24,6 +24,7 @@ import { recordStickerUse } from "../../lib/sticker-usage";
 import { getRevealedMessageTimeSide, isMessageReplySwipe, nextRevealedMessageTimeSide } from "../../lib/message-time-swipe";
 import { cloudElapsedSeconds } from "../../lib/cloud-start-time";
 import { leaveCloud } from "../../lib/leave-cloud";
+import { isGuestCloudLimitError, readJsonResponse } from "../../lib/api-error";
 
 type CloudPayload = {
   id: string;
@@ -382,12 +383,7 @@ function resolveSocketUrl() {
 }
 
 async function readJson<T>(response: Response) {
-  const payload = (await response.json().catch(() => null)) as T | null;
-  if (!response.ok || !payload) {
-    throw new Error("Falha ao carregar dados.");
-  }
-
-  return payload;
+  return readJsonResponse<T>(response);
 }
 
 function mergeMessage(list: ChatMessage[], next: ChatMessage) {
@@ -1597,7 +1593,7 @@ function CloudMessageBubble({
               {msg.content}
             </div>
           ) : (
-            <div className={`break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            <div className={`break-words rounded-2xl px-4 py-3 text-[16px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
               <MentionedText content={msg.content} mentions={msg.mentions} />
               {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
             </div>
@@ -1744,6 +1740,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
   const [shareOpen, setShareOpen] = useState(false);
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
+  const [guestLimitOpen, setGuestLimitOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -1885,7 +1882,12 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       setHyped(Boolean(payload.cloud.hyped));
       setHypesCount(payload.cloud.hypesCount ?? 0);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar a cloud.");
+      if (isGuestCloudLimitError(loadError)) {
+        setError(null);
+        setGuestLimitOpen(true);
+      } else {
+        setError(loadError instanceof Error ? loadError.message : "Não foi possível carregar a cloud.");
+      }
     } finally {
       setLoadingCloud(false);
     }
@@ -3396,7 +3398,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     onKeyDown={handleKeyDown}
                     placeholder="Mensagem..."
                     disabled={isAudioBusy}
-                    className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-white placeholder:text-white/50 outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[16px] text-white placeholder:text-white/50 outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ maxHeight: 120, fieldSizing: "content" }}
                   />
                   {draft.trim() ? (
@@ -3464,6 +3466,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
       )}
 
       {guestSignupOpen && <GuestCloudSignupModal cloudTitle={cloud?.title || "esta cloud"} returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestSignupOpen(false)} />}
+      {guestLimitOpen && <GuestCloudSignupModal title="Limite de visualização atingido" description="Você já visualizou cinco Clouds no modo visitante. Entre ou crie uma conta para continuar navegando sem esse limite." returnTo={`/cloud/${encodeURIComponent(cloudId)}`} onClose={() => setGuestLimitOpen(false)} />}
 
       {imageFormatOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#05020d]/80 p-4 backdrop-blur-md">

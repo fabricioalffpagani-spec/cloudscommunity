@@ -268,6 +268,20 @@ describe("Cloud preview", () => {
 });
 
 describe("Archived cloud conversation", () => {
+  it("shows the shared login modal instead of an archive error after the visitor limit", async () => {
+    window.history.replaceState(null, "", "/cloud/cloud-6/conversation?from=read&scope=for-you");
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/auth/me") return new Response(JSON.stringify({ message: "Unauthorized" }), { status: 401, headers: { "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ code: "GUEST_CLOUD_LIMIT_REACHED", message: "O modo visitante permite acompanhar até cinco Clouds." }), { status: 401, headers: { "Content-Type": "application/json" } });
+    }));
+    render(<SessionUserProvider><ArchivedConversation cloudId="cloud-6" /></SessionUserProvider>);
+    expect(await screen.findByRole("heading", { name: "Limite de visualização atingido" })).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute("href", "/login?returnTo=%2Fcloud%2Fcloud-6%2Fconversation%3Ffrom%3Dread%26scope%3Dfor-you");
+    fireEvent.click(screen.getByRole("button", { name: "Agora não" }));
+    expect(screen.queryByRole("heading", { name: "Limite de visualização atingido" })).not.toBeInTheDocument();
+  });
+
   it.each([375, 1280])("offers a direct Recloud button next to sharing in the archived chat at %ipx", async (width) => {
     vi.stubGlobal("innerWidth", width);
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

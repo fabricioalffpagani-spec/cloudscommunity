@@ -8,6 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("../app/components/session-user", () => ({
+  UserAvatar: () => <span data-testid="profile-avatar" />,
   useSessionUser: () => ({
     user: { id: "viewer", username: "viewer" },
     refresh: sessionRefresh,

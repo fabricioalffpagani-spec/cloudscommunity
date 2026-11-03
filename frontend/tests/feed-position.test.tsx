@@ -49,7 +49,9 @@ describe("feed position", () => {
     const mobileFeed = pageSource
       .split("function MobileCloudFeed(")[1]
       ?.split("function PageContent(")[0];
-    expect(mobileFeed).toMatch(/<article key=\{cloud\.id\} data-cloud-page\b/);
+    expect(mobileFeed).toMatch(
+      /<article\s+key=\{cloud\.id\}\s+data-cloud-page\b/,
+    );
   });
 
   beforeEach(() => {

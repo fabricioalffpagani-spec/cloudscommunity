@@ -5,8 +5,10 @@ Next.js 16, NestJS 11, PostgreSQL 16, Redis 7 e Prisma 7, com Node.js 24.
 `dev` é desenvolvimento e integração; `main` é a versão estável para produção.
 Os arquivos dos dois ambientes ficam nas duas branches após o merge dev → main.
 
-Desenvolvimento local usa `docker compose up`, após preencher os exemplos
-`.env.example` e `backend/.env.example`. O override local mantém hot reload.
+Desenvolvimento local usa `docker compose up --build --watch`, após preencher os
+exemplos `.env.example` e `backend/.env.example`. O override local mantém hot
+reload via Compose Watch, sem o bind mount do frontend que é instável no Docker
+Desktop para Windows.
 
 Produção usa exclusivamente `docker-compose.prod.yml`, com imagens prontas do GHCR:
 `docker compose --env-file .env -f docker-compose.prod.yml pull` e

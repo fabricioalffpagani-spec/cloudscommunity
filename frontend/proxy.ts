@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveBackendOrigin } from "./app/api/_lib/nest-proxy";
 
-const AUTH_PATHS = ["/login", "/signup", "/verify-email"];
+const AUTH_PATHS = ["/login", "/signup", "/verify-email", "/google-onboarding"];
 const PROTECTED_PATH_PREFIXES = [
   "/profile",
   "/messages",
@@ -23,12 +23,17 @@ function isStaticAsset(pathname: string) {
 }
 
 function isProtectedPath(pathname: string) {
-  return PROTECTED_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return PROTECTED_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 }
 
 function loginUrl(request: NextRequest) {
   const url = new URL("/login", request.url);
-  url.searchParams.set("returnTo", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  url.searchParams.set(
+    "returnTo",
+    `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  );
   return url;
 }
 
@@ -71,7 +76,9 @@ export async function proxy(request: NextRequest) {
   const sessionExists = request.cookies.has("cc_session");
 
   if (AUTH_PATHS.includes(pathname)) {
-    const sessionIsValid = sessionExists ? await hasValidSession(request) : false;
+    const sessionIsValid = sessionExists
+      ? await hasValidSession(request)
+      : false;
     if (sessionIsValid) {
       return NextResponse.redirect(new URL("/", request.url));
     }
@@ -104,4 +111,3 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
-

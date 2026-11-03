@@ -506,7 +506,17 @@ export class AuthService {
       });
     }
 
-    if (!verifyPassword(password, authenticatedUser.passwordHash)) {
+    if (!authenticatedUser.passwordHash) {
+      makeAuthUnauthorized(
+        {
+          password:
+            'Esta conta foi criada com o Google. Entre usando Continuar com Google.',
+        },
+        'Esta conta foi criada com o Google. Entre usando Continuar com Google.',
+      );
+    }
+
+    if (!verifyPassword(password, authenticatedUser.passwordHash!)) {
       makeAuthUnauthorized(
         {
           identifier: 'Credenciais inválidas.',
@@ -735,6 +745,12 @@ export class AuthService {
       throw new BadRequestException({
         message: 'Senha atual obrigatória.',
         fieldErrors: { currentPassword: 'Informe a senha atual.' },
+      });
+    }
+
+    if (!current.user.passwordHash) {
+      throw new BadRequestException({
+        message: 'Esta conta ainda não possui uma senha local.',
       });
     }
 

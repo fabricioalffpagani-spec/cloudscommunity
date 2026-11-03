@@ -11,6 +11,8 @@ import { useRecloud } from "./RecloudAction";
 import { RecloudIcon } from "./RecloudIcon";
 import { SendIcon } from "./ui-icons";
 import type { CloudParticipant } from "./CloudParticipantsSheet";
+import { GuestCloudSignupModal } from "./GuestCloudSignupModal";
+import { isGuestCloudLimitError, readJsonResponse } from "../lib/api-error";
 
 type ArchivedMessage = ReadOnlyMessage & { sender: NonNullable<ReadOnlyMessage["sender"]> };
 type ArchivePayload = { cloud: { title: string; visibility?: "public" | "private"; authorId?: string; description?: string | null; endedAt?: string | null; participantProfiles?: CloudParticipant[] }; messages: ArchivedMessage[] };
@@ -56,6 +58,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
   const [sendingReply, setSendingReply] = useState(false);
   const [replyError, setReplyError] = useState("");
   const [shareOpen, setShareOpen] = useState(false);
+  const [guestLimitOpen, setGuestLimitOpen] = useState(false);
   const recloud = useRecloud(cloudId, Boolean(user?.id && cloud));
   const showRecloudAction = Boolean(user?.id && cloud?.visibility !== "private");
   const [contacts, setContacts] = useState<ForwardContact[]>([]);
@@ -81,9 +84,9 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
       ? `?take=100&fromStart=true${cursor ? `&after=${encodeURIComponent(cursor)}` : ""}`
       : cursor ? `?take=100&before=${encodeURIComponent(cursor)}` : "?take=100";
     const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/archive/messages${suffix}`, { cache: "no-store" });
-    const payload = await response.json().catch(() => null) as (ArchivePayload & { message?: string }) | null;
-    if (!response.ok || !payload?.cloud || !Array.isArray(payload.messages)) {
-      throw new Error(payload?.message ?? "Não foi possível carregar a conversa.");
+    const payload = await readJsonResponse<ArchivePayload>(response, "Não foi possível carregar a conversa.");
+    if (!payload.cloud || !Array.isArray(payload.messages)) {
+      throw new Error("Não foi possível carregar a conversa.");
     }
     return payload;
   }, [cloudId, fromReadFeed]);
@@ -96,7 +99,13 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
       setMessages(payload.messages);
       setHasOlder(payload.messages.length === 100);
     }).catch((cause) => {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Não foi possível carregar a conversa.");
+      if (controller.signal.aborted) return;
+      if (isGuestCloudLimitError(cause)) {
+        setError("");
+        setGuestLimitOpen(true);
+      } else {
+        setError(cause instanceof Error ? cause.message : "Não foi possível carregar a conversa.");
+      }
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false);
     });
@@ -204,6 +213,7 @@ export function ArchivedConversation({ cloudId }: { cloudId: string }) {
           return <ForwardToContactModal title="Compartilhar Cloud" preview={cloud.title} url={url} label={cloud.title} forwarded={false} contacts={contacts} loading={loadingContacts} recloud={recloud.canRecloud ? { reclouded: recloud.reclouded, busy: recloud.busy, error: recloud.error, onToggle: () => void recloud.toggle() } : undefined} externalShareText={`Venha ler a conversa “${cloud.title}” no Clouds!\n${url}`} externalSharePrompt="Convide amigos para ler esta conversa na aba Leia!" onClose={() => setShareOpen(false)} />;
     })()}
     {replyTo && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#15161C] p-5"><h2 className="text-lg font-bold">Responder a {replyTo.sender.displayName}</h2><p className="mt-2 break-words rounded-xl bg-white/5 p-3 text-sm text-white/60 [overflow-wrap:anywhere]">Em “{cloud?.title}”: “{replyTo.content ?? "Mensagem"}”</p><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Escreva sua resposta privada..." rows={4} className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm outline-none focus:border-[#A855F7]" />{replyError && <p className="mt-2 text-xs text-red-300">{replyError}</p>}<div className="mt-4 flex justify-end gap-3"><button onClick={() => setReplyTo(null)} className="text-sm text-white/60">Cancelar</button><button disabled={sendingReply || !replyText.trim()} onClick={() => void sendReply()} className="rounded-full bg-[#9333EA] px-4 py-2 text-sm font-semibold disabled:opacity-50">{sendingReply ? "Enviando..." : "Enviar"}</button></div></div></div>}
+    {guestLimitOpen && <GuestCloudSignupModal title="Limite de visualização atingido" description="Você já visualizou cinco Clouds no modo visitante. Entre ou crie uma conta para continuar navegando sem esse limite." returnTo={`/cloud/${encodeURIComponent(cloudId)}/conversation${fromReadFeed ? `?from=read&scope=${readScope}` : ""}`} onClose={() => setGuestLimitOpen(false)} />}
 
     <footer className="shrink-0 border-t border-white/[0.07] bg-black px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:py-4">
       <Link href={`/?create=1&originCloudId=${encodeURIComponent(cloudId)}`} className="mx-auto flex min-h-[54px] max-w-3xl items-center justify-center rounded-full bg-[#A855F7] px-7 text-center text-[14px] font-semibold text-white transition hover:bg-[#9333EA]">Continuar essa conversa</Link>

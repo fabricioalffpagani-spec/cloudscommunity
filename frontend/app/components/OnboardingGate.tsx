@@ -10,8 +10,13 @@ export function OnboardingGate() {
   const { user, status } = useSessionUser();
 
   useEffect(() => {
-    if (status === "authenticated" && pathname !== "/onboarding" && user?.interestsOnboardingRequired) {
-      router.replace("/onboarding");
+    if (
+      status === "authenticated" &&
+      pathname !== "/onboarding" &&
+      user?.interestsOnboardingRequired
+    ) {
+      const current = `${window.location.pathname}${window.location.search}`;
+      router.replace(`/onboarding?returnTo=${encodeURIComponent(current)}`);
     }
   }, [pathname, router, status, user?.interestsOnboardingRequired]);
 
