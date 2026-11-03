@@ -20,6 +20,7 @@ import { GoogleAuthButton } from "../components/GoogleAuthButton";
 type Section =
   | "conta"
   | "perfil"
+  | "resultados"
   | "privacidade"
   | "notificacoes"
   | "aplicativo"
@@ -228,6 +229,15 @@ function InfoIcon({ s = 17 }: { s?: number }) {
       <circle cx="12" cy="12" r="10" />
       <path d="M12 16v-4" />
       <path d="M12 8h.01" />
+    </svg>
+  );
+}
+function ChartIcon({ s = 17 }: { s?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="m7 15 4-4 3 2 4-6" />
     </svg>
   );
 }
@@ -1601,6 +1611,108 @@ function PanelSeguranca() {
   );
 }
 
+type CreatorResults = {
+  profileVisitors: number;
+  forYouReach: number;
+  forYouAccessRate: number | null;
+  forYouAccesses: number;
+  followers: number;
+  newFollowersLast30Days: number;
+  totalClouds: number;
+  uniqueCloudVisitors: number;
+  totalHypes: number;
+  totalMessages: number;
+  bestCloud: { title: string; participants: number; hypes: number } | null;
+};
+
+function ResultMetric({
+  label,
+  value,
+  description,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  description: string;
+  accent?: boolean;
+}) {
+  return (
+    <article className={`rounded-2xl border p-4 ${accent ? "border-[#A855F7]/40 bg-[#6D28D9]/15" : "border-white/[0.08] bg-white/[0.035]"}`}>
+      <p className="text-[12px] font-semibold text-white/65">{label}</p>
+      <p className="mt-2 text-[28px] font-bold leading-none text-white">{value}</p>
+      <p className="mt-2 text-[12px] leading-5 text-white/55">{description}</p>
+    </article>
+  );
+}
+
+function PanelResultados() {
+  const [results, setResults] = useState<CreatorResults | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const loadResults = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/users/results", { cache: "no-store" });
+      const payload = await response.json().catch(() => null) as { ok?: boolean; results?: CreatorResults; message?: string } | null;
+      if (!response.ok || !payload?.ok || !payload.results) throw new Error(payload?.message ?? "Não foi possível carregar seus resultados.");
+      setResults(payload.results);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível carregar seus resultados.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => { void loadResults(); }, []);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-[20px] font-bold text-white">Resultados</h2>
+        <p className="mt-1 text-[13px] leading-5 text-white/60">Entenda como seu perfil e suas Clouds estão alcançando novas pessoas.</p>
+      </div>
+      {loading ? <Card><p role="status" className="py-8 text-center text-[14px] text-white/60">Carregando seus resultados...</p></Card> : error ? <Card><p role="alert" className="text-[14px] text-red-300">{error}</p><button type="button" onClick={() => void loadResults()} className="mt-4 rounded-full bg-[#A855F7] px-5 py-2.5 text-[13px] font-semibold text-white">Tentar novamente</button></Card> : results && <>
+        <Card className="overflow-hidden border-[#A855F7]/35 bg-[radial-gradient(circle_at_85%_10%,rgba(168,85,247,.28),transparent_38%),#120a2e]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#D8B4FE]">Visão geral</p>
+              <h3 className="mt-2 text-[22px] font-bold text-white">Seu alcance, em um só lugar</h3>
+              <p className="mt-2 max-w-xl text-[13px] leading-5 text-white/65">Use estes dados para descobrir quais conversas atraem pessoas e transformar interesse em participação.</p>
+            </div>
+            <button type="button" onClick={() => void loadResults()} className="self-start rounded-full border border-white/15 px-4 py-2 text-[12px] font-semibold text-white/80 transition hover:bg-white/10 sm:self-auto">Atualizar</button>
+          </div>
+        </Card>
+
+        <section aria-labelledby="alcance-title">
+          <h3 id="alcance-title" className="mb-3 text-[14px] font-bold text-white">Alcance</h3>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ResultMetric label="Visitas ao perfil" value={results.profileVisitors.toLocaleString("pt-BR")} description="Pessoas autenticadas que abriram seu perfil." accent />
+            <ResultMetric label="Alcance no Para você" value={results.forYouReach.toLocaleString("pt-BR")} description="Pessoas que não seguiam você quando suas Clouds apareceram no feed Para você." />
+            <ResultMetric label="Taxa de acesso" value={results.forYouAccessRate === null ? "—" : `${results.forYouAccessRate.toLocaleString("pt-BR")}%`} description={results.forYouAccessRate === null ? "Aparece quando sua Cloud começar a ser exibida no Para você." : `${results.forYouAccesses.toLocaleString("pt-BR")} pessoa${results.forYouAccesses === 1 ? " acessou" : "s acessaram"} uma Cloud após vê-la no Para você.`} />
+          </div>
+        </section>
+
+        <section aria-labelledby="comunidade-title">
+          <h3 id="comunidade-title" className="mb-3 text-[14px] font-bold text-white">Comunidade</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ResultMetric label="Seguidores" value={results.followers.toLocaleString("pt-BR")} description={results.newFollowersLast30Days > 0 ? `+${results.newFollowersLast30Days.toLocaleString("pt-BR")} nos últimos 30 dias.` : "Acompanham suas novidades."} />
+            <ResultMetric label="Clouds publicadas" value={results.totalClouds.toLocaleString("pt-BR")} description="Conversas criadas por você na plataforma." />
+            <ResultMetric label="Pessoas nas Clouds" value={results.uniqueCloudVisitors.toLocaleString("pt-BR")} description="Pessoas únicas que entraram em alguma Cloud sua." />
+            <ResultMetric label="Hypes recebidos" value={results.totalHypes.toLocaleString("pt-BR")} description="Reconhecimentos recebidos nas suas Clouds." />
+            <ResultMetric label="Mensagens geradas" value={results.totalMessages.toLocaleString("pt-BR")} description="Mensagens publicadas nas suas conversas." />
+          </div>
+        </section>
+
+        <Card>
+          <Sub>O que está funcionando</Sub>
+          {results.bestCloud ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.035] p-4"><p className="text-[12px] text-white/55">Cloud com maior participação</p><p className="mt-1 break-words text-[16px] font-bold text-white">{results.bestCloud.title}</p><p className="mt-2 text-[13px] text-[#D8B4FE]">{results.bestCloud.participants.toLocaleString("pt-BR")} participante{results.bestCloud.participants === 1 ? "" : "s"} · {results.bestCloud.hypes.toLocaleString("pt-BR")} hype{results.bestCloud.hypes === 1 ? "" : "s"}</p></div> : <p className="text-[13px] leading-5 text-white/60">Publique sua primeira Cloud para acompanhar a participação por aqui.</p>}
+          <p className="mt-4 text-[12px] leading-5 text-white/45">Para proteger a privacidade, os Resultados mostram totais e tendências, nunca a identidade de quem visitou seu perfil.</p>
+        </Card>
+      </>}
+    </div>
+  );
+}
+
 function PanelDados() {
   const { user } = useSessionUser();
   const [confirm, setConfirm] = useState(false);
@@ -1972,6 +2084,7 @@ function PanelSobre() {
 const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: "conta", label: "Conta", icon: <UserIcon /> },
   { key: "perfil", label: "Perfil", icon: <CameraIcon /> },
+  { key: "resultados", label: "Resultados", icon: <ChartIcon /> },
   { key: "privacidade", label: "Privacidade", icon: <EyeIcon /> },
   { key: "notificacoes", label: "Notificações", icon: <BellIcon s={17} /> },
   { key: "aplicativo", label: "Aplicativo", icon: <DeviceIcon /> },
@@ -2042,6 +2155,7 @@ export default function SettingsPage() {
   const panels: Record<Section, React.ReactNode> = {
     conta: <PanelConta />,
     perfil: <PanelPerfil />,
+    resultados: <PanelResultados />,
     privacidade: <PanelPrivacidade />,
     notificacoes: <PanelNotificacoes />,
     aplicativo: <PanelAplicativo />,

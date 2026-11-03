@@ -111,6 +111,9 @@ function setup() {
     follow: {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
+    cloudForYouImpression: {
+      createMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue({ count: 1 }),
+    },
     $transaction: jest.fn(),
     $executeRaw: jest.fn().mockResolvedValue(1),
     $queryRaw: jest.fn().mockResolvedValue([]),
@@ -616,6 +619,21 @@ describe('structured Cloud mentions', () => {
 });
 
 describe('Talk / Read regression', () => {
+  it('records the first For You display for viewers who do not follow the author', async () => {
+    const { service, prisma, cloud } = setup();
+    cloud.status = 'active';
+    prisma.cloud.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([cloud]);
+
+    await service.listFeed('token');
+
+    expect(prisma.cloudForYouImpression.createMany).toHaveBeenCalledWith({
+      data: [{ cloudId, userId: 'viewer' }],
+      skipDuplicates: true,
+    });
+  });
+
   it('includes the actual start time when serializing a scheduled cloud', () => {
     const { service, cloud } = setup();
     const startedAt = new Date('2026-10-20T10:00:00.000Z');

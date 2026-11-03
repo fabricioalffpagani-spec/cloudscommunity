@@ -13,6 +13,7 @@ import { PushNotificationsService } from '../infrastructure/push/push-notificati
 import { DirectMessagesGateway } from '../direct-messages/direct-messages.gateway';
 import {
   MeetResponse,
+  CreatorResultsResponse,
   PublicUserProfilePayload,
   ReceivedHypesResponse,
   UserProfileResponse,
@@ -144,9 +145,145 @@ export class UsersService {
       });
     }
 
-    return {
+    const response: UserProfileResponse = {
       ok: true,
       user: await this.mapPublicProfile(user, current?.user.id ?? null),
+    };
+
+    if (
+      current &&
+      !current.user.isGuest &&
+      current.user.id !== user.id &&
+      !response.user.isBlockedByMe &&
+      !response.user.isBlockedByUser
+    ) {
+      await this.prisma.profileVisit.upsert({
+        where: {
+          profileId_visitorId: {
+            profileId: user.id,
+            visitorId: current.user.id,
+          },
+        },
+        create: { profileId: user.id, visitorId: current.user.id },
+        update: {},
+      });
+    }
+
+    return response;
+  }
+
+  async getCreatorResults(token: string | null): Promise<CreatorResultsResponse> {
+    const current = await this.requireRegisteredSession(token);
+    const authorId = current.user.id;
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const clouds = await this.prisma.cloud.findMany({
+      where: { authorId, deletedAt: null },
+      select: {
+        id: true,
+        title: true,
+        _count: {
+          select: {
+            hypes: true,
+            members: { where: { userId: { not: authorId } } },
+          },
+        },
+      },
+    });
+    const cloudIds = clouds.map((cloud) => cloud.id);
+    const [
+      profileVisitors,
+      followers,
+      newFollowersLast30Days,
+      totalHypes,
+      totalMessages,
+      uniqueCloudMembers,
+      deliveries,
+    ] = await Promise.all([
+      this.prisma.profileVisit.count({ where: { profileId: authorId } }),
+      this.prisma.follow.count({ where: { followingId: authorId } }),
+      this.prisma.follow.count({
+        where: { followingId: authorId, createdAt: { gte: since } },
+      }),
+      this.prisma.cloudHype.count({
+        where: { cloud: { authorId, deletedAt: null } },
+      }),
+      this.prisma.cloudMessage.count({
+        where: {
+          cloud: { authorId, deletedAt: null },
+          deletedAt: null,
+          type: { not: 'system' },
+        },
+      }),
+      this.prisma.cloudMember.findMany({
+        where: { cloudId: { in: cloudIds }, userId: { not: authorId } },
+        select: { userId: true },
+        distinct: ['userId'],
+      }),
+      this.prisma.cloudForYouImpression.findMany({
+        where: { cloudId: { in: cloudIds } },
+        select: { cloudId: true, userId: true, firstSeenAt: true },
+      }),
+    ]);
+    const recipientIds = [...new Set(deliveries.map((delivery) => delivery.userId))];
+    const recommendationMembers = recipientIds.length
+      ? await this.prisma.cloudMember.findMany({
+          where: {
+            cloudId: { in: cloudIds },
+            userId: { in: recipientIds },
+          },
+          select: { cloudId: true, userId: true, joinedAt: true },
+        })
+      : [];
+    const deliveredAt = new Map(
+      deliveries.map((delivery) => [
+        `${delivery.cloudId}:${delivery.userId}`,
+        delivery.firstSeenAt,
+      ]),
+    );
+    const forYouAccesses = new Set(
+      recommendationMembers
+        .filter((member) => {
+          const deliveryAt = deliveredAt.get(`${member.cloudId}:${member.userId}`);
+          return deliveryAt ? member.joinedAt >= deliveryAt : false;
+        })
+        .map((member) => member.userId),
+    ).size;
+    const bestCloud = clouds.reduce<(typeof clouds)[number] | null>(
+      (best, cloud) =>
+        !best ||
+        cloud._count.members > best._count.members ||
+        (cloud._count.members === best._count.members &&
+          cloud._count.hypes > best._count.hypes)
+          ? cloud
+          : best,
+      null,
+    );
+
+    return {
+      ok: true,
+      results: {
+        profileVisitors,
+        forYouReach: recipientIds.length,
+        forYouAccessRate:
+          recipientIds.length > 0
+            ? Math.round((forYouAccesses / recipientIds.length) * 1000) / 10
+            : null,
+        forYouAccesses,
+        followers,
+        newFollowersLast30Days,
+        totalClouds: clouds.length,
+        uniqueCloudVisitors: uniqueCloudMembers.length,
+        totalHypes,
+        totalMessages,
+        bestCloud: bestCloud
+          ? {
+              title: bestCloud.title,
+              participants: bestCloud._count.members,
+              hypes: bestCloud._count.hypes,
+            }
+          : null,
+      },
     };
   }
 

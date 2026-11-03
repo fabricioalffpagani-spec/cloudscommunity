@@ -9,15 +9,15 @@ vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams()
 vi.mock("../app/components/session-user", () => ({ useSessionUser: () => ({ user: null }), SessionUserAvatar: () => null }));
 
 describe("Mobile feed navigation", () => {
-  it("shows Converse, Leia and Conheça in that order without expanding the mobile tabs", () => {
+  it("shows Ler, Ao Vivo and Descubra in that order without expanding the mobile tabs", () => {
     render(<MobileFeedHeader active="following" />);
     const feedNavigation = screen.getByRole("navigation", { name: "Categorias do feed" });
-    expect(within(feedNavigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Converse", "Leia", "Conheça"]);
+    expect(within(feedNavigation).getAllByRole("link").map((link) => link.textContent)).toEqual(["Ler", "Ao Vivo", "Descubra"]);
     expect(screen.getByRole("link", { name: "Ir para a página inicial" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Converse" })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: "Leia" })).toHaveAttribute("href", "/read");
-    expect(screen.getByRole("link", { name: "Conheça" })).toHaveAttribute("href", "/meet");
-    expect(within(feedNavigation).getByRole("link", { name: "Converse" })).toHaveClass("text-[11px]");
+    expect(screen.getByRole("link", { name: "Ler" })).toHaveAttribute("href", "/read");
+    expect(screen.getByRole("link", { name: "Ao Vivo" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Descubra" })).toHaveAttribute("href", "/meet");
+    expect(within(feedNavigation).getByRole("link", { name: "Ler" })).toHaveClass("text-[13px]");
   });
 });
 

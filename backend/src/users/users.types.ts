@@ -97,6 +97,23 @@ export type UsersSearchResponse = {
   users: PublicUserProfilePayload[];
 };
 
+export type CreatorResultsResponse = {
+  ok: true;
+  results: {
+    profileVisitors: number;
+    forYouReach: number;
+    forYouAccessRate: number | null;
+    forYouAccesses: number;
+    followers: number;
+    newFollowersLast30Days: number;
+    totalClouds: number;
+    uniqueCloudVisitors: number;
+    totalHypes: number;
+    totalMessages: number;
+    bestCloud: { title: string; participants: number; hypes: number } | null;
+  };
+};
+
 export type ReceivedHypeUser = {
   id: string;
   username: string;

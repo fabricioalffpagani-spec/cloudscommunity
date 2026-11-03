@@ -117,10 +117,10 @@ export default function TrendingPage() {
           <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
             <HeaderBrand />
           </Link>
-          <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Converse</Link>
-            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Leia</Link>
-            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">Conheça</Link>
+          <nav aria-label="Navegação principal" className="flex items-end justify-self-center gap-14 pb-2">
+            <Link href="/read" title="Ler: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white">Ler</Link>
+            <Link href="/" title="Ao Vivo: Clouds para conversar agora." className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white">Ao Vivo</Link>
+            <Link href="/meet" title="Descubra: pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white">Descubra</Link>
           </nav>
           <div className="flex items-center justify-self-end gap-4 pb-2">
             <button type="button" aria-label="Buscar" onClick={() => setSearchOpen(true)} className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
