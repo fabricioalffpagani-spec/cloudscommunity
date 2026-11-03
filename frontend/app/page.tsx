@@ -1,13 +1,22 @@
 "use client";
 
-
 import Link from "next/link";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { Suspense, useState, useRef, useEffect, useCallback, useMemo, useSyncExternalStore, type RefObject } from "react";
+import {
+  Suspense,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  useSyncExternalStore,
+  type RefObject,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { replaceFeedPosition, useFeedPosition } from "./lib/feed-position";
 import { cacheFeed, getCachedFeed } from "./lib/feed-cache";
+import { requestCloudFeed } from "./lib/cloud-feed-request";
 import { cloudRemainingSeconds } from "./lib/cloud-countdown";
 import { TrendingTopicSuggestions } from "./components/TrendingTopicSuggestions";
 import { recordedAudioBlob } from "./lib/recorded-audio";
@@ -25,19 +34,33 @@ import { FlameIcon } from "./components/FlameIcon";
 import { NotificationsBell } from "./components/NotificationsPanel";
 import { AudioWaveformPlayer } from "./components/AudioWaveformPlayer";
 import { MessagesNavLink } from "./components/MessagesNavLink";
-import { MobileAppNav, useMobileFeedTabSwipe } from "./components/MobileAppChrome";
+import {
+  MobileAppNav,
+  useMobileFeedTabSwipe,
+} from "./components/MobileAppChrome";
 import { CloudScopeTabs, type CloudScope } from "./components/CloudScopeTabs";
-import { ConnectedParticipants, useConnectionIds } from "./components/ConnectedParticipants";
+import {
+  ConnectedParticipants,
+  useConnectionIds,
+} from "./components/ConnectedParticipants";
 import { RecloudMenuItem } from "./components/RecloudAction";
 import { ShareModal } from "./components/UnifiedShareModal";
-import { PencilIcon, SendIcon as PaperPlaneIcon, TrashIcon } from "./components/ui-icons";
+import {
+  PencilIcon,
+  SendIcon as PaperPlaneIcon,
+  TrashIcon,
+} from "./components/ui-icons";
 import { CloudParticipantsSheet } from "./components/CloudParticipantsSheet";
 import { SearchModal } from "./components/SearchModal";
 import { CloudReportModal } from "./components/CloudReportModal";
 import { InviteCloudsButton } from "./components/InviteCloudsButton";
 import { DesktopScheduledCloudActions } from "./components/DesktopScheduledCloudActions";
 import { GuestCloudSignupModal } from "./components/GuestCloudSignupModal";
-import { CloudEditDialog, type EditableCloud } from "./components/CloudEditDialog";
+import { CloudFeedNavigation } from "./components/CloudFeedNavigation";
+import {
+  CloudEditDialog,
+  type EditableCloud,
+} from "./components/CloudEditDialog";
 import { subscribeToCloudFeedUpdates } from "./lib/cloud-presence";
 import {
   SessionUserAvatar,
@@ -73,7 +96,12 @@ type Cloud = {
   editCount?: number;
   liveParticipants?: number;
   authorId?: string;
-  participantProfiles?: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
+  participantProfiles?: Array<{
+    id: string;
+    name: string;
+    username: string;
+    avatarUrl: string | null;
+  }>;
   originCloud?: { id: string; title: string } | null;
   scheduledAt?: string | null;
 };
@@ -91,7 +119,6 @@ type Poll = {
 };
 
 type FeedItem = ({ kind: "cloud" } & Cloud) | ({ kind: "poll" } & Poll);
-
 
 type CloudApiAuthor = {
   id: string;
@@ -117,7 +144,12 @@ type CloudApiPayload = {
   hyped?: boolean;
   membersCount: number;
   participantsCount: number;
-  participantProfiles: Array<{ id: string; name: string; username: string; avatarUrl: string | null }>;
+  participantProfiles: Array<{
+    id: string;
+    name: string;
+    username: string;
+    avatarUrl: string | null;
+  }>;
   originCloud?: { id: string; title: string } | null;
   scheduledAt: string | null;
   href: string;
@@ -130,7 +162,9 @@ function mergeClouds(base: Cloud[], incoming: Cloud[]) {
     byId.set(cloud.id, cloud);
   });
 
-  return Array.from(byId.values()).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return Array.from(byId.values()).sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
 }
 
 export default function Page() {
@@ -167,6 +201,10 @@ function mapApiCloudToCloud(cloud: CloudApiPayload): Cloud {
   };
 }
 
+function cloudFeedCacheKey(userId: string | undefined, scope: string) {
+  return `talk:${userId ?? "guest"}:${scope}`;
+}
+
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const SEED_CLOUDS: Cloud[] = [
@@ -178,7 +216,10 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 8 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-1?title=Tendências%20da%20semana%20em%20Tech&duration=1h&createdAt=" + new Date(Date.now() - 8 * 60 * 1000).toISOString() + "&participants=42",
+    href:
+      "/cloud/seed-1?title=Tendências%20da%20semana%20em%20Tech&duration=1h&createdAt=" +
+      new Date(Date.now() - 8 * 60 * 1000).toISOString() +
+      "&participants=42",
     hypes: 42,
   },
   {
@@ -189,7 +230,10 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 14 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30min&createdAt=" + new Date(Date.now() - 14 * 60 * 1000).toISOString() + "&participants=87",
+    href:
+      "/cloud/seed-2?title=Qual%20álbum%20do%20ano%20vai%20dominar%3F&duration=30min&createdAt=" +
+      new Date(Date.now() - 14 * 60 * 1000).toISOString() +
+      "&participants=87",
     hypes: 87,
   },
   {
@@ -200,7 +244,10 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 3 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-3?title=Gaming%3A%20o%20melhor%20lançamento%20de%202025&duration=1h&createdAt=" + new Date(Date.now() - 3 * 60 * 1000).toISOString() + "&participants=31",
+    href:
+      "/cloud/seed-3?title=Gaming%3A%20o%20melhor%20lançamento%20de%202025&duration=1h&createdAt=" +
+      new Date(Date.now() - 3 * 60 * 1000).toISOString() +
+      "&participants=31",
     hypes: 31,
   },
   {
@@ -211,7 +258,10 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 30 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-4?title=Drama%20das%20redes%3A%20o%20que%20você%20acha%3F&duration=24h&createdAt=" + new Date(Date.now() - 30 * 60 * 1000).toISOString() + "&participants=113",
+    href:
+      "/cloud/seed-4?title=Drama%20das%20redes%3A%20o%20que%20você%20acha%3F&duration=24h&createdAt=" +
+      new Date(Date.now() - 30 * 60 * 1000).toISOString() +
+      "&participants=113",
     hypes: 113,
   },
   {
@@ -222,7 +272,10 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 2 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30min&createdAt=" + new Date(Date.now() - 2 * 60 * 1000).toISOString() + "&participants=58",
+    href:
+      "/cloud/seed-5?title=Futebol%3A%20tabela%20e%20expectativas&duration=30min&createdAt=" +
+      new Date(Date.now() - 2 * 60 * 1000).toISOString() +
+      "&participants=58",
     hypes: 58,
   },
   {
@@ -233,25 +286,28 @@ const SEED_CLOUDS: Cloud[] = [
     createdAt: new Date(Date.now() - 1 * 60 * 1000),
     mode: "text",
     visibility: "public",
-    href: "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=30min&createdAt=" + new Date(Date.now() - 1 * 60 * 1000).toISOString() + "&participants=204",
+    href:
+      "/cloud/seed-6?title=Memes%20do%20momento%20-%20compartilhe%20o%20seu&duration=30min&createdAt=" +
+      new Date(Date.now() - 1 * 60 * 1000).toISOString() +
+      "&participants=204",
     hypes: 204,
   },
 ];
 
 const CATEGORIES: Category[] = [
-  { name: "Talk",   bg: "#FFFFFF", color: "#111827" },
-  { name: "Trending",  bg: "#A855F7" },
-  { name: "Drama",     bg: "#EF4444" },
-  { name: "Funny",     bg: "#EAB308" },
-  { name: "Sports",    bg: "#22C55E" },
+  { name: "Talk", bg: "#FFFFFF", color: "#111827" },
+  { name: "Trending", bg: "#A855F7" },
+  { name: "Drama", bg: "#EF4444" },
+  { name: "Funny", bg: "#EAB308" },
+  { name: "Sports", bg: "#22C55E" },
   { name: "Real Life", bg: "#3B82F6" },
-  { name: "Pop",       bg: "#8B5CF6" },
-  { name: "Politics",  bg: "#0EA5E9" },
-  { name: "Tech",      bg: "#14B8A6" },
-  { name: "Gaming",    bg: "#F97316" },
-  { name: "Music",     bg: "#EC4899" },
-  { name: "Movies",    bg: "#84CC16" },
-  { name: "Memes",     bg: "#F43F5E" },
+  { name: "Pop", bg: "#8B5CF6" },
+  { name: "Politics", bg: "#0EA5E9" },
+  { name: "Tech", bg: "#14B8A6" },
+  { name: "Gaming", bg: "#F97316" },
+  { name: "Music", bg: "#EC4899" },
+  { name: "Movies", bg: "#84CC16" },
+  { name: "Memes", bg: "#F43F5E" },
 ];
 
 const DURATIONS = ["10min", "30min", "2h", "5h", "24h"];
@@ -290,7 +346,8 @@ function getCloudRemainingSeconds(cloud: Cloud) {
 }
 
 function isCloudActive(cloud: Cloud) {
-  if (cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now()) return true;
+  if (cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now())
+    return true;
   return getCloudRemainingSeconds(cloud) > 0;
 }
 
@@ -299,56 +356,77 @@ function getTopicCountdown(cloud: Cloud) {
 }
 
 function getTopicProfile(cloud: Cloud, index: number) {
-  const categoryProfiles: Record<string, {
-    name: string;
-    handle: string;
-    description: string;
-    participants: number;
-  }> = {
+  const categoryProfiles: Record<
+    string,
+    {
+      name: string;
+      handle: string;
+      description: string;
+      participants: number;
+    }
+  > = {
     Tech: {
       name: "pedro.dev",
       handle: "pedro.dev",
-      description: "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
+      description:
+        "IA vai substituir programadores? Debate com exemplos, dúvidas práticas e opiniões sem filtro.",
       participants: 54,
     },
     Music: {
       name: "lais_moraes",
       handle: "lais_moraes",
-      description: "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
+      description:
+        "Qual álbum do ano merece o topo? Você entra, comenta e acompanha a conversa ao vivo.",
       participants: 112,
     },
     Gaming: {
       name: "lucasx7",
       handle: "lucasx7",
-      description: "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
+      description:
+        "Jogos, lançamentos e tretas da semana em um papo rápido que muda a cada minuto.",
       participants: 91,
     },
     Drama: {
       name: "mariana_rib",
       handle: "mariana_rib",
-      description: "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
+      description:
+        "Os tópicos mais comentados do momento, com espaço para leitura rápida e discussão ao vivo.",
       participants: 417,
     },
     Sports: {
       name: "gabriel_souza",
       handle: "gabriel_souza",
-      description: "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
+      description:
+        "Brasileirão, seleção, bastidores e tudo que está puxando a conversa esportiva agora.",
       participants: 326,
     },
     Memes: {
       name: "ana_santos",
       handle: "ana_santos",
-      description: "Memes, cortes e o caos leve da internet, tudo organizado em uma conversa ao vivo.",
+      description:
+        "Memes, cortes e o caos leve da internet, tudo organizado em uma conversa ao vivo.",
       participants: 78,
     },
   };
 
   return {
-    name: cloud.authorName ?? categoryProfiles[cloud.category]?.name ?? `user_${index + 1}`,
-    handle: cloud.authorHandle ?? categoryProfiles[cloud.category]?.handle ?? `user_${index + 1}`,
-    description: cloud.description ?? categoryProfiles[cloud.category]?.description ?? `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
+    name:
+      cloud.authorName ??
+      categoryProfiles[cloud.category]?.name ??
+      `user_${index + 1}`,
+    handle:
+      cloud.authorHandle ??
+      categoryProfiles[cloud.category]?.handle ??
+      `user_${index + 1}`,
+    description:
+      cloud.description ??
+      categoryProfiles[cloud.category]?.description ??
+      `Tópico em alta sobre ${cloud.category.toLowerCase()}.`,
     avatar: cloud.authorPhoto ?? null,
-    participants: cloud.liveParticipants ?? categoryProfiles[cloud.category]?.participants ?? Math.max(18, (cloud.hypes ?? 0) + 24),
+    participants:
+      cloud.liveParticipants ??
+      categoryProfiles[cloud.category]?.participants ??
+      Math.max(18, (cloud.hypes ?? 0) + 24),
   };
 }
 
@@ -364,21 +442,54 @@ function useSiteOrigin() {
 
 function SearchIcon({ s = 20 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="7.5" /><path d="M20 20l-3.5-3.5" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7.5" />
+      <path d="M20 20l-3.5-3.5" />
     </svg>
   );
 }
 function UploadIcon({ s = 20 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M5 20h14" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M5 20h14" />
     </svg>
   );
 }
 function BellIcon({ s = 20 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M15 17H5.5a1 1 0 0 1-.92-1.38l1.42-3.42A5 5 0 0 0 6.4 10V9a5.6 5.6 0 0 1 11.2 0v1c0 .69.14 1.38.4 2l1.42 3.42A1 1 0 0 1 18.5 17H15" />
       <path d="M10 19a2 2 0 0 0 4 0" />
     </svg>
@@ -386,35 +497,92 @@ function BellIcon({ s = 20 }: { s?: number }) {
 }
 function CalendarIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 10h18" />
     </svg>
   );
 }
 
 function ClockIcon({ s = 18 }: { s?: number }) {
-  return <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>;
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  );
 }
 
 function GearIcon({ s = 20 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
     </svg>
   );
 }
 
 function ChevronRightIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="m9 6 6 6-6 6" />
     </svg>
   );
 }
 function CloudIcon({ s = 22, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
       <path d="M8 16 C8 17.5 7.5 18.5 6.5 19.5 C7.5 19 9 18 9.5 16" />
     </svg>
@@ -428,59 +596,147 @@ function FireIcon({ s = 20, className }: { s?: number; className?: string }) {
 function CloudBadge({ s = 32 }: { s?: number }) {
   return (
     <div className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-gradient-to-br from-[#FFF0F8] to-[#F5E6F9] shadow-md">
-      <svg viewBox="0 0 32 26" width={s} height={s} fill="none" aria-hidden="true">
-        <path d="M9.5 21a5 5 0 1 1 0-10 7 7 0 0 1 13.3 2.4 4.6 4.6 0 0 1-1.2 9.1H9.5Z" stroke="#7C3AED" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <path d="M20 10l4 4M24 10l-4 4" stroke="#7C3AED" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+      <svg
+        viewBox="0 0 32 26"
+        width={s}
+        height={s}
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M9.5 21a5 5 0 1 1 0-10 7 7 0 0 1 13.3 2.4 4.6 4.6 0 0 1-1.2 9.1H9.5Z"
+          stroke="#7C3AED"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        <path
+          d="M20 10l4 4M24 10l-4 4"
+          stroke="#7C3AED"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </div>
   );
 }
 function ListIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M5 7h14" /><path d="M5 12h14" /><path d="M5 17h14" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M5 7h14" />
+      <path d="M5 12h14" />
+      <path d="M5 17h14" />
     </svg>
   );
 }
 function MicIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M12 15a3 3 0 0 0 3-3V7a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
-      <path d="M19 12a7 7 0 0 1-14 0" /><path d="M12 19v3" />
+      <path d="M19 12a7 7 0 0 1-14 0" />
+      <path d="M12 19v3" />
     </svg>
   );
 }
 function XIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 6l12 12" /><path d="M18 6 6 18" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
     </svg>
   );
 }
 function PlusIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 5v14" /><path d="M5 12h14" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
     </svg>
   );
 }
 function UserIcon({ s = 16, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
-      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
     </svg>
   );
 }
 function PlayIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="currentColor"
+      aria-hidden="true"
+    >
       <path d="M8 5.14v14l11-7-11-7Z" />
     </svg>
   );
 }
 function StopIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="currentColor" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="currentColor"
+      aria-hidden="true"
+    >
       <rect x="5" y="5" width="14" height="14" rx="2" />
     </svg>
   );
@@ -488,7 +744,17 @@ function StopIcon({ s = 18 }: { s?: number }) {
 
 function PollIcon({ s = 18 }: { s?: number }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <rect x="3" y="14" width="4" height="7" rx="1" />
       <rect x="10" y="9" width="4" height="12" rx="1" />
       <rect x="17" y="4" width="4" height="17" rx="1" />
@@ -496,9 +762,26 @@ function PollIcon({ s = 18 }: { s?: number }) {
   );
 }
 
-function HashtagIcon({ s = 24, className }: { s?: number; className?: string }) {
+function HashtagIcon({
+  s = 24,
+  className,
+}: {
+  s?: number;
+  className?: string;
+}) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M4 9l3 3-3 3" />
       <path d="M20 9l-3 3 3 3" />
       <path d="M12 4v16" />
@@ -508,16 +791,44 @@ function HashtagIcon({ s = 24, className }: { s?: number; className?: string }) 
 
 function EyeIcon({ s = 24, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
 
-function ChatBubbleIcon({ s = 32, className }: { s?: number; className?: string }) {
+function ChatBubbleIcon({
+  s = 32,
+  className,
+}: {
+  s?: number;
+  className?: string;
+}) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
@@ -525,16 +836,44 @@ function ChatBubbleIcon({ s = 32, className }: { s?: number; className?: string 
 
 function HomeIcon({ s = 24, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <path d="M9 22V12h6v10" />
     </svg>
   );
 }
 
-function MessageIcon({ s = 24, className }: { s?: number; className?: string }) {
+function MessageIcon({
+  s = 24,
+  className,
+}: {
+  s?: number;
+  className?: string;
+}) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   );
@@ -542,7 +881,18 @@ function MessageIcon({ s = 24, className }: { s?: number; className?: string }) 
 
 function MeetIcon({ s = 24, className }: { s?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={className}>
+    <svg
+      viewBox="0 0 24 24"
+      width={s}
+      height={s}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -557,7 +907,13 @@ const DIRECT_MESSAGES_STORAGE_KEY = "cloudscommunity:direct-messages:v1";
 
 // ─── Cloud Card ───────────────────────────────────────────────────────────────
 
-function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: number, wasHyped: boolean) => void }) {
+function CloudCard({
+  cloud,
+  onHypar,
+}: {
+  cloud: Cloud;
+  onHypar: (newCount: number, wasHyped: boolean) => void;
+}) {
   const sessionUser = useSessionUser();
   const currentUser = sessionUser.user;
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
@@ -566,19 +922,32 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
   const [shareOpen, setShareOpen] = useState(false);
   const [showPremiere, setShowPremiere] = useState(false);
   const [reminderLoading, setReminderLoading] = useState(false);
-  const [reminderSet, setReminderSet] = useState(() => Boolean(currentUser?.id && cloud.participantProfiles?.some((participant) => participant.id === currentUser.id)));
+  const [reminderSet, setReminderSet] = useState(() =>
+    Boolean(
+      currentUser?.id &&
+      cloud.participantProfiles?.some(
+        (participant) => participant.id === currentUser.id,
+      ),
+    ),
+  );
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const siteOrigin = useSiteOrigin();
 
   const shareUrl = cloud.href ?? `/cloud/${cloud.id}`;
   const fullShareUrl = `${siteOrigin}${shareUrl}`;
   const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
-  const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > Date.now());
+  const isScheduled = Boolean(
+    scheduledDate && scheduledDate.getTime() > Date.now(),
+  );
   const durationSeconds = parseDurationSeconds(cloud.duration);
   const remainingSeconds = getCloudRemainingSeconds(cloud);
   const isLive = !isScheduled && remainingSeconds > 0;
-  const countdownLabel = formatCountdown(isScheduled ? durationSeconds : remainingSeconds);
-  const premiereLabel = scheduledDate ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "";
+  const countdownLabel = formatCountdown(
+    isScheduled ? durationSeconds : remainingSeconds,
+  );
+  const premiereLabel = scheduledDate
+    ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+    : "";
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - cloud.createdAt.getTime()) / 1000);
     if (diff < 60) return "agora mesmo";
@@ -588,27 +957,35 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
   const handleHypar = async () => {
     if (hypeLoading) return;
-    if (!currentUser || currentUser.isGuest) { setAuthPromptOpen(true); return; }
+    if (!currentUser || currentUser.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setHypeLoading(true);
     const wasHyped = hyped;
     setHyped(!wasHyped);
-    setHypes(v => wasHyped ? v - 1 : v + 1);
+    setHypes((v) => (wasHyped ? v - 1 : v + 1));
     try {
-      const res = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/hype`, {
-        method: wasHyped ? "DELETE" : "POST",
-      });
+      const res = await fetch(
+        `/api/clouds/${encodeURIComponent(cloud.id)}/hype`,
+        {
+          method: wasHyped ? "DELETE" : "POST",
+        },
+      );
       if (res.ok) {
-        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        const data = (await res.json().catch(() => null)) as {
+          hypesCount?: number;
+        } | null;
         const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
         setHypes(newCount);
         onHypar(newCount, wasHyped);
       } else {
         setHyped(wasHyped);
-        setHypes(v => wasHyped ? v + 1 : v - 1);
+        setHypes((v) => (wasHyped ? v + 1 : v - 1));
       }
     } catch {
       setHyped(wasHyped);
-      setHypes(v => wasHyped ? v + 1 : v - 1);
+      setHypes((v) => (wasHyped ? v + 1 : v - 1));
     } finally {
       setHypeLoading(false);
     }
@@ -616,14 +993,31 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
   const activateReminder = async () => {
     if (reminderLoading || reminderSet) return;
-    if (!currentUser || currentUser.isGuest) { setAuthPromptOpen(true); return; }
+    if (!currentUser || currentUser.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setReminderLoading(true);
     try {
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
-      if (!response.ok) { const payload = await response.json().catch(() => null) as { message?: string } | null; throw new Error(payload?.message || "Não foi possível entrar na Cloud."); }
+      const response = await fetch(
+        `/api/clouds/${encodeURIComponent(cloud.id)}/join`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(
+          payload?.message || "Não foi possível entrar na Cloud.",
+        );
+      }
       setReminderSet(true);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Não foi possível entrar na Cloud.");
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível entrar na Cloud.",
+      );
     } finally {
       setReminderLoading(false);
     }
@@ -631,29 +1025,79 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
   return (
     <article className="cloud-card w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
-
       {/* Top row: live indicator + countdown */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-[12px]">
           <span className="relative flex h-2 w-2">
-            <span className={`absolute inline-flex h-full w-full rounded-full ${isScheduled ? "" : "animate-ping"}`} style={{ backgroundColor: isScheduled ? "#A855F7" : isLive ? "#22C55E" : "#F87171", opacity: 0.7 }} />
-            <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: isScheduled ? "#A855F7" : isLive ? "#22C55E" : "#F87171" }} />
+            <span
+              className={`absolute inline-flex h-full w-full rounded-full ${isScheduled ? "" : "animate-ping"}`}
+              style={{
+                backgroundColor: isScheduled
+                  ? "#A855F7"
+                  : isLive
+                    ? "#22C55E"
+                    : "#F87171",
+                opacity: 0.7,
+              }}
+            />
+            <span
+              className="relative inline-flex h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: isScheduled
+                  ? "#A855F7"
+                  : isLive
+                    ? "#22C55E"
+                    : "#F87171",
+              }}
+            />
           </span>
-          <span className={isScheduled ? "text-[#C084FC]" : isLive ? "text-[#22C55E]" : "text-[#F87171]"}>
-            {isScheduled ? "AGENDADA" : isLive ? "AO VIVO" : "ENCERRADA"} - {cloud.duration}
+          <span
+            className={
+              isScheduled
+                ? "text-[#C084FC]"
+                : isLive
+                  ? "text-[#22C55E]"
+                  : "text-[#F87171]"
+            }
+          >
+            {isScheduled ? "AGENDADA" : isLive ? "AO VIVO" : "ENCERRADA"} -{" "}
+            {cloud.duration}
           </span>
           <span className="rounded-full bg-white/5 px-2 py-1 text-[13px] font-semibold tabular-nums text-white/70">
             {isScheduled || isLive ? countdownLabel : "00:00"}
           </span>
-          {isScheduled && <div className="relative"><button type="button" onClick={() => setShowPremiere(value => !value)} aria-label="Ver data de estreia" className="rounded-full p-1.5 text-[#C084FC] transition hover:bg-[#9333EA]/20"><CalendarIcon s={16} /></button>{showPremiere && <span className="absolute left-0 top-9 z-20 w-52 rounded-lg border border-[#A855F7]/30 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">{premiereLabel}</span>}</div>}
+          {isScheduled && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowPremiere((value) => !value)}
+                aria-label="Ver data de estreia"
+                className="rounded-full p-1.5 text-[#C084FC] transition hover:bg-[#9333EA]/20"
+              >
+                <CalendarIcon s={16} />
+              </button>
+              {showPremiere && (
+                <span className="absolute left-0 top-9 z-20 w-52 rounded-lg border border-[#A855F7]/30 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
+                  {premiereLabel}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}>
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${cloud.visibility === "public" ? "bg-[#2563EB]/10 text-[#93C5FD]" : "bg-[#7C3AED]/10 text-[#E9D5FF]"}`}
+        >
           {cloud.visibility === "public" ? "Público" : "Privado"}
         </span>
       </div>
 
       {/* Title */}
-      <h2 lang="pt-BR" className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[18px] leading-[1.3] tracking-[-0.012em]" : "text-[20px] leading-snug"}`}>{cloud.title}</h2>
+      <h2
+        lang="pt-BR"
+        className={`mt-4 break-words hyphens-auto font-semibold text-white ${cloud.title.length > 68 ? "text-[18px] leading-[1.3] tracking-[-0.012em]" : "text-[20px] leading-snug"}`}
+      >
+        {cloud.title}
+      </h2>
 
       {cloud.description && (
         <p className="mt-2 text-[14px] leading-relaxed text-white/60 line-clamp-3">
@@ -664,63 +1108,150 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
       {/* Audio player - waveform real */}
       {cloud.mode === "audio" && cloud.audioUrl && (
         <div className="mt-4">
-          <AudioWaveformPlayer src={cloud.audioUrl} peaks={cloud.audioPeaks} isOwn={false} roundedCorner="left" />
+          <AudioWaveformPlayer
+            src={cloud.audioUrl}
+            peaks={cloud.audioPeaks}
+            isOwn={false}
+            roundedCorner="left"
+          />
         </div>
       )}
 
       {/* Footer: action buttons */}
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
-
         {/* Left - reaction buttons */}
         <div className="flex items-center gap-2">
-
-          {!isScheduled && <>
+          {!isScheduled && (
+            <>
+              <button
+                type="button"
+                onClick={handleHypar}
+                aria-label="Hypar"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
+                  hyped
+                    ? "border-orange-500/40 bg-orange-500/15 text-orange-400"
+                    : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
+                }`}
+              >
+                <FireIcon s={24} />
+                {hypes > 0 && <span>{hypes}</span>}
+              </button>
+              {shareOpen && (
+                <ShareModal
+                  cloudId={cloud.id}
+                  cloudTitle={cloud.title}
+                  cloudUrl={fullShareUrl}
+                  onClose={() => setShareOpen(false)}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setShareOpen(true)}
+                aria-label="Compartilhar"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white/70 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={15}
+                  height={15}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M22 2 11 13" />
+                  <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+                </svg>
+                Compartilhar
+              </button>
+            </>
+          )}
+          {isScheduled && (
             <button
               type="button"
-              onClick={handleHypar}
-              aria-label="Hypar"
-              className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-[13px] font-semibold transition ${
-                hyped
-                  ? "border-orange-500/40 bg-orange-500/15 text-orange-400"
-                  : "border-white/10 bg-white/5 text-white/70 hover:border-orange-500/40 hover:text-orange-400"
-              }`}
+              onClick={activateReminder}
+              disabled={reminderLoading || reminderSet}
+              aria-label={
+                reminderSet ? "Lembrete ativado" : "Avisar na estreia"
+              }
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold transition ${reminderSet ? "border-[#A855F7]/60 bg-[#9333EA]/20 text-[#E9D5FF]" : "border-[#A855F7]/40 bg-[#9333EA]/10 text-[#C084FC] hover:bg-[#9333EA]/25"}`}
             >
-              <FireIcon s={24} />
-              {hypes > 0 && <span>{hypes}</span>}
+              <BellIcon s={16} />
+              {reminderSet ? "Lembrete ativado" : "Avisar-me"}
             </button>
-            {shareOpen && (
-              <ShareModal
-                cloudId={cloud.id}
-                cloudTitle={cloud.title}
-                cloudUrl={fullShareUrl}
-                onClose={() => setShareOpen(false)}
-              />
-            )}
+          )}
+          {isScheduled && cloud.authorId === sessionUser.user?.id && (
             <button
               type="button"
-              onClick={() => setShareOpen(true)}
-              aria-label="Compartilhar"
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[13px] font-semibold text-white/70 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
+              onClick={async () => {
+                if (!window.confirm("Excluir esta Cloud agendada?")) return;
+                const response = await fetch(
+                  `/api/clouds/${encodeURIComponent(cloud.id)}`,
+                  { method: "DELETE" },
+                );
+                if (response.ok) window.location.reload();
+              }}
+              aria-label="Excluir Cloud agendada"
+              className="rounded-full border border-red-400/20 p-2 text-red-300 transition hover:bg-red-500/15"
             >
-              <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" />
               </svg>
-              Compartilhar
             </button>
-          </>}
-          {isScheduled && <button type="button" onClick={activateReminder} disabled={reminderLoading || reminderSet} aria-label={reminderSet ? "Lembrete ativado" : "Avisar na estreia"} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] font-semibold transition ${reminderSet ? "border-[#A855F7]/60 bg-[#9333EA]/20 text-[#E9D5FF]" : "border-[#A855F7]/40 bg-[#9333EA]/10 text-[#C084FC] hover:bg-[#9333EA]/25"}`}><BellIcon s={16} />{reminderSet ? "Lembrete ativado" : "Avisar-me"}</button>}
-          {isScheduled && cloud.authorId === sessionUser.user?.id && <button type="button" onClick={async () => { if (!window.confirm("Excluir esta Cloud agendada?")) return; const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}`, { method: "DELETE" }); if (response.ok) window.location.reload(); }} aria-label="Excluir Cloud agendada" className="rounded-full border border-red-400/20 p-2 text-red-300 transition hover:bg-red-500/15"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" /></svg></button>}
+          )}
         </div>
 
         {/* Right — enter */}
-        {isScheduled ? <div className="flex items-center -space-x-2" title="Pessoas aguardando a estreia">{cloud.participantProfiles?.slice(0, 5).map((participant) => participant.avatarUrl ? <Image key={participant.id} src={participant.avatarUrl} alt={participant.name} width={30} height={30} className="h-8 w-8 rounded-full border-2 border-[#111116] object-cover" /> : <span key={participant.id} className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#111116] bg-[#9333EA] text-[11px] font-bold">{participant.name.charAt(0)}</span>)}</div> : <Link
-          href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}&join=1`}
-          className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
-        >
-          Entrar na conversa
-        </Link>}
+        {isScheduled ? (
+          <div
+            className="flex items-center -space-x-2"
+            title="Pessoas aguardando a estreia"
+          >
+            {cloud.participantProfiles?.slice(0, 5).map((participant) =>
+              participant.avatarUrl ? (
+                <Image
+                  key={participant.id}
+                  src={participant.avatarUrl}
+                  alt={participant.name}
+                  width={30}
+                  height={30}
+                  className="h-8 w-8 rounded-full border-2 border-[#111116] object-cover"
+                />
+              ) : (
+                <span
+                  key={participant.id}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#111116] bg-[#9333EA] text-[11px] font-bold"
+                >
+                  {participant.name.charAt(0)}
+                </span>
+              ),
+            )}
+          </div>
+        ) : (
+          <Link
+            href={`${cloud.href ?? `/cloud/${cloud.id}`}?title=${encodeURIComponent(cloud.title)}&duration=${encodeURIComponent(cloud.duration)}&createdAt=${encodeURIComponent(cloud.createdAt.toISOString())}&participants=${cloud.liveParticipants ?? 1}&visibility=${encodeURIComponent(cloud.visibility ?? "public")}&join=1`}
+            className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-5 py-2 text-[13px] font-semibold text-white transition hover:bg-[#7C3AED]"
+          >
+            Entrar na conversa
+          </Link>
+        )}
       </div>
-      {authPromptOpen && <GuestCloudSignupModal returnTo={shareUrl} onClose={() => setAuthPromptOpen(false)} />}
+      {authPromptOpen && (
+        <GuestCloudSignupModal
+          returnTo={shareUrl}
+          onClose={() => setAuthPromptOpen(false)}
+        />
+      )}
     </article>
   );
 }
@@ -729,7 +1260,17 @@ function CloudCard({ cloud, onHypar }: { cloud: Cloud; onHypar: (newCount: numbe
 
 function ShareIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" />
       <path d="M16 6l-4-4-4 4" />
       <path d="M12 2v13" />
@@ -737,22 +1278,113 @@ function ShareIcon() {
   );
 }
 
-function CloudsCalendar({ value, onChange, onDaySelect, onTimeComplete }: { value: string; onChange: (value: string) => void; onDaySelect: () => void; onTimeComplete: () => void }) {
+function CloudsCalendar({
+  value,
+  onChange,
+  onDaySelect,
+  onTimeComplete,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onDaySelect: () => void;
+  onTimeComplete: () => void;
+}) {
   const initial = value ? new Date(value) : new Date(Date.now() + 3_600_000);
-  const [month, setMonth] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
+  const [month, setMonth] = useState(
+    new Date(initial.getFullYear(), initial.getMonth(), 1),
+  );
   const [hour, setHour] = useState("");
   const [minute, setMinute] = useState("");
-  const [selectedDay, setSelectedDay] = useState<number | null>(value ? new Date(value).getDate() : null);
-  const days = Array.from({ length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate() }, (_, i) => i + 1);
+  const [selectedDay, setSelectedDay] = useState<number | null>(
+    value ? new Date(value).getDate() : null,
+  );
+  const days = Array.from(
+    {
+      length: new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate(),
+    },
+    (_, i) => i + 1,
+  );
   const start = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const latest = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
   const earliest = new Date();
-  const emit = (day: number, nextHour = hour, nextMinute = minute) => onChange(`${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T${nextHour || "00"}:${nextMinute || "00"}`);
-  const choose = (day: number) => { setSelectedDay(day); onDaySelect(); emit(day); };
-  const updateHour = (nextHour: string) => { setHour(nextHour); if (selectedDay !== null) emit(selectedDay, nextHour, minute); if (minute) onTimeComplete(); };
-  const updateMinute = (nextMinute: string) => { setMinute(nextMinute); if (selectedDay !== null) emit(selectedDay, hour, nextMinute); if (hour) onTimeComplete(); };
-  const canAdvance = month.getFullYear() < latest.getFullYear() || month.getMonth() < latest.getMonth();
-  return <div className="rounded-2xl border border-[#A855F7]/40 bg-[#151027] p-3 shadow-2xl"><div className="relative mb-3 flex items-center justify-center"><strong className="text-sm capitalize">{month.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</strong>{canAdvance && <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="absolute right-0">›</button>}</div><div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/45">{"DSTQQSS".split("").map((d,i)=><span key={i}>{d}</span>)}{days.map(day => { const date = new Date(month.getFullYear(), month.getMonth(), day); return date < new Date(earliest.getFullYear(), earliest.getMonth(), earliest.getDate()) || date > latest ? <span key={day} /> : <button key={day} type="button" onClick={() => choose(day)} className={`h-8 w-8 rounded-full ${selectedDay === day ? "bg-[#9333EA] text-white shadow-[0_0_0_2px_rgba(216,180,254,.35)]" : "hover:bg-white/10"}`}>{day}</button>; })}</div><div className="mt-3 flex items-center justify-between"><span>Horário</span><div className="flex items-center gap-2"><CloudsTimeWheel value={hour} max={23} onChange={updateHour} /><span>:</span><CloudsTimeWheel value={minute} max={59} onChange={updateMinute} /></div></div></div>;
+  const emit = (day: number, nextHour = hour, nextMinute = minute) =>
+    onChange(
+      `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T${nextHour || "00"}:${nextMinute || "00"}`,
+    );
+  const choose = (day: number) => {
+    setSelectedDay(day);
+    onDaySelect();
+    emit(day);
+  };
+  const updateHour = (nextHour: string) => {
+    setHour(nextHour);
+    if (selectedDay !== null) emit(selectedDay, nextHour, minute);
+    if (minute) onTimeComplete();
+  };
+  const updateMinute = (nextMinute: string) => {
+    setMinute(nextMinute);
+    if (selectedDay !== null) emit(selectedDay, hour, nextMinute);
+    if (hour) onTimeComplete();
+  };
+  const canAdvance =
+    month.getFullYear() < latest.getFullYear() ||
+    month.getMonth() < latest.getMonth();
+  return (
+    <div className="rounded-2xl border border-[#A855F7]/40 bg-[#151027] p-3 shadow-2xl">
+      <div className="relative mb-3 flex items-center justify-center">
+        <strong className="text-sm capitalize">
+          {month.toLocaleDateString("pt-BR", {
+            month: "long",
+            year: "numeric",
+          })}
+        </strong>
+        {canAdvance && (
+          <button
+            type="button"
+            onClick={() =>
+              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
+            }
+            className="absolute right-0"
+          >
+            ›
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-white/45">
+        {"DSTQQSS".split("").map((d, i) => (
+          <span key={i}>{d}</span>
+        ))}
+        {days.map((day) => {
+          const date = new Date(month.getFullYear(), month.getMonth(), day);
+          return date <
+            new Date(
+              earliest.getFullYear(),
+              earliest.getMonth(),
+              earliest.getDate(),
+            ) || date > latest ? (
+            <span key={day} />
+          ) : (
+            <button
+              key={day}
+              type="button"
+              onClick={() => choose(day)}
+              className={`h-8 w-8 rounded-full ${selectedDay === day ? "bg-[#9333EA] text-white shadow-[0_0_0_2px_rgba(216,180,254,.35)]" : "hover:bg-white/10"}`}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <span>Horário</span>
+        <div className="flex items-center gap-2">
+          <CloudsTimeWheel value={hour} max={23} onChange={updateHour} />
+          <span>:</span>
+          <CloudsTimeWheel value={minute} max={59} onChange={updateMinute} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function toLocalDateTimeValue(date: Date) {
@@ -764,11 +1396,46 @@ function toScheduledInstant(value: string) {
   return value ? new Date(value).toISOString() : undefined;
 }
 
-function CloudsTimeWheel({ value, max, onChange }: { value: string; max: number; onChange: (value: string) => void }) {
+function CloudsTimeWheel({
+  value,
+  max,
+  onChange,
+}: {
+  value: string;
+  max: number;
+  onChange: (value: string) => void;
+}) {
   const [open, setOpen] = useState(false);
-  const values = Array.from({ length: max + 1 }, (_, index) => String(index).padStart(2, "0"));
-  if (!open && !value) return <button type="button" onClick={() => setOpen(true)} className="flex h-12 w-14 items-center justify-center rounded-xl border border-white/10 bg-[#252840] text-sm text-white/50">{max === 23 ? "Hr" : "Mn"}</button>;
-  return <div className="h-24 w-14 snap-y snap-mandatory overflow-y-auto rounded-xl border border-white/10 bg-[#252840] text-center scrollbar-none">{values.map((item) => <button key={item} type="button" onClick={() => { onChange(item); setOpen(false); }} className={`block h-8 w-full snap-center text-sm transition ${item === value ? "bg-[#9333EA] font-bold text-white" : "text-white/50 hover:bg-white/10"}`}>{item}</button>)}</div>;
+  const values = Array.from({ length: max + 1 }, (_, index) =>
+    String(index).padStart(2, "0"),
+  );
+  if (!open && !value)
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-12 w-14 items-center justify-center rounded-xl border border-white/10 bg-[#252840] text-sm text-white/50"
+      >
+        {max === 23 ? "Hr" : "Mn"}
+      </button>
+    );
+  return (
+    <div className="h-24 w-14 snap-y snap-mandatory overflow-y-auto rounded-xl border border-white/10 bg-[#252840] text-center scrollbar-none">
+      {values.map((item) => (
+        <button
+          key={item}
+          type="button"
+          onClick={() => {
+            onChange(item);
+            setOpen(false);
+          }}
+          className={`block h-8 w-full snap-center text-sm transition ${item === value ? "bg-[#9333EA] font-bold text-white" : "text-white/50 hover:bg-white/10"}`}
+        >
+          {item}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function CreateCloudModal({
@@ -776,7 +1443,9 @@ function CreateCloudModal({
   onPublish,
 }: {
   onClose: () => void;
-  onPublish: (cloud: Omit<Cloud, "id" | "createdAt" | "mode"> & { scheduledAt?: string }) => Promise<Cloud>;
+  onPublish: (
+    cloud: Omit<Cloud, "id" | "createdAt" | "mode"> & { scheduledAt?: string },
+  ) => Promise<Cloud>;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -788,8 +1457,17 @@ function CreateCloudModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFollowersPopup, setShowFollowersPopup] = useState(false);
-  const [followers, setFollowers] = useState<Array<{ id: string; username: string; displayName: string; avatarUrl: string | null }>>([]);
-  const [selectedFollowers, setSelectedFollowers] = useState<Set<string>>(new Set());
+  const [followers, setFollowers] = useState<
+    Array<{
+      id: string;
+      username: string;
+      displayName: string;
+      avatarUrl: string | null;
+    }>
+  >([]);
+  const [selectedFollowers, setSelectedFollowers] = useState<Set<string>>(
+    new Set(),
+  );
   const [loadingFollowers, setLoadingFollowers] = useState(false);
   const [followersError, setFollowersError] = useState<string | null>(null);
   const isPrivateVisibility = visibility === "private";
@@ -798,7 +1476,9 @@ function CreateCloudModal({
     setLoadingFollowers(true);
     setFollowersError(null);
     try {
-      const response = await fetch("/api/users/following", { cache: "no-store" });
+      const response = await fetch("/api/users/following", {
+        cache: "no-store",
+      });
       if (!response.ok) throw new Error("Failed to fetch followers");
       const data = await response.json();
       setFollowers(data.users || []);
@@ -821,7 +1501,7 @@ function CreateCloudModal({
   };
 
   const toggleFollowerSelection = (followerId: string) => {
-    setSelectedFollowers(prev => {
+    setSelectedFollowers((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(followerId)) {
         newSet.delete(followerId);
@@ -857,7 +1537,10 @@ function CreateCloudModal({
 
     try {
       const invitedUserIds = Array.from(selectedFollowers);
-      if (scheduledAt && !scheduleTimeComplete) { setError("Escolha a hora e os minutos para agendar a Cloud."); return; }
+      if (scheduledAt && !scheduleTimeComplete) {
+        setError("Escolha a hora e os minutos para agendar a Cloud.");
+        return;
+      }
       const cloudData = {
         title: title.trim(),
         category: "general",
@@ -870,13 +1553,17 @@ function CreateCloudModal({
 
       // Criar cloud privada com os usuários convidados como membros
       const publishedCloud = await onPublish(cloudData);
-      
+
       // Enviar convites para os seguidores selecionados
       await sendCloudInvitations(cloudData, publishedCloud.id);
-      
+
       onClose();
     } catch (publishError) {
-      setError(publishError instanceof Error ? publishError.message : "Não foi possível criar a cloud privada.");
+      setError(
+        publishError instanceof Error
+          ? publishError.message
+          : "Não foi possível criar a cloud privada.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -901,7 +1588,9 @@ function CreateCloudModal({
     }
 
     if (visibility === "private") {
-      setError("Para clouds privadas, clique em 'Confirmar convidados' para criar.");
+      setError(
+        "Para clouds privadas, clique em 'Confirmar convidados' para criar.",
+      );
       return;
     }
 
@@ -909,7 +1598,10 @@ function CreateCloudModal({
     setError(null);
 
     try {
-      if (scheduledAt && !scheduleTimeComplete) { setError("Escolha a hora e os minutos para agendar a Cloud."); return; }
+      if (scheduledAt && !scheduleTimeComplete) {
+        setError("Escolha a hora e os minutos para agendar a Cloud.");
+        return;
+      }
       const cloudData = {
         title: normalizedTitle,
         category: "general",
@@ -922,16 +1614,26 @@ function CreateCloudModal({
       const publishedCloud = await onPublish(cloudData);
       onClose();
     } catch (publishError) {
-      setError(publishError instanceof Error ? publishError.message : "Nao foi possivel criar a cloud.");
+      setError(
+        publishError instanceof Error
+          ? publishError.message
+          : "Nao foi possivel criar a cloud.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const sendCloudInvitations = async (cloudData: { title: string; duration: string; visibility: string }, cloudId: string) => {
+  const sendCloudInvitations = async (
+    cloudData: { title: string; duration: string; visibility: string },
+    cloudId: string,
+  ) => {
     const followerIds = Array.from(selectedFollowers);
 
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://clouds.community";
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://clouds.community";
     // Invited users are already Cloud members. Open the Cloud directly so a
     // stale or unavailable invite token cannot block their entry.
     const shareUrl = `${origin}/cloud/${cloudId}?join=1`;
@@ -939,25 +1641,36 @@ function CreateCloudModal({
     for (const followerId of followerIds) {
       try {
         // Create conversation with follower
-        const conversationResponse = await fetch("/api/direct-messages/conversations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ peerUserId: followerId }),
-        });
+        const conversationResponse = await fetch(
+          "/api/direct-messages/conversations",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ peerUserId: followerId }),
+          },
+        );
 
         if (!conversationResponse.ok) {
           const errorText = await conversationResponse.text();
-          console.error(`Failed to create conversation with ${followerId}:`, conversationResponse.statusText, errorText);
+          console.error(
+            `Failed to create conversation with ${followerId}:`,
+            conversationResponse.statusText,
+            errorText,
+          );
           continue;
         }
 
         const conversationData = await conversationResponse.json();
-        
+
         // Handle different response formats
-        const conversationId = conversationData.id || conversationData.conversation?.id;
-        
+        const conversationId =
+          conversationData.id || conversationData.conversation?.id;
+
         if (!conversationId) {
-          console.error(`No conversation ID found in response for ${followerId}:`, conversationData);
+          console.error(
+            `No conversation ID found in response for ${followerId}:`,
+            conversationData,
+          );
           continue;
         }
 
@@ -969,19 +1682,26 @@ function CreateCloudModal({
           cloudVisibility: cloudData.visibility,
         });
 
-        const messageResponse = await fetch(`/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/link`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: shareUrl,
-            label: invitationContent,
-            clientMessageId: `invitation-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          }),
-        });
+        const messageResponse = await fetch(
+          `/api/direct-messages/conversations/${encodeURIComponent(conversationId)}/link`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: shareUrl,
+              label: invitationContent,
+              clientMessageId: `invitation-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            }),
+          },
+        );
 
         if (!messageResponse.ok) {
           const errorText = await messageResponse.text();
-          console.error(`Failed to send invitation to ${followerId}:`, messageResponse.statusText, errorText);
+          console.error(
+            `Failed to send invitation to ${followerId}:`,
+            messageResponse.statusText,
+            errorText,
+          );
         }
       } catch (error) {
         console.error(`Error sending invitation to ${followerId}:`, error);
@@ -990,12 +1710,26 @@ function CreateCloudModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-4 py-4 sm:items-center" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto px-4 py-4 sm:items-center"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-[920px] overflow-y-auto rounded-[28px] border border-white/[0.16] bg-[radial-gradient(circle_at_top_left,rgba(70,80,115,0.32),transparent_42%),linear-gradient(145deg,rgba(29,35,52,0.98),rgba(17,20,34,0.98))] p-5 shadow-[0_28px_80px_rgba(0,0,0,.55)] sm:p-8 md:p-11" onClick={e => e.stopPropagation()}>
+      <div
+        className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-[920px] overflow-y-auto rounded-[28px] border border-white/[0.16] bg-[radial-gradient(circle_at_top_left,rgba(70,80,115,0.32),transparent_42%),linear-gradient(145deg,rgba(29,35,52,0.98),rgba(17,20,34,0.98))] p-5 shadow-[0_28px_80px_rgba(0,0,0,.55)] sm:p-8 md:p-11"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-center justify-between sm:mb-6">
-          <h2 className="text-[24px] font-bold tracking-tight text-white sm:text-[32px]">Criar nova Cloud</h2>
-          <button aria-label="Fechar" onClick={onClose} className="rounded-full p-2 text-white/45 transition hover:bg-white/10 hover:text-white"><XIcon s={25} /></button>
+          <h2 className="text-[24px] font-bold tracking-tight text-white sm:text-[32px]">
+            Criar nova Cloud
+          </h2>
+          <button
+            aria-label="Fechar"
+            onClick={onClose}
+            className="rounded-full p-2 text-white/45 transition hover:bg-white/10 hover:text-white"
+          >
+            <XIcon s={25} />
+          </button>
         </div>
         <div className="space-y-5 sm:space-y-6">
           <TrendingTopicSuggestions
@@ -1006,7 +1740,12 @@ function CreateCloudModal({
             }}
           />
           <div>
-            <label htmlFor="new-cloud-title" className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">Título</label>
+            <label
+              htmlFor="new-cloud-title"
+              className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]"
+            >
+              Título
+            </label>
             <textarea
               id="new-cloud-title"
               autoFocus
@@ -1020,8 +1759,10 @@ function CreateCloudModal({
               inputMode="text"
               rows={1}
               value={title}
-              onChange={e => setTitle(e.target.value.replace(/\n/g, "").slice(0, 40))}
-              onKeyDown={e => {
+              onChange={(e) =>
+                setTitle(e.target.value.replace(/\n/g, "").slice(0, 40))
+              }
+              onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   if (!isPrivateVisibility) handlePublish();
@@ -1031,10 +1772,17 @@ function CreateCloudModal({
               maxLength={40}
               className="w-full resize-none overflow-hidden rounded-2xl border border-white/[0.16] bg-[#20263a]/80 px-4 py-3 text-[15px] leading-6 text-white placeholder:text-white/35 outline-none transition focus:border-[#A855F7] focus:ring-1 focus:ring-[#A855F7]/45 sm:px-6 sm:py-5 sm:text-[23px]"
             />
-            <div className="mt-2 flex justify-end text-[11px] text-white/40 sm:text-[14px]">{title.length}/40</div>
+            <div className="mt-2 flex justify-end text-[11px] text-white/40 sm:text-[14px]">
+              {title.length}/40
+            </div>
           </div>
           <div>
-            <label htmlFor="new-cloud-description" className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">Descrição (opcional)</label>
+            <label
+              htmlFor="new-cloud-description"
+              className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]"
+            >
+              Descrição (opcional)
+            </label>
             <textarea
               id="new-cloud-description"
               name="cloud-description"
@@ -1053,9 +1801,11 @@ function CreateCloudModal({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">Duração</label>
+            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">
+              Duração
+            </label>
             <div className="flex gap-2 flex-wrap">
-              {DURATIONS.map(d => (
+              {DURATIONS.map((d) => (
                 <button
                   key={d}
                   type="button"
@@ -1072,17 +1822,65 @@ function CreateCloudModal({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">Lançamento</label>
+            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">
+              Lançamento
+            </label>
             <div className="mb-2 flex gap-2">
-              <button type="button" onClick={() => setScheduledAt("")} className={`rounded-full px-3 py-1.5 text-[12px] sm:px-5 sm:py-2.5 sm:text-[17px] ${!scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Abrir agora</button>
-              <button type="button" onClick={() => { setScheduledAt(toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000))); setScheduleTimeComplete(false); setCalendarOpen(true); }} className={`rounded-full px-3 py-1.5 text-[12px] sm:px-5 sm:py-2.5 sm:text-[17px] ${scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}>Agendar</button>
+              <button
+                type="button"
+                onClick={() => setScheduledAt("")}
+                className={`rounded-full px-3 py-1.5 text-[12px] sm:px-5 sm:py-2.5 sm:text-[17px] ${!scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}
+              >
+                Abrir agora
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScheduledAt(
+                    toLocalDateTimeValue(new Date(Date.now() + 60 * 60 * 1000)),
+                  );
+                  setScheduleTimeComplete(false);
+                  setCalendarOpen(true);
+                }}
+                className={`rounded-full px-3 py-1.5 text-[12px] sm:px-5 sm:py-2.5 sm:text-[17px] ${scheduledAt ? "bg-[#9333EA] text-white" : "bg-[#252840] text-white/60"}`}
+              >
+                Agendar
+              </button>
             </div>
-            {scheduledAt && <div className="relative"><button type="button" onClick={() => setCalendarOpen(v => !v)} className="w-full rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-left text-[14px] text-white">{new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</button>{calendarOpen && <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20"><CloudsCalendar value={scheduledAt} onChange={setScheduledAt} onDaySelect={() => setScheduleTimeComplete(false)} onTimeComplete={() => { setScheduleTimeComplete(true); setCalendarOpen(false); }} /></div>}</div>}
+            {scheduledAt && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCalendarOpen((v) => !v)}
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#252840] px-4 py-3 text-left text-[14px] text-white"
+                >
+                  {new Date(scheduledAt).toLocaleString("pt-BR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </button>
+                {calendarOpen && (
+                  <div className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-20">
+                    <CloudsCalendar
+                      value={scheduledAt}
+                      onChange={setScheduledAt}
+                      onDaySelect={() => setScheduleTimeComplete(false)}
+                      onTimeComplete={() => {
+                        setScheduleTimeComplete(true);
+                        setCalendarOpen(false);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div>
-            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">Visibilidade</label>
+            <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-white/60 sm:mb-3 sm:text-[15px]">
+              Visibilidade
+            </label>
             <div className="flex gap-2 flex-wrap">
-              {(["public", "private"] as const).map(option => (
+              {(["public", "private"] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -1100,14 +1898,20 @@ function CreateCloudModal({
           </div>
           <button
             onClick={handlePublish}
-            disabled={isPrivateVisibility || !title.trim() || !duration || submitting}
+            disabled={
+              isPrivateVisibility || !title.trim() || !duration || submitting
+            }
             className={`mt-2 w-full rounded-full py-3 text-[15px] font-semibold transition sm:py-4 sm:text-[21px] ${
               isPrivateVisibility
                 ? "bg-[#3B3048] text-white/40 cursor-not-allowed opacity-70"
                 : "bg-[#9333EA] text-white hover:bg-[#7C3AED] disabled:opacity-40 disabled:cursor-not-allowed"
             }`}
           >
-            {isPrivateVisibility ? "Cloud privada - confirme convidados" : (submitting ? "Publicando..." : "Publicar Cloud")}
+            {isPrivateVisibility
+              ? "Cloud privada - confirme convidados"
+              : submitting
+                ? "Publicando..."
+                : "Publicar Cloud"}
           </button>
           {error && <p className="text-[12px] text-red-300">{error}</p>}
         </div>
@@ -1115,88 +1919,113 @@ function CreateCloudModal({
 
       {/* Followers Popup */}
       {showFollowersPopup && (
-        <div className="fixed inset-0 z-[110] flex items-end p-3 sm:items-center sm:justify-center sm:p-6" onClick={(event) => { event.stopPropagation(); setShowFollowersPopup(false); }}>
+        <div
+          className="fixed inset-0 z-[110] flex items-end p-3 sm:items-center sm:justify-center sm:p-6"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowFollowersPopup(false);
+          }}
+        >
           <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
-          <div className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] flex-col rounded-2xl border border-white/10 bg-[#1C1F2E] p-4 shadow-2xl sm:max-h-[min(640px,calc(100dvh-3rem))] sm:p-6" onClick={event => event.stopPropagation()}>
-          <div className="mb-4 flex shrink-0 items-center justify-between">
-            <h3 className="text-[16px] font-bold text-white">Convidar seguidores</h3>
-            <button 
-              onClick={() => setShowFollowersPopup(false)}
-              className="text-white/40 hover:text-white p-1"
-            >
-              <XIcon s={16} />
-            </button>
-          </div>
-          
-          <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-3">
-            <span className="text-[13px] text-white/60">Participantes: {selectedFollowers.size}</span>
-            <button
-              onClick={async () => {
-                if (selectedFollowers.size === 0 || submitting) return;
-
-                setShowFollowersPopup(false);
-                onClose();
-                
-                // Para clouds privadas, não publicar no feed, apenas criar
-                if (visibility === "private") {
-                  await handlePublishPrivate();
-                } else {
-                  await handlePublish();
-                }
-              }}
-              disabled={selectedFollowers.size === 0 || submitting}
-              className="shrink-0 rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-[13px]"
-            >
-              {submitting ? "Criando..." : "Confirmar convidados"}
-            </button>
-          </div>
-
-          {loadingFollowers ? (
-            <p className="text-[13px] text-white/50 text-center py-4">Carregando seguidores...</p>
-          ) : followersError ? (
-            <p className="text-[13px] text-red-300 text-center py-4">{followersError}</p>
-          ) : followers.length === 0 ? (
-            <p className="text-[13px] text-white/50 text-center py-4">Você ainda não segue ninguém.</p>
-          ) : (
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
-              {followers.map(follower => (
-                <div 
-                  key={follower.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-[#252840] border border-white/[0.08] hover:border-white/20 transition"
-                >
-                  <div className="flex items-center gap-3">
-                    {follower.avatarUrl ? (
-                      <img 
-                        src={follower.avatarUrl} 
-                        alt={follower.displayName}
-                        className="h-10 w-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
-                        {follower.displayName.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-[14px] font-semibold text-white">{follower.displayName}</p>
-                      <p className="text-[12px] text-white/50">@{follower.username}</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => toggleFollowerSelection(follower.id)}
-                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition ${
-                      selectedFollowers.has(follower.id)
-                        ? "bg-[#9333EA] text-white"
-                        : "bg-white/10 text-white/60 hover:bg-white/20"
-                    }`}
-                  >
-                    {selectedFollowers.has(follower.id) ? "Convidado" : "Convidar"}
-                  </button>
-                </div>
-              ))}
+          <div
+            className="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-[420px] flex-col rounded-2xl border border-white/10 bg-[#1C1F2E] p-4 shadow-2xl sm:max-h-[min(640px,calc(100dvh-3rem))] sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex shrink-0 items-center justify-between">
+              <h3 className="text-[16px] font-bold text-white">
+                Convidar seguidores
+              </h3>
+              <button
+                onClick={() => setShowFollowersPopup(false)}
+                className="text-white/40 hover:text-white p-1"
+              >
+                <XIcon s={16} />
+              </button>
             </div>
-          )}
-        </div>
+
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <span className="text-[13px] text-white/60">
+                Participantes: {selectedFollowers.size}
+              </span>
+              <button
+                onClick={async () => {
+                  if (selectedFollowers.size === 0 || submitting) return;
+
+                  setShowFollowersPopup(false);
+                  onClose();
+
+                  // Para clouds privadas, não publicar no feed, apenas criar
+                  if (visibility === "private") {
+                    await handlePublishPrivate();
+                  } else {
+                    await handlePublish();
+                  }
+                }}
+                disabled={selectedFollowers.size === 0 || submitting}
+                className="shrink-0 rounded-full bg-[#9333EA] px-3 py-2 text-[12px] font-medium text-white transition hover:bg-[#7C3AED] disabled:cursor-not-allowed disabled:opacity-40 sm:px-4 sm:text-[13px]"
+              >
+                {submitting ? "Criando..." : "Confirmar convidados"}
+              </button>
+            </div>
+
+            {loadingFollowers ? (
+              <p className="text-[13px] text-white/50 text-center py-4">
+                Carregando seguidores...
+              </p>
+            ) : followersError ? (
+              <p className="text-[13px] text-red-300 text-center py-4">
+                {followersError}
+              </p>
+            ) : followers.length === 0 ? (
+              <p className="text-[13px] text-white/50 text-center py-4">
+                Você ainda não segue ninguém.
+              </p>
+            ) : (
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1">
+                {followers.map((follower) => (
+                  <div
+                    key={follower.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-[#252840] border border-white/[0.08] hover:border-white/20 transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      {follower.avatarUrl ? (
+                        <img
+                          src={follower.avatarUrl}
+                          alt={follower.displayName}
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-[#A855F7] flex items-center justify-center text-sm font-semibold text-white">
+                          {follower.displayName.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[14px] font-semibold text-white">
+                          {follower.displayName}
+                        </p>
+                        <p className="text-[12px] text-white/50">
+                          @{follower.username}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFollowerSelection(follower.id)}
+                      className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition ${
+                        selectedFollowers.has(follower.id)
+                          ? "bg-[#9333EA] text-white"
+                          : "bg-white/10 text-white/60 hover:bg-white/20"
+                      }`}
+                    >
+                      {selectedFollowers.has(follower.id)
+                        ? "Convidado"
+                        : "Convidar"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1239,7 +2068,9 @@ function RecordAudioModal({
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
       peaksRef.current = [];
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
       recorder.onstop = () => {
         const blob = recordedAudioBlob(chunksRef.current, recorder.mimeType);
         setAudioUrl(URL.createObjectURL(blob));
@@ -1247,7 +2078,7 @@ function RecordAudioModal({
         // build waveform from captured peaks
         const raw = peaksRef.current.length ? peaksRef.current : [0.3];
         const max = Math.max(...raw, 0.0001);
-        const normalized = raw.map(v => Math.max(0.05, v / max));
+        const normalized = raw.map((v) => Math.max(0.05, v / max));
         if (normalized.length > 40) {
           const out: number[] = [];
           const chunk = normalized.length / 40;
@@ -1264,21 +2095,38 @@ function RecordAudioModal({
         }
         // cleanup audio graph
         if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
-        if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch { /* ignore */ } sourceRef.current = null; }
-        if (audioCtxRef.current) { try { void audioCtxRef.current.close(); } catch { /* ignore */ } audioCtxRef.current = null; }
+        if (sourceRef.current) {
+          try {
+            sourceRef.current.disconnect();
+          } catch {
+            /* ignore */
+          }
+          sourceRef.current = null;
+        }
+        if (audioCtxRef.current) {
+          try {
+            void audioCtxRef.current.close();
+          } catch {
+            /* ignore */
+          }
+          audioCtxRef.current = null;
+        }
         analyserRef.current = null;
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         recordingStreamRef.current = null;
       };
       recorder.start();
       mediaRef.current = recorder;
       setSeconds(0);
       setStatus("recording");
-      timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
+      timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
 
       // capture waveform live
       try {
-        const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
         const audioCtx = new AC();
         void audioCtx.resume?.();
         const source = audioCtx.createMediaStreamSource(stream);
@@ -1304,7 +2152,9 @@ function RecordAudioModal({
     } catch {
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current = null;
-      setError("Permissão de microfone negada. Verifique as configurações do navegador.");
+      setError(
+        "Permissão de microfone negada. Verifique as configurações do navegador.",
+      );
     }
   }, []);
 
@@ -1314,15 +2164,31 @@ function RecordAudioModal({
   }, []);
 
   // cleanup on unmount
-  useEffect(() => () => {
-    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
-    if (sourceRef.current) { try { sourceRef.current.disconnect(); } catch { /* ignore */ } }
-    if (audioCtxRef.current) { try { void audioCtxRef.current.close(); } catch { /* ignore */ } }
-  }, []);
+  useEffect(
+    () => () => {
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (sampleTimerRef.current) clearInterval(sampleTimerRef.current);
+      if (sourceRef.current) {
+        try {
+          sourceRef.current.disconnect();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (audioCtxRef.current) {
+        try {
+          void audioCtxRef.current.close();
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [],
+  );
 
-  const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const fmt = (s: number) =>
+    `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   const handlePublish = () => {
     if (!audioUrl) return;
@@ -1330,36 +2196,62 @@ function RecordAudioModal({
       setError("Selecione uma duração para a cloud.");
       return;
     }
-    onPublish({ title: `Áudio - ${fmt(seconds)}`, category, duration, visibility, audioUrl, audioPeaks: audioPeaks ?? undefined });
+    onPublish({
+      title: `Áudio - ${fmt(seconds)}`,
+      category,
+      duration,
+      visibility,
+      audioUrl,
+      audioPeaks: audioPeaks ?? undefined,
+    });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div
+        className="relative w-full max-w-[420px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-[18px] font-bold text-white">Gravar Áudio</h2>
-          <button onClick={onClose} className="text-white/40 hover:text-white p-1"><XIcon s={18} /></button>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white p-1"
+          >
+            <XIcon s={18} />
+          </button>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-900/40 border border-red-500/30 px-4 py-3 text-[13px] text-red-300">{error}</div>
+          <div className="mb-4 rounded-xl bg-red-900/40 border border-red-500/30 px-4 py-3 text-[13px] text-red-300">
+            {error}
+          </div>
         )}
 
         <div className="flex flex-col items-center gap-5">
           {/* Timer */}
-          <div className={`flex h-24 w-24 items-center justify-center rounded-full border-2 transition-all ${
-            status === "recording"
-              ? "border-red-500 bg-red-500/10 animate-pulse"
-              : status === "done"
-              ? "border-[#22C55E] bg-[#22C55E]/10"
-              : "border-[#9333EA] bg-[#9333EA]/10"
-          }`}>
+          <div
+            className={`flex h-24 w-24 items-center justify-center rounded-full border-2 transition-all ${
+              status === "recording"
+                ? "border-red-500 bg-red-500/10 animate-pulse"
+                : status === "done"
+                  ? "border-[#22C55E] bg-[#22C55E]/10"
+                  : "border-[#9333EA] bg-[#9333EA]/10"
+            }`}
+          >
             {status === "recording" ? (
-              <span className="text-[22px] font-mono font-bold text-red-400">{fmt(seconds)}</span>
+              <span className="text-[22px] font-mono font-bold text-red-400">
+                {fmt(seconds)}
+              </span>
             ) : status === "done" ? (
-              <span className="text-[13px] font-semibold text-[#22C55E]">Gravado!</span>
+              <span className="text-[13px] font-semibold text-[#22C55E]">
+                Gravado!
+              </span>
             ) : (
               <MicIcon s={36} />
             )}
@@ -1367,61 +2259,91 @@ function RecordAudioModal({
 
           {/* Audio preview - waveform real */}
           {audioUrl && (
-            <AudioWaveformPlayer src={audioUrl} peaks={audioPeaks ?? undefined} isOwn={false} roundedCorner="left" />
+            <AudioWaveformPlayer
+              src={audioUrl}
+              peaks={audioPeaks ?? undefined}
+              isOwn={false}
+              roundedCorner="left"
+            />
           )}
 
           {/* Category + Duration when done */}
           {status === "done" && (
             <div className="w-full space-y-3">
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">Categoria</label>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">
+                  Categoria
+                </label>
                 <select
                   value={category}
-                  onChange={e => setCategory(e.target.value)}
+                  onChange={(e) => setCategory(e.target.value)}
                   className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-2.5 text-[14px] text-white outline-none focus:border-[#9333EA]"
                 >
-                  {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  {CATEGORIES.map((c) => (
+                    <option key={c.name} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">Duração no feed</label>
+                <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-1.5">
+                  Duração no feed
+                </label>
                 <div className="flex gap-2 flex-wrap">
-                  {DURATIONS.map(d => (
-                    <button key={d} type="button" onClick={() => setDuration(d)}
+                  {DURATIONS.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDuration(d)}
                       className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
-                        duration === d ? "bg-[#9333EA] text-white" : "bg-[#252840] border border-white/[0.08] text-white/60 hover:text-white"
-                      }`}>
+                        duration === d
+                          ? "bg-[#9333EA] text-white"
+                          : "bg-[#252840] border border-white/[0.08] text-white/60 hover:text-white"
+                      }`}
+                    >
                       {d}
                     </button>
                   ))}
                 </div>
               </div>
-              <p className="rounded-xl border border-white/[0.08] bg-[#252840] px-3 py-2.5 text-[12px] leading-relaxed text-white/55">Clouds de áudio ainda não suportam convites privados. Para criar uma Cloud privada, use uma Cloud de texto.</p>
+              <p className="rounded-xl border border-white/[0.08] bg-[#252840] px-3 py-2.5 text-[12px] leading-relaxed text-white/55">
+                Clouds de áudio ainda não suportam convites privados. Para criar
+                uma Cloud privada, use uma Cloud de texto.
+              </p>
             </div>
           )}
 
           {/* Action buttons */}
           <div className="flex w-full gap-3">
             {status === "idle" && (
-              <button onClick={startRecording}
-                className="flex-1 rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition flex items-center justify-center gap-2">
+              <button
+                onClick={startRecording}
+                className="flex-1 rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition flex items-center justify-center gap-2"
+              >
                 <MicIcon s={18} /> Iniciar gravação
               </button>
             )}
             {status === "recording" && (
-              <button onClick={stopRecording}
-                className="flex-1 rounded-full bg-red-600 py-3 text-[15px] font-semibold text-white hover:bg-red-700 transition flex items-center justify-center gap-2">
+              <button
+                onClick={stopRecording}
+                className="flex-1 rounded-full bg-red-600 py-3 text-[15px] font-semibold text-white hover:bg-red-700 transition flex items-center justify-center gap-2"
+              >
                 <StopIcon s={18} /> Parar
               </button>
             )}
             {status === "done" && (
               <>
-                <button onClick={startRecording}
-                  className="flex-1 rounded-full bg-[#252840] py-3 text-[14px] font-semibold text-white/70 hover:text-white transition">
+                <button
+                  onClick={startRecording}
+                  className="flex-1 rounded-full bg-[#252840] py-3 text-[14px] font-semibold text-white/70 hover:text-white transition"
+                >
                   Regravar
                 </button>
-                <button onClick={handlePublish}
-                  className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white hover:bg-[#7C3AED] transition">
+                <button
+                  onClick={handlePublish}
+                  className="flex-1 rounded-full bg-[#9333EA] py-3 text-[14px] font-semibold text-white hover:bg-[#7C3AED] transition"
+                >
                   Publicar
                 </button>
               </>
@@ -1435,8 +2357,14 @@ function RecordAudioModal({
 
 // ─── Poll Card ────────────────────────────────────────────────────────────────
 
-function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optionId: string) => void }) {
-  const cat = CATEGORIES.find(c => c.name === poll.category) ?? CATEGORIES[1];
+function PollCard({
+  poll,
+  onVote,
+}: {
+  poll: Poll;
+  onVote: (pollId: string, optionId: string) => void;
+}) {
+  const cat = CATEGORIES.find((c) => c.name === poll.category) ?? CATEGORIES[1];
   const totalVotes = poll.options.reduce((s, o) => s + o.votes, 0);
   const timeAgo = (() => {
     const diff = Math.floor((Date.now() - poll.createdAt.getTime()) / 1000);
@@ -1449,8 +2377,10 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
     <article className="w-full rounded-2xl border border-white/[0.08] bg-[#111116] px-6 py-5 transition hover:border-white/20">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold text-white"
-            style={{ backgroundColor: cat.bg, color: cat.color ?? "#fff" }}>
+          <span
+            className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-bold text-white"
+            style={{ backgroundColor: cat.bg, color: cat.color ?? "#fff" }}
+          >
             {poll.category.toUpperCase()}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1C1730] px-3 py-1 text-[11px] font-semibold text-[#C084FC]">
@@ -1466,11 +2396,14 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
         </div>
       </div>
 
-      <h2 className="text-[20px] font-bold text-white leading-snug mb-4">{poll.question}</h2>
+      <h2 className="text-[20px] font-bold text-white leading-snug mb-4">
+        {poll.question}
+      </h2>
 
       <div className="flex flex-col gap-3">
-        {poll.options.map(opt => {
-          const pct = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
+        {poll.options.map((opt) => {
+          const pct =
+            totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
           const isVoted = poll.votedOptionId === opt.id;
           const hasVoted = poll.votedOptionId !== null;
           return (
@@ -1483,21 +2416,34 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
                 isVoted
                   ? "border-[#9333EA] bg-[#9333EA]/15"
                   : hasVoted
-                  ? "border-white/[0.06] bg-[#1C1F2E] cursor-default"
-                  : "border-white/[0.08] bg-[#1C1F2E] hover:border-[#9333EA]/50 hover:bg-[#9333EA]/10"
+                    ? "border-white/[0.06] bg-[#1C1F2E] cursor-default"
+                    : "border-white/[0.08] bg-[#1C1F2E] hover:border-[#9333EA]/50 hover:bg-[#9333EA]/10"
               }`}
             >
               {/* Progress bar */}
               {hasVoted && (
                 <span
                   className="absolute inset-y-0 left-0 rounded-xl transition-all duration-700"
-                  style={{ width: `${pct}%`, backgroundColor: isVoted ? "rgba(147,51,234,0.25)" : "rgba(255,255,255,0.04)" }}
+                  style={{
+                    width: `${pct}%`,
+                    backgroundColor: isVoted
+                      ? "rgba(147,51,234,0.25)"
+                      : "rgba(255,255,255,0.04)",
+                  }}
                 />
               )}
               <div className="relative flex items-center justify-between">
-                <span className={`text-[14px] font-medium ${isVoted ? "text-[#C084FC]" : "text-white"}`}>{opt.text}</span>
+                <span
+                  className={`text-[14px] font-medium ${isVoted ? "text-[#C084FC]" : "text-white"}`}
+                >
+                  {opt.text}
+                </span>
                 {hasVoted && (
-                  <span className={`text-[13px] font-bold ${isVoted ? "text-[#C084FC]" : "text-white/40"}`}>{pct}%</span>
+                  <span
+                    className={`text-[13px] font-bold ${isVoted ? "text-[#C084FC]" : "text-white/40"}`}
+                  >
+                    {pct}%
+                  </span>
                 )}
               </div>
             </button>
@@ -1507,7 +2453,8 @@ function PollCard({ poll, onVote }: { poll: Poll; onVote: (pollId: string, optio
 
       <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-4">
         <span className="text-[12px] text-white/40">
-          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} - publicado {timeAgo}
+          {totalVotes} {totalVotes === 1 ? "voto" : "votos"} - publicado{" "}
+          {timeAgo}
         </span>
         {poll.votedOptionId && (
           <span className="text-[12px] text-[#22C55E]">? Você votou</span>
@@ -1532,11 +2479,17 @@ function CreatePollModal({
   const [duration, setDuration] = useState(DURATIONS[0]);
   const [error, setError] = useState<string | null>(null);
 
-  const addOption = () => { if (options.length < 6) setOptions(o => [...o, ""]); };
-  const removeOption = (i: number) => { if (options.length > 2) setOptions(o => o.filter((_, idx) => idx !== i)); };
-  const updateOption = (i: number, val: string) => setOptions(o => o.map((v, idx) => idx === i ? val : v));
+  const addOption = () => {
+    if (options.length < 6) setOptions((o) => [...o, ""]);
+  };
+  const removeOption = (i: number) => {
+    if (options.length > 2) setOptions((o) => o.filter((_, idx) => idx !== i));
+  };
+  const updateOption = (i: number, val: string) =>
+    setOptions((o) => o.map((v, idx) => (idx === i ? val : v)));
 
-  const canPublish = question.trim() && options.filter(o => o.trim()).length >= 2 && duration;
+  const canPublish =
+    question.trim() && options.filter((o) => o.trim()).length >= 2 && duration;
 
   const handlePublish = () => {
     if (!canPublish) return;
@@ -1546,7 +2499,9 @@ function CreatePollModal({
     }
     onPublish({
       question: question.trim(),
-      options: options.filter(o => o.trim()).map(text => ({ id: crypto.randomUUID(), text, votes: 0 })),
+      options: options
+        .filter((o) => o.trim())
+        .map((text) => ({ id: crypto.randomUUID(), text, votes: 0 })),
       category,
       duration,
     });
@@ -1554,9 +2509,15 @@ function CreatePollModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center px-4"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[500px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div
+        className="relative w-full max-w-[500px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#9333EA]/20 text-[#C084FC]">
@@ -1564,14 +2525,22 @@ function CreatePollModal({
             </span>
             <h2 className="text-[18px] font-bold text-white">Criar Enquete</h2>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white p-1"><XIcon s={18} /></button>
+          <button
+            onClick={onClose}
+            className="text-white/40 hover:text-white p-1"
+          >
+            <XIcon s={18} />
+          </button>
         </div>
 
         <div className="space-y-4">
           {/* Question */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
-              Pergunta <span className="text-white/30 normal-case">({question.length}/120)</span>
+              Pergunta{" "}
+              <span className="text-white/30 normal-case">
+                ({question.length}/120)
+              </span>
             </label>
             <input
               autoFocus
@@ -1580,7 +2549,7 @@ function CreatePollModal({
               autoComplete="off"
               inputMode="text"
               value={question}
-              onChange={e => setQuestion(e.target.value.slice(0, 120))}
+              onChange={(e) => setQuestion(e.target.value.slice(0, 120))}
               placeholder="O que você quer perguntar?"
               className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
             />
@@ -1589,7 +2558,10 @@ function CreatePollModal({
           {/* Options */}
           <div>
             <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
-              Opções <span className="text-white/30 normal-case">(mín. 2, máx. 6)</span>
+              Opções{" "}
+              <span className="text-white/30 normal-case">
+                (mín. 2, máx. 6)
+              </span>
             </label>
             <div className="flex flex-col gap-2">
               {options.map((opt, i) => (
@@ -1603,21 +2575,27 @@ function CreatePollModal({
                     autoComplete="off"
                     inputMode="text"
                     value={opt}
-                    onChange={e => updateOption(i, e.target.value)}
+                    onChange={(e) => updateOption(i, e.target.value)}
                     placeholder={`Opção ${String.fromCharCode(65 + i)}`}
                     className="flex-1 rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-2.5 text-[14px] text-white placeholder:text-white/30 outline-none focus:border-[#9333EA] transition"
                   />
                   {options.length > 2 && (
-                    <button type="button" onClick={() => removeOption(i)}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition">
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/30 hover:bg-red-500/20 hover:text-red-400 transition"
+                    >
                       <XIcon s={14} />
                     </button>
                   )}
                 </div>
               ))}
               {options.length < 6 && (
-                <button type="button" onClick={addOption}
-                  className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-2.5 text-[13px] text-white/40 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition">
+                <button
+                  type="button"
+                  onClick={addOption}
+                  className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-4 py-2.5 text-[13px] text-white/40 hover:border-[#9333EA]/50 hover:text-[#C084FC] transition"
+                >
                   <PlusIcon s={14} /> Adicionar opção
                 </button>
               )}
@@ -1626,30 +2604,50 @@ function CreatePollModal({
 
           {/* Category */}
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Categoria</label>
-            <select value={category} onChange={e => setCategory(e.target.value)}
-              className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#9333EA] transition">
-              {CATEGORIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
+              Categoria
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-xl bg-[#252840] border border-white/[0.08] px-4 py-3 text-[14px] text-white outline-none focus:border-[#9333EA] transition"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c.name} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </div>
 
           {/* Duration */}
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">Duração</label>
+            <label className="block text-[11px] font-semibold uppercase tracking-wider text-white/50 mb-2">
+              Duração
+            </label>
             <div className="flex gap-2 flex-wrap">
-              {DURATIONS.map(d => (
-                <button key={d} type="button" onClick={() => setDuration(d)}
+              {DURATIONS.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDuration(d)}
                   className={`rounded-full px-4 py-2 text-[13px] font-medium transition ${
-                    duration === d ? "bg-[#9333EA] text-white" : "bg-[#252840] border border-white/[0.08] text-white/60 hover:border-[#9333EA] hover:text-white"
-                  }`}>
+                    duration === d
+                      ? "bg-[#9333EA] text-white"
+                      : "bg-[#252840] border border-white/[0.08] text-white/60 hover:border-[#9333EA] hover:text-white"
+                  }`}
+                >
                   {d}
                 </button>
               ))}
             </div>
           </div>
 
-          <button onClick={handlePublish} disabled={!canPublish}
-            className="w-full rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed">
+          <button
+            onClick={handlePublish}
+            disabled={!canPublish}
+            className="w-full rounded-full bg-[#9333EA] py-3 text-[15px] font-semibold text-white hover:bg-[#7C3AED] transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             Publicar Enquete
           </button>
         </div>
@@ -1671,7 +2669,13 @@ type SearchResult = {
   clouds: Cloud[];
 };
 
-function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedClouds: Cloud[] }) {
+function LegacySearchModal({
+  onClose,
+  feedClouds,
+}: {
+  onClose: () => void;
+  feedClouds: Cloud[];
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -1681,8 +2685,15 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
 
   useEffect(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem("cloudscommunity:search-history") ?? "[]");
-      if (Array.isArray(stored)) setHistory(stored.filter((item): item is string => typeof item === "string").slice(0, 6));
+      const stored = JSON.parse(
+        localStorage.getItem("cloudscommunity:search-history") ?? "[]",
+      );
+      if (Array.isArray(stored))
+        setHistory(
+          stored
+            .filter((item): item is string => typeof item === "string")
+            .slice(0, 6),
+        );
     } catch {
       setHistory([]);
     }
@@ -1692,8 +2703,16 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
     const term = value.trim();
     if (!term) return;
     setHistory((current) => {
-      const next = [term, ...current.filter((item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase())].slice(0, 6);
-      localStorage.setItem("cloudscommunity:search-history", JSON.stringify(next));
+      const next = [
+        term,
+        ...current.filter(
+          (item) => item.toLocaleLowerCase() !== term.toLocaleLowerCase(),
+        ),
+      ].slice(0, 6);
+      localStorage.setItem(
+        "cloudscommunity:search-history",
+        JSON.stringify(next),
+      );
       return next;
     });
   };
@@ -1705,7 +2724,9 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
 
   // ESC to close
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -1724,16 +2745,30 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const usersRes = await fetch(`/api/users/search?q=${encodeURIComponent(trimmed)}&limit=5`);
-        const usersPayload = usersRes.ok ? (await usersRes.json().catch(() => null)) : null;
+        const usersRes = await fetch(
+          `/api/users/search?q=${encodeURIComponent(trimmed)}&limit=5`,
+        );
+        const usersPayload = usersRes.ok
+          ? await usersRes.json().catch(() => null)
+          : null;
         const users: SearchResult["users"] = Array.isArray(usersPayload?.users)
-          ? usersPayload.users.slice(0, 5).map((u: { id: string; username: string; displayName: string; avatarUrl: string | null; bio: string | null }) => ({
-              id: u.id,
-              username: u.username,
-              displayName: u.displayName,
-              avatarUrl: u.avatarUrl,
-              bio: u.bio,
-            }))
+          ? usersPayload.users
+              .slice(0, 5)
+              .map(
+                (u: {
+                  id: string;
+                  username: string;
+                  displayName: string;
+                  avatarUrl: string | null;
+                  bio: string | null;
+                }) => ({
+                  id: u.id,
+                  username: u.username,
+                  displayName: u.displayName,
+                  avatarUrl: u.avatarUrl,
+                  bio: u.bio,
+                }),
+              )
           : [];
 
         const lowerTrimmed = trimmed.toLowerCase();
@@ -1743,7 +2778,7 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
               c.title.toLowerCase().includes(lowerTrimmed) ||
               (c.description ?? "").toLowerCase().includes(lowerTrimmed) ||
               (c.authorHandle ?? "").toLowerCase().includes(lowerTrimmed) ||
-              (c.authorName ?? "").toLowerCase().includes(lowerTrimmed)
+              (c.authorName ?? "").toLowerCase().includes(lowerTrimmed),
           )
           .slice(0, 5);
 
@@ -1755,16 +2790,25 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
       }
     }, 300);
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [query, feedClouds]);
 
-  const hasResults = results && (results.users.length > 0 || results.clouds.length > 0);
+  const hasResults =
+    results && (results.users.length > 0 || results.clouds.length > 0);
   const showEmpty = results && !hasResults && !loading;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-24 px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[100] flex items-start justify-center pt-24 px-4"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-[560px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div
+        className="relative w-full max-w-[560px] rounded-2xl bg-[#1C1F2E] border border-white/10 p-4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Input */}
         <div className="flex items-center gap-3 rounded-xl bg-[#252840] px-4 py-3">
           <SearchIcon s={18} />
@@ -1778,19 +2822,42 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
             data-1p-ignore="true"
             inputMode="text"
             value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") saveSearch(query); }}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveSearch(query);
+            }}
             placeholder="Buscar clouds, pessoas..."
             className="flex-1 bg-transparent text-[15px] text-white placeholder:text-white/40 outline-none"
           />
           {loading ? (
             <span className="text-white/30">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                className="animate-spin"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
             </span>
           ) : query ? (
-            <button onClick={() => setQuery("")} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
+            <button
+              onClick={() => setQuery("")}
+              className="text-white/40 hover:text-white"
+            >
+              <XIcon s={16} />
+            </button>
           ) : (
-            <button onClick={onClose} className="text-white/40 hover:text-white"><XIcon s={16} /></button>
+            <button
+              onClick={onClose}
+              className="text-white/40 hover:text-white"
+            >
+              <XIcon s={16} />
+            </button>
           )}
         </div>
 
@@ -1799,23 +2866,37 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
           <div className="mt-3 flex flex-col gap-1 max-h-[420px] overflow-y-auto">
             {results.users.length > 0 && (
               <div>
-                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">Pessoas</p>
-                {results.users.map(user => (
+                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">
+                  Pessoas
+                </p>
+                {results.users.map((user) => (
                   <button
                     key={user.id}
                     className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
-                    onClick={() => { saveSearch(query); router.push(`/users/${user.id}`); onClose(); }}
+                    onClick={() => {
+                      saveSearch(query);
+                      router.push(`/users/${user.id}`);
+                      onClose();
+                    }}
                   >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#A855F7] text-[13px] font-bold text-white overflow-hidden">
                       {user.avatarUrl ? (
-                        <img src={user.avatarUrl} alt={user.displayName} className="h-full w-full object-cover" />
+                        <img
+                          src={user.avatarUrl}
+                          alt={user.displayName}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         user.displayName.charAt(0).toUpperCase()
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold text-white">{user.displayName}</p>
-                      <p className="truncate text-[12px] text-white/40">@{user.username}</p>
+                      <p className="truncate text-[14px] font-semibold text-white">
+                        {user.displayName}
+                      </p>
+                      <p className="truncate text-[12px] text-white/40">
+                        @{user.username}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -1823,8 +2904,10 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
             )}
             {results.clouds.length > 0 && (
               <div className={results.users.length > 0 ? "mt-1" : ""}>
-                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">Clouds</p>
-                {results.clouds.map(cloud => (
+                <p className="px-2 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/30">
+                  Clouds
+                </p>
+                {results.clouds.map((cloud) => (
                   <button
                     key={cloud.id}
                     className="flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/[0.06] transition"
@@ -1845,9 +2928,13 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
                       <CloudIcon s={18} />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate text-[14px] font-semibold text-white">{cloud.title}</p>
+                      <p className="truncate text-[14px] font-semibold text-white">
+                        {cloud.title}
+                      </p>
                       {cloud.authorHandle && (
-                        <p className="truncate text-[12px] text-white/40">@{cloud.authorHandle}</p>
+                        <p className="truncate text-[12px] text-white/40">
+                          @{cloud.authorHandle}
+                        </p>
                       )}
                     </div>
                   </button>
@@ -1859,7 +2946,8 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
 
         {showEmpty && (
           <div className="mt-6 pb-3 text-center text-[13px] text-white/30">
-            Nenhum resultado para <span className="text-white/50">&ldquo;{query}&rdquo;</span>
+            Nenhum resultado para{" "}
+            <span className="text-white/50">&ldquo;{query}&rdquo;</span>
           </div>
         )}
 
@@ -1867,21 +2955,56 @@ function LegacySearchModal({ onClose, feedClouds }: { onClose: () => void; feedC
           <div className="mt-3">
             {history.length > 0 ? (
               <>
-                <div className="mb-2 flex items-center justify-between px-1"><p className="text-[11px] font-semibold uppercase tracking-wider text-white/35">Pesquisas recentes</p><button type="button" onClick={clearHistory} className="text-[11px] font-medium text-[#C084FC] transition hover:text-white">Limpar</button></div>
+                <div className="mb-2 flex items-center justify-between px-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-white/35">
+                    Pesquisas recentes
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearHistory}
+                    className="text-[11px] font-medium text-[#C084FC] transition hover:text-white"
+                  >
+                    Limpar
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {history.map((term) => <button key={term} type="button" onClick={() => setQuery(term)} className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/65 transition hover:border-[#A855F7]/45 hover:bg-[#A855F7]/10 hover:text-white"><svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></svg>{term}</button>)}
+                  {history.map((term) => (
+                    <button
+                      key={term}
+                      type="button"
+                      onClick={() => setQuery(term)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] text-white/65 transition hover:border-[#A855F7]/45 hover:bg-[#A855F7]/10 hover:text-white"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        width={13}
+                        height={13}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M3 12a9 9 0 1 0 3-6.7" />
+                        <path d="M3 4v5h5" />
+                      </svg>
+                      {term}
+                    </button>
+                  ))}
                 </div>
               </>
-            ) : <p className="px-1 text-[12px] text-white/30">Suas pesquisas recentes aparecerão aqui.</p>}
-            <p className="mt-4 px-1 text-[12px] text-white/30">Pressione ESC para fechar</p>
+            ) : (
+              <p className="px-1 text-[12px] text-white/30">
+                Suas pesquisas recentes aparecerão aqui.
+              </p>
+            )}
+            <p className="mt-4 px-1 text-[12px] text-white/30">
+              Pressione ESC para fechar
+            </p>
           </div>
         )}
       </div>
     </div>
   );
 }
-
-
 
 function ProfileMenu({ onClose }: { onClose: () => void }) {
   const { user } = useSessionUser();
@@ -1915,23 +3038,38 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[100]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30" />
-      <div className="absolute right-4 top-[96px] w-[220px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div
+        className="absolute right-4 top-[96px] w-[220px] rounded-2xl bg-[#1C1F2E] border border-white/10 shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-4 py-4 border-b border-white/[0.07]">
           <div className="flex items-center gap-3">
             <SessionUserAvatar user={user} size={40} />
             <div>
-              <p className="text-[14px] font-semibold text-white">{displayName}</p>
+              <p className="text-[14px] font-semibold text-white">
+                {displayName}
+              </p>
               <p className="text-[12px] text-white/40">{handle}</p>
             </div>
           </div>
-        </div>        <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
-          <span className="text-white/50"><UserIcon s={16} /></span> Meu Perfil
+        </div>{" "}
+        <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
+          <span className="text-white/50">
+            <UserIcon s={16} />
+          </span>{" "}
+          Meu Perfil
         </button>
         <button className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-white/80 hover:bg-white/[0.05] hover:text-white transition">
-          <span className="text-white/50"><GearIcon s={16} /></span> Configurações
+          <span className="text-white/50">
+            <GearIcon s={16} />
+          </span>{" "}
+          Configurações
         </button>
         <div className="border-t border-white/[0.07]">
-          <button onClick={handleLogout} className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition">
+          <button
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 px-4 py-3 text-[14px] text-red-400 hover:bg-white/[0.05] transition"
+          >
             Sair da conta
           </button>
         </div>
@@ -1940,7 +3078,13 @@ function ProfileMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
-function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount: number, wasHyped: boolean) => void }) {
+function TopicHypeButton({
+  cloud,
+  onHypar,
+}: {
+  cloud: Cloud;
+  onHypar?: (newCount: number, wasHyped: boolean) => void;
+}) {
   const { user } = useSessionUser();
   const [hyped, setHyped] = useState(cloud.hyped ?? false);
   const [hypes, setHypes] = useState(cloud.hypes ?? 0);
@@ -1949,27 +3093,35 @@ function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount
 
   const handleHype = async () => {
     if (loading) return;
-    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
+    if (!user || user.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setLoading(true);
     const wasHyped = hyped;
     setHyped(!wasHyped);
-    setHypes(v => wasHyped ? v - 1 : v + 1);
+    setHypes((v) => (wasHyped ? v - 1 : v + 1));
     try {
-      const res = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/hype`, {
-        method: wasHyped ? "DELETE" : "POST",
-      });
+      const res = await fetch(
+        `/api/clouds/${encodeURIComponent(cloud.id)}/hype`,
+        {
+          method: wasHyped ? "DELETE" : "POST",
+        },
+      );
       if (res.ok) {
-        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        const data = (await res.json().catch(() => null)) as {
+          hypesCount?: number;
+        } | null;
         const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
         setHypes(newCount);
         onHypar?.(newCount, wasHyped);
       } else {
         setHyped(wasHyped);
-        setHypes(v => wasHyped ? v + 1 : v - 1);
+        setHypes((v) => (wasHyped ? v + 1 : v - 1));
       }
     } catch {
       setHyped(wasHyped);
-      setHypes(v => wasHyped ? v + 1 : v - 1);
+      setHypes((v) => (wasHyped ? v + 1 : v - 1));
     } finally {
       setLoading(false);
     }
@@ -1977,16 +3129,24 @@ function TopicHypeButton({ cloud, onHypar }: { cloud: Cloud; onHypar?: (newCount
 
   return (
     <>
-    <button
-      type="button"
-      disabled={loading}
-      onClick={handleHype}
-      className={`inline-flex items-center gap-3 transition disabled:opacity-60 ${hyped ? "text-orange-400" : "hover:text-orange-300"}`}
-    >
-      <FireIcon s={24} className={hyped ? "text-orange-400" : "text-[#FF632D]"} />
-      <span>{hypes}</span>
-    </button>
-    {authPromptOpen && <GuestCloudSignupModal returnTo={`/cloud/${encodeURIComponent(cloud.id)}`} onClose={() => setAuthPromptOpen(false)} />}
+      <button
+        type="button"
+        disabled={loading}
+        onClick={handleHype}
+        className={`inline-flex items-center gap-3 transition disabled:opacity-60 ${hyped ? "text-orange-400" : "hover:text-orange-300"}`}
+      >
+        <FireIcon
+          s={24}
+          className={hyped ? "text-orange-400" : "text-[#FF632D]"}
+        />
+        <span>{hypes}</span>
+      </button>
+      {authPromptOpen && (
+        <GuestCloudSignupModal
+          returnTo={`/cloud/${encodeURIComponent(cloud.id)}`}
+          onClose={() => setAuthPromptOpen(false)}
+        />
+      )}
     </>
   );
 }
@@ -2012,172 +3172,302 @@ function TopicFeedStage({
   return (
     <>
       <div className="topic-scroll flex h-full flex-col gap-4 overflow-y-auto py-4 pr-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/80">
-          <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
-          Ao vivo agora
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
-        >
-          Todos os tópicos
-          <ChevronRightIcon />
-        </button>
-      </div>
-
-      {clouds.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.08] bg-[#1C1F2E]">
-            <svg viewBox="0 0 24 24" width={36} height={36} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-white/30" aria-hidden="true">
-              <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
-              <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-[18px] font-semibold text-white">Nenhum tópico disponível</p>
-            <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
-              Ainda não há tópicos ativos. Quando alguém publicar, eles aparecem aqui primeiro.
-            </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.18em] text-white/80">
+            <span className="h-2 w-2 rounded-full bg-[#7C3AED]" />
+            Ao vivo agora
           </div>
           <button
             type="button"
-            onClick={onCreateCloud}
-            className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-white/[0.08] bg-[#111116] px-4 text-[13px] font-semibold text-white/80 transition hover:border-white/20 hover:bg-[#16161C]"
           >
-            <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 5v14" /><path d="M5 12h14" />
-            </svg>
-            Criar uma Cloud
+            Todos os tópicos
+            <ChevronRightIcon />
           </button>
         </div>
-      ) : (
-        <div className="flex flex-col gap-3 pb-2">
-          {clouds
-            .map((cloud, index) => ({
-              cloud,
-              index,
-              profile: getTopicProfile(cloud, index),
-              remaining: getTopicCountdown(cloud),
-            }))
-            .map(({ cloud, profile, remaining }) => {
-              const isEnded = remaining <= 0;
-              const isEndingSoon = remaining > 0 && remaining < 5 * 60;
-              const expanded = expandedTopicId === cloud.id;
-              const hours = Math.floor(remaining / 3600);
-              const minutes = Math.floor((remaining % 3600) / 60);
-              const seconds = remaining % 60;
-              const createdLabel = "há pouco";
-              const participantAvatars = profile.avatar ? [profile.avatar] : [];
-              const participantLabel = profile.participants >= 1000
-                ? `${(profile.participants / 1000).toFixed(1).replace(".0", "")}K participantes`
-                : `${profile.participants} participantes`;
 
-              return (
-                <article
-                  key={cloud.id}
-                  className="cloud-card rounded-[22px] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition md:px-7 md:py-5"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Link href={`/users/${profile.handle.replace(/^@/, "")}`} className="shrink-0">
-                        <UserAvatar user={{ id: cloud.authorId ?? profile.handle, username: profile.handle.replace(/^@/, ""), displayName: profile.name, avatarUrl: profile.avatar }} size={56} className="!h-12 !w-12 ring-1 ring-white/15 md:!h-14 md:!w-14" />
-                      </Link>
+        {clouds.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/[0.08] bg-[#1C1F2E]">
+              <svg
+                viewBox="0 0 24 24"
+                width={36}
+                height={36}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-white/30"
+                aria-hidden="true"
+              >
+                <path d="M6 16H5.5a3.5 3.5 0 0 1 0-7 .5.5 0 0 1 .1 0A5 5 0 0 1 15 9.5a3 3 0 0 1 0 6H8" />
+                <path d="M8 16c0 1.5-.5 2.5-1.5 3.5C7.5 19 9 18 9.5 16" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-[18px] font-semibold text-white">
+                Nenhum tópico disponível
+              </p>
+              <p className="mt-2 max-w-[340px] text-[14px] text-white/50">
+                Ainda não há tópicos ativos. Quando alguém publicar, eles
+                aparecem aqui primeiro.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onCreateCloud}
+              className="inline-flex items-center gap-2 rounded-full bg-[#9333EA] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#7C3AED]"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width={18}
+                height={18}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              Criar uma Cloud
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 pb-2">
+            {clouds
+              .map((cloud, index) => ({
+                cloud,
+                index,
+                profile: getTopicProfile(cloud, index),
+                remaining: getTopicCountdown(cloud),
+              }))
+              .map(({ cloud, profile, remaining }) => {
+                const isEnded = remaining <= 0;
+                const isEndingSoon = remaining > 0 && remaining < 5 * 60;
+                const expanded = expandedTopicId === cloud.id;
+                const hours = Math.floor(remaining / 3600);
+                const minutes = Math.floor((remaining % 3600) / 60);
+                const seconds = remaining % 60;
+                const createdLabel = "há pouco";
+                const participantAvatars = profile.avatar
+                  ? [profile.avatar]
+                  : [];
+                const participantLabel =
+                  profile.participants >= 1000
+                    ? `${(profile.participants / 1000).toFixed(1).replace(".0", "")}K participantes`
+                    : `${profile.participants} participantes`;
+
+                return (
+                  <article
+                    key={cloud.id}
+                    className="cloud-card rounded-[22px] bg-[radial-gradient(circle_at_78%_42%,rgba(74,25,70,0.16),transparent_26%),linear-gradient(135deg,#0D1018,#08090E_62%)] px-5 py-4 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition md:px-7 md:py-5"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Link
+                          href={`/users/${profile.handle.replace(/^@/, "")}`}
+                          className="shrink-0"
+                        >
+                          <UserAvatar
+                            user={{
+                              id: cloud.authorId ?? profile.handle,
+                              username: profile.handle.replace(/^@/, ""),
+                              displayName: profile.name,
+                              avatarUrl: profile.avatar,
+                            }}
+                            size={56}
+                            className="!h-12 !w-12 ring-1 ring-white/15 md:!h-14 md:!w-14"
+                          />
+                        </Link>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/users/${profile.handle.replace(/^@/, "")}`}
+                              className="truncate text-[15px] font-semibold text-white hover:underline md:text-[17px]"
+                            >
+                              @{profile.handle.replace(/^@/, "")}
+                            </Link>
+                            <span className="rounded-full border border-[#A855F7]/70 px-2.5 py-0.5 text-[12px] font-medium text-[#C084FC]">
+                              Criador
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">
+                            {createdLabel}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Mais opções"
+                        className="rounded-full p-2 text-[20px] leading-none text-white transition hover:bg-white/10"
+                      >
+                        ?
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_285px] lg:items-center">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link href={`/users/${profile.handle.replace(/^@/, "")}`} className="truncate text-[15px] font-semibold text-white hover:underline md:text-[17px]">
-                            @{profile.handle.replace(/^@/, "")}
-                          </Link>
-                          <span className="rounded-full border border-[#A855F7]/70 px-2.5 py-0.5 text-[12px] font-medium text-[#C084FC]">Criador</span>
-                        </div>
-                        <p className="mt-0.5 text-[12px] text-white/50 md:text-[13px]">{createdLabel}</p>
-                      </div>
-                    </div>
-                    <button type="button" aria-label="Mais opções" className="rounded-full p-2 text-[20px] leading-none text-white transition hover:bg-white/10">
-                      ?
-                    </button>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_285px] lg:items-center">
-                    <div className="min-w-0">
-                      <h3 lang="pt-BR" className="hyphens-auto break-normal text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[28px]" style={{ hyphenateCharacter: "–" }}>
-                        {cloud.title}
-                      </h3>
-                      {expanded ? (
-                        <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-white/65 md:text-[16px]">
-                          {profile.description}
-                        </p>
-                      ) : (
-                        <p className="mt-2 line-clamp-2 text-[15px] leading-6 text-white/65 md:text-[16px]">
-                          {profile.description}
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => onToggleExpand(cloud.id)}
-                        className="mt-2 inline-flex items-center gap-2 text-[14px] font-medium text-[#C084FC] transition hover:text-[#DDD6FE] md:text-[15px]"
-                      >
-                        {expanded ? "Ler menos" : "Ler mais"}
-                        <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={expanded ? "rotate-180 transition-transform" : "transition-transform"}>
-                          <path d="m6 9 6 6 6-6" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div className="lg:pb-0.5">
-                      <p className="text-center text-[13px] text-white/65 md:text-[15px]">{isEnded ? "Encerrada" : "Encerra em"}</p>
-                      {isEnded ? (
-                        <p className="mt-2 text-center text-[38px] font-semibold tracking-[0.14em] text-white/45">00:00:00</p>
-                      ) : (
-                        <div className={`mt-1 flex justify-center gap-1 text-[29px] font-semibold tracking-[0.05em] md:text-[35px] ${isEndingSoon ? "text-[#FF405C]" : "text-[#FF4B67]"}`} style={{ textShadow: "0 0 18px rgba(255,64,92,0.42)" }}>
-                          <span>{String(hours).padStart(2, "0")}</span><span>:</span><span>{String(minutes).padStart(2, "0")}</span><span>:</span><span>{String(seconds).padStart(2, "0")}</span>
-                        </div>
-                      )}
-                      {!isEnded && <div className="mt-1 grid grid-cols-3 text-center text-[11px] uppercase text-white/50 md:text-[13px]"><span>horas</span><span>min</span><span>seg</span></div>}
-                      <button
-                        type="button"
-                        onClick={() => onEnterConversation(cloud)}
-                        className="mt-3 flex h-11 w-full items-center justify-center rounded-[20px] border border-[#9B6CFF] bg-[#0C0D18] px-6 text-[16px] font-semibold text-white shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_25px_rgba(124,58,237,0.12)] transition hover:bg-[#161128] md:text-[17px]"
-                      >
-                        Entrar na conversa
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:mt-5 md:flex-row md:items-center">
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
-                      <TopicHypeButton cloud={cloud} />
-                      {(cloud.visibility !== "private" || cloud.authorId === currentUserId) && (
-                        <button type="button" onClick={() => setShareTarget(cloud)} className="inline-flex items-center gap-3 transition hover:text-[#C084FC]">
-                          <PaperPlaneIcon s={25} className="text-white/65" />
-                          <span>Compartilhar</span>
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 self-start md:self-auto">
-                      <div className="flex -space-x-3">
-                        {participantAvatars.map(avatar => (
-                          <img key={avatar} src={avatar} alt="Participante" className="h-10 w-10 rounded-full border-2 border-[#0B0C12] object-cover md:h-12 md:w-12" referrerPolicy="no-referrer" />
-                        ))}
-                        {!profile.avatar && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#7C3AED] text-[12px] font-bold text-white md:h-12 md:w-12">{profile.name.slice(0, 1).toUpperCase()}</span>}
-                        {profile.participants > 3 && <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">+{profile.participants >= 1000 ? "1K" : profile.participants - 3}</span>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {cloud.visibility === "private" && (
-                          <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
-                            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                          </svg>
+                        <h3
+                          lang="pt-BR"
+                          className="hyphens-auto break-normal text-[26px] font-extrabold leading-[1.08] tracking-[-0.04em] text-white md:text-[28px]"
+                          style={{ hyphenateCharacter: "–" }}
+                        >
+                          {cloud.title}
+                        </h3>
+                        {expanded ? (
+                          <p className="mt-2 whitespace-pre-wrap break-words text-[15px] leading-6 text-white/65 md:text-[16px]">
+                            {profile.description}
+                          </p>
+                        ) : (
+                          <p className="mt-2 line-clamp-2 text-[15px] leading-6 text-white/65 md:text-[16px]">
+                            {profile.description}
+                          </p>
                         )}
-                        <span className="text-[14px] text-white md:text-[17px]">{participantLabel}</span>
+                        <button
+                          type="button"
+                          onClick={() => onToggleExpand(cloud.id)}
+                          className="mt-2 inline-flex items-center gap-2 text-[14px] font-medium text-[#C084FC] transition hover:text-[#DDD6FE] md:text-[15px]"
+                        >
+                          {expanded ? "Ler menos" : "Ler mais"}
+                          <svg
+                            viewBox="0 0 24 24"
+                            width={20}
+                            height={20}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.25"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            className={
+                              expanded
+                                ? "rotate-180 transition-transform"
+                                : "transition-transform"
+                            }
+                          >
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div className="lg:pb-0.5">
+                        <p className="text-center text-[13px] text-white/65 md:text-[15px]">
+                          {isEnded ? "Encerrada" : "Encerra em"}
+                        </p>
+                        {isEnded ? (
+                          <p className="mt-2 text-center text-[38px] font-semibold tracking-[0.14em] text-white/45">
+                            00:00:00
+                          </p>
+                        ) : (
+                          <div
+                            className={`mt-1 flex justify-center gap-1 text-[29px] font-semibold tracking-[0.05em] md:text-[35px] ${isEndingSoon ? "text-[#FF405C]" : "text-[#FF4B67]"}`}
+                            style={{
+                              textShadow: "0 0 18px rgba(255,64,92,0.42)",
+                            }}
+                          >
+                            <span>{String(hours).padStart(2, "0")}</span>
+                            <span>:</span>
+                            <span>{String(minutes).padStart(2, "0")}</span>
+                            <span>:</span>
+                            <span>{String(seconds).padStart(2, "0")}</span>
+                          </div>
+                        )}
+                        {!isEnded && (
+                          <div className="mt-1 grid grid-cols-3 text-center text-[11px] uppercase text-white/50 md:text-[13px]">
+                            <span>horas</span>
+                            <span>min</span>
+                            <span>seg</span>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onEnterConversation(cloud)}
+                          className="mt-3 flex h-11 w-full items-center justify-center rounded-[20px] border border-[#9B6CFF] bg-[#0C0D18] px-6 text-[16px] font-semibold text-white shadow-[inset_0_0_20px_rgba(124,58,237,0.12),0_0_25px_rgba(124,58,237,0.12)] transition hover:bg-[#161128] md:text-[17px]"
+                        >
+                          Entrar na conversa
+                        </button>
                       </div>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
-        </div>
-      )}
+
+                    <div className="mt-4 flex flex-col justify-between gap-3 border-t border-white/[0.07] pt-4 md:mt-5 md:flex-row md:items-center">
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[14px] text-white/70 md:text-[16px]">
+                        <TopicHypeButton cloud={cloud} />
+                        {(cloud.visibility !== "private" ||
+                          cloud.authorId === currentUserId) && (
+                          <button
+                            type="button"
+                            onClick={() => setShareTarget(cloud)}
+                            className="inline-flex items-center gap-3 transition hover:text-[#C084FC]"
+                          >
+                            <PaperPlaneIcon s={25} className="text-white/65" />
+                            <span>Compartilhar</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 self-start md:self-auto">
+                        <div className="flex -space-x-3">
+                          {participantAvatars.map((avatar) => (
+                            <img
+                              key={avatar}
+                              src={avatar}
+                              alt="Participante"
+                              className="h-10 w-10 rounded-full border-2 border-[#0B0C12] object-cover md:h-12 md:w-12"
+                              referrerPolicy="no-referrer"
+                            />
+                          ))}
+                          {!profile.avatar && (
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#7C3AED] text-[12px] font-bold text-white md:h-12 md:w-12">
+                              {profile.name.slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          {profile.participants > 3 && (
+                            <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-[#0B0C12] bg-[#1B1D26] text-[11px] font-semibold text-white/80 md:h-12 md:w-12">
+                              +
+                              {profile.participants >= 1000
+                                ? "1K"
+                                : profile.participants - 3}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {cloud.visibility === "private" && (
+                            <svg
+                              viewBox="0 0 24 24"
+                              width={14}
+                              height={14}
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="text-white/60"
+                            >
+                              <rect
+                                width="18"
+                                height="11"
+                                x="3"
+                                y="11"
+                                rx="2"
+                                ry="2"
+                              />
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                          )}
+                          <span className="text-[14px] text-white md:text-[17px]">
+                            {participantLabel}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+          </div>
+        )}
       </div>
       {shareTarget && (
         <ShareModal
@@ -2193,7 +3483,17 @@ function TopicFeedStage({
 
 // ─── Live Card Action Buttons ────────────────────────────────────────────────
 
-function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: { cloudId: string; initialHypes: number; initialHyped?: boolean; onHypar?: (newCount: number, wasHyped: boolean) => void }) {
+function LiveCardActionButton({
+  cloudId,
+  initialHypes,
+  initialHyped,
+  onHypar,
+}: {
+  cloudId: string;
+  initialHypes: number;
+  initialHyped?: boolean;
+  onHypar?: (newCount: number, wasHyped: boolean) => void;
+}) {
   const [hyped, setHyped] = useState(initialHyped ?? false);
   const [hypes, setHypes] = useState(initialHypes);
   const [loading, setLoading] = useState(false);
@@ -2206,23 +3506,28 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
     setLoading(true);
     const wasHyped = hyped;
     setHyped(!wasHyped);
-    setHypes(v => wasHyped ? v - 1 : v + 1);
+    setHypes((v) => (wasHyped ? v - 1 : v + 1));
     try {
-      const res = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/hype`, {
-        method: wasHyped ? "DELETE" : "POST",
-      });
+      const res = await fetch(
+        `/api/clouds/${encodeURIComponent(cloudId)}/hype`,
+        {
+          method: wasHyped ? "DELETE" : "POST",
+        },
+      );
       if (res.ok) {
-        const data = (await res.json().catch(() => null)) as { hypesCount?: number } | null;
+        const data = (await res.json().catch(() => null)) as {
+          hypesCount?: number;
+        } | null;
         const newCount = data?.hypesCount ?? (wasHyped ? hypes - 1 : hypes + 1);
         setHypes(newCount);
         onHypar?.(newCount, wasHyped);
       } else {
         setHyped(wasHyped);
-        setHypes(v => wasHyped ? v + 1 : v - 1);
+        setHypes((v) => (wasHyped ? v + 1 : v - 1));
       }
     } catch {
       setHyped(wasHyped);
-      setHypes(v => wasHyped ? v + 1 : v - 1);
+      setHypes((v) => (wasHyped ? v + 1 : v - 1));
     } finally {
       setLoading(false);
     }
@@ -2258,8 +3563,19 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
         onClick={() => setShareOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[12px] font-semibold text-white/60 transition hover:border-[#9333EA]/50 hover:text-[#C084FC]"
       >
-        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7Z" />
+        <svg
+          viewBox="0 0 24 24"
+          width={14}
+          height={14}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M22 2 11 13" />
+          <path d="m22 2-7 20-4-9-9-4 20-7Z" />
         </svg>
         Compartilhar
       </button>
@@ -2267,16 +3583,50 @@ function LiveCardActionButton({ cloudId, initialHypes, initialHyped, onHypar }: 
   );
 }
 
-function DesktopCloudFeed({ clouds, initialCloudId, scope, order, navigationTargetRef, currentUserId, onEnter, onDescription, onReport, onDelete, onEdit }: { clouds: Cloud[]; initialCloudId?: string | null; scope: string; order: string; navigationTargetRef: RefObject<string | null>; currentUserId?: string; onEnter: (cloud: Cloud) => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void; onEdit: (cloud: Cloud) => void }) {
+function DesktopCloudFeed({
+  clouds,
+  initialCloudId,
+  scope,
+  order,
+  navigationTargetRef,
+  currentUserId,
+  onEnter,
+  onDescription,
+  onReport,
+  onDelete,
+  onEdit,
+}: {
+  clouds: Cloud[];
+  initialCloudId?: string | null;
+  scope: string;
+  order: string;
+  navigationTargetRef: RefObject<string | null>;
+  currentUserId?: string;
+  onEnter: (cloud: Cloud) => void;
+  onDescription: (cloud: Cloud) => void;
+  onReport: (cloud: Cloud) => void;
+  onDelete: (cloudId: string) => void;
+  onEdit: (cloud: Cloud) => void;
+}) {
   const connectionIds = useConnectionIds(currentUserId);
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
-  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
+  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(
+    null,
+  );
   const siteOrigin = useSiteOrigin();
   const [activeIndex, setActiveIndex] = useState(0);
   const feedRef = useRef<HTMLDivElement | null>(null);
   const wheelLockedRef = useRef(false);
-  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, onActiveIndex: setActiveIndex, navigationTargetRef });
+  const syncPosition = useFeedPosition({
+    cloudIds: clouds.map((cloud) => cloud.id),
+    feedRef,
+    initialCloudId,
+    scope,
+    order,
+    onActiveIndex: setActiveIndex,
+    navigationTargetRef,
+  });
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2286,16 +3636,30 @@ function DesktopCloudFeed({ clouds, initialCloudId, scope, order, navigationTarg
   }, [optionsCloudId]);
 
   const navigateFeed = (direction: number) => {
-    const nextIndex = Math.max(0, Math.min(clouds.length - 1, activeIndex + direction));
-    const target = feedRef.current?.querySelectorAll<HTMLElement>("[data-cloud-page]")[nextIndex];
+    const nextIndex = Math.max(
+      0,
+      Math.min(clouds.length - 1, activeIndex + direction),
+    );
+    const target =
+      feedRef.current?.querySelectorAll<HTMLElement>("[data-cloud-page]")[
+        nextIndex
+      ];
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveIndex(nextIndex);
   };
 
   const handleDesktopKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "PageDown" && event.key !== "PageUp") return;
+    if (
+      event.key !== "ArrowDown" &&
+      event.key !== "ArrowUp" &&
+      event.key !== "PageDown" &&
+      event.key !== "PageUp"
+    )
+      return;
     event.preventDefault();
-    navigateFeed(event.key === "ArrowDown" || event.key === "PageDown" ? 1 : -1);
+    navigateFeed(
+      event.key === "ArrowDown" || event.key === "PageDown" ? 1 : -1,
+    );
   };
 
   const handleDesktopWheel = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -2303,46 +3667,331 @@ function DesktopCloudFeed({ clouds, initialCloudId, scope, order, navigationTarg
     event.preventDefault();
     wheelLockedRef.current = true;
     navigateFeed(event.deltaY > 0 ? 1 : -1);
-    window.setTimeout(() => { wheelLockedRef.current = false; }, 520);
+    window.setTimeout(() => {
+      wheelLockedRef.current = false;
+    }, 520);
   };
 
+  if (clouds.length === 0)
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/empty-clouds-available.png"
+          alt="Sem clouds ativas"
+          className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
+          style={{ aspectRatio: "1536 / 1024" }}
+          draggable={false}
+        />
+        <p className="text-[18px] font-semibold text-white/80">
+          Sem Clouds ativas no momento.
+        </p>
+      </div>
+    );
 
-  if (clouds.length === 0) return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 text-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/empty-clouds-available.png"
-        alt="Sem clouds ativas"
-        className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
-        style={{ aspectRatio: "1536 / 1024" }}
-        draggable={false}
+  return (
+    <div className="relative min-h-0 flex-1">
+      <div
+        ref={feedRef}
+        tabIndex={0}
+        role="region"
+        aria-label="Clouds ativas"
+        onScroll={syncPosition}
+        onWheel={handleDesktopWheel}
+        onKeyDown={handleDesktopKeyDown}
+        className="desktop-cloud-feed cloud-feed-scroller h-full px-8 outline-none"
+      >
+        {clouds.map((cloud) => {
+          const profile = getTopicProfile(cloud, 0);
+          const participants = (cloud.participantProfiles ?? []).filter(
+            (participant) => participant.id !== cloud.authorId,
+          );
+          const isScheduled = Boolean(
+            cloud.scheduledAt &&
+            new Date(cloud.scheduledAt).getTime() > Date.now(),
+          );
+          return (
+            <article
+              key={cloud.id}
+              data-cloud-page
+              className="relative mx-auto flex h-full min-h-full w-full max-w-[1100px] snap-start flex-col"
+            >
+              <div className="talk-card-header flex items-center justify-between gap-6 px-12 pb-7 pt-10">
+                <div className="flex min-w-0 items-center gap-5">
+                  <span className="relative shrink-0">
+                    <UserAvatar
+                      user={{
+                        id: cloud.authorId ?? profile.handle,
+                        username: profile.handle,
+                        displayName: profile.name,
+                        avatarUrl: profile.avatar,
+                      }}
+                      size={80}
+                      className="talk-card-avatar ring-2 ring-white/10"
+                    />
+                    <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[21px] font-semibold text-white">
+                      {profile.name}
+                    </p>
+                    <p className="text-[16px] text-white/45">
+                      @{profile.handle}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-6">
+                  <button
+                    type="button"
+                    onClick={() => setParticipantsCloudId(cloud.id)}
+                    className="flex -space-x-4 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]"
+                    aria-label={`${participants.length} participantes da Cloud`}
+                  >
+                    {participants.slice(0, 7).map((participant) =>
+                      participant.avatarUrl ? (
+                        <img
+                          key={participant.id}
+                          src={participant.avatarUrl}
+                          alt={participant.name}
+                          title={participant.name}
+                          className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span
+                          key={participant.id}
+                          title={participant.name}
+                          className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold"
+                        >
+                          {participant.name.slice(0, 1).toUpperCase()}
+                        </span>
+                      ),
+                    )}
+                    {participants.length > 7 && (
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">
+                        +{participants.length - 7}
+                      </span>
+                    )}
+                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-label="Mais opções da Cloud"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOptionsCloudId((current) =>
+                          current === cloud.id ? null : cloud.id,
+                        );
+                      }}
+                      className="p-2 text-[26px] leading-none text-white/80 hover:text-white"
+                    >
+                      ⋮
+                    </button>
+                    {optionsCloudId === cloud.id && (
+                      <div
+                        onClick={(event) => event.stopPropagation()}
+                        className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl"
+                      >
+                        {(cloud.visibility !== "private" ||
+                          cloud.authorId === currentUserId) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOptionsCloudId(null);
+                              setShareTarget(cloud);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"
+                          >
+                            <PaperPlaneIcon s={16} />
+                            Enviar
+                          </button>
+                        )}
+                        {cloud.description?.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOptionsCloudId(null);
+                              onDescription(cloud);
+                            }}
+                            className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"
+                          >
+                            Ver descrição
+                          </button>
+                        )}
+                        {currentUserId && (
+                          <RecloudMenuItem cloudId={cloud.id} />
+                        )}
+                        {currentUserId && cloud.authorId !== currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOptionsCloudId(null);
+                              onReport(cloud);
+                            }}
+                            className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5"
+                          >
+                            Denunciar Cloud
+                          </button>
+                        )}
+                        {currentUserId && cloud.authorId === currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOptionsCloudId(null);
+                              onEdit(cloud);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"
+                          >
+                            <PencilIcon s={16} />
+                            Editar Cloud
+                          </button>
+                        )}
+                        {cloud.authorId === currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOptionsCloudId(null);
+                              onDelete(cloud.id);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5"
+                          >
+                            <TrashIcon s={16} />
+                            Excluir Cloud
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {participantsCloudId === cloud.id && (
+                <CloudParticipantsSheet
+                  title={cloud.title}
+                  participants={cloud.participantProfiles ?? []}
+                  onClose={() => setParticipantsCloudId(null)}
+                />
+              )}
+              {shareTarget?.id === cloud.id && (
+                <ShareModal
+                  cloudId={cloud.id}
+                  cloudTitle={cloud.title}
+                  cloudUrl={siteOrigin + (cloud.href ?? "/cloud/" + cloud.id)}
+                  onClose={() => setShareTarget(null)}
+                />
+              )}
+              <Link
+                href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`}
+                aria-label={`Ver perfil de ${profile.name}`}
+                className="absolute left-12 top-10 z-20 h-20 w-[340px] rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-[#C084FC]"
+              />
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Cloud ${cloud.title}. Clique duas vezes para entrar.`}
+                onDoubleClick={() => {
+                  if (!isScheduled) onEnter(cloud);
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    !isScheduled &&
+                    (event.key === "Enter" || event.key === " ")
+                  ) {
+                    event.preventDefault();
+                    onEnter(cloud);
+                  }
+                }}
+                className="talk-card-title flex flex-1 cursor-pointer flex-col items-center justify-center px-12 py-10 text-center"
+              >
+                <h2
+                  lang="pt-BR"
+                  className="cloud-feed-title max-w-[90%] hyphens-auto break-normal text-[72px] font-extrabold leading-[1.06] tracking-tight text-white"
+                  style={{
+                    fontFamily:
+                      "'Space Grotesk', 'DM Sans', system-ui, sans-serif",
+                    hyphenateCharacter: "–",
+                  }}
+                >
+                  {cloud.title}
+                </h2>
+              </div>
+              <div className="talk-card-actions flex items-center justify-between gap-4 px-12 pb-16">
+                <div className="min-w-0">
+                  {isScheduled ? (
+                    <DesktopScheduledCloudActions
+                      cloudId={cloud.id}
+                      title={cloud.title}
+                      scheduledAt={cloud.scheduledAt}
+                      initiallyReminded={Boolean(
+                        currentUserId &&
+                        cloud.participantProfiles?.some(
+                          (participant) => participant.id === currentUserId,
+                        ),
+                      )}
+                    />
+                  ) : (
+                    <ConnectedParticipants
+                      participants={cloud.participantProfiles ?? []}
+                      ids={connectionIds}
+                    />
+                  )}
+                </div>
+                <span className="talk-card-countdown shrink-0 rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white">
+                  {formatCountdown(getTopicCountdown(cloud))}
+                </span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      <CloudFeedNavigation
+        activeIndex={activeIndex}
+        cloudCount={clouds.length}
+        onNavigate={navigateFeed}
       />
-      <p className="text-[18px] font-semibold text-white/80">Sem Clouds ativas no momento.</p>
     </div>
   );
-
-  return <div className="relative min-h-0 flex-1"><div ref={feedRef} tabIndex={0} role="region" aria-label="Clouds ativas" onScroll={syncPosition} onWheel={handleDesktopWheel} onKeyDown={handleDesktopKeyDown} className="desktop-cloud-feed cloud-feed-scroller h-full px-8 outline-none">{clouds.map((cloud) => {
-    const profile = getTopicProfile(cloud, 0);
-    const participants = (cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId);
-    const isScheduled = Boolean(cloud.scheduledAt && new Date(cloud.scheduledAt).getTime() > Date.now());
-    return <article key={cloud.id} data-cloud-page className="relative mx-auto flex h-full min-h-full w-full max-w-[1100px] snap-start flex-col">
-      <div className="talk-card-header flex items-center justify-between gap-6 px-12 pb-7 pt-10"><div className="flex min-w-0 items-center gap-5"><span className="relative shrink-0"><UserAvatar user={{ id: cloud.authorId ?? profile.handle, username: profile.handle, displayName: profile.name, avatarUrl: profile.avatar }} size={80} className="talk-card-avatar ring-2 ring-white/10" /><span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" /></span><div className="min-w-0"><p className="truncate text-[21px] font-semibold text-white">{profile.name}</p><p className="text-[16px] text-white/45">@{profile.handle}</p></div></div><div className="flex shrink-0 items-center gap-6"><button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex -space-x-4 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]" aria-label={`${participants.length} participantes da Cloud`}>{participants.slice(0, 7).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold">{participant.name.slice(0, 1).toUpperCase()}</span>)}{participants.length > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold">+{participants.length - 7}</span>}</button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((current) => current === cloud.id ? null : cloud.id); }} className="p-2 text-[26px] leading-none text-white/80 hover:text-white">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-11 z-30 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUserId) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUserId && <RecloudMenuItem cloudId={cloud.id} />}{currentUserId && cloud.authorId !== currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUserId && cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}{cloud.authorId === currentUserId && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir Cloud</button>}</div>}</div></div></div>
-      {participantsCloudId === cloud.id && <CloudParticipantsSheet title={cloud.title} participants={cloud.participantProfiles ?? []} onClose={() => setParticipantsCloudId(null)} />}
-      {shareTarget?.id === cloud.id && <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={siteOrigin + (cloud.href ?? ("/cloud/" + cloud.id))} onClose={() => setShareTarget(null)} />}
-      <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="absolute left-12 top-10 z-20 h-20 w-[340px] rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-[#C084FC]" />
-      <div role="button" tabIndex={0} aria-label={`Cloud ${cloud.title}. Clique duas vezes para entrar.`} onDoubleClick={() => { if (!isScheduled) onEnter(cloud); }} onKeyDown={(event) => { if (!isScheduled && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onEnter(cloud); } }} className="talk-card-title flex flex-1 cursor-pointer flex-col items-center justify-center px-12 py-10 text-center"><h2 lang="pt-BR" className="cloud-feed-title max-w-[90%] hyphens-auto break-normal text-[72px] font-extrabold leading-[1.06] tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}>{cloud.title}</h2></div>
-      <div className="talk-card-actions flex items-center justify-between gap-4 px-12 pb-16"><div className="min-w-0">{isScheduled ? <DesktopScheduledCloudActions cloudId={cloud.id} title={cloud.title} scheduledAt={cloud.scheduledAt} initiallyReminded={Boolean(currentUserId && cloud.participantProfiles?.some((participant) => participant.id === currentUserId))} /> : <ConnectedParticipants participants={cloud.participantProfiles ?? []} ids={connectionIds} />}</div><span className="talk-card-countdown shrink-0 rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white">{formatCountdown(getTopicCountdown(cloud))}</span></div>
-    </article>;
-  })}</div>{clouds.length > 1 && <div style={{ right: "max(1rem, calc(50% - 625px))" }} className="pointer-events-none absolute inset-y-0 z-20 hidden flex-col justify-center gap-2 md:flex"><button type="button" aria-label="Cloud anterior" onClick={() => navigateFeed(-1)} disabled={activeIndex === 0} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↑</button><button type="button" aria-label="Próxima Cloud" onClick={() => navigateFeed(1)} disabled={activeIndex >= clouds.length - 1} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#171325]/25 text-lg text-white/65 shadow-sm backdrop-blur-md transition hover:border-white/20 hover:bg-[#2B174F]/55 hover:text-white disabled:cursor-not-allowed disabled:opacity-20">↓</button></div>}</div>;
 }
 
-function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, navigationTargetRef, onEnter, onCreate, onDescription, onReport, onDelete, onEdit }: { clouds: Cloud[]; focusCloudId: string | null; initialCloudId?: string | null; scope: string; order: string; navigationTargetRef: RefObject<string | null>; onEnter: (cloud: Cloud) => void; onCreate: () => void; onDescription: (cloud: Cloud) => void; onReport: (cloud: Cloud) => void; onDelete: (cloudId: string) => void; onEdit: (cloud: Cloud) => void }) {
+function MobileCloudFeed({
+  clouds,
+  focusCloudId,
+  initialCloudId,
+  scope,
+  order,
+  navigationTargetRef,
+  onEnter,
+  onCreate,
+  onDescription,
+  onReport,
+  onDelete,
+  onEdit,
+}: {
+  clouds: Cloud[];
+  focusCloudId: string | null;
+  initialCloudId?: string | null;
+  scope: string;
+  order: string;
+  navigationTargetRef: RefObject<string | null>;
+  onEnter: (cloud: Cloud) => void;
+  onCreate: () => void;
+  onDescription: (cloud: Cloud) => void;
+  onReport: (cloud: Cloud) => void;
+  onDelete: (cloudId: string) => void;
+  onEdit: (cloud: Cloud) => void;
+}) {
   const sessionUser = useSessionUser();
   const currentUser = sessionUser.user;
   const connectionIds = useConnectionIds(currentUser?.id);
   const titleTapRef = useRef<{ cloudId: string; at: number } | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
-  const syncPosition = useFeedPosition({ cloudIds: clouds.map((cloud) => cloud.id), feedRef, initialCloudId, scope, order, navigationTargetRef });
+  const syncPosition = useFeedPosition({
+    cloudIds: clouds.map((cloud) => cloud.id),
+    feedRef,
+    initialCloudId,
+    scope,
+    order,
+    navigationTargetRef,
+  });
   const cloudRefs = useRef<Record<string, HTMLElement | null>>({});
   const [premiereId, setPremiereId] = useState<string | null>(null);
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
@@ -2350,11 +3999,16 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
   const [optionsCloudId, setOptionsCloudId] = useState<string | null>(null);
   const [shareTarget, setShareTarget] = useState<Cloud | null>(null);
   const siteOrigin = useSiteOrigin();
-  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(null);
-  const [authPromptCloudId, setAuthPromptCloudId] = useState<string | null>(null);
+  const [participantsCloudId, setParticipantsCloudId] = useState<string | null>(
+    null,
+  );
+  const [authPromptCloudId, setAuthPromptCloudId] = useState<string | null>(
+    null,
+  );
   // Keep the dialog tied to the live feed object, rather than a snapshot taken
   // when it was opened. Membership changes are therefore visible immediately.
-  const participantsCloud = clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
+  const participantsCloud =
+    clouds.find((cloud) => cloud.id === participantsCloudId) ?? null;
 
   useEffect(() => {
     if (!optionsCloudId) return;
@@ -2368,7 +4022,10 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
     const frame = window.requestAnimationFrame(() => {
       const cloudElement = cloudRefs.current[focusCloudId];
       if (cloudElement) {
-        feedRef.current?.scrollTo({ top: cloudElement.offsetTop, behavior: "instant" });
+        feedRef.current?.scrollTo({
+          top: cloudElement.offsetTop,
+          behavior: "instant",
+        });
       }
     });
     return () => window.cancelAnimationFrame(frame);
@@ -2378,47 +4035,235 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/empty-clouds-available.png" alt="Sem Clouds ativas" className="h-auto w-full max-w-[280px] object-contain" draggable={false} />
-        <p className="mt-2 text-lg font-semibold text-white/85">Sem Clouds ativas agora</p>
-        <button type="button" onClick={onCreate} className="mt-6 rounded-full bg-[#9333EA] px-7 py-3 font-semibold text-white">Criar uma Cloud</button>
+        <img
+          src="/empty-clouds-available.png"
+          alt="Sem Clouds ativas"
+          className="h-auto w-full max-w-[280px] object-contain"
+          draggable={false}
+        />
+        <p className="mt-2 text-lg font-semibold text-white/85">
+          Sem Clouds ativas agora
+        </p>
+        <button
+          type="button"
+          onClick={onCreate}
+          className="mt-6 rounded-full bg-[#9333EA] px-7 py-3 font-semibold text-white"
+        >
+          Criar uma Cloud
+        </button>
       </div>
     );
   }
 
   return (
-    <div ref={feedRef} onScroll={syncPosition} className="mobile-cloud-feed cloud-feed-scroller">
+    <div
+      ref={feedRef}
+      onScroll={syncPosition}
+      className="mobile-cloud-feed cloud-feed-scroller"
+    >
       {clouds.map((cloud) => {
         const remaining = getTopicCountdown(cloud);
         const profile = getTopicProfile(cloud, 0);
-        const scheduledDate = cloud.scheduledAt ? new Date(cloud.scheduledAt) : null;
-        const isScheduled = Boolean(scheduledDate && scheduledDate.getTime() > Date.now());
-        const premiereLabel = scheduledDate ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "";
+        const scheduledDate = cloud.scheduledAt
+          ? new Date(cloud.scheduledAt)
+          : null;
+        const isScheduled = Boolean(
+          scheduledDate && scheduledDate.getTime() > Date.now(),
+        );
+        const premiereLabel = scheduledDate
+          ? `Estreia em ${scheduledDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às ${scheduledDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+          : "";
         const activateReminder = async () => {
           if (remindedIds.has(cloud.id)) return;
-          if (!currentUser || currentUser.isGuest) { setAuthPromptCloudId(cloud.id); return; }
-          const response = await fetch(`/api/clouds/${encodeURIComponent(cloud.id)}/join`, { method: "POST" });
+          if (!currentUser || currentUser.isGuest) {
+            setAuthPromptCloudId(cloud.id);
+            return;
+          }
+          const response = await fetch(
+            `/api/clouds/${encodeURIComponent(cloud.id)}/join`,
+            { method: "POST" },
+          );
           if (response.ok) {
-            setRemindedIds(current => new Set(current).add(cloud.id));
+            setRemindedIds((current) => new Set(current).add(cloud.id));
             setQueueCloud(cloud);
           } else {
-            const payload = await response.json().catch(() => null) as { message?: string } | null;
-            window.alert(payload?.message || "Não foi possível entrar na Cloud.");
+            const payload = (await response.json().catch(() => null)) as {
+              message?: string;
+            } | null;
+            window.alert(
+              payload?.message || "Não foi possível entrar na Cloud.",
+            );
           }
         };
         return (
-          <article key={cloud.id} data-cloud-page ref={(element) => { cloudRefs.current[cloud.id] = element; }} className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6">
-            {shareTarget?.id === cloud.id && <ShareModal cloudId={cloud.id} cloudTitle={cloud.title} cloudUrl={siteOrigin + (cloud.href ?? ("/cloud/" + cloud.id))} onClose={() => setShareTarget(null)} />}
+          <article
+            key={cloud.id}
+            data-cloud-page
+            ref={(element) => {
+              cloudRefs.current[cloud.id] = element;
+            }}
+            className="relative flex min-h-full snap-start flex-col bg-transparent px-6 pb-3 pt-6"
+          >
+            {shareTarget?.id === cloud.id && (
+              <ShareModal
+                cloudId={cloud.id}
+                cloudTitle={cloud.title}
+                cloudUrl={siteOrigin + (cloud.href ?? "/cloud/" + cloud.id)}
+                onClose={() => setShareTarget(null)}
+              />
+            )}
             <div className="flex items-center justify-between gap-2">
-              <Link href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`} aria-label={`Ver perfil de ${profile.name}`} className="flex min-w-0 flex-1 items-center gap-2">
-                <UserAvatar user={{ id: cloud.authorId ?? profile.handle, username: profile.handle, displayName: profile.name, avatarUrl: profile.avatar }} size={36} />
-                <div className="min-w-0"><p className="truncate text-[16px] font-bold leading-[1.25]">{profile.name}</p><p className="mt-0.5 truncate text-[12px] leading-[1.25] text-white/65">@{profile.handle}</p></div>
-              </Link>
-              <button type="button" onClick={() => setParticipantsCloudId(cloud.id)} className="flex shrink-0 items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]" aria-label={`Ver ${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
-                <div className="flex -space-x-2">
-                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).slice(0, 4).map((participant) => participant.avatarUrl ? <img key={participant.id} src={participant.avatarUrl} alt={participant.name} className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover" referrerPolicy="no-referrer" /> : <span key={participant.id} title={participant.name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold">{participant.name.slice(0, 1)}</span>)}
-                {(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">+{(cloud.participantProfiles ?? []).filter((participant) => participant.id !== cloud.authorId).length - 4}</span>}
+              <Link
+                href={`/users/${encodeURIComponent(cloud.authorId ?? profile.handle)}`}
+                aria-label={`Ver perfil de ${profile.name}`}
+                className="flex min-w-0 flex-1 items-center gap-2"
+              >
+                <UserAvatar
+                  user={{
+                    id: cloud.authorId ?? profile.handle,
+                    username: profile.handle,
+                    displayName: profile.name,
+                    avatarUrl: profile.avatar,
+                  }}
+                  size={36}
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-[16px] font-bold leading-[1.25]">
+                    {profile.name}
+                  </p>
+                  <p className="mt-0.5 truncate text-[12px] leading-[1.25] text-white/65">
+                    @{profile.handle}
+                  </p>
                 </div>
-              </button><div className="relative"><button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setOptionsCloudId((id) => id === cloud.id ? null : cloud.id); }} className="px-1 text-xl text-white/75">⋮</button>{optionsCloudId === cloud.id && <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">{(cloud.visibility !== "private" || cloud.authorId === currentUser?.id) && <button type="button" onClick={() => { setOptionsCloudId(null); setShareTarget(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PaperPlaneIcon s={16} />Enviar</button>}{cloud.description?.trim() && <button type="button" onClick={() => { setOptionsCloudId(null); onDescription(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}{currentUser?.id && <RecloudMenuItem cloudId={cloud.id} />}{currentUser?.id && cloud.authorId !== currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onReport(cloud); }} className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}{currentUser?.id && cloud.authorId === currentUser.id && <button type="button" onClick={() => { setOptionsCloudId(null); onEdit(cloud); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"><PencilIcon s={16} />Editar Cloud</button>}{cloud.authorId === currentUser?.id && <button type="button" onClick={() => { setOptionsCloudId(null); onDelete(cloud.id); }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"><TrashIcon s={16} />Excluir Cloud</button>}</div>}</div>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setParticipantsCloudId(cloud.id)}
+                className="flex shrink-0 items-center gap-2 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-[#C084FC]"
+                aria-label={`Ver ${cloud.participantProfiles?.length ?? 0} participantes da Cloud`}
+              >
+                <div className="flex -space-x-2">
+                  {(cloud.participantProfiles ?? [])
+                    .filter((participant) => participant.id !== cloud.authorId)
+                    .slice(0, 4)
+                    .map((participant) =>
+                      participant.avatarUrl ? (
+                        <img
+                          key={participant.id}
+                          src={participant.avatarUrl}
+                          alt={participant.name}
+                          className="h-7 w-7 rounded-full border-2 border-[#100625] object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span
+                          key={participant.id}
+                          title={participant.name}
+                          className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#7C3AED] text-[9px] font-bold"
+                        >
+                          {participant.name.slice(0, 1)}
+                        </span>
+                      ),
+                    )}
+                  {(cloud.participantProfiles ?? []).filter(
+                    (participant) => participant.id !== cloud.authorId,
+                  ).length > 4 && (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#100625] bg-[#32106f] text-[9px] font-bold text-white">
+                      +
+                      {(cloud.participantProfiles ?? []).filter(
+                        (participant) => participant.id !== cloud.authorId,
+                      ).length - 4}
+                    </span>
+                  )}
+                </div>
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  aria-label="Mais opções da Cloud"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setOptionsCloudId((id) =>
+                      id === cloud.id ? null : cloud.id,
+                    );
+                  }}
+                  className="px-1 text-xl text-white/75"
+                >
+                  ⋮
+                </button>
+                {optionsCloudId === cloud.id && (
+                  <div
+                    onClick={(event) => event.stopPropagation()}
+                    className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl"
+                  >
+                    {(cloud.visibility !== "private" ||
+                      cloud.authorId === currentUser?.id) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOptionsCloudId(null);
+                          setShareTarget(cloud);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"
+                      >
+                        <PaperPlaneIcon s={16} />
+                        Enviar
+                      </button>
+                    )}
+                    {cloud.description?.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOptionsCloudId(null);
+                          onDescription(cloud);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"
+                      >
+                        Ver descrição
+                      </button>
+                    )}
+                    {currentUser?.id && <RecloudMenuItem cloudId={cloud.id} />}
+                    {currentUser?.id && cloud.authorId !== currentUser.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOptionsCloudId(null);
+                          onReport(cloud);
+                        }}
+                        className="w-full px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"
+                      >
+                        Denunciar Cloud
+                      </button>
+                    )}
+                    {currentUser?.id && cloud.authorId === currentUser.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOptionsCloudId(null);
+                          onEdit(cloud);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-white/80 hover:bg-white/5"
+                      >
+                        <PencilIcon s={16} />
+                        Editar Cloud
+                      </button>
+                    )}
+                    {cloud.authorId === currentUser?.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOptionsCloudId(null);
+                          onDelete(cloud.id);
+                        }}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-red-300 hover:bg-white/5"
+                      >
+                        <TrashIcon s={16} />
+                        Excluir Cloud
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <button
               type="button"
@@ -2427,7 +4272,10 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
 
                 const now = Date.now();
                 const previousTap = titleTapRef.current;
-                if (previousTap?.cloudId === cloud.id && now - previousTap.at < 300) {
+                if (
+                  previousTap?.cloudId === cloud.id &&
+                  now - previousTap.at < 300
+                ) {
                   titleTapRef.current = null;
                   onEnter(cloud);
                   return;
@@ -2437,21 +4285,160 @@ function MobileCloudFeed({ clouds, focusCloudId, initialCloudId, scope, order, n
               }}
               className="flex flex-1 items-center justify-center px-5 text-center touch-pan-y select-none"
               style={{ touchAction: "pan-y" }}
-              aria-label={isScheduled ? `Cloud agendada ${cloud.title}. A estreia ainda não começou.` : `Detalhes da Cloud ${cloud.title}. Toque duas vezes para entrar.`}
+              aria-label={
+                isScheduled
+                  ? `Cloud agendada ${cloud.title}. A estreia ainda não começou.`
+                  : `Detalhes da Cloud ${cloud.title}. Toque duas vezes para entrar.`
+              }
             >
-              <span lang="pt-BR" className={`cloud-feed-title block break-words hyphens-auto font-display font-bold text-white ${cloud.title.length > 68 ? "text-[43px] leading-[1.17] tracking-[-.035em]" : "text-[52px] leading-[1.13] tracking-[-.045em]"}`}>{cloud.title}</span>
+              <span
+                lang="pt-BR"
+                className={`cloud-feed-title block break-words hyphens-auto font-display font-bold text-white ${cloud.title.length > 68 ? "text-[43px] leading-[1.17] tracking-[-.035em]" : "text-[52px] leading-[1.13] tracking-[-.045em]"}`}
+              >
+                {cloud.title}
+              </span>
             </button>
-            <span className="absolute bottom-6 right-6 rounded-full bg-white/[0.07] px-3 py-1.5 text-[14px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(remaining)} restantes`}>
-              {isScheduled ? formatCountdown(parseDurationSeconds(cloud.duration)) : formatCountdown(remaining)}
+            <span
+              className="absolute bottom-6 right-6 rounded-full bg-white/[0.07] px-3 py-1.5 text-[14px] font-bold tabular-nums text-white"
+              aria-label={`${formatCountdown(remaining)} restantes`}
+            >
+              {isScheduled
+                ? formatCountdown(parseDurationSeconds(cloud.duration))
+                : formatCountdown(remaining)}
             </span>
-            {!isScheduled && <div className="absolute bottom-6 left-6 max-w-[65%]"><ConnectedParticipants participants={cloud.participantProfiles ?? []} ids={connectionIds} /></div>}
-            {isScheduled && <div className="absolute bottom-5 left-6 flex items-center gap-2"><div className="relative"><button type="button" onClick={() => setPremiereId(current => current === cloud.id ? null : cloud.id)} aria-label="Ver data de estreia" className="rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><CalendarIcon s={18} /></button>{premiereId === cloud.id && <span className="absolute bottom-11 left-0 z-20 w-52 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">{premiereLabel}</span>}</div><button type="button" onClick={activateReminder} aria-label="Avisar-me na estreia" className={`rounded-full p-2 ${remindedIds.has(cloud.id) ? "bg-[#9333EA] text-white" : "bg-[#9333EA]/20 text-[#D8B4FE]"}`}><BellIcon s={18} /></button></div>}
+            {!isScheduled && (
+              <div className="absolute bottom-6 left-6 max-w-[65%]">
+                <ConnectedParticipants
+                  participants={cloud.participantProfiles ?? []}
+                  ids={connectionIds}
+                />
+              </div>
+            )}
+            {isScheduled && (
+              <div className="absolute bottom-5 left-6 flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPremiereId((current) =>
+                        current === cloud.id ? null : cloud.id,
+                      )
+                    }
+                    aria-label="Ver data de estreia"
+                    className="rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"
+                  >
+                    <CalendarIcon s={18} />
+                  </button>
+                  {premiereId === cloud.id && (
+                    <span className="absolute bottom-11 left-0 z-20 w-52 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-3 py-2 text-xs leading-relaxed text-white shadow-xl">
+                      {premiereLabel}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={activateReminder}
+                  aria-label="Avisar-me na estreia"
+                  className={`rounded-full p-2 ${remindedIds.has(cloud.id) ? "bg-[#9333EA] text-white" : "bg-[#9333EA]/20 text-[#D8B4FE]"}`}
+                >
+                  <BellIcon s={18} />
+                </button>
+              </div>
+            )}
           </article>
         );
       })}
-      {participantsCloud && <CloudParticipantsSheet title={participantsCloud.title} participants={participantsCloud.participantProfiles ?? []} onClose={() => setParticipantsCloudId(null)} />}
-      {queueCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5" role="dialog" aria-modal="true"><div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={19} /></div><h2 className="text-lg font-bold text-white">Você entrou na fila</h2><p className="mt-1 text-sm leading-relaxed text-white/65">Você será notificado quando “{queueCloud.title}” estrear.</p></div><button type="button" onClick={() => setQueueCloud(null)} aria-label="Fechar" className="text-xl text-white/50">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{[...(queueCloud.participantProfiles ?? []), ...(currentUser?.id && !queueCloud.participantProfiles?.some((participant) => participant.id === currentUser.id) ? [{ id: currentUser.id, name: currentUser.displayName, username: currentUser.username, avatarUrl: currentUser.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setQueueCloud(null)} className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white">Entendi</button></div></div>}
-      {authPromptCloudId && <GuestCloudSignupModal returnTo={`/cloud/${encodeURIComponent(authPromptCloudId)}`} onClose={() => setAuthPromptCloudId(null)} />}
+      {participantsCloud && (
+        <CloudParticipantsSheet
+          title={participantsCloud.title}
+          participants={participantsCloud.participantProfiles ?? []}
+          onClose={() => setParticipantsCloudId(null)}
+        />
+      )}
+      {queueCloud && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 px-5"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#171821] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="mb-2 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]">
+                  <BellIcon s={19} />
+                </div>
+                <h2 className="text-lg font-bold text-white">
+                  Você entrou na fila
+                </h2>
+                <p className="mt-1 text-sm leading-relaxed text-white/65">
+                  Você será notificado quando “{queueCloud.title}” estrear.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQueueCloud(null)}
+                aria-label="Fechar"
+                className="text-xl text-white/50"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                Participantes aguardando
+              </p>
+              <div className="mt-3 max-h-48 space-y-2 overflow-y-auto">
+                {[
+                  ...(queueCloud.participantProfiles ?? []),
+                  ...(currentUser?.id &&
+                  !queueCloud.participantProfiles?.some(
+                    (participant) => participant.id === currentUser.id,
+                  )
+                    ? [
+                        {
+                          id: currentUser.id,
+                          name: currentUser.displayName,
+                          username: currentUser.username,
+                          avatarUrl: currentUser.avatarUrl,
+                        },
+                      ]
+                    : []),
+                ].map((participant) => (
+                  <div key={participant.id} className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">
+                      {participant.avatarUrl ? (
+                        <img
+                          src={participant.avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        participant.name.slice(0, 1)
+                      )}
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      {participant.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setQueueCloud(null)}
+              className="mt-5 w-full rounded-full bg-[#9333EA] py-2.5 text-sm font-semibold text-white"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+      {authPromptCloudId && (
+        <GuestCloudSignupModal
+          returnTo={`/cloud/${encodeURIComponent(authPromptCloudId)}`}
+          onClose={() => setAuthPromptCloudId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2466,22 +4453,33 @@ function PageContent() {
   const trendingQuery = searchParams.get("q")?.toLowerCase().trim() ?? null;
   const requestedCloudId = searchParams.get("cloud");
   const mobilePreview = searchParams.get("mobilePreview") === "1";
-  const initialScope = searchParams.get("scope") === "following" ? "following" : "for-you";
-  const initialCacheKey = user?.id ? `talk:${user.id}:${initialScope}` : "";
+  const initialScope =
+    searchParams.get("scope") === "following" ? "following" : "for-you";
+  const initialCacheKey = cloudFeedCacheKey(user?.id, initialScope);
 
-  const [clouds, setClouds] = useState<Cloud[]>(() => getCachedFeed<Cloud[]>(initialCacheKey) ?? []);
+  const [clouds, setClouds] = useState<Cloud[]>(
+    () => getCachedFeed<Cloud[]>(initialCacheKey) ?? [],
+  );
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [hydrated, setHydrated] = useState(() => getCachedFeed<Cloud[]>(initialCacheKey) !== null);
+  const [hydrated, setHydrated] = useState(
+    () => getCachedFeed<Cloud[]>(initialCacheKey) !== null,
+  );
   const [tick, setTick] = useState(0);
-  const [modal, setModal] = useState<"search" | "create" | "notifications" | "profile" | "record" | "poll" | null>(null);
+  const [modal, setModal] = useState<
+    "search" | "create" | "notifications" | "profile" | "record" | "poll" | null
+  >(null);
   const [authPromptOpen, setAuthPromptOpen] = useState(false);
   const [originCloudId, setOriginCloudId] = useState<string | null>(null);
   const [homeStage, setHomeStage] = useState<"topics" | "live">("topics");
   const [expandedTopicId, setExpandedTopicId] = useState<string | null>(null);
   const [currentCloudIndex, setCurrentCloudIndex] = useState(0);
   const navigationTargetRef = useRef<string | null>(null);
-  const [feedOrder, setFeedOrder] = useState<"default" | "recent">(() => searchParams.get("order") === "recent" ? "recent" : "default");
-  const [mobileFocusCloudId, setMobileFocusCloudId] = useState<string | null>(null);
+  const [feedOrder, setFeedOrder] = useState<"default" | "recent">(() =>
+    searchParams.get("order") === "recent" ? "recent" : "default",
+  );
+  const [mobileFocusCloudId, setMobileFocusCloudId] = useState<string | null>(
+    null,
+  );
   const [recentNoticeMounted, setRecentNoticeMounted] = useState(false);
   const [recentNoticeVisible, setRecentNoticeVisible] = useState(false);
   const [cloudScope, setCloudScope] = useState<CloudScope>(initialScope);
@@ -2490,8 +4488,11 @@ function PageContent() {
   const [cloudReportOpen, setCloudReportOpen] = useState(false);
   const [editingCloud, setEditingCloud] = useState<Cloud | null>(null);
   const [scheduledQueueOpen, setScheduledQueueOpen] = useState(false);
-  const [scheduledReminderLoading, setScheduledReminderLoading] = useState(false);
-  const [scheduledReminderCloudId, setScheduledReminderCloudId] = useState<string | null>(null);
+  const [scheduledReminderLoading, setScheduledReminderLoading] =
+    useState(false);
+  const [scheduledReminderCloudId, setScheduledReminderCloudId] = useState<
+    string | null
+  >(null);
   const [scheduledDateOpen, setScheduledDateOpen] = useState(false);
   const scheduledDateHintRef = useRef<HTMLDivElement | null>(null);
   // Simulated participant count: starts at a seeded value per cloud, fluctuates every few seconds
@@ -2514,7 +4515,10 @@ function PageContent() {
     ];
   }, [feedOrder]);
 
-  useEffect(() => () => recentNoticeTimers.current.forEach(window.clearTimeout), []);
+  useEffect(
+    () => () => recentNoticeTimers.current.forEach(window.clearTimeout),
+    [],
+  );
 
   useEffect(() => {
     if (!cloudOptionsOpen) return;
@@ -2535,11 +4539,17 @@ function PageContent() {
   }, [router, searchParams, user]);
 
   const requestCreate = () => {
-    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
+    if (!user || user.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setModal("create");
   };
   const changeCloudScope = (scope: CloudScope) => {
-    if (scope === "following" && (!user || user.isGuest)) { setAuthPromptOpen(true); return; }
+    if (scope === "following" && (!user || user.isGuest)) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setCloudScope(scope);
   };
 
@@ -2550,7 +4560,9 @@ function PageContent() {
     let sorted: Cloud[];
     if (feedOrder === "recent") {
       // Recentes: ordena por data de criação
-      sorted = [...clouds].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      sorted = [...clouds].sort(
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+      );
     } else {
       // Default: respeita a ordem do servidor (já ordenada por hype score + recência)
       // mas reordena localmente pelo score de hypes para refletir hypes feitos na sessão
@@ -2580,7 +4592,9 @@ function PageContent() {
 
   useEffect(() => {
     if (!requestedCloudId) return;
-    const index = orderedClouds.filter(isCloudActive).findIndex((cloud) => cloud.id === requestedCloudId);
+    const index = orderedClouds
+      .filter(isCloudActive)
+      .findIndex((cloud) => cloud.id === requestedCloudId);
     if (index >= 0) setCurrentCloudIndex(index);
   }, [orderedClouds, requestedCloudId]);
 
@@ -2604,19 +4618,23 @@ function PageContent() {
       try {
         const storedPolls = localStorage.getItem("cloudscommunity:polls");
         if (storedPolls) {
-          const parsed = JSON.parse(storedPolls) as Array<Omit<Poll, "createdAt"> & { createdAt: string }>;
+          const parsed = JSON.parse(storedPolls) as Array<
+            Omit<Poll, "createdAt"> & { createdAt: string }
+          >;
           if (!cancelled) {
-            setPolls(parsed.map((poll) => ({
-              ...poll,
-              createdAt: new Date(poll.createdAt),
-            })));
+            setPolls(
+              parsed.map((poll) => ({
+                ...poll,
+                createdAt: new Date(poll.createdAt),
+              })),
+            );
           }
         }
       } catch {
         // ignore invalid stored polls
       }
 
-      const currentCacheKey = user?.id ? `talk:${user.id}:${cloudScope}` : "";
+      const currentCacheKey = cloudFeedCacheKey(user?.id, cloudScope);
       const cachedClouds = getCachedFeed<Cloud[]>(currentCacheKey);
       if (cachedClouds) {
         if (!cancelled) {
@@ -2626,21 +4644,21 @@ function PageContent() {
       }
 
       try {
-        const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", {
-          cache: "no-store",
+        const payload = await requestCloudFeed<CloudApiPayload>(
+          cloudScope === "following" ? "/api/clouds/following" : "/api/clouds",
+        );
+        const serverClouds = payload.map(mapApiCloudToCloud).filter((cloud) => {
+          // Clouds privadas só aparecem para o criador e convidados.
+          if (cloud.visibility === "private") {
+            return (
+              cloud.authorId === user?.id ||
+              cloud.participantProfiles?.some(
+                (participant) => participant.id === user?.id,
+              )
+            );
+          }
+          return true;
         });
-
-        const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: CloudApiPayload[] } | null;
-        if (!response.ok || !Array.isArray(payload?.clouds)) throw new Error("Não foi possível atualizar o feed.");
-        const serverClouds = response.ok && Array.isArray(payload?.clouds)
-          ? payload.clouds.map(mapApiCloudToCloud).filter(cloud => {
-              // Clouds privadas só aparecem para o criador e convidados.
-              if (cloud.visibility === "private") {
-                return cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id);
-              }
-              return true;
-            })
-          : [];
 
         if (!cancelled) {
           cacheFeed(currentCacheKey, serverClouds);
@@ -2667,15 +4685,20 @@ function PageContent() {
   useEffect(() => {
     const refreshParticipants = async () => {
       try {
-        const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", {
-          cache: "no-store",
-        });
-        const payload = (await response.json().catch(() => null)) as { ok?: boolean; clouds?: CloudApiPayload[] } | null;
-        if (!response.ok || !Array.isArray(payload?.clouds)) return;
-        const refreshedClouds = payload.clouds
+        const payload = await requestCloudFeed<CloudApiPayload>(
+          cloudScope === "following" ? "/api/clouds/following" : "/api/clouds",
+        );
+        const refreshedClouds = payload
           .map(mapApiCloudToCloud)
-          .filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id));
-        cacheFeed(user?.id ? `talk:${user.id}:${cloudScope}` : "", refreshedClouds);
+          .filter(
+            (cloud) =>
+              cloud.visibility !== "private" ||
+              cloud.authorId === user?.id ||
+              cloud.participantProfiles?.some(
+                (participant) => participant.id === user?.id,
+              ),
+          );
+        cacheFeed(cloudFeedCacheKey(user?.id, cloudScope), refreshedClouds);
         setClouds(refreshedClouds);
       } catch {
         // Keep the last successfully rendered feed while the refresh fails.
@@ -2693,11 +4716,22 @@ function PageContent() {
       refreshTimer = window.setTimeout(async () => {
         refreshTimer = null;
         try {
-          const response = await fetch(cloudScope === "following" ? "/api/clouds/following" : "/api/clouds", { cache: "no-store" });
-          const payload = (await response.json().catch(() => null)) as { clouds?: CloudApiPayload[] } | null;
-          if (!response.ok || !Array.isArray(payload?.clouds)) return;
-          const refreshedClouds = payload.clouds.map(mapApiCloudToCloud).filter((cloud) => cloud.visibility !== "private" || cloud.authorId === user?.id || cloud.participantProfiles?.some((participant) => participant.id === user?.id));
-          cacheFeed(user?.id ? `talk:${user.id}:${cloudScope}` : "", refreshedClouds);
+          const payload = await requestCloudFeed<CloudApiPayload>(
+            cloudScope === "following"
+              ? "/api/clouds/following"
+              : "/api/clouds",
+          );
+          const refreshedClouds = payload
+            .map(mapApiCloudToCloud)
+            .filter(
+              (cloud) =>
+                cloud.visibility !== "private" ||
+                cloud.authorId === user?.id ||
+                cloud.participantProfiles?.some(
+                  (participant) => participant.id === user?.id,
+                ),
+            );
+          cacheFeed(cloudFeedCacheKey(user?.id, cloudScope), refreshedClouds);
           setClouds(refreshedClouds);
         } catch {
           // The periodic refresh remains available if the live refresh fails.
@@ -2723,9 +4757,17 @@ function PageContent() {
     return () => clearInterval(interval);
   }, []);
 
-  const closeModal = () => { setModal(null); setOriginCloudId(null); };
+  const closeModal = () => {
+    setModal(null);
+    setOriginCloudId(null);
+  };
 
-  const publishCloud = async (data: Omit<Cloud, "id" | "createdAt" | "mode"> & { audioUrl?: string; invitedUserIds?: string[] }) => {
+  const publishCloud = async (
+    data: Omit<Cloud, "id" | "createdAt" | "mode"> & {
+      audioUrl?: string;
+      invitedUserIds?: string[];
+    },
+  ) => {
     if (data.audioUrl) {
       const id = crypto.randomUUID();
       const cloud = {
@@ -2758,7 +4800,11 @@ function PageContent() {
       }),
     });
 
-    const payload = (await response.json().catch(() => null)) as { ok?: boolean; cloud?: CloudApiPayload; message?: string } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      cloud?: CloudApiPayload;
+      message?: string;
+    } | null;
 
     const cloudPayload = payload?.cloud;
 
@@ -2774,26 +4820,46 @@ function PageContent() {
   };
 
   const hyparCloud = (cloudId: string, newCount: number, wasHyped: boolean) => {
-    setClouds(prev => prev.map(c => c.id === cloudId ? { ...c, hypes: newCount, hyped: !wasHyped } : c));
+    setClouds((prev) =>
+      prev.map((c) =>
+        c.id === cloudId ? { ...c, hypes: newCount, hyped: !wasHyped } : c,
+      ),
+    );
   };
 
   const deleteScheduledCloud = async (cloudId: string) => {
-    if (!window.confirm("Excluir esta Cloud agendada? Ela será removida permanentemente.")) return;
-    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, { method: "DELETE" });
-    if (response.ok) setClouds(current => current.filter((cloud) => cloud.id !== cloudId));
+    if (
+      !window.confirm(
+        "Excluir esta Cloud agendada? Ela será removida permanentemente.",
+      )
+    )
+      return;
+    const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}`, {
+      method: "DELETE",
+    });
+    if (response.ok)
+      setClouds((current) => current.filter((cloud) => cloud.id !== cloudId));
   };
 
   const joinScheduledQueue = async (cloudId: string) => {
     if (scheduledReminderLoading) return;
-    if (!user || user.isGuest) { setAuthPromptOpen(true); return; }
+    if (!user || user.isGuest) {
+      setAuthPromptOpen(true);
+      return;
+    }
     setScheduledReminderLoading(true);
     try {
-      const response = await fetch(`/api/clouds/${encodeURIComponent(cloudId)}/join`, { method: "POST" });
+      const response = await fetch(
+        `/api/clouds/${encodeURIComponent(cloudId)}/join`,
+        { method: "POST" },
+      );
       if (response.ok) {
         setScheduledReminderCloudId(cloudId);
         setScheduledQueueOpen(true);
       } else {
-        const payload = await response.json().catch(() => null) as { message?: string } | null;
+        const payload = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
         window.alert(payload?.message || "Não foi possível entrar na Cloud.");
       }
     } finally {
@@ -2801,33 +4867,54 @@ function PageContent() {
     }
   };
 
-  const publishPoll = (data: Omit<Poll, "id" | "createdAt" | "votedOptionId">) => {
-    setPolls(prev => [{
-      ...data,
-      id: crypto.randomUUID(),
-      createdAt: new Date(),
-      votedOptionId: null,
-    }, ...prev]);
+  const publishPoll = (
+    data: Omit<Poll, "id" | "createdAt" | "votedOptionId">,
+  ) => {
+    setPolls((prev) => [
+      {
+        ...data,
+        id: crypto.randomUUID(),
+        createdAt: new Date(),
+        votedOptionId: null,
+      },
+      ...prev,
+    ]);
   };
 
   const voteOnPoll = (pollId: string, optionId: string) => {
-    setPolls(prev => prev.map(p =>
-      p.id === pollId && p.votedOptionId === null
-        ? { ...p, votedOptionId: optionId, options: p.options.map(o => o.id === optionId ? { ...o, votes: o.votes + 1 } : o) }
-        : p
-    ));
+    setPolls((prev) =>
+      prev.map((p) =>
+        p.id === pollId && p.votedOptionId === null
+          ? {
+              ...p,
+              votedOptionId: optionId,
+              options: p.options.map((o) =>
+                o.id === optionId ? { ...o, votes: o.votes + 1 } : o,
+              ),
+            }
+          : p,
+      ),
+    );
   };
 
   // Merge clouds + polls sorted by createdAt descending
   const allItems: FeedItem[] = [
-    ...clouds.map(c => ({ kind: "cloud" as const, ...c })),
-    ...polls.map(p => ({ kind: "poll" as const, ...p })),
+    ...clouds.map((c) => ({ kind: "cloud" as const, ...c })),
+    ...polls.map((p) => ({ kind: "poll" as const, ...p })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   // Categorias removidas: feed sempre mostra todos os itens em ordem por createdAt.
-  const visibleItems = feedOrder === "recent" ? [...allItems].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) : allItems;
+  const visibleItems =
+    feedOrder === "recent"
+      ? [...allItems].sort(
+          (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+        )
+      : allItems;
   const activeClouds = orderedClouds.filter(isCloudActive);
-  const currentCloud = activeClouds[Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))] ?? null;
+  const currentCloud =
+    activeClouds[
+      Math.min(currentCloudIndex, Math.max(0, activeClouds.length - 1))
+    ] ?? null;
   const currentCountdown = currentCloud ? getTopicCountdown(currentCloud) : 0;
 
   useEffect(() => {
@@ -2851,48 +4938,82 @@ function PageContent() {
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsidePointerDown);
   }, [scheduledDateOpen]);
 
   // Aguarda hidratação para evitar flash do feed antes de um possível redirect.
   if (!hydrated) return null;
 
-
   return (
-    <div className={`flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white ${mobilePreview ? "mx-auto max-w-[430px] border-x border-white/[.08] shadow-[0_0_80px_rgba(115,45,255,.35)]" : ""}`}
-      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)" }} {...mobileFeedTabSwipe}>
-
+    <div
+      className={`flex h-[100dvh] min-h-screen flex-col overflow-hidden text-white ${mobilePreview ? "mx-auto max-w-[430px] border-x border-white/[.08] shadow-[0_0_80px_rgba(115,45,255,.35)]" : ""}`}
+      style={{
+        background:
+          "radial-gradient(ellipse at 50% 30%, rgba(40,10,120,0.60) 0%, rgba(12,4,40,0.98) 45%, #030208 100%)",
+      }}
+      {...mobileFeedTabSwipe}
+    >
       {/* ── Modals ── */}
-      {modal === "search"        && <SearchModal onClose={closeModal} />}
-      {modal === "create"        && <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />}
-      {modal === "poll"          && <CreatePollModal onClose={closeModal} onPublish={publishPoll} />}
-      {modal === "profile"       && <ProfileMenu onClose={closeModal} />}
-      {modal === "record"        && <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />}
+      {modal === "search" && <SearchModal onClose={closeModal} />}
+      {modal === "create" && (
+        <CreateCloudModal onClose={closeModal} onPublish={publishCloud} />
+      )}
+      {modal === "poll" && (
+        <CreatePollModal onClose={closeModal} onPublish={publishPoll} />
+      )}
+      {modal === "profile" && <ProfileMenu onClose={closeModal} />}
+      {modal === "record" && (
+        <RecordAudioModal onClose={closeModal} onPublish={publishCloud} />
+      )}
       {recentNoticeMounted && (
-        <div className={`pointer-events-none fixed left-1/2 top-24 z-[90] -translate-x-1/2 rounded-full border border-white/15 bg-[#1a0e3d]/95 px-4 py-2 text-[13px] font-semibold text-white shadow-xl backdrop-blur-md transition-opacity duration-300 ${recentNoticeVisible ? "opacity-100" : "opacity-0"}`}>
+        <div
+          className={`pointer-events-none fixed left-1/2 top-24 z-[90] -translate-x-1/2 rounded-full border border-white/15 bg-[#1a0e3d]/95 px-4 py-2 text-[13px] font-semibold text-white shadow-xl backdrop-blur-md transition-opacity duration-300 ${recentNoticeVisible ? "opacity-100" : "opacity-0"}`}
+        >
           Clouds mais recentes
         </div>
       )}
 
       {/* ── Header — fundo gradiente escuro ── */}
-      <header className={mobilePreview ? "hidden" : "hidden flex-none bg-transparent md:block"}>
+      <header
+        className={
+          mobilePreview ? "hidden" : "hidden flex-none bg-transparent md:block"
+        }
+      >
         <div className="mx-auto grid h-[100px] max-w-[1280px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-4 px-8 pb-4">
-
           {/* Logo */}
-          <Link href="/" className="flex shrink-0 items-center gap-4 justify-self-start pb-2">
+          <Link
+            href="/"
+            className="flex shrink-0 items-center gap-4 justify-self-start pb-2"
+          >
             <HeaderBrand />
           </Link>
 
           {/* Nav */}
-          <nav aria-label="Navegação" className="flex items-end justify-self-center gap-16 pb-2">
-            <Link href="/" title="Converse: Clouds ao vivo para conversar agora." className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white">
+          <nav
+            aria-label="Navegação"
+            className="flex items-end justify-self-center gap-16 pb-2"
+          >
+            <Link
+              href="/"
+              title="Converse: Clouds ao vivo para conversar agora."
+              className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white"
+            >
               Converse
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
-            <Link href="/read" title="Leia: conversas encerradas disponíveis para leitura." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+            <Link
+              href="/read"
+              title="Leia: conversas encerradas disponíveis para leitura."
+              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
+            >
               Leia
             </Link>
-            <Link href="/meet" title="Conheça: descubra pessoas para seguir e conhecer." className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white">
+            <Link
+              href="/meet"
+              title="Conheça: descubra pessoas para seguir e conhecer."
+              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
+            >
               Conheça
             </Link>
           </nav>
@@ -2900,17 +5021,31 @@ function PageContent() {
           {/* Right icons */}
           <div className="flex items-center justify-self-end gap-4 pb-2">
             <InviteCloudsButton />
-            <button type="button" aria-label="Buscar" onClick={() => setModal("search")}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]">
+            <button
+              type="button"
+              aria-label="Buscar"
+              onClick={() => setModal("search")}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.12] text-white transition hover:bg-white/[0.20]"
+            >
               <SearchIcon s={28} />
             </button>
             <NotificationsBell buttonClassName="relative flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]" />
-            <Link href="/profile" aria-label="Meu perfil"
-              className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white">
-              <SessionUserAvatar user={user} size={56} className="rounded-full" />
+            <Link
+              href="/profile"
+              aria-label="Meu perfil"
+              className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#A855F7] text-[18px] font-bold text-white"
+            >
+              <SessionUserAvatar
+                user={user}
+                size={56}
+                className="rounded-full"
+              />
             </Link>
-            <Link href="/settings" aria-label="Configurações"
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]">
+            <Link
+              href="/settings"
+              aria-label="Configurações"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.07] text-white transition hover:bg-white/[0.13]"
+            >
               <GearIcon s={28} />
             </Link>
           </div>
@@ -2918,17 +5053,50 @@ function PageContent() {
       </header>
 
       {/* Cabeçalho compacto do feed móvel */}
-      <header className={`${mobilePreview ? "grid" : "grid md:hidden"} h-[76px] flex-none grid-cols-[48px_minmax(0,1fr)_48px] items-center px-5 pt-[max(.5rem,env(safe-area-inset-top))]`}>
-        <Link href={mobilePreview ? "/?mobilePreview=1" : "/"} aria-label="Ir para a página inicial" className="flex h-[42px] w-[42px] items-center justify-center">
+      <header
+        className={`${mobilePreview ? "grid" : "grid md:hidden"} h-[76px] flex-none grid-cols-[48px_minmax(0,1fr)_48px] items-center px-5 pt-[max(.5rem,env(safe-area-inset-top))]`}
+      >
+        <Link
+          href={mobilePreview ? "/?mobilePreview=1" : "/"}
+          aria-label="Ir para a página inicial"
+          className="flex h-[42px] w-[42px] items-center justify-center"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo_clouds.png" alt="Clouds Community" className="h-[42px] w-[42px] object-contain" />
+          <img
+            src="/logo_clouds.png"
+            alt="Clouds Community"
+            className="h-[42px] w-[42px] object-contain"
+          />
         </Link>
-        <nav aria-label="Categorias do feed" className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap">
-          <span className="relative text-[11px] font-bold text-[#B44DFF]">Converse<span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" /></span>
-          <Link href={mobilePreview ? "/read?mobilePreview=1" : "/read"} className="text-[11px] font-semibold text-white/60">Leia</Link>
-          <Link href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"} className="text-[11px] font-semibold text-white/60">Conheça</Link>
+        <nav
+          aria-label="Categorias do feed"
+          className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap"
+        >
+          <span className="relative text-[11px] font-bold text-[#B44DFF]">
+            Converse
+            <span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" />
+          </span>
+          <Link
+            href={mobilePreview ? "/read?mobilePreview=1" : "/read"}
+            className="text-[11px] font-semibold text-white/60"
+          >
+            Leia
+          </Link>
+          <Link
+            href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"}
+            className="text-[11px] font-semibold text-white/60"
+          >
+            Conheça
+          </Link>
         </nav>
-        <button type="button" aria-label="Buscar" onClick={() => setModal("search")} className="justify-self-center text-white"><SearchIcon s={27} /></button>
+        <button
+          type="button"
+          aria-label="Buscar"
+          onClick={() => setModal("search")}
+          className="justify-self-center text-white"
+        >
+          <SearchIcon s={27} />
+        </button>
       </header>
 
       <div className="relative">
@@ -2936,213 +5104,486 @@ function PageContent() {
         <div className="absolute right-7 top-1/2 -translate-y-1/2 md:hidden">
           <InviteCloudsButton compact />
         </div>
-        {!trendingQuery && <div className={`${mobilePreview ? "flex" : "flex md:hidden"} absolute left-6 top-1/2 -translate-y-1/2`}>
-        <button
-          type="button"
-          onClick={toggleRecentClouds}
-          aria-pressed={feedOrder === "recent"}
-          title={feedOrder === "recent" ? "Exibindo as Clouds mais recentes primeiro" : "Exibir as Clouds mais recentes primeiro"}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7]" : "border-white/[0.10] bg-[#100825]/80 text-white hover:border-[#A855F7]/45"}`}
-        >
-          <ClockIcon s={15} />
-        </button>
-        </div>}
+        {!trendingQuery && (
+          <div
+            className={`${mobilePreview ? "flex" : "flex md:hidden"} absolute left-6 top-1/2 -translate-y-1/2`}
+          >
+            <button
+              type="button"
+              onClick={toggleRecentClouds}
+              aria-pressed={feedOrder === "recent"}
+              title={
+                feedOrder === "recent"
+                  ? "Exibindo as Clouds mais recentes primeiro"
+                  : "Exibir as Clouds mais recentes primeiro"
+              }
+              className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7]" : "border-white/[0.10] bg-[#100825]/80 text-white hover:border-[#A855F7]/45"}`}
+            >
+              <ClockIcon s={15} />
+            </button>
+          </div>
+        )}
       </div>
 
-      <main className={`${mobilePreview ? "flex" : "flex md:hidden"} cloud-feed-main`}>
+      <main
+        className={`${mobilePreview ? "flex" : "flex md:hidden"} cloud-feed-main`}
+      >
         <div className="relative flex h-full min-h-0 flex-1 flex-col">
-        <MobileCloudFeed
-          key={`${cloudScope}:${feedOrder}`}
-          clouds={activeClouds}
-          focusCloudId={mobileFocusCloudId}
-          initialCloudId={requestedCloudId}
-          navigationTargetRef={navigationTargetRef}
-          scope={cloudScope}
-          order={feedOrder}
-          onEnter={enterConversation}
-          onCreate={requestCreate}
-          onDescription={(cloud) => {
-            const index = activeClouds.findIndex((item) => item.id === cloud.id);
-            if (index >= 0) setCurrentCloudIndex(index);
-            setCloudDescriptionOpen(true);
-          }}
-          onReport={(cloud) => {
-            const index = activeClouds.findIndex((item) => item.id === cloud.id);
-            if (index >= 0) setCurrentCloudIndex(index);
-            setCloudReportOpen(true);
-          }}
-          onDelete={deleteScheduledCloud}
-          onEdit={setEditingCloud}
-        />
+          <MobileCloudFeed
+            key={`${cloudScope}:${feedOrder}`}
+            clouds={activeClouds}
+            focusCloudId={mobileFocusCloudId}
+            initialCloudId={requestedCloudId}
+            navigationTargetRef={navigationTargetRef}
+            scope={cloudScope}
+            order={feedOrder}
+            onEnter={enterConversation}
+            onCreate={requestCreate}
+            onDescription={(cloud) => {
+              const index = activeClouds.findIndex(
+                (item) => item.id === cloud.id,
+              );
+              if (index >= 0) setCurrentCloudIndex(index);
+              setCloudDescriptionOpen(true);
+            }}
+            onReport={(cloud) => {
+              const index = activeClouds.findIndex(
+                (item) => item.id === cloud.id,
+              );
+              if (index >= 0) setCurrentCloudIndex(index);
+              setCloudReportOpen(true);
+            }}
+            onDelete={deleteScheduledCloud}
+            onEdit={setEditingCloud}
+          />
         </div>
       </main>
 
-      {homeStage === "topics" && !mobilePreview && <main className="cloud-feed-main relative hidden md:flex">
-        {!trendingQuery && <button
-          type="button"
-          onClick={toggleRecentClouds}
-          aria-label={feedOrder === "recent" ? "Exibindo Clouds mais recentes" : "Exibir Clouds mais recentes"}
-          aria-pressed={feedOrder === "recent"}
-          title={feedOrder === "recent" ? "Exibindo as Clouds mais recentes primeiro" : "Exibir as Clouds mais recentes primeiro"}
-          className={`absolute left-[max(2rem,calc(50%-608px))] top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7] shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45"}`}
-        >
-          <ClockIcon s={18} />
-        </button>}
-        <div className="relative flex h-full min-h-0 flex-1 flex-col">
-        <DesktopCloudFeed
-          key={`${cloudScope}:${feedOrder}`}
-          clouds={activeClouds}
-          initialCloudId={requestedCloudId}
-          navigationTargetRef={navigationTargetRef}
-          scope={cloudScope}
-          order={feedOrder}
-          currentUserId={user?.id}
-          onEnter={enterConversation}
-          onDescription={(cloud) => { const index = activeClouds.findIndex((item) => item.id === cloud.id); if (index >= 0) setCurrentCloudIndex(index); setCloudDescriptionOpen(true); }}
-          onReport={(cloud) => { const index = activeClouds.findIndex((item) => item.id === cloud.id); if (index >= 0) setCurrentCloudIndex(index); setCloudReportOpen(true); }}
-          onDelete={deleteScheduledCloud}
-          onEdit={setEditingCloud}
-        />
-        </div>
-      </main>}
+      {homeStage === "topics" && !mobilePreview && (
+        <main className="cloud-feed-main relative hidden md:flex">
+          {!trendingQuery && (
+            <button
+              type="button"
+              onClick={toggleRecentClouds}
+              aria-label={
+                feedOrder === "recent"
+                  ? "Exibindo Clouds mais recentes"
+                  : "Exibir Clouds mais recentes"
+              }
+              aria-pressed={feedOrder === "recent"}
+              title={
+                feedOrder === "recent"
+                  ? "Exibindo as Clouds mais recentes primeiro"
+                  : "Exibir as Clouds mais recentes primeiro"
+              }
+              className={`absolute left-[max(2rem,calc(50%-608px))] top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7] shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45"}`}
+            >
+              <ClockIcon s={18} />
+            </button>
+          )}
+          <div className="relative flex h-full min-h-0 flex-1 flex-col">
+            <DesktopCloudFeed
+              key={`${cloudScope}:${feedOrder}`}
+              clouds={activeClouds}
+              initialCloudId={requestedCloudId}
+              navigationTargetRef={navigationTargetRef}
+              scope={cloudScope}
+              order={feedOrder}
+              currentUserId={user?.id}
+              onEnter={enterConversation}
+              onDescription={(cloud) => {
+                const index = activeClouds.findIndex(
+                  (item) => item.id === cloud.id,
+                );
+                if (index >= 0) setCurrentCloudIndex(index);
+                setCloudDescriptionOpen(true);
+              }}
+              onReport={(cloud) => {
+                const index = activeClouds.findIndex(
+                  (item) => item.id === cloud.id,
+                );
+                if (index >= 0) setCurrentCloudIndex(index);
+                setCloudReportOpen(true);
+              }}
+              onDelete={deleteScheduledCloud}
+              onEdit={setEditingCloud}
+            />
+          </div>
+        </main>
+      )}
 
       {/* ── Main: vertical-scroll carousel ── */}
-      <main className={mobilePreview || homeStage === "topics" ? "hidden" : "relative hidden min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-6 md:flex"}>
+      <main
+        className={
+          mobilePreview || homeStage === "topics"
+            ? "hidden"
+            : "relative hidden min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-6 md:flex"
+        }
+      >
         {homeStage === "topics" ? (
           <>
             {trendingQuery ? (
               <div className="absolute left-6 top-5 z-20 flex items-center gap-2 rounded-full border border-[#A855F7]/50 bg-[#1a0a3d]/90 px-4 py-2 text-[12px] font-semibold text-white backdrop-blur-md shadow-lg">
-                <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="m18 15-6-6-6 6"/>
+                <svg
+                  viewBox="0 0 24 24"
+                  width={13}
+                  height={13}
+                  fill="none"
+                  stroke="#A855F7"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m18 15-6-6-6 6" />
                 </svg>
-                <span className="text-[#C084FC]">#{trendingQuery.charAt(0).toUpperCase() + trendingQuery.slice(1)}</span>
+                <span className="text-[#C084FC]">
+                  #
+                  {trendingQuery.charAt(0).toUpperCase() +
+                    trendingQuery.slice(1)}
+                </span>
                 <span className="text-white/50">em alta</span>
-                <Link href="/" className="ml-1 text-white/30 hover:text-white transition">×</Link>
+                <Link
+                  href="/"
+                  className="ml-1 text-white/30 hover:text-white transition"
+                >
+                  ×
+                </Link>
               </div>
             ) : (
               <button
                 type="button"
                 onClick={toggleRecentClouds}
                 aria-pressed={feedOrder === "recent"}
-                title={feedOrder === "recent" ? "Exibindo as Clouds mais recentes primeiro" : "Exibir as Clouds mais recentes primeiro"}
+                title={
+                  feedOrder === "recent"
+                    ? "Exibindo as Clouds mais recentes primeiro"
+                    : "Exibir as Clouds mais recentes primeiro"
+                }
                 className={`absolute left-[max(2.5rem,calc(50%-600px))] top-5 z-20 flex h-10 w-10 items-center justify-center rounded-full border transition-all ${feedOrder === "recent" ? "border-[#A855F7]/70 bg-white/[0.08] text-[#A855F7] shadow-[0_5px_18px_rgba(124,58,237,0.38)]" : "border-white/[0.10] bg-[#100825]/80 text-white shadow-lg shadow-black/20 backdrop-blur-md hover:border-[#A855F7]/45"}`}
               >
                 <ClockIcon s={18} />
               </button>
             )}
             {currentCloud ? (
-            <>
-
-            {/* Cloud card + dot indicators */}
-            <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4 md:mr-20 xl:mr-0">
-            <div
-              onClick={() => setCloudOptionsOpen(false)}
-              className="cloud-card relative flex w-full flex-col overflow-hidden rounded-3xl md:min-h-[680px]"
-              style={{
-                background: "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
-                border: "1px solid rgba(168,85,247,0.22)",
-                boxShadow: "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
-              }}
-            >
-              {/* Card header */}
-              <div className="flex items-center justify-between px-12 pb-7 pt-10">
-                <div className="flex items-center gap-5">
-                  <Link href={`/users/${encodeURIComponent(currentCloud.authorId ?? "")}`} aria-label={`Ver perfil de ${currentCloud.authorName ?? "Autor"}`} className="relative">
-                    <UserAvatar user={{ id: currentCloud.authorId ?? "author", username: currentCloud.authorHandle ?? "user", displayName: currentCloud.authorName ?? "Autor", avatarUrl: currentCloud.authorPhoto ?? null }} size={80} className="ring-2 ring-white/10" />
-                    <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
-                  </Link>
-                  <div>
-                    <p className="flex items-center gap-2 text-[21px] font-semibold text-white">
-                      {currentCloud.authorName ?? "Autor"}
-                      <svg viewBox="0 0 24 24" width={18} height={18} fill="#A855F7" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="m9 12 2 2 4-4" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </p>
-                    <p className="text-[16px] text-white/45">@{currentCloud.authorHandle ?? "user"}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6">
-                  <div className="flex -space-x-4" aria-label={`${currentCloud.participantProfiles?.length ?? 0} participantes da Cloud`}>
-                    {currentCloud.participantProfiles?.slice(0, 7).map((participant) => (
-                      <Link key={participant.id} href={`/users/${encodeURIComponent(participant.id)}`} aria-label={`Ver perfil de ${participant.name}`}>
-                        {participant.avatarUrl ? <img src={participant.avatarUrl} alt={participant.name} title={participant.name} className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover" referrerPolicy="no-referrer" /> : <span title={participant.name} className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold text-white">{participant.name.slice(0, 1).toUpperCase()}</span>}
-                      </Link>
-                    ))}
-                    {(currentCloud.participantProfiles?.length ?? 0) > 7 && <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold text-white">+{(currentCloud.participantProfiles?.length ?? 0) - 7}</span>}
-                  </div>
-                  {currentCloud.scheduledAt && new Date(currentCloud.scheduledAt).getTime() > Date.now() && currentCloud.authorId === user?.id && <button type="button" onClick={() => deleteScheduledCloud(currentCloud.id)} aria-label="Excluir Cloud agendada" className="rounded-full p-2 text-white/55 transition hover:bg-red-500/15 hover:text-red-300"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" /></svg></button>}
-                  <div className="relative flex items-center">
-                    <button type="button" aria-label="Mais opções da Cloud" onClick={(event) => { event.stopPropagation(); setCloudOptionsOpen((open) => !open); }} className="flex items-center text-white hover:text-white/70 transition">
-                      <svg viewBox="0 0 24 24" width={22} height={22} fill="#ffffff" aria-hidden="true"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                    </button>
-                    {cloudOptionsOpen && (
-                      <div onClick={(event) => event.stopPropagation()} className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl">
-                        {currentCloud.description?.trim() && <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudDescriptionOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5">Ver descrição</button>}
-                        {user?.id && currentCloud.authorId !== user.id && <button type="button" onClick={() => { setCloudOptionsOpen(false); setCloudReportOpen(true); }} className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5">Denunciar Cloud</button>}
+              <>
+                {/* Cloud card + dot indicators */}
+                <div className="flex min-w-0 flex-1 max-w-[1100px] flex-col gap-4 md:mr-20 xl:mr-0">
+                  <div
+                    onClick={() => setCloudOptionsOpen(false)}
+                    className="cloud-card relative flex w-full flex-col overflow-hidden rounded-3xl md:min-h-[680px]"
+                    style={{
+                      background:
+                        "linear-gradient(175deg, rgba(40,15,100,0.85) 0%, rgba(15,8,50,0.92) 60%, rgba(8,5,30,0.95) 100%)",
+                      border: "1px solid rgba(168,85,247,0.22)",
+                      boxShadow:
+                        "0 40px 100px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    {/* Card header */}
+                    <div className="flex items-center justify-between px-12 pb-7 pt-10">
+                      <div className="flex items-center gap-5">
+                        <Link
+                          href={`/users/${encodeURIComponent(currentCloud.authorId ?? "")}`}
+                          aria-label={`Ver perfil de ${currentCloud.authorName ?? "Autor"}`}
+                          className="relative"
+                        >
+                          <UserAvatar
+                            user={{
+                              id: currentCloud.authorId ?? "author",
+                              username: currentCloud.authorHandle ?? "user",
+                              displayName: currentCloud.authorName ?? "Autor",
+                              avatarUrl: currentCloud.authorPhoto ?? null,
+                            }}
+                            size={80}
+                            className="ring-2 ring-white/10"
+                          />
+                          <span className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full border-2 border-[#0f0832] bg-[#22C55E]" />
+                        </Link>
+                        <div>
+                          <p className="flex items-center gap-2 text-[21px] font-semibold text-white">
+                            {currentCloud.authorName ?? "Autor"}
+                            <svg
+                              viewBox="0 0 24 24"
+                              width={18}
+                              height={18}
+                              fill="#A855F7"
+                              aria-hidden="true"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path
+                                d="m9 12 2 2 4-4"
+                                fill="none"
+                                stroke="white"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </p>
+                          <p className="text-[16px] text-white/45">
+                            @{currentCloud.authorHandle ?? "user"}
+                          </p>
+                        </div>
                       </div>
-                    )}
+
+                      <div className="flex items-center gap-6">
+                        <div
+                          className="flex -space-x-4"
+                          aria-label={`${currentCloud.participantProfiles?.length ?? 0} participantes da Cloud`}
+                        >
+                          {currentCloud.participantProfiles
+                            ?.slice(0, 7)
+                            .map((participant) => (
+                              <Link
+                                key={participant.id}
+                                href={`/users/${encodeURIComponent(participant.id)}`}
+                                aria-label={`Ver perfil de ${participant.name}`}
+                              >
+                                {participant.avatarUrl ? (
+                                  <img
+                                    src={participant.avatarUrl}
+                                    alt={participant.name}
+                                    title={participant.name}
+                                    className="h-14 w-14 rounded-full border-2 border-[#160a3e] object-cover"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                ) : (
+                                  <span
+                                    title={participant.name}
+                                    className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#7C3AED] text-[16px] font-bold text-white"
+                                  >
+                                    {participant.name.slice(0, 1).toUpperCase()}
+                                  </span>
+                                )}
+                              </Link>
+                            ))}
+                          {(currentCloud.participantProfiles?.length ?? 0) >
+                            7 && (
+                            <span className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#160a3e] bg-[#32106f] text-[16px] font-bold text-white">
+                              +
+                              {(currentCloud.participantProfiles?.length ?? 0) -
+                                7}
+                            </span>
+                          )}
+                        </div>
+                        {currentCloud.scheduledAt &&
+                          new Date(currentCloud.scheduledAt).getTime() >
+                            Date.now() &&
+                          currentCloud.authorId === user?.id && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteScheduledCloud(currentCloud.id)
+                              }
+                              aria-label="Excluir Cloud agendada"
+                              className="rounded-full p-2 text-white/55 transition hover:bg-red-500/15 hover:text-red-300"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                width="18"
+                                height="18"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                              >
+                                <path d="M4 7h16M10 11v6M14 11v6M9 7l1-3h4l1 3M6 7l1 14h10l1-14" />
+                              </svg>
+                            </button>
+                          )}
+                        <div className="relative flex items-center">
+                          <button
+                            type="button"
+                            aria-label="Mais opções da Cloud"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setCloudOptionsOpen((open) => !open);
+                            }}
+                            className="flex items-center text-white hover:text-white/70 transition"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              width={22}
+                              height={22}
+                              fill="#ffffff"
+                              aria-hidden="true"
+                            >
+                              <circle cx="12" cy="5" r="1.5" />
+                              <circle cx="12" cy="12" r="1.5" />
+                              <circle cx="12" cy="19" r="1.5" />
+                            </svg>
+                          </button>
+                          {cloudOptionsOpen && (
+                            <div
+                              onClick={(event) => event.stopPropagation()}
+                              className="absolute right-0 top-full z-30 mt-2 w-52 overflow-hidden rounded-xl border border-white/10 bg-[#15161C] py-1 shadow-2xl"
+                            >
+                              {currentCloud.description?.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCloudOptionsOpen(false);
+                                    setCloudDescriptionOpen(true);
+                                  }}
+                                  className="w-full px-4 py-3 text-left text-[13px] text-white/80 hover:bg-white/5"
+                                >
+                                  Ver descrição
+                                </button>
+                              )}
+                              {user?.id &&
+                                currentCloud.authorId !== user.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCloudOptionsOpen(false);
+                                      setCloudReportOpen(true);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-[13px] text-red-300 hover:bg-white/5"
+                                  >
+                                    Denunciar Cloud
+                                  </button>
+                                )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Big title */}
+                    <div className="flex flex-1 flex-col items-center justify-center px-12 py-10 text-center">
+                      {currentCloud.originCloud && (
+                        <p className="mb-4 text-[12px] text-white/45">
+                          Inspirada em{" "}
+                          <Link
+                            href={`/read?cloud=${encodeURIComponent(currentCloud.originCloud.id)}`}
+                            className="font-semibold text-[#C084FC] hover:text-white hover:underline"
+                          >
+                            {currentCloud.originCloud.title}
+                          </Link>
+                        </p>
+                      )}
+                      <h2
+                        lang="pt-BR"
+                        className="cloud-feed-title hyphens-auto break-normal text-[68px] font-extrabold leading-[1.06] tracking-tight text-white sm:text-[72px]"
+                        style={{
+                          fontFamily:
+                            "'Space Grotesk', 'DM Sans', system-ui, sans-serif",
+                          hyphenateCharacter: "–",
+                        }}
+                      >
+                        {currentCloud.title}
+                      </h2>
+                    </div>
+
+                    {/* Enter button */}
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center px-12 pb-16">
+                      <div className="col-start-2">
+                        {currentCloud.scheduledAt &&
+                        new Date(currentCloud.scheduledAt).getTime() >
+                          Date.now() ? (
+                          <div className="flex items-center gap-3">
+                            <div
+                              ref={scheduledDateHintRef}
+                              onMouseEnter={() => setScheduledDateOpen(true)}
+                              onMouseLeave={() => setScheduledDateOpen(false)}
+                              className="relative"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setScheduledDateOpen((open) => !open)
+                                }
+                                aria-label="Ver data de estreia"
+                                className="rounded-full border border-[#A855F7]/70 bg-[#9333EA] p-4 text-white transition hover:bg-[#7C3AED]"
+                              >
+                                <CalendarIcon s={21} />
+                              </button>
+                              {scheduledDateOpen && (
+                                <span className="absolute bottom-full left-1/2 mb-3 hidden w-60 -translate-x-1/2 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-4 py-3 text-sm leading-relaxed text-white shadow-2xl sm:block">
+                                  Estreia em{" "}
+                                  {new Date(
+                                    currentCloud.scheduledAt,
+                                  ).toLocaleDateString("pt-BR", {
+                                    day: "2-digit",
+                                    month: "long",
+                                  })}{" "}
+                                  às{" "}
+                                  {new Date(
+                                    currentCloud.scheduledAt,
+                                  ).toLocaleTimeString("pt-BR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                joinScheduledQueue(currentCloud.id)
+                              }
+                              disabled={
+                                scheduledReminderLoading ||
+                                scheduledReminderCloudId === currentCloud.id
+                              }
+                              aria-label={
+                                scheduledReminderCloudId === currentCloud.id
+                                  ? "Aguardando a estreia"
+                                  : "Avisar-me na estreia"
+                              }
+                              className={`inline-flex items-center gap-2 rounded-full border px-12 py-5 text-[18px] font-semibold transition-all duration-300 ease-out ${scheduledReminderCloudId === currentCloud.id ? "scale-105 border-[#A855F7] bg-[#9333EA] text-white shadow-[0_0_24px_rgba(147,51,234,0.5)]" : "border-[#A855F7]/70 bg-transparent text-white hover:bg-[#A855F7]/20"}`}
+                            >
+                              <BellIcon s={20} />
+                              {scheduledReminderCloudId === currentCloud.id
+                                ? "Aguardando"
+                                : "Avisar-me"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => enterConversation(currentCloud)}
+                            className="rounded-full border border-[#A855F7]/70 bg-transparent px-28 py-6 text-[21px] font-semibold text-white transition hover:bg-[#A855F7]/20"
+                          >
+                            Entrar na Cloud
+                          </button>
+                        )}
+                      </div>
+                      <span
+                        className="col-start-3 justify-self-end rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white"
+                        aria-label={`${formatCountdown(currentCountdown)} restantes`}
+                      >
+                        {formatCountdown(currentCountdown)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Big title */}
-              <div className="flex flex-1 flex-col items-center justify-center px-12 py-10 text-center">
-                {currentCloud.originCloud && <p className="mb-4 text-[12px] text-white/45">Inspirada em <Link href={`/read?cloud=${encodeURIComponent(currentCloud.originCloud.id)}`} className="font-semibold text-[#C084FC] hover:text-white hover:underline">{currentCloud.originCloud.title}</Link></p>}
-                <h2
-                  lang="pt-BR"
-                  className="cloud-feed-title hyphens-auto break-normal text-[68px] font-extrabold leading-[1.06] tracking-tight text-white sm:text-[72px]"
-                  style={{ fontFamily: "'Space Grotesk', 'DM Sans', system-ui, sans-serif", hyphenateCharacter: "–" }}
-                >
-                  {currentCloud.title}
-                </h2>
-              </div>
-
-              {/* Enter button */}
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center px-12 pb-16">
-                <div className="col-start-2">
-                {currentCloud.scheduledAt && new Date(currentCloud.scheduledAt).getTime() > Date.now() ? <div className="flex items-center gap-3"><div ref={scheduledDateHintRef} onMouseEnter={() => setScheduledDateOpen(true)} onMouseLeave={() => setScheduledDateOpen(false)} className="relative"><button type="button" onClick={() => setScheduledDateOpen((open) => !open)} aria-label="Ver data de estreia" className="rounded-full border border-[#A855F7]/70 bg-[#9333EA] p-4 text-white transition hover:bg-[#7C3AED]"><CalendarIcon s={21} /></button>{scheduledDateOpen && <span className="absolute bottom-full left-1/2 mb-3 hidden w-60 -translate-x-1/2 rounded-xl border border-[#A855F7]/40 bg-[#171325] px-4 py-3 text-sm leading-relaxed text-white shadow-2xl sm:block">Estreia em {new Date(currentCloud.scheduledAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })} às {new Date(currentCloud.scheduledAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>}</div><button type="button" onClick={() => joinScheduledQueue(currentCloud.id)} disabled={scheduledReminderLoading || scheduledReminderCloudId === currentCloud.id} aria-label={scheduledReminderCloudId === currentCloud.id ? "Aguardando a estreia" : "Avisar-me na estreia"} className={`inline-flex items-center gap-2 rounded-full border px-12 py-5 text-[18px] font-semibold transition-all duration-300 ease-out ${scheduledReminderCloudId === currentCloud.id ? "scale-105 border-[#A855F7] bg-[#9333EA] text-white shadow-[0_0_24px_rgba(147,51,234,0.5)]" : "border-[#A855F7]/70 bg-transparent text-white hover:bg-[#A855F7]/20"}`}><BellIcon s={20} />{scheduledReminderCloudId === currentCloud.id ? "Aguardando" : "Avisar-me"}</button></div> : <button
-                  type="button"
-                  onClick={() => enterConversation(currentCloud)}
-                  className="rounded-full border border-[#A855F7]/70 bg-transparent px-28 py-6 text-[21px] font-semibold text-white transition hover:bg-[#A855F7]/20"
-                >
-                  Entrar na Cloud
-                </button>}
-                </div>
-                <span className="col-start-3 justify-self-end rounded-full bg-white/[0.07] px-6 py-3 text-[22px] font-bold tabular-nums text-white" aria-label={`${formatCountdown(currentCountdown)} restantes`}>
-                  {formatCountdown(currentCountdown)}
-                </span>
-              </div>
-            </div>
-
-            </div>
-
-            </>
+              </>
             ) : (
-            /* Empty state — sem cards, sem setas */
-            <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/empty-clouds-available.png"
-                alt="Sem clouds ativas"
-                className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
-                style={{ mixBlendMode: "normal", aspectRatio: "1536 / 1024" }}
-                draggable={false}
-              />
-              <p className="text-[18px] font-semibold text-white/80">
-                Sem clouds ativas no momento, que tal começar alguma?
-              </p>
-              <button
-                type="button"
-                onClick={requestCreate}
-                className="rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
-              >
-                Criar uma Cloud
-              </button>
-            </div>
+              /* Empty state — sem cards, sem setas */
+              <div className="flex flex-1 flex-col items-center justify-center gap-6 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/empty-clouds-available.png"
+                  alt="Sem clouds ativas"
+                  className="h-auto w-[min(72vw,420px)] select-none object-contain md:w-[420px]"
+                  style={{ mixBlendMode: "normal", aspectRatio: "1536 / 1024" }}
+                  draggable={false}
+                />
+                <p className="text-[18px] font-semibold text-white/80">
+                  Sem clouds ativas no momento, que tal começar alguma?
+                </p>
+                <button
+                  type="button"
+                  onClick={requestCreate}
+                  className="rounded-full bg-[#A855F7] px-8 py-3 text-[15px] font-semibold text-white transition hover:bg-[#9333EA]"
+                >
+                  Criar uma Cloud
+                </button>
+              </div>
             )}
-        </>
+          </>
         ) : (
           <div className="absolute inset-0 flex h-full flex-col px-3 py-4 lg:px-6">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -3151,7 +5592,17 @@ function PageContent() {
                 onClick={() => setHomeStage("topics")}
                 className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#120a2e] px-4 py-2 text-[13px] font-semibold text-white/75 transition hover:border-white/15 hover:bg-[#16161C]"
               >
-                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width={16}
+                  height={16}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.25"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <path d="m15 18-6-6 6-6" />
                 </svg>
                 Voltar aos tópicos
@@ -3173,8 +5624,61 @@ function PageContent() {
         )}
       </main>
 
-      {cloudDescriptionOpen && currentCloud && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" style={{ paddingLeft: "max(1rem, env(safe-area-inset-left))", paddingRight: "max(1rem, env(safe-area-inset-right))" }}><div className="flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6"><div className="mb-4 flex shrink-0 items-center justify-between"><h3 className="text-[18px] font-bold">Descrição da Cloud</h3><button type="button" aria-label="Fechar descrição" onClick={() => setCloudDescriptionOpen(false)} className="shrink-0 p-1 text-white/50 hover:text-white">×</button></div><p className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[14px] leading-relaxed text-white/75">{currentCloud.description?.trim() || "O criador não adicionou uma descrição para esta Cloud."}</p></div></div>}
-      {editingCloud && <CloudEditDialog cloud={{ id: editingCloud.id, title: editingCloud.title, duration: editingCloud.duration, description: editingCloud.description, editCount: editingCloud.editCount ?? 0 }} onClose={() => setEditingCloud(null)} onSaved={(edited: EditableCloud) => { const updated = clouds.map((item) => item.id === edited.id ? { ...item, title: edited.title, duration: edited.duration, description: edited.description ?? undefined, editCount: edited.editCount } : item); setClouds(updated); cacheFeed(user?.id ? `talk:${user.id}:${cloudScope}` : "", updated); setEditingCloud(null); }} />}
+      {cloudDescriptionOpen && currentCloud && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          style={{
+            paddingLeft: "max(1rem, env(safe-area-inset-left))",
+            paddingRight: "max(1rem, env(safe-area-inset-right))",
+          }}
+        >
+          <div className="flex max-h-[calc(100dvh-2rem)] w-full min-w-0 max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#15161C] p-6">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
+              <h3 className="text-[18px] font-bold">Descrição da Cloud</h3>
+              <button
+                type="button"
+                aria-label="Fechar descrição"
+                onClick={() => setCloudDescriptionOpen(false)}
+                className="shrink-0 p-1 text-white/50 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            <p className="min-h-0 min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[14px] leading-relaxed text-white/75">
+              {currentCloud.description?.trim() ||
+                "O criador não adicionou uma descrição para esta Cloud."}
+            </p>
+          </div>
+        </div>
+      )}
+      {editingCloud && (
+        <CloudEditDialog
+          cloud={{
+            id: editingCloud.id,
+            title: editingCloud.title,
+            duration: editingCloud.duration,
+            description: editingCloud.description,
+            editCount: editingCloud.editCount ?? 0,
+          }}
+          onClose={() => setEditingCloud(null)}
+          onSaved={(edited: EditableCloud) => {
+            const updated = clouds.map((item) =>
+              item.id === edited.id
+                ? {
+                    ...item,
+                    title: edited.title,
+                    duration: edited.duration,
+                    description: edited.description ?? undefined,
+                    editCount: edited.editCount,
+                  }
+                : item,
+            );
+            setClouds(updated);
+            cacheFeed(cloudFeedCacheKey(user?.id, cloudScope), updated);
+            setEditingCloud(null);
+          }}
+        />
+      )}
       {cloudReportOpen && currentCloud && currentCloud.authorId && (
         <CloudReportModal
           cloudId={currentCloud.id}
@@ -3183,24 +5687,131 @@ function PageContent() {
           onClose={() => setCloudReportOpen(false)}
         />
       )}
-      {scheduledQueueOpen && currentCloud && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#171821] p-6 shadow-2xl"><div className="flex items-start justify-between gap-4"><div><span className="mb-3 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]"><BellIcon s={20} /></span><h2 className="text-xl font-bold text-white">Você entrou na fila</h2><p className="mt-2 text-sm leading-relaxed text-white/65">Você será notificado quando “{currentCloud.title}” estrear.</p></div><button type="button" onClick={() => setScheduledQueueOpen(false)} aria-label="Fechar" className="text-2xl text-white/50 hover:text-white">×</button></div><div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold uppercase tracking-wider text-white/45">Participantes aguardando</p><div className="mt-3 max-h-60 space-y-2 overflow-y-auto">{[...(currentCloud.participantProfiles ?? []), ...(user?.id && !currentCloud.participantProfiles?.some((participant) => participant.id === user.id) ? [{ id: user.id, name: user.displayName, username: user.username, avatarUrl: user.avatarUrl }] : [])].map((participant) => <div key={participant.id} className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">{participant.avatarUrl ? <img src={participant.avatarUrl} alt="" className="h-full w-full object-cover" /> : participant.name.slice(0, 1)}</span><span className="text-sm font-medium text-white">{participant.name}</span></div>)}</div></div><button type="button" onClick={() => setScheduledQueueOpen(false)} className="mt-6 w-full rounded-full bg-[#9333EA] py-3 text-sm font-semibold text-white">Entendi</button></div></div>}
+      {scheduledQueueOpen && currentCloud && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/65 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#171821] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="mb-3 inline-flex rounded-full bg-[#9333EA]/20 p-2 text-[#D8B4FE]">
+                  <BellIcon s={20} />
+                </span>
+                <h2 className="text-xl font-bold text-white">
+                  Você entrou na fila
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-white/65">
+                  Você será notificado quando “{currentCloud.title}” estrear.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScheduledQueueOpen(false)}
+                aria-label="Fechar"
+                className="text-2xl text-white/50 hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/45">
+                Participantes aguardando
+              </p>
+              <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
+                {[
+                  ...(currentCloud.participantProfiles ?? []),
+                  ...(user?.id &&
+                  !currentCloud.participantProfiles?.some(
+                    (participant) => participant.id === user.id,
+                  )
+                    ? [
+                        {
+                          id: user.id,
+                          name: user.displayName,
+                          username: user.username,
+                          avatarUrl: user.avatarUrl,
+                        },
+                      ]
+                    : []),
+                ].map((participant) => (
+                  <div key={participant.id} className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#9333EA] text-xs font-bold">
+                      {participant.avatarUrl ? (
+                        <img
+                          src={participant.avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        participant.name.slice(0, 1)
+                      )}
+                    </span>
+                    <span className="text-sm font-medium text-white">
+                      {participant.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setScheduledQueueOpen(false)}
+              className="mt-6 w-full rounded-full bg-[#9333EA] py-3 text-sm font-semibold text-white"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
 
-      <nav className={mobilePreview ? "hidden" : "hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block"} aria-label="Navegação inferior">
+      <nav
+        className={
+          mobilePreview
+            ? "hidden"
+            : "hidden flex-none border-t border-white/[0.07] bg-[#060410] md:block"
+        }
+        aria-label="Navegação inferior"
+      >
         <div className="mx-auto grid max-w-[480px] grid-cols-4 items-center px-4 py-5">
-          <Link href="/" className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#C084FC]"><HomeIcon s={32} /><span className="text-[13px] font-semibold">Home</span></Link>
+          <Link
+            href="/"
+            className="flex flex-col items-center gap-2 text-[#A855F7] transition hover:text-[#C084FC]"
+          >
+            <HomeIcon s={32} />
+            <span className="text-[13px] font-semibold">Home</span>
+          </Link>
           <MessagesNavLink />
-          <button type="button" aria-label="Publicar nova Cloud" onClick={requestCreate} className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]">
-            <span className="relative flex h-8 w-8 items-center justify-center"><img src="/cloud-plus-compact.png" alt="" className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]" /></span>
+          <button
+            type="button"
+            aria-label="Publicar nova Cloud"
+            onClick={requestCreate}
+            className="group flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"
+          >
+            <span className="relative flex h-8 w-8 items-center justify-center">
+              <img
+                src="/cloud-plus-compact.png"
+                alt=""
+                className="absolute h-20 w-20 scale-[1.45] object-contain drop-shadow-[0_0_0.2px_white] transition-[filter] group-hover:[filter:brightness(0)_saturate(100%)_invert(52%)_sepia(97%)_saturate(2679%)_hue-rotate(241deg)_brightness(100%)_contrast(95%)]"
+              />
+            </span>
             <span className="text-[13px] font-semibold">Publicar</span>
           </button>
-          <Link href="/trending" className="-translate-x-4 flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"><FlameIcon s={30} /><span className="text-[13px] font-semibold">Trending</span></Link>
+          <Link
+            href="/trending"
+            className="-translate-x-4 flex flex-col items-center gap-2 text-white transition hover:text-[#A855F7]"
+          >
+            <FlameIcon s={30} />
+            <span className="text-[13px] font-semibold">Trending</span>
+          </Link>
         </div>
       </nav>
 
       <MobileAppNav active="home" force={mobilePreview} />
 
-      {authPromptOpen && <GuestCloudSignupModal returnTo="/" onClose={() => setAuthPromptOpen(false)} />}
-
+      {authPromptOpen && (
+        <GuestCloudSignupModal
+          returnTo="/"
+          onClose={() => setAuthPromptOpen(false)}
+        />
+      )}
     </div>
   );
 }

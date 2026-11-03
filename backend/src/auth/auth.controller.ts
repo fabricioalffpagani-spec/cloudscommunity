@@ -14,14 +14,22 @@ import { AuthService } from './auth.service';
 import { SocketTicketService } from './socket-ticket.service';
 import { SESSION_COOKIE_NAME } from './auth.constants';
 import { clearSessionCookie, setSessionCookie } from './auth.utils';
+import { GoogleAuthService } from './google-auth.service';
+
+const GOOGLE_STATE_COOKIE = 'cc_google_oauth_state';
+const GOOGLE_PENDING_COOKIE = 'cc_google_pending';
 
 function extractSessionToken(req: Request): string | null {
+  return extractCookie(req, SESSION_COOKIE_NAME);
+}
+
+function extractCookie(req: Request, cookieName: string): string | null {
   const rawCookie = req.headers.cookie ?? '';
   const cookiePairs = rawCookie.split(';');
 
   for (const pair of cookiePairs) {
     const [name, ...rest] = pair.split('=');
-    if (name?.trim() === SESSION_COOKIE_NAME) {
+    if (name?.trim() === cookieName) {
       return rest.join('=').trim() || null;
     }
   }
@@ -33,8 +41,127 @@ function extractSessionToken(req: Request): string | null {
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly googleAuthService: GoogleAuthService,
     private readonly socketTicketService: SocketTicketService,
   ) {}
+
+  @Get('google/start')
+  async googleStart(
+    @Query('returnTo') returnTo: string | undefined,
+    @Query('intent') intent: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const result = await this.googleAuthService.start(
+      returnTo,
+      intent,
+      extractSessionToken(req),
+    );
+    res.cookie(GOOGLE_STATE_COOKIE, result.state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/google/callback',
+      maxAge: 10 * 60 * 1000,
+    });
+    res.redirect(302, result.authorizationUrl);
+  }
+
+  @Get('google/callback')
+  async googleCallback(
+    @Query('state') state: string | undefined,
+    @Query('code') code: string | undefined,
+    @Query('error') error: string | undefined,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const result = await this.googleAuthService.callback({
+      state,
+      cookieState: extractCookie(req, GOOGLE_STATE_COOKIE) ?? undefined,
+      code,
+      error,
+      meta: {
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    });
+    res.clearCookie(GOOGLE_STATE_COOKIE, { path: '/api/auth/google/callback' });
+    if (result.pendingToken) {
+      res.cookie(GOOGLE_PENDING_COOKIE, result.pendingToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/google',
+        maxAge: 15 * 60 * 1000,
+      });
+    }
+    if (result.sessionToken && result.sessionExpiresAt) {
+      setSessionCookie(res, result.sessionToken, result.sessionExpiresAt);
+    }
+    res.redirect(302, result.redirectTo);
+  }
+
+  @Post('google/register')
+  async googleRegister(
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.googleAuthService.completeRegistration(
+      extractCookie(req, GOOGLE_PENDING_COOKIE),
+      {
+        name: typeof body.name === 'string' ? body.name : undefined,
+        username: typeof body.username === 'string' ? body.username : undefined,
+        birthDate:
+          typeof body.birthDate === 'string' ? body.birthDate : undefined,
+        acceptedTerms: body.acceptedTerms === true,
+        acceptedCommunityRules: body.acceptedCommunityRules === true,
+      },
+      {
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    );
+    setSessionCookie(res, result.token, result.expiresAt);
+    res.clearCookie(GOOGLE_PENDING_COOKIE, { path: '/api/auth/google' });
+    return { ok: true as const, returnTo: result.returnTo };
+  }
+
+  @Get('google/pending-registration')
+  googlePendingRegistration(@Req() req: Request) {
+    return this.googleAuthService.pendingRegistration(
+      extractCookie(req, GOOGLE_PENDING_COOKIE),
+    );
+  }
+
+  @Post('google/link')
+  async googleLink(
+    @Body() body: Record<string, unknown>,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.googleAuthService.completeLink(
+      extractCookie(req, GOOGLE_PENDING_COOKIE),
+      typeof body.password === 'string' ? body.password : undefined,
+      {
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      },
+    );
+    setSessionCookie(res, result.token, result.expiresAt);
+    res.clearCookie(GOOGLE_PENDING_COOKIE, { path: '/api/auth/google' });
+    return { ok: true as const, returnTo: result.returnTo };
+  }
+
+  @Get('google/status')
+  googleStatus(@Req() req: Request) {
+    return this.googleAuthService.status(extractSessionToken(req));
+  }
+
+  @Delete('google')
+  unlinkGoogle(@Req() req: Request) {
+    return this.googleAuthService.unlink(extractSessionToken(req));
+  }
 
   @Get('socket-ticket')
   async socketTicket(@Req() req: Request) {

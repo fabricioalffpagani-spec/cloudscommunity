@@ -1,4 +1,4 @@
-# Override para desenvolvimento: hot-reload do frontend igual ao backend
+# Override para desenvolvimento: hot reload sem bind mount do frontend.
 # Docker Compose carrega automaticamente este arquivo (docker compose up)
 # Para produção use somente: docker compose -f docker-compose.prod.yml up -d --no-build
 services:
@@ -14,9 +14,26 @@ services:
       dockerfile: Dockerfile
     environment:
       NODE_ENV: development
-    # Webpack honors WATCHPACK_POLLING on Windows/WSL bind mounts.
-    command: ["sh", "tools/dev-entrypoint.sh", "sh", "-c", "npm run dev -- --webpack --hostname 0.0.0.0 --port ${UI_HTTP_PORT}"]
-    volumes:
-      - ./frontend:/app
+    # Next 16 uses Turbopack by default. Forcing Webpack here made Watchpack
+    # repeatedly rescan the Windows bind mount and emit EIO errors for most
+    # route directories, blocking local compilations and navigation.
+    command: ["sh", "tools/dev-entrypoint.sh", "sh", "-c", "npm run dev -- --hostname 0.0.0.0 --port ${UI_HTTP_PORT}"]
+    # Compose Watch sincroniza mudanças para o filesystem Linux do container.
+    # O bind mount direto do Windows causava EIO durante scans/compilações.
+    volumes: !override
       - clouds_frontend_node_modules:/app/node_modules
       - /app/.next
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - .next/
+            - coverage/
+        - action: rebuild
+          path: ./frontend/package.json
+        - action: rebuild
+          path: ./frontend/package-lock.json

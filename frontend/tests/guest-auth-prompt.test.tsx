@@ -13,6 +13,17 @@ vi.mock("../app/components/session-user", () => ({
 }));
 
 describe("visitor authentication prompts", () => {
+  it("keeps the login copy centered against the viewport independently of the form", () => {
+    render(<LoginPage />);
+
+    expect(screen.getByTestId("login-copy-panel")).toHaveClass(
+      "lg:sticky",
+      "lg:top-0",
+      "lg:h-screen",
+      "lg:justify-center",
+    );
+  });
+
   it("preserves the current Cloud in login and signup links", () => {
     render(<GuestCloudSignupModal returnTo="/cloud/cloud-1?message=message-2" onClose={vi.fn()} />);
     expect(screen.getByRole("link", { name: "Entrar" })).toHaveAttribute(
@@ -44,5 +55,18 @@ describe("visitor authentication prompts", () => {
       "href",
       "/signup?returnTo=%2Fmessages%3Fid%3Duser-1",
     );
+  });
+
+  it("never shows the legacy password confirmation step for Google linking", async () => {
+    window.history.replaceState({}, "", "/login?googleLink=1&returnTo=%2Fread");
+    render(<LoginPage />);
+
+    expect(
+      screen.queryByText("Confirmar e vincular Google"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Entrar" })).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Continuar com Google" }),
+    ).toBeVisible();
   });
 });

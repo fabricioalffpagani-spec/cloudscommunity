@@ -1593,7 +1593,7 @@ function CloudMessageBubble({
               {msg.content}
             </div>
           ) : (
-            <div className={`break-words rounded-2xl px-4 py-3 text-[15px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
+            <div className={`break-words rounded-2xl px-4 py-3 text-[16px] leading-relaxed text-white [overflow-wrap:anywhere] ${own ? "rounded-br-[4px] bg-[#9333EA]" : "rounded-bl-[4px] border border-white/[0.08] bg-[#1a0e3d]"}`}>
               <MentionedText content={msg.content} mentions={msg.mentions} />
               {msg.pending && <span className="ml-2 text-[11px] text-white/50">enviando...</span>}
             </div>
@@ -3398,7 +3398,7 @@ export default function CloudChat({ cloudId, title, duration, createdAt, visibil
                     onKeyDown={handleKeyDown}
                     placeholder="Mensagem..."
                     disabled={isAudioBusy}
-                    className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[15px] text-white placeholder:text-white/50 outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-[16px] text-white placeholder:text-white/50 outline-none [overflow-wrap:anywhere] disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ maxHeight: 120, fieldSizing: "content" }}
                   />
                   {draft.trim() ? (

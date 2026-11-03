@@ -12,6 +12,16 @@ enum UserStatus {
   blocked
 }
 
+enum ExternalIdentityProvider {
+  GOOGLE
+}
+
+enum GooglePendingAccountKind {
+  REGISTER
+  LINK
+  COMPLETE
+}
+
 enum CloudMode {
   text
   audio
@@ -73,66 +83,121 @@ enum NotificationEntityType {
 }
 
 model User {
-  id            String      @id @default(uuid()) @db.Uuid
-  email         String      @unique @db.VarChar(255)
-  passwordHash  String      @db.Text
-  status        UserStatus  @default(active)
-  emailVerifiedAt DateTime?
-  termsAcceptedAt DateTime?
+  id                       String     @id @default(uuid()) @db.Uuid
+  email                    String     @unique @db.VarChar(255)
+  passwordHash             String?    @db.Text
+  status                   UserStatus @default(active)
+  emailVerifiedAt          DateTime?
+  termsAcceptedAt          DateTime?
   communityRulesAcceptedAt DateTime?
-  lastLoginAt     DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  deletedAt       DateTime?
-  isGuest         Boolean     @default(false)
-  guestIpAddress  String?     @unique @db.VarChar(64)
+  lastLoginAt              DateTime?
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+  deletedAt                DateTime?
+  isGuest                  Boolean    @default(false)
+  guestIpAddress           String?    @unique @db.VarChar(64)
 
-  profile                  Profile?
-  authoredClouds            Cloud[]         @relation("CloudAuthor")
-  cloudHypes                CloudHype[]
-  cloudShares               CloudShare[]
-  reclouds                  Recloud[]
-  following                 Follow[]        @relation("FollowFollower")
-  followers                 Follow[]        @relation("FollowFollowing")
-  followRequestsSent        FollowRequest[] @relation("FollowRequestRequester")
-  followRequestsReceived    FollowRequest[] @relation("FollowRequestTarget")
-  cloudMessages             CloudMessage[]
-  directMessages            DirectMessage[]
-  directMessageReactions    DirectMessageReaction[]
-  participantOneConversations Conversation[] @relation("ConversationParticipantOne")
-  participantTwoConversations Conversation[] @relation("ConversationParticipantTwo")
-  cloudMembers              CloudMember[]
-  conversationMembers       ConversationMember[]
-  notifications             Notification[]
-  pushSubscriptions         PushSubscription[]
-  mediaAssets               MediaAsset[]
-  sessions                  Session[]
-  emailVerificationTokens   EmailVerificationToken[]
-  passwordResetTokens       PasswordResetToken[]
-  cloudMessageReactions     CloudMessageReaction[]
-  cloudMessageViews         CloudMessageView[]
-  cloudBans                 CloudBan[]             @relation("CloudBanUser")
-  cloudBansGiven            CloudBan[]             @relation("CloudBanBannedBy")
-  cloudReports              CloudReport[]          @relation("CloudReportReported")
-  cloudReportsGiven         CloudReport[]          @relation("CloudReportReporter")
-  sharePopup                SharePopup?
-  cloudInactivityDeliveries CloudInactivityDelivery[]
-  blockedUsers              UserBlock[]     @relation("UserBlockBlocker")
-  blockedByUsers            UserBlock[]     @relation("UserBlockBlocked")
-  savedStickers             SavedSticker[]
-  searchHistory             SearchHistory[]
+  profile                     Profile?
+  authoredClouds              Cloud[]                   @relation("CloudAuthor")
+  cloudHypes                  CloudHype[]
+  cloudShares                 CloudShare[]
+  reclouds                    Recloud[]
+  following                   Follow[]                  @relation("FollowFollower")
+  followers                   Follow[]                  @relation("FollowFollowing")
+  followRequestsSent          FollowRequest[]           @relation("FollowRequestRequester")
+  followRequestsReceived      FollowRequest[]           @relation("FollowRequestTarget")
+  cloudMessages               CloudMessage[]
+  directMessages              DirectMessage[]
+  directMessageReactions      DirectMessageReaction[]
+  participantOneConversations Conversation[]            @relation("ConversationParticipantOne")
+  participantTwoConversations Conversation[]            @relation("ConversationParticipantTwo")
+  cloudMembers                CloudMember[]
+  conversationMembers         ConversationMember[]
+  notifications               Notification[]
+  pushSubscriptions           PushSubscription[]
+  mediaAssets                 MediaAsset[]
+  sessions                    Session[]
+  emailVerificationTokens     EmailVerificationToken[]
+  passwordResetTokens         PasswordResetToken[]
+  cloudMessageReactions       CloudMessageReaction[]
+  cloudMessageViews           CloudMessageView[]
+  cloudBans                   CloudBan[]                @relation("CloudBanUser")
+  cloudBansGiven              CloudBan[]                @relation("CloudBanBannedBy")
+  cloudReports                CloudReport[]             @relation("CloudReportReported")
+  cloudReportsGiven           CloudReport[]             @relation("CloudReportReporter")
+  sharePopup                  SharePopup?
+  cloudInactivityDeliveries   CloudInactivityDelivery[]
+  blockedUsers                UserBlock[]               @relation("UserBlockBlocker")
+  blockedByUsers              UserBlock[]               @relation("UserBlockBlocked")
+  savedStickers               SavedSticker[]
+  searchHistory               SearchHistory[]
+  externalIdentities          ExternalIdentity[]
+  googleOAuthStates           GoogleOAuthState[]
+  googlePendingAccounts       GooglePendingAccount[]
 
   @@index([status])
   @@index([createdAt])
 }
 
-model EmailVerificationToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique @db.VarChar(128)
+model ExternalIdentity {
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String                   @db.Uuid
+  provider          ExternalIdentityProvider
+  providerAccountId String                   @db.VarChar(255)
+  email             String?                  @db.VarChar(255)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+  @@index([userId])
+}
+
+model GoogleOAuthState {
+  id        String    @id @default(uuid()) @db.Uuid
+  stateHash String    @unique @db.VarChar(64)
+  intent    String    @db.VarChar(20)
+  userId    String?   @db.Uuid
+  returnTo  String    @db.VarChar(512)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model GooglePendingAccount {
+  id                String                   @id @default(uuid()) @db.Uuid
+  tokenHash         String                   @unique @db.VarChar(64)
+  kind              GooglePendingAccountKind
+  userId            String?                  @db.Uuid
+  providerAccountId String                   @db.VarChar(255)
+  email             String                   @db.VarChar(255)
+  emailVerified     Boolean
+  displayName       String?                  @db.VarChar(120)
+  avatarUrl         String?                  @db.Text
+  returnTo          String                   @db.VarChar(512)
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(128)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -141,12 +206,12 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
-  tokenHash String   @unique @db.VarChar(128)
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(128)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -155,71 +220,71 @@ model PasswordResetToken {
 }
 
 model Profile {
-  userId      String   @id @db.Uuid
-  username    String   @unique @db.VarChar(50)
-  displayName String   @db.VarChar(120)
-  birthDate   DateTime @db.Date
-  bio         String?  @db.VarChar(500)
-  avatarUrl   String?  @db.Text
-  coverUrl    String?  @db.Text
-  location    String?  @db.VarChar(120)
-  website     String?  @db.VarChar(255)
-  isPrivate   Boolean  @default(false)
-  showHypesCount Boolean @default(true)
-  showArchivedClouds Boolean @default(true)
-  showParticipatingNow Boolean @default(true)
-  interests     String[] @default([]) @db.Text
-  interestsCompletedAt DateTime?
-  interestsOnboardingRequired Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  userId                      String    @id @db.Uuid
+  username                    String    @unique @db.VarChar(50)
+  displayName                 String    @db.VarChar(120)
+  birthDate                   DateTime  @db.Date
+  bio                         String?   @db.VarChar(500)
+  avatarUrl                   String?   @db.Text
+  coverUrl                    String?   @db.Text
+  location                    String?   @db.VarChar(120)
+  website                     String?   @db.VarChar(255)
+  isPrivate                   Boolean   @default(false)
+  showHypesCount              Boolean   @default(true)
+  showArchivedClouds          Boolean   @default(true)
+  showParticipatingNow        Boolean   @default(true)
+  interests                   String[]  @default([]) @db.Text
+  interestsCompletedAt        DateTime?
+  interestsOnboardingRequired Boolean   @default(false)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contacts    Contact[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts Contact[]
 
   @@index([displayName])
 }
 
 model Cloud {
-  id           String          @id @default(uuid()) @db.Uuid
-  authorId     String          @db.Uuid
-  title        String          @db.VarChar(180)
-  content      String?         @db.Text
-  category     String          @db.VarChar(50)
-  mode         CloudMode       @default(text)
-  visibility   CloudVisibility @default(public)
-  acceptingMembers Boolean     @default(true)
-  status       CloudStatus     @default(active)
-  duration     String          @db.VarChar(20)
-  editCount    Int             @default(0)
-  audioUrl     String?         @db.Text
-  scheduledAt  DateTime?
-  startedAt    DateTime?
-  endedAt      DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  deletedAt    DateTime?
-  originCloudId String?        @db.Uuid
-  primaryTopic String?         @db.VarChar(50)
-  topicScores  Json?           @db.JsonB
-  topicKeywords String[]       @default([]) @db.Text
-  topicConfidence Float?
-  classificationVersion String? @db.VarChar(20)
-  classifiedAt DateTime?
+  id                    String          @id @default(uuid()) @db.Uuid
+  authorId              String          @db.Uuid
+  title                 String          @db.VarChar(180)
+  content               String?         @db.Text
+  category              String          @db.VarChar(50)
+  mode                  CloudMode       @default(text)
+  visibility            CloudVisibility @default(public)
+  acceptingMembers      Boolean         @default(true)
+  status                CloudStatus     @default(active)
+  duration              String          @db.VarChar(20)
+  editCount             Int             @default(0)
+  audioUrl              String?         @db.Text
+  scheduledAt           DateTime?
+  startedAt             DateTime?
+  endedAt               DateTime?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  deletedAt             DateTime?
+  originCloudId         String?         @db.Uuid
+  primaryTopic          String?         @db.VarChar(50)
+  topicScores           Json?           @db.JsonB
+  topicKeywords         String[]        @default([]) @db.Text
+  topicConfidence       Float?
+  classificationVersion String?         @db.VarChar(20)
+  classifiedAt          DateTime?
 
-  author       User            @relation("CloudAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  hypes        CloudHype[]
-  shares       CloudShare[]
-  reclouds     Recloud[]
-  messages     CloudMessage[]
-  members      CloudMember[]
-  invites      CloudInvite[]
-  bans         CloudBan[]
-  reports      CloudReport[]
-  originCloud  Cloud?          @relation("CloudContinuations", fields: [originCloudId], references: [id], onDelete: SetNull)
-  continuations Cloud[]        @relation("CloudContinuations")
+  author               User                      @relation("CloudAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  hypes                CloudHype[]
+  shares               CloudShare[]
+  reclouds             Recloud[]
+  messages             CloudMessage[]
+  members              CloudMember[]
+  invites              CloudInvite[]
+  bans                 CloudBan[]
+  reports              CloudReport[]
+  originCloud          Cloud?                    @relation("CloudContinuations", fields: [originCloudId], references: [id], onDelete: SetNull)
+  continuations        Cloud[]                   @relation("CloudContinuations")
   inactivityDeliveries CloudInactivityDelivery[]
-  guestVisits  GuestCloudVisit[]
+  guestVisits          GuestCloudVisit[]
 
   @@index([authorId, createdAt])
   @@index([category])
@@ -230,47 +295,48 @@ model Cloud {
 }
 
 model CloudHype {
-  cloudId    String   @db.Uuid
-  userId     String   @db.Uuid
-  createdAt  DateTime @default(now())
+  cloudId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
 
-  cloud      Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([cloudId, userId])
   @@index([userId])
 }
 
 model CloudShare {
-  cloudId    String   @db.Uuid
-  userId     String   @db.Uuid
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  cloudId   String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  cloud      Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([cloudId, userId])
   @@index([userId])
 }
 
 model Recloud {
-  cloudId String @db.Uuid
-  userId String @db.Uuid
+  cloudId   String   @db.Uuid
+  userId    String   @db.Uuid
   createdAt DateTime @default(now())
-  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cloud     Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@id([cloudId, userId])
   @@index([userId, createdAt])
 }
 
 model Follow {
-  followerId String   @db.Uuid
+  followerId  String   @db.Uuid
   followingId String   @db.Uuid
   createdAt   DateTime @default(now())
 
-  follower   User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
-  following  User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@id([followerId, followingId])
   @@index([followerId])
@@ -303,27 +369,27 @@ model FollowRequest {
 }
 
 model CloudMessage {
-  id               String       @id @default(uuid()) @db.Uuid
-  cloudId          String       @db.Uuid
-  userId           String       @db.Uuid
-  type             MessageType  @default(text)
-  content          String?      @db.Text
-  mentions         Json         @default("[]") @db.JsonB
-  mediaUrl         String?      @db.Text
-  isSticker        Boolean      @default(false)
-  replyToMessageId String?      @db.Uuid
-  isPinned         Boolean      @default(false)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  id               String      @id @default(uuid()) @db.Uuid
+  cloudId          String      @db.Uuid
+  userId           String      @db.Uuid
+  type             MessageType @default(text)
+  content          String?     @db.Text
+  mentions         Json        @default("[]") @db.JsonB
+  mediaUrl         String?     @db.Text
+  isSticker        Boolean     @default(false)
+  replyToMessageId String?     @db.Uuid
+  isPinned         Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
   editedAt         DateTime?
   deletedAt        DateTime?
 
-  cloud            Cloud        @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replyToMessage   CloudMessage?  @relation("CloudMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
-  replies          CloudMessage[] @relation("CloudMessageReplies")
-  reactions        CloudMessageReaction[]
-  views            CloudMessageView[]
+  cloud          Cloud                  @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyToMessage CloudMessage?          @relation("CloudMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies        CloudMessage[]         @relation("CloudMessageReplies")
+  reactions      CloudMessageReaction[]
+  views          CloudMessageView[]
 
   @@index([cloudId, createdAt])
   @@index([userId])
@@ -336,26 +402,26 @@ model CloudMessageView {
   userId    String   @db.Uuid
   viewedAt  DateTime @default(now())
 
-  message   CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([messageId, userId])
   @@index([userId, viewedAt])
 }
 
 model SavedSticker {
-  id          String   @id @default(uuid()) @db.Uuid
-  userId      String   @db.Uuid
-  mediaUrl    String   @db.Text
-  contentHash String   @db.VarChar(32)
-  createdAt   DateTime @default(now())
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @db.Uuid
+  mediaUrl    String    @db.Text
+  contentHash String    @db.VarChar(32)
+  createdAt   DateTime  @default(now())
   lastUsedAt  DateTime?
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, contentHash])
   @@index([userId, createdAt])
   @@index([userId, lastUsedAt(sort: Desc), createdAt(sort: Desc)])
-  @@unique([userId, contentHash])
 }
 
 // Global, platform-owned catalogue used by both CloudChat and private messages.
@@ -381,34 +447,34 @@ model SearchHistory {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, kind, targetId])
   @@index([userId, updatedAt])
 }
 
 model Conversation {
-  id                      String   @id @default(uuid()) @db.Uuid
-  conversationKey         String   @unique @db.VarChar(100)
-  participantOneId        String   @db.Uuid
-  participantTwoId        String   @db.Uuid
-  lastMessageId           String?  @unique @db.Uuid
-  lastMessageType         MessageType?
-  lastMessageAt           DateTime?
-  lastMessagePreview      String?  @db.VarChar(255)
-  participantOneLastReadAt DateTime?
-  participantTwoLastReadAt DateTime?
-  participantOneUnreadCount Int     @default(0)
-  participantTwoUnreadCount Int     @default(0)
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  deletedAt               DateTime?
+  id                        String       @id @default(uuid()) @db.Uuid
+  conversationKey           String       @unique @db.VarChar(100)
+  participantOneId          String       @db.Uuid
+  participantTwoId          String       @db.Uuid
+  lastMessageId             String?      @unique @db.Uuid
+  lastMessageType           MessageType?
+  lastMessageAt             DateTime?
+  lastMessagePreview        String?      @db.VarChar(255)
+  participantOneLastReadAt  DateTime?
+  participantTwoLastReadAt  DateTime?
+  participantOneUnreadCount Int          @default(0)
+  participantTwoUnreadCount Int          @default(0)
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  deletedAt                 DateTime?
 
-  participantOne          User          @relation("ConversationParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
-  participantTwo          User          @relation("ConversationParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
-  lastMessage             DirectMessage? @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
-  messages                DirectMessage[]
-  members                 ConversationMember[]
+  participantOne User                 @relation("ConversationParticipantOne", fields: [participantOneId], references: [id], onDelete: Cascade)
+  participantTwo User                 @relation("ConversationParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Cascade)
+  lastMessage    DirectMessage?       @relation("ConversationLastMessage", fields: [lastMessageId], references: [id], onDelete: SetNull)
+  messages       DirectMessage[]
+  members        ConversationMember[]
 
   @@index([participantOneId])
   @@index([participantTwoId])
@@ -416,15 +482,15 @@ model Conversation {
 }
 
 model CloudMember {
-  id          String           @id @default(uuid()) @db.Uuid
-  cloudId     String           @db.Uuid
-  userId      String           @db.Uuid
-  role        CloudMemberRole  @default(member)
-  joinedAt    DateTime         @default(now())
-  leftAt      DateTime?
+  id       String          @id @default(uuid()) @db.Uuid
+  cloudId  String          @db.Uuid
+  userId   String          @db.Uuid
+  role     CloudMemberRole @default(member)
+  joinedAt DateTime        @default(now())
+  leftAt   DateTime?
 
-  cloud       Cloud            @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([cloudId, userId])
   @@index([userId])
@@ -451,8 +517,8 @@ model CloudMessageReaction {
   emoji     String   @db.VarChar(50)
   createdAt DateTime @default(now())
 
-  message   CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message CloudMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId, emoji])
   @@index([messageId])
@@ -460,13 +526,13 @@ model CloudMessageReaction {
 }
 
 model CloudInvite {
-  id        String   @id @default(uuid()) @db.Uuid
-  cloudId   String   @db.Uuid
-  token     String   @unique @db.VarChar(64)
-  createdAt DateTime @default(now())
+  id        String    @id @default(uuid()) @db.Uuid
+  cloudId   String    @db.Uuid
+  token     String    @unique @db.VarChar(64)
+  createdAt DateTime  @default(now())
   expiresAt DateTime?
 
-  cloud     Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  cloud Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
 
   @@index([cloudId])
   @@index([token])
@@ -479,9 +545,9 @@ model CloudBan {
   bannedById String   @db.Uuid
   createdAt  DateTime @default(now())
 
-  cloud      Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  user       User     @relation("CloudBanUser", fields: [userId], references: [id], onDelete: Cascade)
-  bannedBy   User     @relation("CloudBanBannedBy", fields: [bannedById], references: [id], onDelete: Cascade)
+  cloud    Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  user     User  @relation("CloudBanUser", fields: [userId], references: [id], onDelete: Cascade)
+  bannedBy User  @relation("CloudBanBannedBy", fields: [bannedById], references: [id], onDelete: Cascade)
 
   @@unique([cloudId, userId])
   @@index([cloudId])
@@ -489,30 +555,30 @@ model CloudBan {
 }
 
 model CloudReport {
-  id           String   @id @default(uuid()) @db.Uuid
-  cloudId      String   @db.Uuid
-  reportedId   String   @db.Uuid
-  reporterId   String   @db.Uuid
-  messageId    String?  @db.Uuid
-  reasons      String[] @db.Text
-  createdAt    DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  cloudId    String   @db.Uuid
+  reportedId String   @db.Uuid
+  reporterId String   @db.Uuid
+  messageId  String?  @db.Uuid
+  reasons    String[] @db.Text
+  createdAt  DateTime @default(now())
 
-  cloud        Cloud    @relation(fields: [cloudId], references: [id], onDelete: Cascade)
-  reported     User     @relation("CloudReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
-  reporter     User     @relation("CloudReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  cloud    Cloud @relation(fields: [cloudId], references: [id], onDelete: Cascade)
+  reported User  @relation("CloudReportReported", fields: [reportedId], references: [id], onDelete: Cascade)
+  reporter User  @relation("CloudReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
 
   @@index([cloudId, reportedId])
   @@index([reporterId])
 }
 
 model ConversationMember {
-  id              String       @id @default(uuid()) @db.Uuid
-  conversationId  String       @db.Uuid
-  userId          String       @db.Uuid
-  joinedAt        DateTime     @default(now())
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @db.Uuid
+  userId         String   @db.Uuid
+  joinedAt       DateTime @default(now())
 
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([userId])
@@ -520,18 +586,18 @@ model ConversationMember {
 }
 
 model Notification {
-  id           String                 @id @default(uuid()) @db.Uuid
-  userId       String                 @db.Uuid
-  type         NotificationType
-  entityType   NotificationEntityType
-  entityId     String                 @db.VarChar(255)
-  title        String                 @db.VarChar(180)
-  body         String                 @db.Text
-  metadata     Json?                  @db.JsonB
-  isRead       Boolean                @default(false)
-  createdAt    DateTime               @default(now())
+  id         String                 @id @default(uuid()) @db.Uuid
+  userId     String                 @db.Uuid
+  type       NotificationType
+  entityType NotificationEntityType
+  entityId   String                 @db.VarChar(255)
+  title      String                 @db.VarChar(180)
+  body       String                 @db.Text
+  metadata   Json?                  @db.JsonB
+  isRead     Boolean                @default(false)
+  createdAt  DateTime               @default(now())
 
-  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
   @@index([entityType, entityId])
@@ -547,7 +613,7 @@ model PushSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -569,10 +635,10 @@ model InvitationCode {
 }
 
 model InvitationReferral {
-  invitedUserId String   @id @db.Uuid
-  inviterUserId String   @db.Uuid
+  invitedUserId String    @id @db.Uuid
+  inviterUserId String    @db.Uuid
   creditedAt    DateTime?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([inviterUserId, creditedAt])
 }
@@ -616,63 +682,63 @@ model CloudInactivityDelivery {
   stage       Int
   sentAt      DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastCloud   Cloud    @relation(fields: [lastCloudId], references: [id], onDelete: Cascade)
+  user      User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastCloud Cloud @relation(fields: [lastCloudId], references: [id], onDelete: Cascade)
 
   @@unique([userId, lastCloudId, stage])
   @@index([userId, lastCloudId, sentAt])
 }
 
 model MediaAsset {
-  id              String   @id @default(uuid()) @db.Uuid
-  ownerId         String   @db.Uuid
-  url             String   @db.Text
-  mimeType        String   @db.VarChar(120)
-  sizeBytes       BigInt   @db.BigInt
-  storageKey      String   @unique @db.VarChar(255)
+  id               String   @id @default(uuid()) @db.Uuid
+  ownerId          String   @db.Uuid
+  url              String   @db.Text
+  mimeType         String   @db.VarChar(120)
+  sizeBytes        BigInt   @db.BigInt
+  storageKey       String   @unique @db.VarChar(255)
   originalFileName String?  @db.VarChar(255)
-  width           Int?
-  height          Int?
-  durationMs      Int?
-  createdAt       DateTime @default(now())
+  width            Int?
+  height           Int?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
 
-  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  directMessages  DirectMessage[]
+  owner          User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  directMessages DirectMessage[]
 
   @@index([ownerId, createdAt])
   @@index([mimeType])
 }
 
 model DirectMessage {
-  id               String         @id @default(uuid()) @db.Uuid
-  conversationId   String         @db.Uuid
-  senderId         String         @db.Uuid
-  type             MessageType    @default(text)
-  content          String?        @db.Text
-  mediaAssetId     String?        @db.Uuid
-  clientMessageId  String?        @db.VarChar(80)
-  replyToMessageId String?        @db.Uuid
+  id               String      @id @default(uuid()) @db.Uuid
+  conversationId   String      @db.Uuid
+  senderId         String      @db.Uuid
+  type             MessageType @default(text)
+  content          String?     @db.Text
+  mediaAssetId     String?     @db.Uuid
+  clientMessageId  String?     @db.VarChar(80)
+  replyToMessageId String?     @db.Uuid
   readAt           DateTime?
   editedAt         DateTime?
-  isPinned         Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  isPinned         Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
   deletedAt        DateTime?
 
-  conversation     Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender           User           @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  mediaAsset       MediaAsset?    @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
-  replyToMessage   DirectMessage? @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
-  replies          DirectMessage[] @relation("DirectMessageReplies")
-  reactions        DirectMessageReaction[]
-  lastMessageOfConversation Conversation? @relation("ConversationLastMessage")
+  conversation              Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender                    User                    @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  mediaAsset                MediaAsset?             @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  replyToMessage            DirectMessage?          @relation("DirectMessageReplies", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies                   DirectMessage[]         @relation("DirectMessageReplies")
+  reactions                 DirectMessageReaction[]
+  lastMessageOfConversation Conversation?           @relation("ConversationLastMessage")
 
+  @@unique([conversationId, clientMessageId])
   @@index([conversationId, createdAt])
   @@index([conversationId, isPinned])
   @@index([senderId])
   @@index([replyToMessageId])
   @@index([mediaAssetId])
-  @@unique([conversationId, clientMessageId])
 }
 
 model DirectMessageReaction {
@@ -691,35 +757,35 @@ model DirectMessageReaction {
 }
 
 model Session {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid
-  refreshTokenHash String  @db.Text
-  deviceName      String?  @db.VarChar(120)
-  ipAddress       String?  @db.VarChar(45)
-  userAgent       String?  @db.Text
-  expiresAt       DateTime
-  revokedAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @db.Uuid
+  refreshTokenHash String    @db.Text
+  deviceName       String?   @db.VarChar(120)
+  ipAddress        String?   @db.VarChar(45)
+  userAgent        String?   @db.Text
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
 }
 
 model Contact {
-  id          String   @id @default(uuid()) @db.Uuid
-  profileId   String   @db.Uuid
-  name        String   @db.VarChar(120)
-  email       String?  @db.VarChar(255)
-  phone       String?  @db.VarChar(20)
-  invited     Boolean  @default(false)
-  invitedAt   DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String    @id @default(uuid()) @db.Uuid
+  profileId String    @db.Uuid
+  name      String    @db.VarChar(120)
+  email     String?   @db.VarChar(255)
+  phone     String?   @db.VarChar(20)
+  invited   Boolean   @default(false)
+  invitedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  profile     Profile  @relation(fields: [profileId], references: [userId], onDelete: Cascade)
+  profile Profile @relation(fields: [profileId], references: [userId], onDelete: Cascade)
 
   @@index([profileId])
   @@index([email])
@@ -727,17 +793,17 @@ model Contact {
 }
 
 model SharePopup {
-  id              String   @id @default(uuid()) @db.Uuid
-  userId          String   @db.Uuid
-  firstShownAt    DateTime @default(now())
-  lastShownAt     DateTime?
-  shownCount      Int      @default(1)
-  dismissedCount  Int      @default(0)
-  sentCount       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  firstShownAt   DateTime  @default(now())
+  lastShownAt    DateTime?
+  shownCount     Int       @default(1)
+  dismissedCount Int       @default(0)
+  sentCount      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId])
 }

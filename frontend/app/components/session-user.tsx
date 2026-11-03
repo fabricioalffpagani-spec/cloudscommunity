@@ -52,6 +52,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<SessionUser | null>(null);
   const [status, setStatus] = useState<SessionContextValue["status"]>("loading");
   const revision = useRef(0);
+  const inFlightRefresh = useRef<Promise<void> | null>(null);
   const applyUser = useCallback((updatedUser: SessionUser) => {
     revision.current += 1;
     setUser(updatedUser);
@@ -64,37 +65,47 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
     setUser((current) => current ? { ...current, cloudsCount: Math.max(0, (current.cloudsCount ?? 0) - 1) } : current);
   }, []);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
+    if (inFlightRefresh.current) return inFlightRefresh.current;
+
     const requestRevision = ++revision.current;
-    setStatus((current) =>
-      current === "authenticated" || current === "anonymous" ? current : "loading",
-    );
+    const request = (async () => {
+      setStatus((current) =>
+        current === "authenticated" || current === "anonymous" ? current : "loading",
+      );
 
-    try {
-      const response = await fetch("/api/auth/me", {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-        },
-      });
+      try {
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        });
 
-      const payload = (await response.json().catch(() => null)) as SessionPayload | null;
+        const payload = (await response.json().catch(() => null)) as SessionPayload | null;
 
-      if (requestRevision !== revision.current) return;
+        if (requestRevision !== revision.current) return;
 
-      if (!response.ok || !payload?.user) {
+        if (!response.ok || !payload?.user) {
+          setUser(null);
+          setStatus(response.status === 401 ? "anonymous" : "error");
+          return;
+        }
+
+        setUser(payload.user);
+        setStatus("authenticated");
+      } catch {
+        if (requestRevision !== revision.current) return;
         setUser(null);
-        setStatus(response.status === 401 ? "anonymous" : "error");
-        return;
+        setStatus("error");
       }
+    })();
 
-      setUser(payload.user);
-      setStatus("authenticated");
-    } catch {
-      if (requestRevision !== revision.current) return;
-      setUser(null);
-      setStatus("error");
-    }
+    inFlightRefresh.current = request;
+    void request.then(() => {
+      if (inFlightRefresh.current === request) inFlightRefresh.current = null;
+    });
+    return request;
   }, []);
 
   useEffect(() => {
@@ -102,9 +113,14 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
   }, [refresh]);
 
   useEffect(() => {
+    let timer: number | null = null;
     const revalidateSession = () => {
       if (document.visibilityState === "visible") {
-        void refresh();
+        if (timer !== null) window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          timer = null;
+          void refresh();
+        }, 50);
       }
     };
 
@@ -112,6 +128,7 @@ export function SessionUserProvider({ children }: { children: React.ReactNode })
     document.addEventListener("visibilitychange", revalidateSession);
 
     return () => {
+      if (timer !== null) window.clearTimeout(timer);
       window.removeEventListener("focus", revalidateSession);
       document.removeEventListener("visibilitychange", revalidateSession);
     };
