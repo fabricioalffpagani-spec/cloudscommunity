@@ -13,10 +13,11 @@ beforeEach(() => {
 afterEach(() => { state.pathname = "/"; state.onboarding = false; vi.unstubAllGlobals(); });
 
 describe("mobile welcome tutorial", () => {
-  it("immediately explains the double tap on Talk and does not repeat after dismissal", () => {
+  it("shows the Ao Vivo instructions on the live page and does not repeat after dismissal", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const first = render(<MobileNavigationTutorial />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat, toque duas vezes rapidamente no título da conversa.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Conheça a aba Ao Vivo");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat ao vivo, toque duas vezes rapidamente no título da conversa.");
     expect(screen.getByRole("dialog")).toHaveTextContent("Boas-vindas ao Clouds!");
     expect(screen.queryByRole("button", { name: "Próximo" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
@@ -25,12 +26,13 @@ describe("mobile welcome tutorial", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("shows the Read explanation on its first visit, independently of Talk", () => {
+  it("shows the Ler explanation on its first visit, independently of Ao Vivo", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const view = render(<MobileNavigationTutorial />);
     fireEvent.click(screen.getByRole("button", { name: "Entendi" }));
     state.pathname = "/read";
     view.rerender(<MobileNavigationTutorial />);
+    expect(screen.getByRole("dialog")).toHaveTextContent("Conheça a aba Ler");
     expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir uma conversa, toque duas vezes rapidamente no título.");
     fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
     view.unmount();
@@ -49,13 +51,15 @@ describe("mobile welcome tutorial", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("shows the desktop instructions and Read explanation only once each", () => {
+  it("shows desktop instructions on the corresponding Ao Vivo and Ler pages only once each", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false }));
     const view = render(<MobileNavigationTutorial />);
-    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat, clique duas vezes no título da conversa.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Conheça a aba Ao Vivo");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir o chat ao vivo, clique duas vezes no título da conversa.");
     fireEvent.click(screen.getByRole("button", { name: "Entendi" }));
     state.pathname = "/read";
     view.rerender(<MobileNavigationTutorial />);
+    expect(screen.getByRole("dialog")).toHaveTextContent("Conheça a aba Ler");
     expect(screen.getByRole("dialog")).toHaveTextContent("Para abrir uma conversa, clique duas vezes no título.");
     fireEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
     view.unmount();

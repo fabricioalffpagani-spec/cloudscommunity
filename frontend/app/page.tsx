@@ -4992,29 +4992,29 @@ function PageContent() {
           {/* Nav */}
           <nav
             aria-label="Navegação"
-            className="flex items-end justify-self-center gap-16 pb-2"
+            className="flex items-end justify-self-center gap-14 pb-2"
           >
             <Link
-              href="/"
-              title="Converse: Clouds ao vivo para conversar agora."
-              className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white"
+              href="/read"
+              title="Ler: conversas encerradas disponíveis para leitura."
+              className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white"
             >
-              Converse
+              Ler
+            </Link>
+            <Link
+              href="/"
+              title="Ao Vivo: Clouds para conversar agora."
+              className="relative inline-flex h-14 items-center text-[16px] font-semibold text-white"
+            >
+              Ao Vivo
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
             <Link
-              href="/read"
-              title="Leia: conversas encerradas disponíveis para leitura."
-              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
-            >
-              Leia
-            </Link>
-            <Link
               href="/meet"
-              title="Conheça: descubra pessoas para seguir e conhecer."
-              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
+              title="Descubra: pessoas para seguir e conhecer."
+              className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white"
             >
-              Conheça
+              Descubra
             </Link>
           </nav>
 
@@ -5070,23 +5070,23 @@ function PageContent() {
         </Link>
         <nav
           aria-label="Categorias do feed"
-          className="flex min-w-0 items-center justify-center gap-8 whitespace-nowrap"
+          className="flex min-w-0 items-center justify-center gap-6 whitespace-nowrap"
         >
-          <span className="relative text-[11px] font-bold text-[#B44DFF]">
-            Converse
+          <Link
+            href={mobilePreview ? "/read?mobilePreview=1" : "/read"}
+            className="text-[13px] font-semibold text-white/60"
+          >
+            Ler
+          </Link>
+          <span className="relative text-[13px] font-bold text-[#B44DFF]">
+            Ao Vivo
             <span className="absolute -bottom-3 left-1 right-1 h-1 rounded-full bg-[#A855F7]" />
           </span>
           <Link
-            href={mobilePreview ? "/read?mobilePreview=1" : "/read"}
-            className="text-[11px] font-semibold text-white/60"
-          >
-            Leia
-          </Link>
-          <Link
             href={mobilePreview ? "/meet?mobilePreview=1" : "/meet"}
-            className="text-[11px] font-semibold text-white/60"
+            className="text-[13px] font-semibold text-white/60"
           >
-            Conheça
+            Descubra
           </Link>
         </nav>
         <button

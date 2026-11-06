@@ -336,7 +336,7 @@ export class CloudService {
     // For You combines declared interests with the themes the member actually
     // engages with. A small discovery lane is added after ranking below.
     const now = Date.now();
-    const [blocks, profiles, userHypes, memberships, messages, shares] =
+    const [blocks, profiles, userHypes, memberships, messages, shares, following] =
       await Promise.all([
         this.prisma.userBlock.findMany({
           where: {
@@ -370,6 +370,10 @@ export class CloudService {
         this.prisma.cloudShare.findMany({
           where: { userId: current.user.id },
           select: { cloud: { select: { primaryTopic: true } } },
+        }),
+        this.prisma.follow.findMany({
+          where: { followerId: current.user.id },
+          select: { followingId: true },
         }),
       ]);
     const blockedUserIds = new Set(
@@ -417,6 +421,23 @@ export class CloudService {
       return [candidate];
     });
     const userHypeIds = new Set(userHypes.map((hype) => hype.cloudId));
+    const followingIds = new Set(following.map(({ followingId }) => followingId));
+    if (!current.user.isGuest) {
+      const impressions = diversified
+        .map(({ cloud }) => cloud)
+        .filter(
+          (cloud) =>
+            cloud.authorId !== current.user.id &&
+            !followingIds.has(cloud.authorId),
+        )
+        .map((cloud) => ({ cloudId: cloud.id, userId: current.user.id }));
+      if (impressions.length > 0) {
+        await this.prisma.cloudForYouImpression.createMany({
+          data: impressions,
+          skipDuplicates: true,
+        });
+      }
+    }
 
     return {
       ok: true,

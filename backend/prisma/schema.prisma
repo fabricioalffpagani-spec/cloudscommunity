@@ -134,6 +134,8 @@ model User {
   externalIdentities          ExternalIdentity[]
   googleOAuthStates           GoogleOAuthState[]
   googlePendingAccounts       GooglePendingAccount[]
+  profileVisitsReceived       ProfileVisit[]            @relation("ProfileVisitProfile")
+  profileVisitsMade           ProfileVisit[]            @relation("ProfileVisitVisitor")
 
   @@index([status])
   @@index([createdAt])
@@ -243,6 +245,20 @@ model Profile {
   contacts Contact[]
 
   @@index([displayName])
+}
+
+model ProfileVisit {
+  profileId     String   @db.Uuid
+  visitorId     String   @db.Uuid
+  firstVisitedAt DateTime @default(now())
+  lastVisitedAt  DateTime @updatedAt
+
+  profile User @relation("ProfileVisitProfile", fields: [profileId], references: [id], onDelete: Cascade)
+  visitor User @relation("ProfileVisitVisitor", fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, visitorId])
+  @@index([profileId, lastVisitedAt])
+  @@index([visitorId])
 }
 
 model Cloud {
@@ -663,6 +679,15 @@ model CloudInterestRecommendationDelivery {
   @@unique([userId, slotKey])
   @@unique([userId, cloudId])
   @@index([userId, createdAt])
+}
+
+model CloudForYouImpression {
+  cloudId     String   @db.Uuid
+  userId      String   @db.Uuid
+  firstSeenAt DateTime @default(now())
+
+  @@id([cloudId, userId])
+  @@index([userId, firstSeenAt])
 }
 
 model CloudTrendingDelivery {

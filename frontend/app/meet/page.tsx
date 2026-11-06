@@ -484,28 +484,28 @@ function MeetPageContent() {
           </Link>
           <nav
             aria-label="Navegação"
-            className="flex items-end justify-self-center gap-16 pb-2"
+            className="flex items-end justify-self-center gap-14 pb-2"
           >
             <Link
-              href="/"
-              title="Converse: Clouds ao vivo para conversar agora."
-              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
+              href="/read"
+              title="Ler: conversas encerradas disponíveis para leitura."
+              className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white"
             >
-              Converse
+              Ler
             </Link>
             <Link
-              href="/read"
-              title="Leia: conversas encerradas disponíveis para leitura."
-              className="inline-flex h-14 items-center text-[13px] font-semibold text-white/50 transition hover:text-white"
+              href="/"
+              title="Ao Vivo: Clouds para conversar agora."
+              className="inline-flex h-14 items-center text-[16px] font-semibold text-white/50 transition hover:text-white"
             >
-              Leia
+              Ao Vivo
             </Link>
             <Link
               href="/meet"
-              title="Conheça: descubra pessoas para seguir e conhecer."
-              className="relative inline-flex h-14 items-center text-[13px] font-semibold text-white"
+              title="Descubra: pessoas para seguir e conhecer."
+              className="relative inline-flex h-14 items-center text-[16px] font-semibold text-white"
             >
-              Conheça
+              Descubra
               <span className="absolute -bottom-0.5 left-0 right-0 h-[3px] rounded-full bg-[#A855F7]" />
             </Link>
           </nav>

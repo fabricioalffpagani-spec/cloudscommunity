@@ -112,6 +112,11 @@ export class UsersController {
     return this.usersService.getInviteContacts(extractSessionToken(req));
   }
 
+  @Get('results')
+  async results(@Req() req: Request) {
+    return this.usersService.getCreatorResults(extractSessionToken(req));
+  }
+
   @Get('invitation-preview/:code')
   async invitationPreview(@Param('code') code: string) {
     return this.usersService.invitationPreview(code);
