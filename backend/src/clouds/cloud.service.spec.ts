@@ -112,7 +112,9 @@ function setup() {
       findMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue([]),
     },
     cloudForYouImpression: {
-      createMany: jest.fn<Promise<unknown>, unknown[]>().mockResolvedValue({ count: 1 }),
+      createMany: jest
+        .fn<Promise<unknown>, unknown[]>()
+        .mockResolvedValue({ count: 1 }),
     },
     $transaction: jest.fn(),
     $executeRaw: jest.fn().mockResolvedValue(1),
