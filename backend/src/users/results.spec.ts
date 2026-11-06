@@ -11,32 +11,66 @@ describe('creator results', () => {
     const prisma = {
       cloud: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'cloud-1', title: 'Cloud com alcance', _count: { members: 7, hypes: 4 } },
-          { id: 'cloud-2', title: 'Cloud menor', _count: { members: 2, hypes: 6 } },
+          {
+            id: 'cloud-1',
+            title: 'Cloud com alcance',
+            _count: { members: 7, hypes: 4 },
+          },
+          {
+            id: 'cloud-2',
+            title: 'Cloud menor',
+            _count: { members: 2, hypes: 6 },
+          },
         ]),
       },
       profileVisit: { count: jest.fn().mockResolvedValue(18) },
-      follow: { count: jest.fn().mockResolvedValueOnce(44).mockResolvedValueOnce(5) },
+      follow: {
+        count: jest.fn().mockResolvedValueOnce(44).mockResolvedValueOnce(5),
+      },
       cloudHype: { count: jest.fn().mockResolvedValue(10) },
       cloudMessage: { count: jest.fn().mockResolvedValue(71) },
       cloudMember: {
-        findMany: jest.fn()
-          .mockResolvedValueOnce([{ userId: 'reader-a' }, { userId: 'reader-b' }])
+        findMany: jest
+          .fn()
           .mockResolvedValueOnce([
-            { cloudId: 'cloud-1', userId: 'reader-a', joinedAt: afterRecommendation },
-            { cloudId: 'cloud-2', userId: 'reader-b', joinedAt: new Date('2026-10-31T10:00:00.000Z') },
+            { userId: 'reader-a' },
+            { userId: 'reader-b' },
+          ])
+          .mockResolvedValueOnce([
+            {
+              cloudId: 'cloud-1',
+              userId: 'reader-a',
+              joinedAt: afterRecommendation,
+            },
+            {
+              cloudId: 'cloud-2',
+              userId: 'reader-b',
+              joinedAt: new Date('2026-10-31T10:00:00.000Z'),
+            },
           ]),
       },
       cloudForYouImpression: {
         findMany: jest.fn().mockResolvedValue([
-          { cloudId: 'cloud-1', userId: 'reader-a', firstSeenAt: recommendationAt },
-          { cloudId: 'cloud-2', userId: 'reader-b', firstSeenAt: recommendationAt },
+          {
+            cloudId: 'cloud-1',
+            userId: 'reader-a',
+            firstSeenAt: recommendationAt,
+          },
+          {
+            cloudId: 'cloud-2',
+            userId: 'reader-b',
+            firstSeenAt: recommendationAt,
+          },
         ]),
       },
     };
     const service = new UsersService(
       prisma as unknown as PrismaService,
-      { resolveSession: jest.fn().mockResolvedValue({ user: { id: 'owner', isGuest: false } }) } as unknown as AuthService,
+      {
+        resolveSession: jest
+          .fn()
+          .mockResolvedValue({ user: { id: 'owner', isGuest: false } }),
+      } as unknown as AuthService,
       {} as PushNotificationsService,
       {} as DirectMessagesGateway,
     );

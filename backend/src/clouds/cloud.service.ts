@@ -336,46 +336,50 @@ export class CloudService {
     // For You combines declared interests with the themes the member actually
     // engages with. A small discovery lane is added after ranking below.
     const now = Date.now();
-    const [blocks, profiles, userHypes, memberships, messages, shares, following] =
-      await Promise.all([
-        this.prisma.userBlock.findMany({
-          where: {
-            OR: [
-              { blockerId: current.user.id },
-              { blockedId: current.user.id },
-            ],
-          },
-          select: { blockerId: true, blockedId: true },
-        }),
-        this.prisma.profile.findMany({
-          where: { userId: current.user.id },
-          select: { interests: true },
-        }),
-        this.prisma.cloudHype.findMany({
-          where: { userId: current.user.id },
-          select: { cloudId: true, cloud: { select: { primaryTopic: true } } },
-        }),
-        this.prisma.cloudMember.findMany({
-          where: { userId: current.user.id },
-          select: { cloud: { select: { primaryTopic: true } } },
-        }),
-        this.prisma.cloudMessage.findMany({
-          where: {
-            userId: current.user.id,
-            deletedAt: null,
-            type: { not: 'system' },
-          },
-          select: { cloud: { select: { primaryTopic: true } } },
-        }),
-        this.prisma.cloudShare.findMany({
-          where: { userId: current.user.id },
-          select: { cloud: { select: { primaryTopic: true } } },
-        }),
-        this.prisma.follow.findMany({
-          where: { followerId: current.user.id },
-          select: { followingId: true },
-        }),
-      ]);
+    const [
+      blocks,
+      profiles,
+      userHypes,
+      memberships,
+      messages,
+      shares,
+      following,
+    ] = await Promise.all([
+      this.prisma.userBlock.findMany({
+        where: {
+          OR: [{ blockerId: current.user.id }, { blockedId: current.user.id }],
+        },
+        select: { blockerId: true, blockedId: true },
+      }),
+      this.prisma.profile.findMany({
+        where: { userId: current.user.id },
+        select: { interests: true },
+      }),
+      this.prisma.cloudHype.findMany({
+        where: { userId: current.user.id },
+        select: { cloudId: true, cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudMember.findMany({
+        where: { userId: current.user.id },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudMessage.findMany({
+        where: {
+          userId: current.user.id,
+          deletedAt: null,
+          type: { not: 'system' },
+        },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.cloudShare.findMany({
+        where: { userId: current.user.id },
+        select: { cloud: { select: { primaryTopic: true } } },
+      }),
+      this.prisma.follow.findMany({
+        where: { followerId: current.user.id },
+        select: { followingId: true },
+      }),
+    ]);
     const blockedUserIds = new Set(
       blocks.map((block) =>
         block.blockerId === current.user.id ? block.blockedId : block.blockerId,
@@ -421,7 +425,9 @@ export class CloudService {
       return [candidate];
     });
     const userHypeIds = new Set(userHypes.map((hype) => hype.cloudId));
-    const followingIds = new Set(following.map(({ followingId }) => followingId));
+    const followingIds = new Set(
+      following.map(({ followingId }) => followingId),
+    );
     if (!current.user.isGuest) {
       const impressions = diversified
         .map(({ cloud }) => cloud)
