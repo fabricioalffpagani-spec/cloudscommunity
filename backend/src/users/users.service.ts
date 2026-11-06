@@ -172,7 +172,9 @@ export class UsersService {
     return response;
   }
 
-  async getCreatorResults(token: string | null): Promise<CreatorResultsResponse> {
+  async getCreatorResults(
+    token: string | null,
+  ): Promise<CreatorResultsResponse> {
     const current = await this.requireRegisteredSession(token);
     const authorId = current.user.id;
     const since = new Date();
@@ -225,7 +227,9 @@ export class UsersService {
         select: { cloudId: true, userId: true, firstSeenAt: true },
       }),
     ]);
-    const recipientIds = [...new Set(deliveries.map((delivery) => delivery.userId))];
+    const recipientIds = [
+      ...new Set(deliveries.map((delivery) => delivery.userId)),
+    ];
     const recommendationMembers = recipientIds.length
       ? await this.prisma.cloudMember.findMany({
           where: {
@@ -244,7 +248,9 @@ export class UsersService {
     const forYouAccesses = new Set(
       recommendationMembers
         .filter((member) => {
-          const deliveryAt = deliveredAt.get(`${member.cloudId}:${member.userId}`);
+          const deliveryAt = deliveredAt.get(
+            `${member.cloudId}:${member.userId}`,
+          );
           return deliveryAt ? member.joinedAt >= deliveryAt : false;
         })
         .map((member) => member.userId),
